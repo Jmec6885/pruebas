@@ -654,45 +654,43 @@
 
     // === CONFIGURACIÓN DE TURNOS ATTF (Visibilidad del Botón) ===
 const TURNOS_ATTF = {
-    // Turno 1: 6:00 AM - 2:00 PM (Botón visible: 4 AM a 10 AM)
     turno1: {
         nombre: "Turno 1 (6:00 AM - 2:00 PM)",
         horaInicio: 6,
         horaFin: 14,
-        horaInicioGracia: 4,  // El botón aparece a las 4 AM
-        horaFinGracia: 10,    // El botón desaparece después de las 10 AM
+        horaInicioGracia: 4,      // Botón visible desde las 4 AM
+        horaFinGracia: 10,        // Botón visible hasta las 10 AM
+        horasGraciaExtension: 3,  // Puede trabajar 3 horas después de las 2 PM (hasta 5 PM)
         codigo: "6am-2pm"
     },
-    // Turno 4: 8:00 AM - 4:00 PM (Botón visible: 5 AM a 10 AM)
     turno4: {
         nombre: "Turno 4 (8:00 AM - 4:00 PM)",
         horaInicio: 8,
         horaFin: 16,
-        horaInicioGracia: 5,  // El botón aparece a las 5 AM
-        horaFinGracia: 10,    // El botón desaparece después de las 10 AM
+        horaInicioGracia: 5,
+        horaFinGracia: 10,
+        horasGraciaExtension: 3,  // Hasta las 7 PM
         codigo: "8am-4pm"
     },
-    // Turno 2: 2:00 PM - 10:00 PM (Botón visible: 11 AM a 5 PM)
     turno2: {
         nombre: "Turno 2 (2:00 PM - 10:00 PM)",
         horaInicio: 14,
         horaFin: 22,
-        horaInicioGracia: 10, // El botón aparece a las 11 AM
-        horaFinGracia: 18,    // El botón desaparece después de las 5 PM (17:00)
+        horaInicioGracia: 12,
+        horaFinGracia: 18,
+        horasGraciaExtension: 3,  // Hasta la 1 AM
         codigo: "2pm-10pm"
     },
-   
-    // Turno 3: 10:00 PM - 6:00 AM (Botón visible: 7 PM hasta las 6 AM del día siguiente)
-// ✅ CORRECTO
-turno3: {
-    nombre: "Turno 3 (10:00 PM - 6:00 AM)",
-    horaInicio: 22,
-    horaFin: 6,
-    horaInicioGracia: 19,  // Aparece a las 7 PM
-    horaFinGracia: 4,      // Desaparece a las 9 AM (permite trabajar hasta esta hora)
-    codigo: "10pm-6am",
-    esTurnoNocturno: true
-}
+    turno3: {
+        nombre: "Turno 3 (10:00 PM - 6:00 AM)",
+        horaInicio: 22,
+        horaFin: 6,
+        horaInicioGracia: 19,     // Botón visible desde las 7 PM
+        horaFinGracia: 4,         // Botón visible hasta las 4 AM
+        horasGraciaExtension: 3,  // Puede trabajar hasta las 9 AM
+        codigo: "10pm-6am",
+        esTurnoNocturno: true
+    }
 };
 
 
@@ -817,19 +815,22 @@ function verificarDiaDescanso(userData) {
         return false;
     }
     
-    let diaAVerificar = ahora.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+    let diaAVerificar = ahora.getDay();
     const diasDescanso = userData.dias_descanso.split(',').map(d => parseInt(d));
     
     // === EXCEPCIÓN ÚNICA: TURNO NOCTURNO QUE TERMINA EN DÍA DE DESCANSO ===
     if (userData.rol === 'ATTF' && userData.turno_actual === 'turno3') {
-        // Si estamos en horas de madrugada (00:00 - 09:00)
-        if (horaActual >= 0 && horaActual < 9) {
+        const turno = TURNOS_ATTF.turno3;
+        const horaCorteExtendida = turno.horaFin + turno.horasGraciaExtension; // 9 AM
+        
+        // Si estamos en horario extendido del turno (00:00 - 09:00)
+        if (horaActual >= 0 && horaActual < horaCorteExtendida) {
             // Verificar el día ANTERIOR (cuando empezó el turno)
             const diaAnterior = diaAVerificar === 0 ? 6 : diaAVerificar - 1;
             
             // Si el día ANTERIOR no era descanso, permitir terminar turno
             if (!diasDescanso.includes(diaAnterior)) {
-                console.log(`🌙 Permitiendo terminar turno nocturno iniciado ayer (día ${diaAnterior})`);
+                console.log(`🌙 Permitiendo terminar turno nocturno iniciado ayer (día ${diaAnterior}) hasta las ${horaCorteExtendida}:00`);
                 return false; // NO es descanso, puede continuar
             }
         }
@@ -842,6 +843,8 @@ function verificarDiaDescanso(userData) {
     
     return esDescanso;
 }
+
+    
 // Función para mostrar selección de días de descanso
 function mostrarSeleccionDiasDescanso() {
     const loginSection = document.getElementById('loginSection');
@@ -3052,8 +3055,6 @@ function verFoto(link) {
     if (link) window.open(link, '_blank');
 }
 
-
-
 function verificarCorteTurno() {
     if (!currentUser || currentUser.rol !== 'ATTF' || !currentUser.turnoAsignado) {
         return; 
@@ -3063,21 +3064,37 @@ function verificarCorteTurno() {
     const horaActual = ahora.getHours();
     const turnoActual = TURNOS_ATTF[currentUser.turnoAsignado];
     
-    // Verificar si el turno es nocturno
+    // Calcular hora de corte con extensión de gracia
+    let horaCorte;
+    
     if (turnoActual.esTurnoNocturno) {
-        // Para turno nocturno: cerrar a las 9 AM (3 horas después de las 6 AM)
-        if (horaActual >= 9) {
+        // Turno nocturno: 6 AM + 3 horas = 9 AM
+        horaCorte = turnoActual.horaFin + turnoActual.horasGraciaExtension;
+        
+        if (horaActual >= horaCorte) {
             alert('Su turno nocturno ha finalizado. Se cerrará su sesión.');
             logout();
             return;
         }
     } else {
-        // Para turnos diurnos: cerrar 3 horas después del fin
-        const horaCorte = turnoActual.horaFin + 3;
-        if (horaActual >= horaCorte) {
-            alert('Su turno ha finalizado. Se cerrará su sesión.');
-            logout();
-            return;
+        // Turnos diurnos
+        horaCorte = turnoActual.horaFin + turnoActual.horasGraciaExtension;
+        
+        // Si el corte excede 24 horas, ajustar
+        if (horaCorte >= 24) {
+            horaCorte = horaCorte - 24;
+            // Verificar si ya pasó la medianoche Y pasó la hora de corte
+            if (horaActual < 12 && horaActual >= horaCorte) {
+                alert('Su turno ha finalizado. Se cerrará su sesión.');
+                logout();
+                return;
+            }
+        } else {
+            if (horaActual >= horaCorte) {
+                alert('Su turno ha finalizado. Se cerrará su sesión.');
+                logout();
+                return;
+            }
         }
     }
 }
