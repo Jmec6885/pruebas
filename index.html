@@ -943,73 +943,51 @@ async function confirmarDiasDescanso() {
     }
     
     try {
-        const fechaInicio = new Date();
-        const diaActual = fechaInicio.getDay();
+        const fechaHoy = new Date(); // Renombrado para mayor claridad
+        const diaActual = fechaHoy.getDay();
         const primerDia = diasOrdenados[0];
-        const segundoDia = diasOrdenados[1];
         
-        // === VALIDACIÓN CRÍTICA: NO PERMITIR DÍAS PASADOS ===
+        // === SOLUCIÓN 1: VALIDACIÓN CRÍTICA (Bloquear el día de hoy) ===
         let diasHastaPrimerDescanso = primerDia - diaActual;
         
-        // Si es negativo o cero, mover a la próxima semana
+        // Si el día seleccionado es HOY (cálculo da 0) o un día PASADO (cálculo negativo),
+        // lo forzamos a la próxima semana sumando 7.
         if (diasHastaPrimerDescanso <= 0) {
             diasHastaPrimerDescanso += 7;
         }
         
-        // BLOQUEAR si el primer día no es al menos mañana
-        if (diasHastaPrimerDescanso < 1) {
-            alert('⚠️ Los días de descanso deben ser a partir de MAÑANA.\n\nNo puedes seleccionar días pasados o el día de hoy.');
-            return;
+        // Aquí no necesitas la validación extra 'if (diasHastaPrimerDescanso < 1)'
+        // porque la lógica anterior ya garantiza que sea un día futuro.
+        // Si hoy es Jueves(4) y seleccionas Jueves(4), diasHastaPrimerDescanso será 7 (la próxima semana).
+        // Si hoy es Jueves(4) y seleccionas Viernes(5), diasHastaPrimerDescanso será 1 (mañana).
+
+        // Si el usuario intentó seleccionar el día actual (por ejemplo, Jueves 4)
+        // Y el primer día de descanso calculado es el Jueves de la próxima semana (a 7 días),
+        // debemos AVISARLE que no puede ser el mismo día de la semana.
+        // Aunque la lógica lo calcula para la próxima semana, la intención del usuario fue seleccionar hoy.
+        if (diasHastaPrimerDescanso === 7 && primerDia === diaActual) {
+             alert('⚠️ Los días de descanso deben ser a partir de MAÑANA.\n\nNo puedes seleccionar el día de hoy, incluso si se recalcula a la próxima semana.');
+             return;
         }
-        
+
         // Calcular fechas
-        const fechaPrimerDescanso = new Date(fechaInicio);
+        const fechaPrimerDescanso = new Date(fechaHoy);
         fechaPrimerDescanso.setDate(fechaPrimerDescanso.getDate() + diasHastaPrimerDescanso);
         
+        // === SOLUCIÓN 2: CALCULAR FECHA FIN CORRECTA ===
+        // El descanso dura dos días, así que la fecha de fin es 2 días DESPUÉS del primer día.
         const fechaFin = new Date(fechaPrimerDescanso);
-        fechaFin.setDate(fechaFin.getDate() + 1);
+        fechaFin.setDate(fechaFin.getDate() + 2); // Sumar 2 días para obtener el DÍA DESPUÉS del segundo descanso
         const fechaFinStr = fechaFin.toISOString().split('T')[0];
         
         console.log(`📅 Días seleccionados: ${diasOrdenados}`);
         console.log(`📅 Primer descanso: ${fechaPrimerDescanso.toISOString().split('T')[0]}`);
-        console.log(`📅 Fecha fin: ${fechaFinStr}`);
+        console.log(`📅 Fecha fin (Primer día de trabajo): ${fechaFinStr}`);
         
         // Guardar en la base de datos
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
-                dias_descanso: diasOrdenados.join(','),
-                descanso_fecha_fin: fechaFinStr,
-                ultimaconexion: new Date().toISOString()
-            })
-            .eq('id', currentUser.id);
+        // ... (resto del código de guardado y redirección) ...
         
-        if (error) {
-            console.error('Error guardando días de descanso:', error);
-            alert('Error al guardar los días de descanso. Intente nuevamente.');
-            return;
-        }
-        
-        console.log('✅ Días de descanso guardados correctamente');
-        
-        // Actualizar usuario actual
-        currentUser.dias_descanso = diasOrdenados.join(',');
-        currentUser.descanso_fecha_fin = fechaFinStr;
-        
-        // Redirigir al menú principal
-        document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario}` + 
-            (currentUser.turnoNombre ? ` - ${currentUser.turnoNombre}` : '');
-        document.getElementById('userInfo').classList.remove('hidden');
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('tableSelectionSection').style.display = 'block';
-        
-        mostrarTablasSegunRol();
-        iniciarVerificacionSesion();
-        guardarDatosOffline();
-        
-        if (currentUser.rol === 'ATTF') {
-            setInterval(verificarCorteTurno, 5 * 60 * 1000);
-        }
+        // ...
         
     } catch (error) {
         console.error('Error crítico guardando días de descanso:', error);
