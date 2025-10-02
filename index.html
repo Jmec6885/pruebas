@@ -681,7 +681,7 @@ const TURNOS_ATTF = {
         horaFinGracia: 18,    // El botón desaparece después de las 5 PM (17:00)
         codigo: "2pm-10pm"
     },
-    // Turno 3: 10:00 PM - 6:00 AM (Botón visible: 7 PM a 1 AM)
+   
     // Turno 3: 10:00 PM - 6:00 AM (Botón visible: 7 PM hasta las 6 AM del día siguiente)
 // ✅ CORRECTO
 turno3: {
@@ -689,7 +689,7 @@ turno3: {
     horaInicio: 22,
     horaFin: 6,
     horaInicioGracia: 19,  // Aparece a las 7 PM
-    horaFinGracia: 9,      // Desaparece a las 9 AM (permite trabajar hasta esta hora)
+    horaFinGracia: 4,      // Desaparece a las 9 AM (permite trabajar hasta esta hora)
     codigo: "10pm-6am",
     esTurnoNocturno: true
 }
