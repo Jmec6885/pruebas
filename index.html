@@ -923,7 +923,6 @@ function toggleDiaDescanso(dia) {
     }
 }
 
-// Función para confirmar días de descanso
 async function confirmarDiasDescanso() {
     if (window.diasDescansoSeleccionados.length !== 2) {
         alert('Debe seleccionar exactamente 2 días de descanso');
@@ -944,35 +943,46 @@ async function confirmarDiasDescanso() {
     }
     
     try {
-    // Calcular fecha de fin: último día de descanso a las 23:59
-    const fechaInicio = new Date();
-    
-    // Encontrar cuál es el segundo día (el último)
-    
-    const primerDia = diasOrdenados[0];
-    const segundoDia = diasOrdenados[1];
-    
-    // Calcular días hasta el primer día de descanso
-    const diaActual = fechaInicio.getDay();
-    let diasHastaPrimerDescanso = primerDia - diaActual;
-    if (diasHastaPrimerDescanso < 0) diasHastaPrimerDescanso += 7;
-    
-    // La fecha de fin es el segundo día de descanso
-    const fechaFin = new Date(fechaInicio);
-    fechaFin.setDate(fechaFin.getDate() + diasHastaPrimerDescanso + 1); // +1 para el segundo día
-    const fechaFinStr = fechaFin.toISOString().split('T')[0];
-    
-    console.log(`📅 Días de descanso: ${diasOrdenados}, Fecha fin: ${fechaFinStr}`);
-    
-    // Guardar en la base de datos
-    const { error } = await supabaseClient
-        .from('usuarios')
-        .update({
-            dias_descanso: diasOrdenados.join(','),
-            descanso_fecha_fin: fechaFinStr,
-            ultimaconexion: new Date().toISOString()
-        })
-        .eq('id', currentUser.id);
+        const fechaInicio = new Date();
+        const diaActual = fechaInicio.getDay();
+        const primerDia = diasOrdenados[0];
+        const segundoDia = diasOrdenados[1];
+        
+        // === VALIDACIÓN CRÍTICA: NO PERMITIR DÍAS PASADOS ===
+        let diasHastaPrimerDescanso = primerDia - diaActual;
+        
+        // Si es negativo o cero, mover a la próxima semana
+        if (diasHastaPrimerDescanso <= 0) {
+            diasHastaPrimerDescanso += 7;
+        }
+        
+        // BLOQUEAR si el primer día no es al menos mañana
+        if (diasHastaPrimerDescanso < 1) {
+            alert('⚠️ Los días de descanso deben ser a partir de MAÑANA.\n\nNo puedes seleccionar días pasados o el día de hoy.');
+            return;
+        }
+        
+        // Calcular fechas
+        const fechaPrimerDescanso = new Date(fechaInicio);
+        fechaPrimerDescanso.setDate(fechaPrimerDescanso.getDate() + diasHastaPrimerDescanso);
+        
+        const fechaFin = new Date(fechaPrimerDescanso);
+        fechaFin.setDate(fechaFin.getDate() + 1);
+        const fechaFinStr = fechaFin.toISOString().split('T')[0];
+        
+        console.log(`📅 Días seleccionados: ${diasOrdenados}`);
+        console.log(`📅 Primer descanso: ${fechaPrimerDescanso.toISOString().split('T')[0]}`);
+        console.log(`📅 Fecha fin: ${fechaFinStr}`);
+        
+        // Guardar en la base de datos
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({
+                dias_descanso: diasOrdenados.join(','),
+                descanso_fecha_fin: fechaFinStr,
+                ultimaconexion: new Date().toISOString()
+            })
+            .eq('id', currentUser.id);
         
         if (error) {
             console.error('Error guardando días de descanso:', error);
@@ -980,7 +990,7 @@ async function confirmarDiasDescanso() {
             return;
         }
         
-        console.log('✅ Días de descanso guardados:', diasOrdenados);
+        console.log('✅ Días de descanso guardados correctamente');
         
         // Actualizar usuario actual
         currentUser.dias_descanso = diasOrdenados.join(',');
@@ -1007,29 +1017,7 @@ async function confirmarDiasDescanso() {
     }
 }
 
-// Función para limpiar días de descanso viejos automáticamente
-async function limpiarDiasDescansoViejos() {
-    try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
-        
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
-                dias_descanso: null,
-                descanso_fecha_fin: null
-            })
-            .lt('descanso_fecha_fin', fechaHoy);
-        
-        if (error) {
-            console.error('Error limpiando días de descanso viejos:', error);
-        } else {
-            console.log('🧹 Días de descanso antiguos limpiados');
-        }
-    } catch (error) {
-        console.error('Error en limpieza de días de descanso:', error);
-    }
-}
-    
+
 async function login() {
     console.log('🔐 Ejecutando login...');
     
