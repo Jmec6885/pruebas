@@ -779,69 +779,101 @@ async function limpiarTurnosViejos() {
 }
 
 
-// Función para limpiar días de descanso viejos automáticamente
-async function limpiarDiasDescansoViejos() {
+async function confirmarDiasDescanso() {
+    if (window.diasDescansoSeleccionados.length !== 2) {
+        alert('Debe seleccionar exactamente 2 días de descanso');
+        return;
+    }
+    
+    // Ordenar días y verificar que sean consecutivos
+    const diasOrdenados = window.diasDescansoSeleccionados.sort((a, b) => a - b);
+    
+    // Permitir Domingo(0) + Lunes(1) como consecutivos
+    const sonConsecutivos = 
+        (diasOrdenados[1] - diasOrdenados[0] === 1) || 
+        (diasOrdenados[0] === 0 && diasOrdenados[1] === 6);
+    
+    if (!sonConsecutivos) {
+        alert('Los días de descanso deben ser consecutivos (ej: Lunes-Martes, Sábado-Domingo)');
+        return;
+    }
+    
     try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
+        const fechaInicio = new Date();
+        const diaActual = fechaInicio.getDay(); // 0=Domingo, 1=Lunes, etc.
+        const primerDia = diasOrdenados[0];
+        const segundoDia = diasOrdenados[1];
         
+        // === VALIDACIÓN CRÍTICA: NO PERMITIR DÍAS PASADOS ===
+        // Calcular días hasta el primer día de descanso
+        let diasHastaPrimerDescanso = primerDia - diaActual;
+        
+        // Si el resultado es negativo o cero, el día ya pasó o es hoy
+        if (diasHastaPrimerDescanso <= 0) {
+            diasHastaPrimerDescanso += 7; // Mover a la próxima semana
+        }
+        
+        // Verificar que el primer día sea al menos mañana
+        if (diasHastaPrimerDescanso < 1) {
+            alert('Los días de descanso deben ser a partir de mañana. No puedes seleccionar días pasados o el día de hoy.');
+            return;
+        }
+        
+        // === CALCULAR FECHAS ===
+        // Fecha del primer día de descanso
+        const fechaPrimerDescanso = new Date(fechaInicio);
+        fechaPrimerDescanso.setDate(fechaPrimerDescanso.getDate() + diasHastaPrimerDescanso);
+        
+        // Fecha del segundo día de descanso (fecha de fin)
+        const fechaFin = new Date(fechaPrimerDescanso);
+        fechaFin.setDate(fechaFin.getDate() + 1); // +1 día para el segundo día consecutivo
+        const fechaFinStr = fechaFin.toISOString().split('T')[0];
+        
+        console.log(`📅 Días seleccionados: ${diasOrdenados}`);
+        console.log(`📅 Primer día de descanso: ${fechaPrimerDescanso.toISOString().split('T')[0]}`);
+        console.log(`📅 Fecha fin de descanso: ${fechaFinStr}`);
+        
+        // Guardar en la base de datos
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
-                dias_descanso: null,
-                descanso_fecha_fin: null
+                dias_descanso: diasOrdenados.join(','),
+                descanso_fecha_fin: fechaFinStr,
+                ultimaconexion: new Date().toISOString()
             })
-            .lt('descanso_fecha_fin', fechaHoy); // Donde descanso_fecha_fin sea menor a hoy
+            .eq('id', currentUser.id);
         
         if (error) {
-            console.error('Error limpiando días de descanso viejos:', error);
-        } else {
-            console.log('🧹 Días de descanso antiguos limpiados');
+            console.error('Error guardando días de descanso:', error);
+            alert('Error al guardar los días de descanso. Intente nuevamente.');
+            return;
         }
-    } catch (error) {
-        console.error('Error en limpieza de días de descanso:', error);
-    }
-}
-
-function verificarDiaDescanso(userData) {
-    if (!userData.dias_descanso || !userData.descanso_fecha_fin) return false;
-    
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-    const fechaHoy = ahora.toISOString().split('T')[0];
-    
-    // Verificar si aún está dentro del período de descanso
-    if (fechaHoy > userData.descanso_fecha_fin) {
-        console.log('✅ Período de descanso expirado');
-        return false;
-    }
-    
-    let diaAVerificar = ahora.getDay();
-    const diasDescanso = userData.dias_descanso.split(',').map(d => parseInt(d));
-    
-    // === EXCEPCIÓN ÚNICA: TURNO NOCTURNO QUE TERMINA EN DÍA DE DESCANSO ===
-    if (userData.rol === 'ATTF' && userData.turno_actual === 'turno3') {
-        const turno = TURNOS_ATTF.turno3;
-        const horaCorteExtendida = turno.horaFin + turno.horasGraciaExtension; // 9 AM
         
-        // Si estamos en horario extendido del turno (00:00 - 09:00)
-        if (horaActual >= 0 && horaActual < horaCorteExtendida) {
-            // Verificar el día ANTERIOR (cuando empezó el turno)
-            const diaAnterior = diaAVerificar === 0 ? 6 : diaAVerificar - 1;
-            
-            // Si el día ANTERIOR no era descanso, permitir terminar turno
-            if (!diasDescanso.includes(diaAnterior)) {
-                console.log(`🌙 Permitiendo terminar turno nocturno iniciado ayer (día ${diaAnterior}) hasta las ${horaCorteExtendida}:00`);
-                return false; // NO es descanso, puede continuar
-            }
+        console.log('✅ Días de descanso guardados correctamente');
+        
+        // Actualizar usuario actual
+        currentUser.dias_descanso = diasOrdenados.join(',');
+        currentUser.descanso_fecha_fin = fechaFinStr;
+        
+        // Redirigir al menú principal
+        document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario}` + 
+            (currentUser.turnoNombre ? ` - ${currentUser.turnoNombre}` : '');
+        document.getElementById('userInfo').classList.remove('hidden');
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('tableSelectionSection').style.display = 'block';
+        
+        mostrarTablasSegunRol();
+        iniciarVerificacionSesion();
+        guardarDatosOffline();
+        
+        if (currentUser.rol === 'ATTF') {
+            setInterval(verificarCorteTurno, 5 * 60 * 1000);
         }
+        
+    } catch (error) {
+        console.error('Error crítico guardando días de descanso:', error);
+        alert('Error de conexión al guardar días de descanso.');
     }
-    
-    // === REGLA GENERAL: BLOQUEAR TODO EL DÍA DE DESCANSO ===
-    const esDescanso = diasDescanso.includes(diaAVerificar);
-    
-    console.log(`📅 Verificando descanso: Día=${diaAVerificar}, Descansos=${diasDescanso}, Resultado=${esDescanso}`);
-    
-    return esDescanso;
 }
 
     
