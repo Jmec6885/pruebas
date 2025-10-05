@@ -1605,13 +1605,14 @@ async function limpiarDiasDescansoViejos() {
     try {
         const fechaHoy = new Date().toISOString().split('T')[0];
         
+        // CORRECCIÓN: Usar .filter() con sintaxis correcta
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
                 descanso_fecha_inicio: null,
                 descanso_fecha_fin: null
             })
-            .lt('descanso_fecha_fin', fechaHoy);
+            .filter('descanso_fecha_fin', 'lt', fechaHoy); // ← SINTAXIS CORRECTA
         
         if (error) {
             console.error('Error limpiando días de descanso viejos:', error);
@@ -1623,12 +1624,11 @@ async function limpiarDiasDescansoViejos() {
     }
 }
 
-
 async function limpiarTurnosViejos() {
     try {
         const fechaHoy = new Date().toISOString().split('T')[0];
         
-        // Limpiar turnos pasados de ATTF
+        // CORRECCIÓN: Usar .filter() con sintaxis correcta
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
@@ -1638,7 +1638,7 @@ async function limpiarTurnosViejos() {
                 fecha_turno_manana: null
             })
             .eq('rol', 'ATTF')
-            .lt('fecha_turno_hoy', fechaHoy);
+            .filter('fecha_turno_hoy', 'lt', fechaHoy); // ← SINTAXIS CORRECTA
         
         if (error) {
             console.error('Error limpiando turnos viejos:', error);
@@ -1649,7 +1649,6 @@ async function limpiarTurnosViejos() {
         console.error('Error en limpieza de turnos:', error);
     }
 }
-
 
 
 async function actualizarTurnosDiarios() {
@@ -2187,80 +2186,7 @@ function generarKMLString(ubicaciones) {
 
     
 
-     // === FUNCIÓN PARA MOSTRAR LA SELECCIÓN DE TURNO (CORREGIDA) ===
-function mostrarSeleccionTurno() {
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-    const diaActual = ahora.toDateString();
-    
-    // VALIDACIÓN: Si ya tiene turno asignado, ir directo al menú
-    if (currentUser.turnoAsignado) {
-        console.log('✅ Usuario ya tiene turno asignado:', currentUser.turnoAsignado);
-        document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} - ${TURNOS_ATTF[currentUser.turnoAsignado].nombre}`;
-        document.getElementById('userInfo').classList.remove('hidden');
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('tableSelectionSection').style.display = 'block';
-        
-        mostrarTablasSegunRol();
-        iniciarVerificacionSesion();
-        setInterval(verificarCorteTurno, 5 * 60 * 1000);
-        return;
-    }
-    
-    const turnosDisponibles = [];
-    const lastSession = JSON.parse(sessionStorage.getItem('attf_last_turn'));
-    
-    // SI YA ELIGIÓ UN TURNO HOY, solo permitir reingreso al mismo turno
-    if (lastSession && lastSession.dia === diaActual) {
-        const turnoAnterior = TURNOS_ATTF[lastSession.turnoKey];
-        
-        let turnoAunValido = false;
-        
-        // ✅ CORRECCIÓN: Verificar turno nocturno correctamente
-        if (turnoAnterior.esTurnoNocturno) {
-            // Turno nocturno: válido desde las 19:00 hasta las 09:00 del día siguiente
-            turnoAunValido = (horaActual >= turnoAnterior.horaInicioGracia || horaActual < turnoAnterior.horaFinGracia);
-        } else {
-            // Turnos diurnos normales
-            turnoAunValido = (horaActual >= turnoAnterior.horaInicioGracia && horaActual < turnoAnterior.horaFinGracia);
-        }
-        
-        if (turnoAunValido) {
-            turnosDisponibles.push({ 
-                key: lastSession.turnoKey, 
-                ...turnoAnterior, 
-                descripcion: "Continuar en tu turno de hoy" 
-            });
-        } else {
-            alert('Tu turno de hoy ha finalizado. Podrás acceder nuevamente en tu próximo turno.');
-            logout();
-            return;
-        }
-    } else {
-        // PRIMER INGRESO DEL DÍA: Mostrar turnos según hora actual
-        Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-            let puedeIngresar = false;
-            
-            // ✅ CORRECCIÓN: Verificar turno nocturno correctamente
-            if (turno.esTurnoNocturno) {
-                // Turno nocturno: puede ingresar desde las 19:00 o antes de las 09:00
-                puedeIngresar = (horaActual >= turno.horaInicioGracia || horaActual < turno.horaFinGracia);
-            } else {
-                // Turnos diurnos
-                puedeIngresar = (horaActual >= turno.horaInicioGracia && horaActual < turno.horaFinGracia);
-            }
-            
-            if (puedeIngresar) {
-                turnosDisponibles.push({ key, ...turno, descripcion: "Turno disponible" });
-            }
-        });
-    }
-    
-    if (turnosDisponibles.length === 0) {
-        alert('No hay turnos disponibles en este horario.');
-        logout();
-        return;
-    }
+     
     
     const loginSection = document.getElementById('loginSection');
     loginSection.innerHTML = `
@@ -2282,123 +2208,7 @@ function mostrarSeleccionTurno() {
 }
 
 
-// ... (Otras funciones auxiliares)
 
-// === FUNCIÓN AUXILIAR: GUARDAR TURNO EN SESIÓN ===
-function guardarTurnoEnSesion(turnoKey) {
-    const ahora = new Date();
-    const diaActual = ahora.toDateString();
-    
-    // Guardar la clave del turno y el día actual en el almacenamiento local
-    sessionStorage.setItem('attf_last_turn', JSON.stringify({
-        turnoKey: turnoKey,
-        dia: diaActual
-    }));
-}
-
-async function seleccionarTurno(turnoKey) {
-    const turno = TURNOS_ATTF[turnoKey];
-    const ahora = new Date();
-    
-    if (currentUser.turnoAsignado) {
-        alert('Error: Ya tiene un turno asignado y activo. Debe cerrar sesión para finalizar el turno actual.');
-        return; 
-    }
-    
-    try {
-        // Guardar turno en la base de datos
-        const fechaActual = ahora.toISOString().split('T')[0];
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
-                turno_actual: turnoKey,
-                turno_fecha: fechaActual,
-                turno_hora_inicio: ahora.toISOString()
-            })
-            .eq('id', currentUser.id);
-        
-        if (error) {
-            console.error('Error guardando turno en BD:', error);
-            alert('Error al asignar el turno. Intente nuevamente.');
-            return;
-        }
-        
-        console.log('✅ Turno guardado en BD:', turnoKey);
-        
-    } catch (error) {
-        console.error('Error crítico guardando turno:', error);
-        alert('Error de conexión al asignar turno.');
-        return;
-    }
-    
-    // Asignar turno localmente
-    currentUser.turnoAsignado = turnoKey;
-    currentUser.turnoNombre = turno.nombre;
-    currentUser.turno_fecha = ahora.toISOString().split('T')[0];
-    
-    sessionStorage.setItem('attf_last_turn', JSON.stringify({
-        turnoKey: turnoKey,
-        dia: ahora.toDateString(),
-        horaInicio: ahora.toISOString()
-    }));
-    
-    // === VERIFICAR DÍAS DE DESCANSO ANTES DE DAR ACCESO ===
-const fechaHoy = ahora.toISOString().split('T')[0];
-
-// 1. Verificar si es día de descanso
-if (verificarDiaDescanso(currentUser)) {
-    alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
-    logout();
-    return;
-}
-
-// 2. Verificar si necesita elegir días de descanso
-if (!currentUser.descanso_fecha_fin || currentUser.descanso_fecha_fin < fechaHoy) {
-    mostrarSeleccionDiasDescanso();
-    return;
-}
-
-// 3. Si todo está bien, dar acceso al menú
-setInterval(verificarCorteTurno, 5 * 60 * 1000);
-
-document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} - ${turno.nombre}`;
-document.getElementById('userInfo').classList.remove('hidden');
-document.getElementById('loginSection').style.display = 'none';
-document.getElementById('tableSelectionSection').style.display = 'block';
-
-console.log('🔧 Filtrando tablas según rol:', currentUser.rol);
-mostrarTablasSegunRol();
-
-iniciarVerificacionSesion();
-guardarDatosOffline();
-}
-
-
-
-function programarCierreSesion(turno) {
-    const ahora = new Date();
-    let fechaCierre = new Date();
-    
-    if (turno.horaFinGracia < turno.horaInicioGracia) {
-        // Turno nocturno: cierre al día siguiente
-        if (ahora.getHours() >= turno.horaInicioGracia) {
-            fechaCierre.setDate(fechaCierre.getDate() + 1);
-        }
-        fechaCierre.setHours(turno.horaFinGracia, 0, 0, 0);
-    } else {
-        // Turno diurno
-        fechaCierre.setHours(turno.horaFinGracia, 0, 0, 0);
-    }
-    
-    const tiempoRestante = fechaCierre.getTime() - ahora.getTime();
-    
-    if (tiempoRestante > 0) {
-        setTimeout(() => {
-            alert('Su turno ha terminado. La sesión se cerrará automáticamente.');
-            logout();
-        }, tiempoRestante);
-    }
-}
 
 
 
@@ -3678,49 +3488,6 @@ function verFoto(link) {
     if (link) window.open(link, '_blank');
 }
 
-function verificarCorteTurno() {
-    if (!currentUser || currentUser.rol !== 'ATTF' || !currentUser.turnoAsignado) {
-        return; 
-    }
-
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-    const turnoActual = TURNOS_ATTF[currentUser.turnoAsignado];
-    
-    // Calcular hora de corte con extensión de gracia
-    let horaCorte;
-    
-    if (turnoActual.esTurnoNocturno) {
-        // Turno nocturno: 6 AM + 3 horas = 9 AM
-        horaCorte = turnoActual.horaFin + turnoActual.horasGraciaExtension;
-        
-        if (horaActual >= horaCorte) {
-            alert('Su turno nocturno ha finalizado. Se cerrará su sesión.');
-            logout();
-            return;
-        }
-    } else {
-        // Turnos diurnos
-        horaCorte = turnoActual.horaFin + turnoActual.horasGraciaExtension;
-        
-        // Si el corte excede 24 horas, ajustar
-        if (horaCorte >= 24) {
-            horaCorte = horaCorte - 24;
-            // Verificar si ya pasó la medianoche Y pasó la hora de corte
-            if (horaActual < 12 && horaActual >= horaCorte) {
-                alert('Su turno ha finalizado. Se cerrará su sesión.');
-                logout();
-                return;
-            }
-        } else {
-            if (horaActual >= horaCorte) {
-                alert('Su turno ha finalizado. Se cerrará su sesión.');
-                logout();
-                return;
-            }
-        }
-    }
-}
 
 
 // === FUNCIÓN PARA GUARDAR DATOS OFFLINE ===
