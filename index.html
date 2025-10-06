@@ -1078,32 +1078,7 @@ function mostrarConfiguracionInicialATTF() {
         return;
     }
     
-    const loginSection = document.getElementById('loginSection');
-    loginSection.innerHTML = `
-        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-        <h1 class="titulo-degradado">CLESA</h1>
-        <p class="subtitulo">Configura tu Calendario de Trabajo</p>
-        
-        <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-            <strong>Paso 1 de 2:</strong> Selecciona tu turno de HOY
-        </div>
-        
-        <div class="form-group">
-            <label>Turno de HOY:</label>
-            <select id="turnoHoy" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                <option value="">-- Seleccione su turno --</option>
-                ${turnosDisponibles.map(t => `<option value="${t.key}">${t.nombre}</option>`).join('')}
-            </select>
-        </div>
-        
-        <button class="btn" onclick="confirmarTurnoHoyATTF()" style="margin-top: 20px;">
-            Continuar al Paso 2 →
-        </button>
-        <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
-            Cancelar
-        </button>
-    `;
-}
+   
 
 
 async function confirmarTurnoHoyATTF() {
@@ -2188,30 +2163,6 @@ function generarKMLString(ubicaciones) {
 
      
     
-    const loginSection = document.getElementById('loginSection');
-    loginSection.innerHTML = `
-        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-        <h1 class="titulo-degradado">CLESA</h1>
-        <p class="subtitulo">Seleccione su Turno de Trabajo</p>
-        
-        <div class="table-selector">
-            ${turnosDisponibles.map(turno => `
-                <div class="table-option" onclick="seleccionarTurno('${turno.key}')">
-                    <span class="table-icon">🕐</span>
-                    <div class="table-title">${turno.nombre}</div>
-                    <div class="table-description">${turno.descripcion}</div>
-                </div>
-            `).join('')}
-        </div>
-        <button class="btn btn-danger" onclick="logout()" style="margin-top: 20px;">Cancelar</button>
-    `;
-}
-
-
-
-
-
-
 function mostrarTablasSegunRol() {
     if (!currentUser || !currentUser.rol) {
         console.log('❌ currentUser no está disponible');
@@ -3571,3 +3522,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
