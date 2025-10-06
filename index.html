@@ -1018,7 +1018,8 @@ async function loginATTF(userData) {
         }
         
         // Verificar si debe programar turno de mañana
-        if (userData.contador_turnos >= 5) {
+        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+        if (contadorTurnos >= 5) {
             // Día 5: Forzar descanso
             mostrarForzarDescansoATTF();
             return;
@@ -1307,18 +1308,24 @@ async function confirmarTurnoMananaATTF() {
         
         const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
         
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
-                turno_hoy: turnoHoy,
-                fecha_turno_hoy: fechaHoy,
-                turno_manana: turnoManana,
-                fecha_turno_manana: fechaMananaStr,
-                contador_turnos: (currentUser.contador_turnos || 0) + 1,
-                estado_ciclo: 'ciclo_normal',
-                ultimaconexion: new Date().toISOString()
-            })
-            .eq('id', currentUser.id);
+        const contadorActual = parseInt(currentUser.contador_turnos) || 0;  // ← Convertir a número
+const nuevoContador = contadorActual + 1;
+
+const contadorActual = parseInt(currentUser.contador_turnos) || 0;  // ← Convertir a número
+const nuevoContador = contadorActual + 1;
+
+const { error } = await supabaseClient
+    .from('usuarios')
+    .update({
+        turno_hoy: turnoHoy,
+        fecha_turno_hoy: fechaHoy,
+        turno_manana: turnoManana,
+        fecha_turno_manana: fechaMananaStr,
+        contador_turnos: nuevoContador,  // ← Usar el valor numérico
+        estado_ciclo: 'ciclo_normal',
+        ultimaconexion: new Date().toISOString()
+    })
+    .eq('id', currentUser.id);
         
         if (error) {
             alert('Error guardando configuración: ' + error.message);
