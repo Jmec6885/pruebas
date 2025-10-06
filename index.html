@@ -1150,9 +1150,6 @@ async function confirmarTurnoHoyATTF() {
 // AÑADIR esta función auxiliar
 function getTurnoConsecutivo(turnoHoyKey) {
     const relaciones = {
-        "turno1": "turno2",
-        "turno4": "turno2", // Asumimos que quieres evitar el solapamiento 4pm -> 2pm-10pm
-        "turno2": "turno3",
         "turno3": "turno1",
         "turno3": "turno4"
     };
