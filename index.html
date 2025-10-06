@@ -492,7 +492,6 @@
         font-size: 2rem;
     }
     
-   
     /* Mejorar legibilidad de enlaces */
     .result-item a {
         display: inline-block;
@@ -508,6 +507,7 @@
         padding: 10px 15px !important;
     }
 }
+
 
     </style>
 </head>
@@ -650,7 +650,8 @@
     
     // NOTA: Las variables ya fueron declaradas arriba. ¡No las repitas!
 
-    const TURNOS_ATTF = {
+    // === CONFIGURACIÓN DE TURNOS ATTF (Visibilidad del Botón) ===
+const TURNOS_ATTF = {
     turno1: {
         nombre: "6:00 AM - 2:00 PM",
         codigo: "6am-2pm",
@@ -1077,7 +1078,32 @@ function mostrarConfiguracionInicialATTF() {
         return;
     }
     
-   
+    const loginSection = document.getElementById('loginSection');
+    loginSection.innerHTML = `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+        <h1 class="titulo-degradado">CLESA</h1>
+        <p class="subtitulo">Configura tu Calendario de Trabajo</p>
+        
+        <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+            <strong>Paso 1 de 2:</strong> Selecciona tu turno de HOY
+        </div>
+        
+        <div class="form-group">
+            <label>Turno de HOY:</label>
+            <select id="turnoHoy" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <option value="">-- Seleccione su turno --</option>
+                ${turnosDisponibles.map(t => `<option value="${t.key}">${t.nombre}</option>`).join('')}
+            </select>
+        </div>
+        
+        <button class="btn" onclick="confirmarTurnoHoyATTF()" style="margin-top: 20px;">
+            Continuar al Paso 2 →
+        </button>
+        <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
+            Cancelar
+        </button>
+    `;
+}
 
 
 async function confirmarTurnoHoyATTF() {
@@ -1579,14 +1605,13 @@ async function limpiarDiasDescansoViejos() {
     try {
         const fechaHoy = new Date().toISOString().split('T')[0];
         
-        // CORRECCIÓN: Usar .filter() con sintaxis correcta
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
                 descanso_fecha_inicio: null,
                 descanso_fecha_fin: null
             })
-            .filter('descanso_fecha_fin', 'lt', fechaHoy); // ← SINTAXIS CORRECTA
+            .lt('descanso_fecha_fin', fechaHoy);
         
         if (error) {
             console.error('Error limpiando días de descanso viejos:', error);
@@ -1598,11 +1623,12 @@ async function limpiarDiasDescansoViejos() {
     }
 }
 
+
 async function limpiarTurnosViejos() {
     try {
         const fechaHoy = new Date().toISOString().split('T')[0];
         
-        // CORRECCIÓN: Usar .filter() con sintaxis correcta
+        // Limpiar turnos pasados de ATTF
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
@@ -1612,7 +1638,7 @@ async function limpiarTurnosViejos() {
                 fecha_turno_manana: null
             })
             .eq('rol', 'ATTF')
-            .filter('fecha_turno_hoy', 'lt', fechaHoy); // ← SINTAXIS CORRECTA
+            .lt('fecha_turno_hoy', fechaHoy);
         
         if (error) {
             console.error('Error limpiando turnos viejos:', error);
@@ -1623,6 +1649,7 @@ async function limpiarTurnosViejos() {
         console.error('Error en limpieza de turnos:', error);
     }
 }
+
 
 
 async function actualizarTurnosDiarios() {
@@ -1746,7 +1773,6 @@ async function desbloquearUsuario(username) {
     
     alert(`Usuario ${username} desbloqueado exitosamente.\n\nSu configuración ha sido reseteada.`);
 }
-
 
 
 
@@ -2160,8 +2186,11 @@ function generarKMLString(ubicaciones) {
 
     
 
-     
-    
+
+
+
+
+
 function mostrarTablasSegunRol() {
     if (!currentUser || !currentUser.rol) {
         console.log('❌ currentUser no está disponible');
@@ -3437,6 +3466,7 @@ function volverAResultadosPrincipales(tablaAnterior) {
 function verFoto(link) {
     if (link) window.open(link, '_blank');
 }
+
 
 
 
