@@ -1308,24 +1308,25 @@ async function confirmarTurnoMananaATTF() {
         
         const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
         
-        const contadorActual = parseInt(currentUser.contador_turnos) || 0;  // ← Convertir a número
-const nuevoContador = contadorActual + 1;
-
-const contadorActual = parseInt(currentUser.contador_turnos) || 0;  // ← Convertir a número
-const nuevoContador = contadorActual + 1;
-
-const { error } = await supabaseClient
-    .from('usuarios')
-    .update({
-        turno_hoy: turnoHoy,
-        fecha_turno_hoy: fechaHoy,
-        turno_manana: turnoManana,
-        fecha_turno_manana: fechaMananaStr,
-        contador_turnos: nuevoContador,  // ← Usar el valor numérico
-        estado_ciclo: 'ciclo_normal',
-        ultimaconexion: new Date().toISOString()
-    })
-    .eq('id', currentUser.id);
+        // === SOLUCIÓN: Conversión explícita antes de la suma ===
+        // 1. Usamos parseFloat (o parseInt) para asegurarnos que sea un número.
+        // 2. Si es null o undefined, el || 0 asegura que sea 0.
+        const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
+        const nuevoContador = contadorActual + 1;
+        // ======================================================
+        
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({
+                turno_hoy: turnoHoy,
+                fecha_turno_hoy: fechaHoy,
+                turno_manana: turnoManana,
+                fecha_turno_manana: fechaMananaStr,
+                contador_turnos: nuevoContador, // ← Este es un número real
+                estado_ciclo: 'ciclo_normal',
+                ultimaconexion: new Date().toISOString()
+            })
+            .eq('id', currentUser.id);
         
         if (error) {
             alert('Error guardando configuración: ' + error.message);
@@ -1650,100 +1651,124 @@ async function confirmarDescansoPoda() {
 
 
 async function limpiarDiasDescansoViejos() {
-    try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
+    // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
+    const ahora = new Date();
+    const fechaHoyStr = ahora.toISOString().split('T')[0];
+    
+    // 2. Buscar usuarios cuyo descanso terminó o termina hoy
+    // La fecha de fin de descanso (descanso_fecha_fin) es el último día libre.
+    // El turno de regreso (turno_regreso) está programado para el día siguiente.
+    // Por eso, usamos 'lt' (less than, menor que) para fechas pasadas.
+    const { data: usuarios, error } = await supabaseClient
+        .from('usuarios')
+        .select('id, turno_regreso, fecha_turno_regreso, descanso_fecha_fin')
+        // Filtramos a los que tienen un descanso_fecha_fin que ya pasó o es hoy
+        .lte('descanso_fecha_fin', fechaHoyStr) 
+        // y que tienen un turno de regreso programado
+        .not('turno_regreso', 'is', null); 
         
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
+    if (error) {
+        console.error('Error al consultar usuarios para limpieza de descanso:', error);
+        return;
+    }
+    
+    // 3. Procesar cada usuario encontrado (cuyo descanso terminó)
+    const updates = usuarios.map(usuario => {
+        // Promovemos el Turno de Regreso para que se convierta en el Turno de Hoy.
+        // Esto reinicia el contador y el ciclo de 5 días.
+        
+        // Lógica de validación de REGRESO:
+        // Solo promovemos si la fecha de regreso es HOY. 
+        // Si el usuario se ausentó (llegó más tarde de la fecha_turno_regreso), 
+        // la función limpiarTurnosViejos() manejará la migración del turno.
+        const fechaRegresoProgramada = usuario.fecha_turno_regreso;
+
+        if (fechaRegresoProgramada === fechaHoyStr) {
+            return {
+                id: usuario.id,
+                // Reinicio del ciclo:
+                turno_hoy: usuario.turno_regreso,
+                fecha_turno_hoy: usuario.fecha_turno_regreso,
+                contador_turnos: 0, // El primer turno después del descanso es el turno 0/1
+
+                // Limpieza de campos de descanso (muy importante):
                 descanso_fecha_inicio: null,
-                descanso_fecha_fin: null
-            })
-            .lt('descanso_fecha_fin', fechaHoy);
-        
-        if (error) {
-            console.error('Error limpiando días de descanso viejos:', error);
-        } else {
-            console.log('🧹 Días de descanso antiguos limpiados');
+                descanso_fecha_fin: null,
+                turno_regreso: null,
+                fecha_turno_regreso: null
+            };
         }
-    } catch (error) {
-        console.error('Error en limpieza de días de descanso:', error);
+        
+        // Si la fecha de regreso ya pasó, se salta este usuario en la limpieza de descanso.
+        // Esto evita que se "peguen" turnos viejos si el usuario estuvo inactivo mucho tiempo.
+        return null;
+    }).filter(update => update !== null); // Eliminar los registros nulos (que no deben actualizarse hoy)
+
+
+    if (updates.length > 0) {
+        // 4. Ejecutar la actualización masiva de los usuarios que regresan
+        const { error: updateError } = await supabaseClient
+            .from('usuarios')
+            .upsert(updates);
+
+        if (updateError) {
+            console.error('Error al actualizar limpieza de descanso:', updateError);
+        } else {
+            console.log(`🌴 ${updates.length} usuario(s) regresaron de descanso. Ciclo reiniciado.`);
+        }
     }
 }
 
 
 async function limpiarTurnosViejos() {
-    try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
-        
-        // Limpiar turnos pasados de ATTF
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({
-                turno_hoy: null,
-                fecha_turno_hoy: null,
-                turno_manana: null,
-                fecha_turno_manana: null
-            })
-            .eq('rol', 'ATTF')
-            .lt('fecha_turno_hoy', fechaHoy);
-        
-        if (error) {
-            console.error('Error limpiando turnos viejos:', error);
-        } else {
-            console.log('🧹 Turnos antiguos limpiados');
-        }
-    } catch (error) {
-        console.error('Error en limpieza de turnos:', error);
-    }
-}
-
-
-
-async function actualizarTurnosDiarios() {
-    console.log('🔄 Ejecutando actualización diaria de turnos...');
+    const ahora = new Date();
+    // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
+    const fechaHoyStr = ahora.toISOString().split('T')[0];
     
-    try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
+    // Buscar usuarios donde la fecha_turno_hoy no sea hoy (es decir, ya pasó)
+    const { data: usuarios, error } = await supabaseClient
+        .from('usuarios')
+        .select('id, fecha_turno_hoy, turno_manana, fecha_turno_manana')
+        // Filtramos por usuarios cuya fecha_turno_hoy NO sea la de hoy
+        .not('fecha_turno_hoy', 'eq', fechaHoyStr)
+        .or('turno_hoy.not.is.null'); // Solo aquellos que alguna vez tuvieron turno hoy
         
-        // Obtener todos los usuarios ATTF con turno programado para hoy
-        const { data: usuarios, error } = await supabaseClient
+    if (error) {
+        console.error('Error al consultar usuarios para limpieza de turnos:', error);
+        return;
+    }
+    
+    // 2. Procesar cada usuario encontrado
+    const updates = usuarios.map(usuario => {
+        // La fecha de turno de hoy programada ya pasó, o nunca se programó para hoy.
+        // Asignamos el turno de MAÑANA como el turno de HOY.
+        const nuevoTurnoHoy = usuario.turno_manana;
+        const nuevaFechaTurnoHoy = usuario.fecha_turno_manana;
+        
+        return {
+            id: usuario.id,
+            turno_hoy: nuevoTurnoHoy,
+            fecha_turno_hoy: nuevaFechaTurnoHoy,
+            turno_manana: null, // Limpiamos el turno de mañana
+            fecha_turno_manana: null // Limpiamos la fecha de mañana
+        };
+    });
+
+    if (updates.length > 0) {
+        // 3. Ejecutar la actualización masiva de los turnos "viejos"
+        const { error: updateError } = await supabaseClient
             .from('usuarios')
-            .select('*')
-            .eq('rol', 'ATTF')
-            .eq('fecha_turno_manana', fechaHoy);
-        
-        if (error) {
-            console.error('Error obteniendo usuarios:', error);
-            return;
+            .upsert(updates);
+
+        if (updateError) {
+            console.error('Error al actualizar turnos viejos:', updateError);
+        } else {
+            console.log(`🧹 ${updates.length} turno(s) viejo(s) limpiado(s) y migrado(s).`);
         }
-        
-        if (!usuarios || usuarios.length === 0) {
-            console.log('No hay usuarios con turnos programados para hoy');
-            return;
-        }
-        
-        // Actualizar cada usuario: turno_manana → turno_hoy
-        for (const usuario of usuarios) {
-            await supabaseClient
-                .from('usuarios')
-                .update({
-                    turno_hoy: usuario.turno_manana,
-                    fecha_turno_hoy: fechaHoy,
-                    turno_manana: null,
-                    fecha_turno_manana: null
-                })
-                .eq('id', usuario.id);
-            
-            console.log(`✅ Turno actualizado para usuario: ${usuario.usuario}`);
-        }
-        
-        console.log('🎉 Actualización diaria completada');
-        
-    } catch (error) {
-        console.error('Error en actualización diaria:', error);
     }
 }
+
+
 
 
 
