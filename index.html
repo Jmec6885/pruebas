@@ -1153,6 +1153,7 @@ function getTurnoConsecutivo(turnoHoyKey) {
         "turno4": "turno2", // Asumimos que quieres evitar el solapamiento 4pm -> 2pm-10pm
         "turno2": "turno3",
         "turno3": "turno1"
+        "turno3": "turno4"
     };
     return relaciones[turnoHoyKey];
 }
