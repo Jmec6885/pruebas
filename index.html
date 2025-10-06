@@ -1108,44 +1108,84 @@ function mostrarConfiguracionInicialATTF() {
 
 async function confirmarTurnoHoyATTF() {
     const turnoHoyKey = document.getElementById('turnoHoy').value;
-    
+
     if (!turnoHoyKey) {
         alert('Por favor seleccione su turno de hoy');
         return;
     }
+
+    // --- INICIO: CAMBIO 1 para ELIMINAR CONFIRMACIÓN ---
     
-    const turnoHoy = TURNOS_ATTF[turnoHoyKey];
+    // Obtener la cantidad de turnos que el usuario pudo seleccionar en el Paso 1
+    // (Asumimos que solo puede seleccionar un turno si solo hay una opción)
+    const selectElement = document.getElementById('turnoHoy');
+    const numOpciones = selectElement.options.length - 1; // Restamos la opción "-- Seleccione su turno --"
     
-    // Confirmación con alerta
-    const confirmar = confirm(`¿Confirmas que tu turno de HOY es:\n\n${turnoHoy.nombre}?\n\n✅ SÍ - Continuar\n❌ NO - Corregir`);
-    
-    if (!confirmar) {
-        return; // Usuario puede corregir
+    let confirmar = true; // Por defecto, NO pide confirmación (asumimos que está bien)
+
+    if (numOpciones > 1) {
+        // Si hay más de una opción disponible, SÍ pedimos confirmación (lógica actual)
+        const turnoHoy = TURNOS_ATTF[turnoHoyKey];
+        confirmar = confirm(
+            `¿Confirmas que tu turno de HOY es:\n\n${turnoHoy.nombre}?\n\n✅ SÍ - Continuar\n❌ NO - Corregir`
+        );
     }
+    
+    // Si la confirmación fue cancelada (o si había varias opciones y el usuario dijo NO)
+    if (!confirmar) {
+        return;
+    }
+
+    // --- FIN: CAMBIO 1 ---
     
     // Guardar temporalmente en memoria
     window.turnoHoySeleccionado = turnoHoyKey;
-    
+
     // Pasar al paso 2
     mostrarProgramarTurnoManana(true); // Con opción descanso (primera vez)
 }
 
 
+// AÑADIR esta función auxiliar
+function getTurnoConsecutivo(turnoHoyKey) {
+    const relaciones = {
+        "turno1": "turno2",
+        "turno4": "turno2", // Asumimos que quieres evitar el solapamiento 4pm -> 2pm-10pm
+        "turno2": "turno3",
+        "turno3": "turno1"
+    };
+    return relaciones[turnoHoyKey];
+}
+
 function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
     const loginSection = document.getElementById('loginSection');
     const paso = mostrarOpcionDescanso ? "Paso 2 de 2" : "Programa tu próximo turno";
     
+    // 1. Obtener el turno de HOY seleccionado
+    const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno_hoy;
+    // 2. Obtener la clave del turno consecutivo que debe ser BLOQUEADO
+    const turnoConsecutivoKey = getTurnoConsecutivo(turnoHoyKey); 
+
     let opcionesHTML = '';
     
     // Generar opciones de turnos
     Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-        opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+        // --- INICIO: CAMBIO 2 para BLOQUEAR CONSECUTIVOS ---
+        if (key === turnoConsecutivoKey) {
+            // Generar la opción como deshabilitada (no se puede seleccionar)
+            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+        } else {
+            opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+        }
+        // --- FIN: CAMBIO 2 ---
     });
     
     // Agregar opción descanso si aplica
     if (mostrarOpcionDescanso) {
         opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
     }
+    
+    // ... (El resto de la función es igual, solo actualizamos el HTML con las opciones generadas)
     
     loginSection.innerHTML = `
         <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
@@ -1160,13 +1200,12 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
             <label>Turno de MAÑANA:</label>
             <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                 <option value="">-- Seleccione --</option>
-                ${opcionesHTML}
+                ${opcionesHTML} 
             </select>
         </div>
         
         <div id="seccionDescanso" style="display: none; margin-top: 20px;">
-            <!-- Se llenará dinámicamente -->
-        </div>
+            </div>
         
         <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; display: none;">
             ✅ Confirmar y Acceder
@@ -1176,6 +1215,7 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
         </button>
     `;
 }
+
 
 
 
