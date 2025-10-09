@@ -2036,7 +2036,7 @@ function verGraficas(graficaData, nombreCliente, cuentaContrato) {
 }
 
 
-    // ✅ Función para crear gráficas (CON ETIQUETAS ROTADAS)
+   // ✅ Función para crear gráficas HORIZONTALES (barras de izq→der, líneas arriba→abajo)
 function crearGraficas(datos) {
     try {
         const ctxConsumos = document.getElementById('consumosChart');
@@ -2055,17 +2055,17 @@ function crearGraficas(datos) {
                         borderSkipped: false,
                     }]
                 },
-                plugins: [ChartDataLabels], // ✅ Activar plugin de etiquetas
+                plugins: [ChartDataLabels],
                 options: {
+                    indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {display: true, position: 'top'},
-                        // ✅ Configuración de etiquetas de datos
                         datalabels: {
                             display: true,
                             anchor: 'end',
-                            align: 'top',
+                            align: 'right',
                             font: {
                                 weight: 'bold',
                                 size: 12
@@ -2078,28 +2078,23 @@ function crearGraficas(datos) {
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y} kWh`;
+                                    return `${context.dataset.label}: ${context.parsed.x} kWh`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        y: {
+                        x: { // 🎯 Ahora X es el valor (consumo)
                             beginAtZero: true,
                             title: {display: true, text: 'Consumo (kWh)'},
-                            // ✅ Agregar espacio extra arriba para las etiquetas
                             suggestedMax: function(context) {
                                 const max = Math.max(...datos.consumos);
-                                return max * 1.15; // 15% más de espacio
+                                return max * 1.15;
                             }
                         },
-                        x: {
+                        y: { // 🎯 Ahora Y son los meses
                             title: {display: true, text: 'Mes'},
-                            // 🎯 CAMBIO AQUÍ: Rotar etiquetas del eje X
                             ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                autoSkip: false,
                                 font: {
                                     size: 11
                                 }
@@ -2127,21 +2122,21 @@ function crearGraficas(datos) {
                         pointBackgroundColor: 'rgba(118, 75, 162, 1)',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
-                        pointRadius: 8, // ✅ Puntos un poco más grandes
+                        pointRadius: 8,
                         pointHoverRadius: 10
                     }]
                 },
-                plugins: [ChartDataLabels], // ✅ Activar plugin de etiquetas
+                plugins: [ChartDataLabels],
                 options: {
+                    indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {display: true, position: 'top'},
-                        // ✅ Configuración de etiquetas de datos para líneas
                         datalabels: {
                             display: true,
                             anchor: 'end',
-                            align: 'top',
+                            align: 'right',
                             offset: 5,
                             font: {
                                 weight: 'bold',
@@ -2160,29 +2155,28 @@ function crearGraficas(datos) {
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y.toLocaleString()} kWh`;
+                                    return `${context.dataset.label}: ${context.parsed.x.toLocaleString()} kWh`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        y: {
+                        x: { // 🎯 Ahora X es el valor (lectura)
                             beginAtZero: false,
                             title: {display: true, text: 'Lectura Acumulada (kWh)'},
-                            ticks: {callback: function(value){return value.toLocaleString();}},
-                            // ✅ Agregar espacio extra arriba para las etiquetas
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString();
+                                }
+                            },
                             suggestedMax: function(context) {
                                 const max = Math.max(...datos.lecturas);
-                                return max * 1.1; // 10% más de espacio
+                                return max * 1.1;
                             }
                         },
-                        x: {
+                        y: { // 🎯 Ahora Y son los meses
                             title: {display: true, text: 'Mes'},
-                            // 🎯 CAMBIO AQUÍ: Rotar etiquetas del eje X
                             ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                autoSkip: false,
                                 font: {
                                     size: 11
                                 }
@@ -2193,7 +2187,7 @@ function crearGraficas(datos) {
             });
         }
 
-        console.log('✅ Gráficas creadas exitosamente');
+        console.log('✅ Gráficas creadas exitosamente en formato HORIZONTAL');
 
     } catch (error) {
         console.error('❌ Error creando gráficas:', error);
@@ -2412,1107 +2406,385 @@ async function logout() {
       selectedTable = null;
     }
 
-    // === FUNCIÓN PRINCIPAL DE BÚSQUEDA (FINAL Y UNIVERSAL) ===
+   // ===================================================================
+// 🔍 FUNCIÓN UNIFICADA DE BÚSQUEDA (VERSIÓN COMPLETA Y OPTIMIZADA)
+// ===================================================================
+
 async function buscar(campo, tipo) {
     await renovarSesion();
     await capturarCoordenadasGPS(); 
     
     const valor = document.getElementById(`search${campo}`).value.trim();
     if (!valor) {
-      alert(`Por favor ingrese un valor para ${campo}`);
-      return;
+        alert(`Por favor ingrese un valor para ${campo}`);
+        return;
     }
 
-    // 💡 CAMBIO CLAVE: Contamos la búsqueda AHORA, después de la validación del valor
-    // Esto asegura que cada búsqueda válida (simple o múltiple) sea contada.
     await incrementarContadorBusquedas();
     
     const valores = valor.includes(',') ? valor.split(',').map(v => v.trim()).filter(v => v) : [valor];
     
     if (valores.length > 1) {
-      // Búsqueda Múltiple KML
-      await busquedaMultipleKML(campo, valores);
+        // Búsqueda Múltiple KML
+        await busquedaMultipleKML(campo, valores);
     } else {
-      // Búsqueda principal inmediata (búsqueda simple)
-      let query = supabaseClient.from(selectedTable).select('*');
-      if (tipo === 'exact') query = query.eq(campo, valor);
-      else query = query.ilike(campo, `%${valor}%`);
+        // Búsqueda simple
+        let query = supabaseClient.from(selectedTable).select('*');
+        if (tipo === 'exact') query = query.eq(campo, valor);
+        else query = query.ilike(campo, `%${valor}%`);
 
-      const { data, error } = await query;
-      if (error) {
-        alert('Error al buscar: ' + error.message);
+        const { data, error } = await query;
+        if (error) {
+            alert('Error al buscar: ' + error.message);
+            return;
+        }
+        
+        mostrarResultados(data || []);
+        
+        // Búsqueda adicional automática en tablas relacionadas
+        busquedaEnTablasRelacionadas(campo, valor, data || []);
+    }
+}
+
+// ===================================================================
+// 📊 MOSTRAR RESULTADOS PRINCIPALES
+// ===================================================================
+
+function mostrarResultados(resultados) {
+    const container = document.getElementById('searchResults');
+    const config = tableConfigs[selectedTable];
+    
+    consultasData = resultados;
+
+    if (resultados.length === 0) {
+        container.innerHTML = '<div class="result-card">❌ No se encontraron resultados</div>';
         return;
-      }
-      
-      // Mostrar resultados principales inmediatamente
-      mostrarResultados(data || []);
-      
-      // Si estamos en consultas_servicios, iniciar búsqueda adicional
-      if (selectedTable === 'consultas_servicios') {
-        busquedaAdicionalProgresiva(campo, valor);
-      }
+    }
+
+    let html = `<div class="result-header">✅ Se encontraron ${resultados.length} resultado(s)</div>`;
+    
+    resultados.forEach((item, index) => {
+        html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
+        config.resultFields.forEach(field => {
+            let valor = String(item[field] || 'N/A');
+            
+            if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
+                valor = formatearComentario(valor);
+                html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
+            } else {
+                html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
+            }
+        });
+        
+        html += generarBotonesAccion(item, index, config);
+        html += '</div>'; // Cierre result-card
+    });
+
+    // Botón KML si hay coordenadas
+    if (tieneCoordenadasValidas(resultados)) {
+        html += `<div style="margin-top: 20px; text-align: center; padding: 0 10px;">
+                    <button class="btn btn-secondary" onclick="descargarKML()" style="width: 100%; max-width: 280px;">📥 Descargar KML</button>
+                 </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// ===================================================================
+// 🎨 FUNCIÓN AUXILIAR: FORMATEAR COMENTARIOS
+// ===================================================================
+
+function formatearComentario(valor) {
+    return valor
+        .replace(/\*([^*]+)\*/g, '<br><strong>$1</strong>')
+        .replace(/OS SAP/g, '<br><strong>OS SAP</strong>')
+        .replace(/Fecha Generacion/g, '<br><strong>Fecha Generación:</strong>')
+        .replace(/Medidor según SAP/g, '<br><strong>Medidor según SAP:</strong>')
+        .replace(/Cantidad OS/g, '<br><strong>Cantidad OS:</strong>')
+        .replace(/Comentario Generacion/g, '<br><strong>Comentario Generación:</strong>')
+        .replace(/Comentario Incumplida o Adicional/g, '<br><strong>Comentario Incumplida o Adicional:</strong>')
+        .replace(/Comentario de Visita Fallida/g, '<br><strong>Comentario de Visita Fallida:</strong>')
+        .replace(/Comentario de visita Anterior/g, '<br><strong>Comentario de visita Anterior:</strong>')
+        .replace(/Foto Medidor o Suministr/g, '<br><strong>Foto Medidor o Suministro:</strong>')
+        .replace(/Coordenas Contiguo Previa/g, '<br><strong>Coordenadas Contiguo Previa:</strong>')
+        .replace(/Coordenadas Visita Anterior/g, '<br><strong>Coordenadas Visita Anterior:</strong>')
+        .replace(/Coordeadas lector/g, '<br><strong>Coordenadas lector:</strong>')
+        .replace(/Coordenadas de OS según ATOMO/g, '<br><strong>Coordenadas de OS según ATOMO:</strong>')
+        .replace(/Fecha Eje\. OS anterior/g, '<br><strong>Fecha Eje. OS anterior:</strong>')
+        .replace(/Unidad que Eje\. OS Anterior/g, '<br><strong>Unidad que Eje. OS Anterior:</strong>')
+        .replace(/Dias (\d+)/g, '<br><strong>Días:</strong> $1')
+        .replace(/lectura[:\s]*(\d+)/gi, '<br><strong>Lectura:</strong> $1')
+        .replace(/Sin Datos/g, '<br><em>Sin Datos</em>')
+        .replace(/Sin Comentario/g, '<br><em>Sin Comentario</em>')
+        .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
+        .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
+        .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
+        .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
+        .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>')
+        .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
+        .replace(/Numero de OS/g, '<br><strong>Número de OS:</strong>')
+        .replace(/Tipologia/g, '<br><strong>Tipología:</strong>')
+        .replace(/Comentario de Cierre/g, '<br><strong>Comentario de Cierre:</strong>')
+        .replace(/coordenadas del suministro/g, '<br><strong>Coordenadas del suministro:</strong>')
+        .replace(/Comentario de Generacion/g, '<br><strong>Comentario de Generación:</strong>')
+        .replace(/Coordenadas De cierre/g, '<br><strong>Coordenadas De cierre:</strong>')
+        .replace(/Fecha Ejec/g, '<br><strong>Fecha Ejec:</strong>')
+        .replace(/Ejecutada por/g, '<br><strong>Ejecutada por:</strong>')
+        .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
+}
+
+// ===================================================================
+// 🔘 FUNCIÓN AUXILIAR: GENERAR BOTONES DE ACCIÓN
+// ===================================================================
+
+function generarBotonesAccion(item, index, config) {
+    let html = '<div class="action-buttons">';
+    
+    config.actions.forEach(action => {
+        const val = item[action];
+        if (!val) return;
+
+        const isCoordenadasLector = (action === 'Coordenadas' || action === 'CoordenadasLector');
+        const isCoordenadasGis = (action === 'Coordenadasgis' || action === 'CoordenadasGis');
+        const isFotoLink = (action === 'FotoLink' || action === 'fotolink');
+        const isGrafica = (action === 'Grafica');
+        
+        // Roles sin acceso a gráficas
+        const sinGraficas = ['Lectura', 'Contratista', 'ATTF', 'Poda'];
+        const puedeVerGraficas = !sinGraficas.includes(currentUser.rol);
+        
+        if (isCoordenadasLector) {
+            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
+        } else if (isCoordenadasGis) {
+            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
+        } else if (isFotoLink) {
+            html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
+        } else if (isGrafica && puedeVerGraficas) {
+            html += `<button class="btn btn-secondary" onclick="verGraficasPorIndice(${index})">📊 Ver Consumos</button>`;
+        }
+    });
+    
+    html += '</div></div>'; // Cierre action-buttons y result-card
+    return html;
+}
+
+// ===================================================================
+// 🔍 BÚSQUEDA EN TABLAS RELACIONADAS (UNIFICADA)
+// ===================================================================
+
+async function busquedaEnTablasRelacionadas(campo, valor, resultadoPrincipal) {
+    // Determinar si se debe buscar OS o búsqueda adicional general
+    const esOS = resultadoPrincipal.length > 0 && 
+                 (resultadoPrincipal[0].OSATMO || resultadoPrincipal[0].OSSAP || resultadoPrincipal[0].OSATOMO);
+    
+    if (esOS) {
+        // Búsqueda de OS relacionadas
+        setTimeout(() => {
+            buscarOSRelacionadas(resultadoPrincipal[0]).then(relacionadas => {
+                if (relacionadas) {
+                    mostrarResultadosRelacionados(relacionadas, resultadoPrincipal[0]);
+                }
+            });
+        }, 2000);
+    } else if (selectedTable === 'consultas_servicios') {
+        // Búsqueda adicional en OS Pendientes y OSCerradas
+        mostrarIndicadorBusqueda();
+        
+        const tablasAdicionales = ['OS Pendientes', 'OSCerradas'];
+        const resultadosAdicionales = {};
+        
+        for (const tabla of tablasAdicionales) {
+            const config = tableConfigs[tabla];
+            if (!config) continue;
+            
+            const campoEquivalente = encontrarCampoEquivalente(campo, config);
+            if (!campoEquivalente) continue;
+            
+            let query = supabaseClient.from(tabla).select('*');
+            query = query.eq(campoEquivalente, valor);
+            
+            const { data, error } = await query;
+            if (!error && data && data.length > 0) {
+                resultadosAdicionales[tabla] = data;
+            }
+        }
+        
+        ocultarIndicadorBusqueda();
+        
+        if (Object.keys(resultadosAdicionales).length > 0) {
+            mostrarBotonesResultadosAdicionales(resultadosAdicionales);
+        }
     }
 }
 
-
-    function mostrarResultados(resultados) {
-  const container = document.getElementById('searchResults');
-  const config = tableConfigs[selectedTable];
-  
-  // Guardamos los datos para uso posterior
-  consultasData = resultados;
-
-  if (resultados.length === 0) {
-    container.innerHTML = '<div class="result-card">❌ No se encontraron resultados</div>';
-    return;
-  }
-
-  let html = `<div class="result-header">✅ Se encontraron ${resultados.length} resultado(s)</div>`;
-  
-  resultados.forEach((item, index) => {
-    html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
-    config.resultFields.forEach(field => {
-      let valor = item[field] || 'N/A';
-      
-      // Formatear especialmente el campo Comentario
-      if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
-        // Reemplazar patrones comunes para mejorar legibilidad
-        valor = valor
-          .replace(/\*([^*]+)\*/g, '<br><strong>$1</strong>') // *texto* -> negrita con salto
-          .replace(/OS SAP/g, '<br><strong>OS SAP</strong>')
-          .replace(/Fecha Generacion/g, '<br><strong>Fecha Generación:</strong>')
-          .replace(/Medidor según SAP/g, '<br><strong>Medidor según SAP:</strong>')
-          .replace(/Cantidad OS/g, '<br><strong>Cantidad OS:</strong>')
-          .replace(/Comentario Generacion/g, '<br><strong>Comentario Generación:</strong>')
-          .replace(/Comentario Incumplida o Adicional/g, '<br><strong>Comentario Incumplida o Adicional:</strong>')
-          .replace(/Comentario de Visita Fallida/g, '<br><strong>Comentario de Visita Fallida:</strong>')
-          .replace(/Comentario de visita Anterior/g, '<br><strong>Comentario de visita Anterior:</strong>')
-          .replace(/Foto Medidor o Suministr/g, '<br><strong>Foto Medidor o Suministro:</strong>')
-          .replace(/Coordenas Contiguo Previa/g, '<br><strong>Coordenadas Contiguo Previa:</strong>')
-          .replace(/Coordenadas Visita Anterior/g, '<br><strong>Coordenadas Visita Anterior:</strong>')
-          .replace(/Coordeadas lector/g, '<br><strong>Coordenadas lector:</strong>')
-          .replace(/Coordenadas de OS según ATOMO/g, '<br><strong>Coordenadas de OS según ATOMO:</strong>')
-          .replace(/Fecha Eje\. OS anterior/g, '<br><strong>Fecha Eje. OS anterior:</strong>')
-          .replace(/Unidad que Eje\. OS Anterior/g, '<br><strong>Unidad que Eje. OS Anterior:</strong>')
-          .replace(/Dias (\d+)/g, '<br><strong>Días:</strong> $1')
-          .replace(/lectura[:\s]*(\d+)/gi, '<br><strong>Lectura:</strong> $1')
-          .replace(/Sin Datos/g, '<br><em>Sin Datos</em>')
-          .replace(/Sin Comentario/g, '<br><em>Sin Comentario</em>')
-          .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
-          .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
-          .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
-          .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
-          .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>')
-          .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
-          .replace(/Numero de OS/g, '<br><strong>Número de OS:</strong>')
-          .replace(/Tipologia/g, '<br><strong>Tipología:</strong>')
-          .replace(/Comentario de Cierre/g, '<br><strong>Comentario de Cierre:</strong>')
-          .replace(/coordenadas del suministro/g, '<br><strong>Coordenadas del suministro:</strong>')
-          .replace(/Comentario de Generacion/g, '<br><strong>Comentario de Generación:</strong>')
-          .replace(/Coordenadas De cierre/g, '<br><strong>Coordenadas De cierre:</strong>')
-          .replace(/Fecha Ejec/g, '<br><strong>Fecha Ejec:</strong>')
-          .replace(/Ejecutada por/g, '<br><strong>Ejecutada por:</strong>')
-          .replace(/Nombre Cliente/g, '<br><em>Nombre Cliente</em>')
-          .replace(/Cuenta Contrato/g, '<br><em>Cuenta Contrato</em>')
-          .replace(/Direccion/g, '<br><em>Direccion</em>')
-          .replace(/Tarifa/g, '<br><em>Tarifa</em>')
-          .replace(/Medidor/g, '<br><em>Medidor</em>')
-          .replace(/Fecha Lect/g, '<br><em>Fecha Lect</em>')
-          .replace(/Proteccion que lo Alimenta/g, '<br><em>Proteccion que lo Alimenta</em>')
-          .replace(/Propiedad/g, '<br><em>Propiedad</em>')
-          .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-          .replace(/Capacidad Sum/g, '<br><em>Capacidad Sum</em>')
-          .replace(/Circuito/g, '<br><em>Circuito</em>')
-          .replace(/Uicacion/g, '<br><em>Uicacion</em>')
-          .replace(/Cantidad de clientes/g, '<br><em>Cantidad de clientes</em>')
-          .replace(/Estructura Tx/g, '<br><em>Estructura Tx</em>')
-          .replace(/Primary Phase ConcatSet/g, '<br><em>Primary Phase ConcatSet</em>')
-          .replace(/Usos/g, '<br><em>Usos</em>')
-          .replace(/Voltaje/g, '<br><em>Voltaje</em>')
-          .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-          .replace(/Estructura/g, '<br><em>Estructura</em>')
-          .replace(/Aes Circuito/g, '<br><em>Aes Circuito</em>')
-          .replace(/Municipio/g, '<br><em>Municipio</em>')
-          .replace(/Fecha Ejec/g, '<br><em>Fecha Ejeco</em>')
-          .replace(/Fecha Gene/g, '<br><em>Fecha Gene</em>')
-          .replace(/OS ATOMO/g, '<br><em>OS ATOMO</em>')
-          .replace(/NIC(Contract Account)/g, '<br><em>NIC(Contract Account)</em>')
-          .replace(/Comentario de Previa/g, '<br><em>Comentario de Previa</em>')
-          .replace(/Comentario Generacion/g, '<br><em>Comentario Generacion</em>')
-          .replace(/Coordenadas/g, '<br><em>Coordenadas</em>')
-          .replace(/Coordenadas según ATOMO/g, '<br><em>Coordenadas según ATOMO</em>')
-          .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
-        
-        html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-      } else {
-        html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-      }
-    });
-    
-    // Verificar si es una búsqueda por OS para buscar relacionadas (solo en consultas_servicios)
-    // Verificar si es una búsqueda por OS para buscar relacionadas (en todas las tablas de OS)
-if ((selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas') && 
-    (item.OSATMO || item.OSSAP || item.OSATOMO)) {
-  setTimeout(() => {
-    buscarOSRelacionadas(item).then(relacionadas => {
-      if (relacionadas) {
-        mostrarOSRelacionadas(relacionadas, 'OS', item);
-      }
-    });
-  }, 2000);
-}
-    
-    html += '<div class="action-buttons">';
-
-config.actions.forEach(action => {
-    const val = item[action];
-    if (!val) return;
-
-    const isCoordenadasLector = (action === 'Coordenadas' || action === 'CoordenadasLector');
-    const isCoordenadasGis = (action === 'Coordenadasgis' || action === 'CoordenadasGis');
-    const isFotoLink = (action === 'FotoLink' || action === 'fotolink');
-    const isGrafica = (action === 'Grafica');
-    
-    // 1. ROL LECTURA
-    if (currentUser.rol === 'Lectura') {
-        if (selectedTable === 'consultas_servicios') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-            } else if (isCoordenadasGis) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-        }
-        
-    // 2. ROL CONTRATISTA
-    } else if (currentUser.rol === 'Contratista') {
-        if (selectedTable === 'consultas_servicios') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-            } else if (isCoordenadasGis) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-            // NOTA: No se muestra "Gráfica" para Contratista
-        } else if (selectedTable === 'TX y Cortes') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Ver Ubicación</button>`;
-            }
-        } else {
-            if (action.toLowerCase().includes('coordenadas')) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-        }
-        
-    // 3. ROL ATTF (SIN ACCESO A GRÁFICAS)
-    } else if (currentUser.rol === 'ATTF') {
-        if (selectedTable === 'consultas_servicios') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-            } else if (isCoordenadasGis) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-            // NO mostrar gráficas para ATTF
-        } else if (selectedTable === 'TX y Cortes') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Ver Ubicación</button>`;
-            }
-        }
-        
-    // 4. ROL PODA (SIN ACCESO A GRÁFICAS)
-    } else if (currentUser.rol === 'Poda') {
-        if (selectedTable === 'consultas_servicios') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-            } else if (isCoordenadasGis) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-            // NO mostrar gráficas para Poda
-        } else if (selectedTable === 'TX y Cortes') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Ver Ubicación</button>`;
-            }
-        }
-        
-    // 5. ROL SUPERVISOR Y OTROS (ACCESO COMPLETO INCLUYENDO GRÁFICAS)
-    } else { 
-        if (selectedTable === 'consultas_servicios') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-            } else if (isCoordenadasGis) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            } else if (isGrafica) {
-                // Solo Supervisor y Consulta tienen acceso a Gráficas
-                html += `<button class="btn btn-secondary" onclick="verGraficasPorIndice(${index})">📊 Ver Consumos</button>`;
-            }
-        } else if (selectedTable === 'TX y Cortes') {
-            if (isCoordenadasLector) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Ver Ubicación</button>`;
-            }
-        } else {
-            if (action.toLowerCase().includes('coordenadas')) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
-            } else if (isFotoLink) {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-        }
-    }
-});
-    
-html += '</div></div>'; // Cierre de action-buttons y result-card
-
-// Cierre del forEach de los resultados
-});
-
-  // Verificar si hay coordenadas válidas antes de mostrar el botón KML
-  const tieneCoordenadasValidas = resultados.some(item => {
-    const coordenadas = item.Coordenadas || item.coordenadas || item.Coordenadasgis || item.coordenadasgis;
-    return coordenadas && coordenadas.includes(',');
-  });
-
-  if (tieneCoordenadasValidas) {
-    html += '<div style="margin-top: 20px; text-align: center; padding: 0 10px;">';
-    html += '<button class="btn btn-secondary" onclick="descargarKML()" style="width: 100%; max-width: 280px;">📥 Descargar KML</button>';
-    html += '</div>';
-  }
-  
-  container.innerHTML = html;
-}
+// ===================================================================
+// 🔗 BUSCAR OS RELACIONADAS (OPTIMIZADA)
+// ===================================================================
 
 async function buscarOSRelacionadas(osData) {
-  const osNumero = osData.OSATMO || osData.OSSAP || osData.OSATOMO;
-  if (!osNumero) return null;
-  
-  console.log('=== DEBUG OS RELACIONADAS ===');
-  console.log('OS Original:', osNumero);
-  console.log('Datos originales:', osData);
-  
-  const criteriosBusqueda = [];
-  
-  // Verificar CuentaContrato
-  console.log('CuentaContrato:', osData.CuentaContrato, 'Tipo:', typeof osData.CuentaContrato);
-  if (osData.CuentaContrato && 
-      String(osData.CuentaContrato).trim() !== '' && 
-      String(osData.CuentaContrato) !== '0' && 
-      String(osData.CuentaContrato) !== '200000000000') {
-    criteriosBusqueda.push({campo: 'CuentaContrato', valor: osData.CuentaContrato});
-    console.log('✓ CuentaContrato válido:', osData.CuentaContrato);
-  } else {
-    console.log('✗ CuentaContrato filtrado');
-  }
-  
-  // Verificar Medidor
-  console.log('Medidor:', osData.Medidor, 'Tipo:', typeof osData.Medidor);
-  if (osData.Medidor && 
-      String(osData.Medidor).trim() !== '' && 
-      String(osData.Medidor) !== '0') {
-    criteriosBusqueda.push({campo: 'Medidor', valor: osData.Medidor});
-    console.log('✓ Medidor válido:', osData.Medidor);
-  } else {
-    console.log('✗ Medidor filtrado');
-  }
-  
-  // Verificar NombreCliente
-  console.log('NombreCliente:', osData.NombreCliente, 'Tipo:', typeof osData.NombreCliente);
-  if (osData.NombreCliente && 
-      String(osData.NombreCliente).trim() !== '' && 
-      String(osData.NombreCliente) !== '0' &&
-      String(osData.NombreCliente).toLowerCase() !== 'sin nombre') {
-    criteriosBusqueda.push({campo: 'NombreCliente', valor: osData.NombreCliente});
-    console.log('✓ NombreCliente válido:', osData.NombreCliente);
-  } else {
-    console.log('✗ NombreCliente filtrado');
-  }
-  
-  console.log('Criterios de búsqueda finales:', criteriosBusqueda);
-  
-  if (criteriosBusqueda.length === 0) {
-    console.log('❌ No hay criterios válidos para buscar');
-    return null;
-  }
-  
-  // Mostrar indicador de carga  
-  mostrarIndicadorBusquedaAdicional();
-  
-  const relacionadasPorTabla = {};
-  
-  let tablasBusqueda = [];
-
-  if (selectedTable === 'OS Pendientes') {
-    tablasBusqueda = ['OS Pendientes', 'OSCerradas'];
-  } else if (selectedTable === 'OSCerradas') {
-    tablasBusqueda = ['OS Pendientes', 'OSCerradas'];
-  } else if (selectedTable === 'consultas_servicios') {
-    tablasBusqueda = ['OS Pendientes', 'OSCerradas'];
-  } else {
-    tablasBusqueda = [];
-  }
-
-  for (const tabla of tablasBusqueda) {
-    console.log(`🔍 Buscando en tabla: ${tabla}`);
+    const osNumero = osData.OSATMO || osData.OSSAP || osData.OSATOMO;
+    if (!osNumero) return null;
     
-    // Inicializar el array de esta tabla una sola vez
-    if (!relacionadasPorTabla[tabla]) {
-      relacionadasPorTabla[tabla] = [];
+    const criteriosBusqueda = [];
+    
+    // Validar CuentaContrato
+    if (osData.CuentaContrato && 
+        String(osData.CuentaContrato).trim() !== '' && 
+        String(osData.CuentaContrato) !== '0' && 
+        String(osData.CuentaContrato) !== '200000000000') {
+        criteriosBusqueda.push({campo: 'CuentaContrato', valor: osData.CuentaContrato});
     }
-      
-    for (const criterio of criteriosBusqueda) {
-      try {
-        const campoEquivalente = encontrarCampoEquivalente(criterio.campo, tableConfigs[tabla]);
-        if (!campoEquivalente) continue;
+    
+    // Validar Medidor
+    if (osData.Medidor && 
+        String(osData.Medidor).trim() !== '' && 
+        String(osData.Medidor) !== '0') {
+        criteriosBusqueda.push({campo: 'Medidor', valor: osData.Medidor});
+    }
+    
+    // Validar NombreCliente
+    if (osData.NombreCliente && 
+        String(osData.NombreCliente).trim() !== '' && 
+        String(osData.NombreCliente) !== '0' &&
+        String(osData.NombreCliente).toLowerCase() !== 'sin nombre') {
+        criteriosBusqueda.push({campo: 'NombreCliente', valor: osData.NombreCliente});
+    }
+    
+    if (criteriosBusqueda.length === 0) return null;
+    
+    mostrarIndicadorBusqueda();
+    
+    const relacionadasPorTabla = {};
+    const tablasBusqueda = (selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas' || selectedTable === 'consultas_servicios') 
+                           ? ['OS Pendientes', 'OSCerradas'] 
+                           : [];
+
+    for (const tabla of tablasBusqueda) {
+        if (!relacionadasPorTabla[tabla]) relacionadasPorTabla[tabla] = [];
         
-        console.log(`  🔎 Buscando por ${campoEquivalente} = ${criterio.valor}`);
-        
-        const { data, error } = await supabaseClient
-          .from(tabla)
-          .select('*')
-          .eq(campoEquivalente, criterio.valor);
-        
-        if (error) {
-          console.log(`  ❌ Error en ${tabla}:`, error);
-          continue;
-        }
-        
-        if (data && data.length > 0) {
-          console.log(`  ✅ Encontrados ${data.length} registros en ${tabla} por ${campoEquivalente}`);
-          
-          data.forEach(item => {
-            const itemOS = item.OSATMO || item.OSSAP || item.OSATOMO;
-            console.log(`    📋 Revisando OS: ${itemOS}`);
+        for (const criterio of criteriosBusqueda) {
+            const campoEquivalente = encontrarCampoEquivalente(criterio.campo, tableConfigs[tabla]);
+            if (!campoEquivalente) continue;
             
-            // Excluir solo la OS exacta que se está consultando
-            const esMismaOS = (selectedTable === tabla && itemOS === osNumero);
-
-            if (itemOS && !esMismaOS) {
-              // Verificar duplicados de manera más específica usando ID único o combinación de campos
-              const claveUnica = `${tabla}-${itemOS}-${item.CuentaContrato}-${item.Medidor}`;
-              const existe = relacionadasPorTabla[tabla].find(r => {
-                const rOS = r.OSATMO || r.OSSAP || r.OSATOMO;
-                const claveExistente = `${tabla}-${rOS}-${r.CuentaContrato}-${r.Medidor}`;
-                return claveExistente === claveUnica;
-              });
-              
-              if (!existe) {
-                relacionadasPorTabla[tabla].push({
-                  ...item, 
-                  criterioRelacion: criterio.campo,
-                  tablaOrigen: tabla
-                });
-                console.log(`    ✅ Agregada OS relacionada: ${itemOS} desde ${tabla} (criterio: ${criterio.campo})`);
-              } else {
-                console.log(`    ⏭️ OS ya existe: ${itemOS} en ${tabla}`);
-              }
-            } else if (esMismaOS) {
-              console.log(`    ⏭️ Misma OS original: ${itemOS}`);
-            } else {
-              console.log(`    ⏭️ OS sin número válido: ${itemOS}`);
-            }
-          });
-        } else {
-          console.log(`  ❌ No se encontraron registros en ${tabla} para ${campoEquivalente} = ${criterio.valor}`);
+            const { data, error } = await supabaseClient
+                .from(tabla)
+                .select('*')
+                .eq(campoEquivalente, criterio.valor);
+            
+            if (error || !data) continue;
+            
+            data.forEach(item => {
+                const itemOS = item.OSATMO || item.OSSAP || item.OSATOMO;
+                const esMismaOS = (selectedTable === tabla && itemOS === osNumero);
+                
+                if (itemOS && !esMismaOS) {
+                    const claveUnica = `${tabla}-${itemOS}-${item.CuentaContrato}-${item.Medidor}`;
+                    const existe = relacionadasPorTabla[tabla].find(r => {
+                        const rOS = r.OSATMO || r.OSSAP || r.OSATOMO;
+                        return `${tabla}-${rOS}-${r.CuentaContrato}-${r.Medidor}` === claveUnica;
+                    });
+                    
+                    if (!existe) {
+                        relacionadasPorTabla[tabla].push({...item, criterioRelacion: criterio.campo, tablaOrigen: tabla});
+                    }
+                }
+            });
         }
-      } catch (error) {
-        console.log(`❌ Error buscando en tabla ${tabla}:`, error);
-        continue;
-      }
     }
     
-    console.log(`📊 Total encontrado en ${tabla}: ${relacionadasPorTabla[tabla].length}`);
-  }
-  
-  ocultarIndicadorBusquedaAdicional();
-  
-  console.log('=== RESULTADO FINAL ===');
-  console.log('Total OS relacionadas encontradas por tabla:', Object.keys(relacionadasPorTabla).length);
-  console.log('OS relacionadas:', relacionadasPorTabla);
-  console.log('========================');
-  
-  return Object.keys(relacionadasPorTabla).length > 0 ? relacionadasPorTabla : null;
+    ocultarIndicadorBusqueda();
+    return Object.keys(relacionadasPorTabla).length > 0 ? relacionadasPorTabla : null;
 }
 
+// ===================================================================
+// 📋 MOSTRAR RESULTADOS RELACIONADOS
+// ===================================================================
 
-      function mostrarOSRelacionadas(relacionadasPorTabla, criterioOriginal, datosOriginales) {
-  if (!relacionadasPorTabla || Object.keys(relacionadasPorTabla).length === 0) {
-    console.log('❌ No hay relacionadas para mostrar');
-    return;
-  }
-  
-  console.log('📊 Mostrando relacionadas:', relacionadasPorTabla);
-  
-  window.resultadosAdicionalesOS = relacionadasPorTabla;
-  const container = document.getElementById('searchResults');
-  
-  // Crear identificación del registro original
-  const osOriginal = datosOriginales.OSATMO || datosOriginales.OSSAP || datosOriginales.OSATOMO || 'N/A';
-  const clienteOriginal = datosOriginales.NombreCliente || 'N/A';
-  const cuentaOriginal = datosOriginales.CuentaContrato || 'N/A';
-  const medidorOriginal = datosOriginales.Medidor || 'N/A';
+function mostrarResultadosRelacionados(relacionadasPorTabla, datosOriginales) {
+    if (!relacionadasPorTabla || Object.keys(relacionadasPorTabla).length === 0) return;
+    
+    window.resultadosRelacionados = relacionadasPorTabla;
+    const container = document.getElementById('searchResults');
+    
+    const osOriginal = datosOriginales.OSATMO || datosOriginales.OSSAP || datosOriginales.OSATOMO || 'N/A';
+    const clienteOriginal = datosOriginales.NombreCliente || 'N/A';
+    const cuentaOriginal = datosOriginales.CuentaContrato || 'N/A';
+    const medidorOriginal = datosOriginales.Medidor || 'N/A';
 
-  let botonesHtml = `
-    <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107; margin-top: 15px;">
-      <div class="result-header">🔗 OS Relacionadas Encontradas</div>
-      <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #ffc107;">
-        <strong>Relacionadas para:</strong><br>
-        📋 OS: ${osOriginal}<br>
-        👤 Cliente: ${clienteOriginal}<br>
-        📄 Cuenta: ${cuentaOriginal}<br>
-        ⚡ Medidor: ${medidorOriginal}
-      </div>
-      <p>Se encontraron OS adicionales. Haz clic para ver detalles completos:</p>
-      <div class="action-buttons">
-  `;
-  
-  for (const [tabla, datos] of Object.entries(relacionadasPorTabla)) {
-    const config = tableConfigs[tabla];
-    const icono = config ? config.icon : '📋';
-    botonesHtml += `
-      <button class="btn btn-secondary" onclick="mostrarResultadosAdicionalesOS('${tabla}')">
-        ${icono} Ver OS en ${config.title} (${datos.length})
-      </button>
-    `;
-  }
-  
-  botonesHtml += `</div></div>`;
-  container.innerHTML += botonesHtml;
+    let html = `
+        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107; margin-top: 15px;">
+            <div class="result-header">🔗 Información Relacionada Encontrada</div>
+            <div style="background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #ffc107;">
+                <strong>Relacionado con:</strong><br>
+                📋 OS: ${osOriginal}<br>
+                👤 Cliente: ${clienteOriginal}<br>
+                📄 Cuenta: ${cuentaOriginal}<br>
+                ⚡ Medidor: ${medidorOriginal}
+            </div>
+            <p>Se encontró información adicional. Haz clic para ver detalles:</p>
+            <div class="action-buttons">`;
+    
+    for (const [tabla, datos] of Object.entries(relacionadasPorTabla)) {
+        const config = tableConfigs[tabla];
+        const icono = config ? config.icon : '📋';
+        html += `<button class="btn btn-secondary" onclick="mostrarDetalleRelacionados('${tabla}')">
+                    ${icono} Ver ${config.title} (${datos.length})
+                 </button>`;
+    }
+    
+    html += `</div></div>`;
+    container.innerHTML += html;
 }
 
-      function mostrarResultadosAdicionalesOS(tabla) {
-    if (!window.resultadosAdicionalesOS || !window.resultadosAdicionalesOS[tabla]) {
+// ===================================================================
+// 📄 MOSTRAR DETALLE DE RESULTADOS RELACIONADOS
+// ===================================================================
+
+function mostrarDetalleRelacionados(tabla) {
+    if (!window.resultadosRelacionados || !window.resultadosRelacionados[tabla]) {
         alert('No hay datos disponibles');
         return;
     }
     
-    const datos = window.resultadosAdicionalesOS[tabla];
+    const datos = window.resultadosRelacionados[tabla];
     const config = tableConfigs[tabla];
-    
     const container = document.getElementById('searchResults');
-    const contenidoOriginal = container.innerHTML;
+    
+    // Guardar estado original
+    window.contenidoOriginalBusqueda = container.innerHTML;
     
     let html = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
-            <div class="result-header">📋 ${config.title} - OS Relacionadas</div>
+            <div class="result-header">📋 ${config.title} - Información Relacionada</div>
             <div style="margin-bottom: 15px; text-align: center;">
                 <button class="btn btn-back" onclick="restaurarResultadosOriginales()">
                     ← Volver a Resultados Principales
                 </button>
             </div>
-        </div>
-    `;
-    
-    // Cambio temporal de selectedTable solo para las acciones/botones
-    const selectedTableOriginal = selectedTable;
-    selectedTable = tabla; 
-    
-    datos.forEach((item, index) => {
-        html += `<div class="result-card"><div class="result-header">Relacionada ${index + 1}</div>`;
-        config.resultFields.forEach(field => {
-            
-            // 💡 CORRECCIÓN CLAVE: Aseguramos que 'valor' es un String, incluso si era null/undefined
-            let valor = String(item[field] || 'N/A'); 
-            
-            // =====================================================================
-            // === LÓGICA DE FORMATO DE COMENTARIOS APLICADA AQUÍ ===
-            // =====================================================================
-            if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
-                // Se copia toda la lógica de 'replace' de mostrarResultados
-                valor = valor
-                    .replace(/\*([^*]+)\*/g, '<br><strong>$1</strong>')
-                    .replace(/OS SAP/g, '<br><strong>OS SAP</strong>')
-                    .replace(/Fecha Generacion/g, '<br><strong>Fecha Generación:</strong>')
-                    .replace(/Medidor según SAP/g, '<br><strong>Medidor según SAP:</strong>')
-                    .replace(/Cantidad OS/g, '<br><strong>Cantidad OS:</strong>')
-                    .replace(/Comentario Generacion/g, '<br><strong>Comentario Generación:</strong>')
-                    .replace(/Comentario Incumplida o Adicional/g, '<br><strong>Comentario Incumplida o Adicional:</strong>')
-                    .replace(/Comentario de Visita Fallida/g, '<br><strong>Comentario de Visita Fallida:</strong>')
-                    .replace(/Comentario de visita Anterior/g, '<br><strong>Comentario de visita Anterior:</strong>')
-                    .replace(/Foto Medidor o Suministr/g, '<br><strong>Foto Medidor o Suministro:</strong>')
-                    .replace(/Coordenas Contiguo Previa/g, '<br><strong>Coordenadas Contiguo Previa:</strong>')
-                    .replace(/Coordenadas Visita Anterior/g, '<br><strong>Coordenadas Visita Anterior:</strong>')
-                    .replace(/Coordeadas lector/g, '<br><strong>Coordenadas lector:</strong>')
-                    .replace(/Coordenadas de OS según ATOMO/g, '<br><strong>Coordenadas de OS según ATOMO:</strong>')
-                    .replace(/Fecha Eje\. OS anterior/g, '<br><strong>Fecha Eje. OS anterior:</strong>')
-                    .replace(/Unidad que Eje\. OS Anterior/g, '<br><strong>Unidad que Eje. OS Anterior:</strong>')
-                    .replace(/Dias (\d+)/g, '<br><strong>Días:</strong> $1')
-                    .replace(/lectura[:\s]*(\d+)/gi, '<br><strong>Lectura:</strong> $1')
-                    .replace(/Sin Datos/g, '<br><em>Sin Datos</em>')
-                    .replace(/Sin Comentario/g, '<br><em>Sin Comentario</em>')
-                    .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
-                    .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
-                    .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
-                    .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
-                    .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>')
-                    .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
-                    .replace(/Numero de OS/g, '<br><strong>Número de OS:</strong>')
-                    .replace(/Tipologia/g, '<br><strong>Tipología:</strong>')
-                    .replace(/Comentario de Cierre/g, '<br><strong>Comentario de Cierre:</strong>')
-                    .replace(/coordenadas del suministro/g, '<br><strong>Coordenadas del suministro:</strong>')
-                    .replace(/Comentario de Generacion/g, '<br><strong>Comentario de Generación:</strong>')
-                    .replace(/Coordenadas De cierre/g, '<br><strong>Coordenadas De cierre:</strong>')
-                    .replace(/Fecha Ejec/g, '<br><strong>Fecha Ejec:</strong>')
-                    .replace(/Ejecutada por/g, '<br><strong>Ejecutada por:</strong>')
-                    .replace(/Nombre Cliente/g, '<br><em>Nombre Cliente</em>')
-                    .replace(/Cuenta Contrato/g, '<br><em>Cuenta Contrato</em>')
-                    .replace(/Direccion/g, '<br><em>Direccion</em>')
-                    .replace(/Tarifa/g, '<br><em>Tarifa</em>')
-                    .replace(/Medidor/g, '<br><em>Medidor</em>')
-                    .replace(/Fecha Lect/g, '<br><em>Fecha Lect</em>')
-                    .replace(/Proteccion que lo Alimenta/g, '<br><em>Proteccion que lo Alimenta</em>')
-                    .replace(/Propiedad/g, '<br><em>Propiedad</em>')
-                    .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-                    .replace(/Capacidad Sum/g, '<br><em>Capacidad Sum</em>')
-                    .replace(/Circuito/g, '<br><em>Circuito</em>')
-                    .replace(/Uicacion/g, '<br><em>Uicacion</em>')
-                    .replace(/Cantidad de clientes/g, '<br><em>Cantidad de clientes</em>')
-                    .replace(/Estructura Tx/g, '<br><em>Estructura Tx</em>')
-                    .replace(/Primary Phase ConcatSet/g, '<br><em>Primary Phase ConcatSet</em>')
-                    .replace(/Usos/g, '<br><em>Usos</em>')
-                    .replace(/Voltaje/g, '<br><em>Voltaje</em>')
-                    .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-                    .replace(/Estructura/g, '<br><em>Estructura</em>')
-                    .replace(/Aes Circuito/g, '<br><em>Aes Circuito</em>')
-                    .replace(/Municipio/g, '<br><em>Municipio</em>')
-                    .replace(/Fecha Ejec/g, '<br><em>Fecha Ejeco</em>')
-                    .replace(/Fecha Gene/g, '<br><em>Fecha Gene</em>')
-                    .replace(/OS ATOMO/g, '<br><em>OS ATOMO</em>')
-                    .replace(/NIC(Contract Account)/g, '<br><em>NIC(Contract Account)</em>')
-                    .replace(/Comentario de Previa/g, '<br><em>Comentario de Previa</em>')
-                    .replace(/Comentario Generacion/g, '<br><em>Comentario Generacion</em>')
-                    .replace(/Coordenadas/g, '<br><em>Coordenadas</em>')
-                    .replace(/Coordenadas según ATOMO/g, '<br><em>Coordenadas según ATOMO</em>')
-                    .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
-                
-                // Mostrar el campo con el div especial para formato
-                html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-            } else {
-                // Mostrar campos normales
-                html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-            }
-            // =====================================================================
-            
-        });
-        
-        // Botones de acción
-        html += '<div class="action-buttons">';
-        config.actions.forEach(action => {
-            const val = item[action];
-            if (!val) return;
-            
-            if (action.toLowerCase().includes('coordenadas')) {
-                // Usando la función abrirCoordenadas con el formato mejorado
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
-            } else if (action === 'FotoLink' || action === 'fotolink') {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-        });
-        html += '</div></div>';
-    });
-    
-    // Restaurar selectedTable original
-    selectedTable = selectedTableOriginal;
-    
-    // Guardar el contenido original para poder restaurarlo
-    window.contenidoOriginalBusqueda = contenidoOriginal;
-    
-    container.innerHTML = html;
-}
-
-
-async function capturarCoordenadasGPS() {
-  if (!navigator.geolocation || !currentUser) return;
-  try {
-    const posicion = await new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => reject(new Error("Timeout")), 2000);
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          clearTimeout(timeoutId);
-          resolve(pos);
-        },
-        error => {
-          clearTimeout(timeoutId);
-          reject(error);
-        },
-        { enableHighAccuracy: false, timeout: 1500, maximumAge: 600000 }
-      );
-    });
-    const lat = posicion.coords.latitude;
-    const lng = posicion.coords.longitude;
-    const coordenadas = lat + "," + lng;
-    const timestamp = new Date().toISOString();
-    await supabaseClient.from("usuarios").update({ coordenadas, ultimaconexion: timestamp }).eq("id", currentUser.id);
-  } catch (error) {
-    if (currentUser) {
-      await supabaseClient.from("usuarios").update({ ultimaconexion: new Date().toISOString() }).eq("id", currentUser.id);
-    }
-  }
-}
-
-      function restaurarResultadosOriginales() {
-  const container = document.getElementById('searchResults');
-  if (window.contenidoOriginalBusqueda) {
-    container.innerHTML = window.contenidoOriginalBusqueda;
-    delete window.contenidoOriginalBusqueda;
-  } else {
-    container.innerHTML = '<div class="result-card">Realice una nueva búsqueda</div>';
-  }
-}
-
-function mostrarIndicadorBusquedaAdicional() {
-  const container = document.getElementById('searchResults');
-  const indicador = `
-    <div id="indicadorBusquedaAdicional" class="result-card" style="background: #f0f9ff; border: 2px solid #3b54d3; text-align: center;">
-      <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-        <div class="loading" style="display: block;"></div>
-        <span>Buscando OS relacionadas...</span>
-      </div>
-    </div>
-  `;
-  container.innerHTML += indicador;
-}
-
-function ocultarIndicadorBusquedaAdicional() {
-  const indicador = document.getElementById('indicadorBusquedaAdicional');
-  if (indicador) indicador.remove();
-}
-
-function encontrarCampoEquivalente(campoOriginal, configTabla) {
-  const mapaCampos = {
-    'CuentaContrato': ['CuentaContrato'],
-    'Medidor': ['Medidor'], 
-    'NombreCliente': ['NombreCliente'],
-    'OSATMO': ['OSATMO', 'OSATOMO'],
-    'OSSAP': ['OSSAP']
-  };
-  
-  const posiblesCampos = mapaCampos[campoOriginal] || [campoOriginal];
-  
-  for (const field of configTabla.fields) {
-    if (posiblesCampos.includes(field.key)) {
-      return field.key;
-    }
-  }
-  return null;
-}
-
-
-
-function abrirCoordenadas(coordenadas) {
-  if (coordenadas) window.open(`https://www.google.com/maps?q=${coordenadas}`, '_blank');
-}
-
-function verFoto(link) {
-  if (link) window.open(link, '_blank');
-}
-
-function seleccionarTabla(tableName) {
-  if (currentUser.rol === 'Lectura' && tableName !== 'consultas_servicios') {
-    alert('Su rol solo permite acceso a Consultas de Servicios');
-    return;
-  }
-
-  selectedTable = tableName;
-  const config = tableConfigs[tableName];
-  document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
-  generarCamposBusqueda(config);
-  document.getElementById('tableSelectionSection').style.display = 'none';
-  document.getElementById('searchSection').style.display = 'block';
-}
-
-
-async function generarKMLMultiple() {
-  const btnGenerar = document.getElementById('btnGenerarKML');
-  const btnDescargar = document.getElementById('btnDescargarKML');
-  
-  btnGenerar.innerHTML = '⏳ Generando KML...';
-  btnGenerar.disabled = true;
-  
-  try {
-    const ubicaciones = [];
-    
-    window.resultadosKML.forEach((item, index) => {
-      const coordenadas = item.Coordenadas || item.coordenadas || item.Coordenadasgis || item.coordenadasgis;
-      if (coordenadas && coordenadas.includes(',')) {
-        const etiqueta = item.NombreCliente || item.CuentaContrato || item.Medidor || `Punto ${index + 1}`;
-        ubicaciones.push({ etiqueta, coordenadas });
-      }
-    });
-    
-    if (ubicaciones.length === 0) {
-      alert('No se encontraron coordenadas válidas en los resultados');
-      btnGenerar.innerHTML = '🗺️ Generar KML';
-      btnGenerar.disabled = false;
-      return;
-    }
-    
-    // Simular procesamiento
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    window.kmlGenerado = generarKMLString(ubicaciones);
-    
-    btnGenerar.innerHTML = '✅ KML Generado';
-    btnDescargar.classList.remove('hidden');
-    
-    // Guardar coordenadas en BD del usuario
-    if (currentUser) {
-      const coordenadasTexto = ubicaciones.map(u => `${u.etiqueta}: ${u.coordenadas}`).join('\n');
-      await supabaseClient
-        .from('usuarios')
-        .update({ 
-          coordenadas: coordenadasTexto,
-          ultimaconexion: new Date().toISOString()
-        })
-        .eq('id', currentUser.id);
-    }
-    
-  } catch (error) {
-    alert('Error generando KML: ' + error.message);
-    btnGenerar.innerHTML = '🗺️ Generar KML';
-    btnGenerar.disabled = false;
-  }
-}
-
-// === FUNCIÓN PARA CONSTRUIR EL CONTENIDO XML DEL KML ===
-function generarKMLString(ubicaciones) {
-    if (!Array.isArray(ubicaciones) || ubicaciones.length === 0) {
-        throw new Error("No se enviaron ubicaciones válidas para el KML.");
-    }
-    
-    let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
-    kml += '<name>Coordenadas de búsqueda</name>\n';
-
-    ubicaciones.forEach(({ etiqueta, coordenadas }) => {
-        const parts = coordenadas.split(',').map(s => s.trim());
-        let coordsForKML;
-        
-        // Aseguramos el formato: Longitud,Latitud,Altitud (o solo Longitud,Latitud)
-        if (parts.length >= 2) {
-            // Asumiendo que tus datos son Latitud, Longitud (que es el formato común)
-            coordsForKML = `${parts[1]},${parts[0]},0`; 
-        } else {
-            // Fallback (debería ser corregido si ocurre)
-            coordsForKML = `0,0`; 
-        }
-
-        kml += '<Placemark>\n';
-        kml += `<name>${etiqueta}</name>\n`;
-        kml += `<description>ID/Referencia: ${etiqueta}</description>\n`;
-        kml += '<Style>\n<IconStyle>\n<Icon>\n';
-        kml += '<href>http://maps.google.com/mapfiles/kml/pushpin/red-pushpin.png</href>\n';
-        kml += '</Icon>\n</IconStyle>\n</Style>\n';
-        kml += `<Point><coordinates>${coordsForKML}</coordinates></Point>\n`;
-        kml += '</Placemark>\n';
-    });
-
-    kml += '</Document>\n</kml>';
-    return kml;
-}
-
-
-// === FUNCIÓN PARA MANEJAR LA BÚSQUEDA MÚLTIPLE (KML) ===
-async function busquedaMultipleKML(campo, valores) {
-    // 1. Mostrar un indicador
-    document.getElementById('searchResults').innerHTML = '<div class="result-card">⏳ Buscando múltiples resultados para KML...</div>';
-
-    try {
-        const resultadosTotales = [];
-        
-        // 2. Iterar sobre cada valor de búsqueda
-        for (const valor of valores) {
-            let query = supabaseClient.from(selectedTable).select('*');
-            query = query.eq(campo, valor); 
-            
-            const { data, error } = await query;
-
-            if (error) {
-                console.error(`Error buscando ${valor}:`, error.message);
-                continue;
-            }
-
-            if (data && data.length > 0) {
-                // Solo guardamos los resultados exitosos
-                resultadosTotales.push(...data);
-            }
-        }
-        
-        // 3. Almacenar los resultados globales para la generación de KML
-        window.resultadosKML = resultadosTotales; 
-
-        // 4. Actualizar la interfaz con el botón de generar KML
-        if (resultadosTotales.length > 0) {
-             let html = `<div class="result-card" style="background: #f0f8ff; border: 2px solid #5a5f78;">
-                         <div class="result-header">✅ ${resultadosTotales.length} Resultados Encontrados</div>
-                         <p>Resultados listos para generar el archivo KML de coordenadas.</p>
-                         <div class="action-buttons">
-                             <button id="btnGenerarKML" class="btn btn-primary" onclick="generarKMLMultiple()">
-                                 🗺️ Generar KML
-                             </button>
-                             <button id="btnDescargarKML" class="btn btn-success hidden" onclick="descargarKMLGenerado()">
-                                 ⬇️ Descargar KML
-                             </button>
-                         </div>
-                         </div>`;
-            document.getElementById('searchResults').innerHTML = html;
-        } else {
-            document.getElementById('searchResults').innerHTML = '<div class="result-card">❌ No se encontraron resultados para los valores ingresados.</div>';
-        }
-
-    } catch (error) {
-        console.error('Error en busquedaMultipleKML:', error);
-        document.getElementById('searchResults').innerHTML = '<div class="result-card">❌ Error procesando la búsqueda múltiple.</div>';
-    }
-}
-
-function descargarKMLGenerado() {
-  if (!window.kmlGenerado) {
-    alert('No hay KML generado para descargar');
-    return;
-  }
-  
-  const blob = new Blob([window.kmlGenerado], { type: 'application/vnd.google-earth.kml+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `busqueda_multiple_${selectedTable}_${new Date().getTime()}.kml`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-
-
-async function busquedaAdicionalProgresiva(campo, valor) {
-  // Mostrar indicador de búsqueda adicional
-  mostrarIndicadorBusquedaAdicional();
-  
-  const tablasAdicionales = ['OS Pendientes', 'OSCerradas'];
-  const resultadosAdicionales = {};
-  
-  try {
-    // Buscar en cada tabla
-    for (const tabla of tablasAdicionales) {
-      const config = tableConfigs[tabla];
-      if (!config) continue;
-      
-      const campoEquivalente = encontrarCampoEquivalente(campo, config);
-      if (!campoEquivalente) continue;
-      
-      let query = supabaseClient.from(tabla).select('*');
-      query = query.eq(campoEquivalente, valor);
-      
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        resultadosAdicionales[tabla] = data;
-      }
-    }
-    
-    // Actualizar interfaz con resultados
-    actualizarConResultadosAdicionales(resultadosAdicionales);
-    
-  } catch (error) {
-    console.error('Error en búsqueda adicional:', error);
-    ocultarIndicadorBusquedaAdicional();
-  }
-}
-
-
-function mostrarIndicadorBusquedaAdicional() {
-  const container = document.getElementById('searchResults');
-  const indicador = `
-    <div id="indicadorBusquedaAdicional" class="result-card" style="background: #f0f9ff; border: 2px solid #3b54d3; text-align: center;">
-      <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-        <div class="loading" style="display: block;"></div>
-        <span>Buscando en otras tablas...</span>
-      </div>
-      <div style="margin-top: 10px; font-size: 14px; color: #666;">
-        <div>⏳ OS Pendientes...</div>
-        <div>⏳ OS Cerradas...</div>
-      </div>
-    </div>
-  `;
-  container.innerHTML += indicador;
-}
-
-function ocultarIndicadorBusquedaAdicional() {
-  const indicador = document.getElementById('indicadorBusquedaAdicional');
-  if (indicador) indicador.remove();
-}
-
-function actualizarConResultadosAdicionales(resultadosAdicionales) {
-  ocultarIndicadorBusquedaAdicional();
-  
-  if (Object.keys(resultadosAdicionales).length > 0) {
-    const container = document.getElementById('searchResults');
-    let botonesHtml = `
-      <div class="result-card" style="background: #f0fff4; border: 2px solid #22c55e;">
-        <div class="result-header">✅ Información adicional encontrada</div>
-        <p>Se encontró información relacionada:</p>
-        <div class="action-buttons">
-    `;
-    
-    for (const [tabla, datos] of Object.entries(resultadosAdicionales)) {
-      const config = tableConfigs[tabla];
-      const icono = config ? config.icon : '📋';
-      botonesHtml += `
-        <button class="btn btn-secondary" onclick="mostrarResultadosAdicionales('${tabla}')">
-          ${icono} Ver ${config.title} (${datos.length})
-        </button>
-      `;
-    }
-    
-    botonesHtml += `</div></div>`;
-    container.innerHTML += botonesHtml;
-    
-    window.resultadosAdicionales = resultadosAdicionales;
-  }
-}
-
-function encontrarCampoEquivalente(campoOriginal, configTabla) {
-  const mapaCampos = {
-    'CuentaContrato': ['CuentaContrato'],
-    'Medidor': ['Medidor'],
-    'NombreCliente': ['NombreCliente']
-  };
-  
-  const posiblesCampos = mapaCampos[campoOriginal] || [campoOriginal];
-  
-  for (const field of configTabla.fields) {
-    if (posiblesCampos.includes(field.key)) {
-      return field.key;
-    }
-  }
-  return null;
-}
-
-function mostrarResultadosAdicionales(tabla) {
-    if (!window.resultadosAdicionales || !window.resultadosAdicionales[tabla]) {
-        alert('No hay datos disponibles');
-        return;
-    }
-    
-    const datos = window.resultadosAdicionales[tabla];
-    const config = tableConfigs[tabla];
-    
-    // Guardar el contenido actual antes de reemplazarlo
-    const container = document.getElementById('searchResults');
-    const contenidoOriginal = container.innerHTML;
-    
-    let html = `
-        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
-            <div class="result-header">📋 ${config.title} - Información Adicional</div>
-            <div style="margin-bottom: 15px; text-align: center;">
-                <button class="btn btn-back" onclick="restaurarResultadosOriginales()">
-                    ← Volver a Consulta de Suministros
-                </button>
-            </div>
-        </div>
-    `;
+        </div>`;
     
     const selectedTableOriginal = selectedTable;
-    selectedTable = tabla; // Cambio temporal solo para acciones/botones
+    selectedTable = tabla;
     
     datos.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
         config.resultFields.forEach(field => {
+            let valor = String(item[field] || 'N/A');
             
-            // 💡 CORRECCIÓN 1: Aseguramos que 'valor' es un String
-            let valor = String(item[field] || 'N/A'); 
-            
-            // === LÓGICA CLAVE DE FORMATO DE COMENTARIOS ===
-            // Comprobamos si es un campo de comentario y si tiene contenido
             if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
-                
-                // 💡 CORRECCIÓN 2: Aplicamos la cadena COMPLETA de reemplazos
-                valor = valor
-                    .replace(/\*([^*]+)\*/g, '<br><strong>$1</strong>') // *texto* -> negrita con salto
-                    .replace(/OS SAP/g, '<br><strong>OS SAP</strong>')
-                    .replace(/Fecha Generacion/g, '<br><strong>Fecha Generación:</strong>')
-                    .replace(/Medidor según SAP/g, '<br><strong>Medidor según SAP:</strong>')
-                    .replace(/Cantidad OS/g, '<br><strong>Cantidad OS:</strong>')
-                    .replace(/Comentario Generacion/g, '<br><strong>Comentario Generación:</strong>')
-                    .replace(/Comentario Incumplida o Adicional/g, '<br><strong>Comentario Incumplida o Adicional:</strong>')
-                    .replace(/Comentario de Visita Fallida/g, '<br><strong>Comentario de Visita Fallida:</strong>')
-                    .replace(/Comentario de visita Anterior/g, '<br><strong>Comentario de visita Anterior:</strong>')
-                    .replace(/Foto Medidor o Suministr/g, '<br><strong>Foto Medidor o Suministro:</strong>')
-                    .replace(/Coordenas Contiguo Previa/g, '<br><strong>Coordenadas Contiguo Previa:</strong>')
-                    .replace(/Coordenadas Visita Anterior/g, '<br><strong>Coordenadas Visita Anterior:</strong>')
-                    .replace(/Coordeadas lector/g, '<br><strong>Coordenadas lector:</strong>')
-                    .replace(/Coordenadas de OS según ATOMO/g, '<br><strong>Coordenadas de OS según ATOMO:</strong>')
-                    .replace(/Fecha Eje\. OS anterior/g, '<br><strong>Fecha Eje. OS anterior:</strong>')
-                    .replace(/Unidad que Eje\. OS Anterior/g, '<br><strong>Unidad que Eje. OS Anterior:</strong>')
-                    .replace(/Dias (\d+)/g, '<br><strong>Días:</strong> $1')
-                    .replace(/lectura[:\s]*(\d+)/gi, '<br><strong>Lectura:</strong> $1')
-                    .replace(/Sin Datos/g, '<br><em>Sin Datos</em>')
-                    .replace(/Sin Comentario/g, '<br><em>Sin Comentario</em>')
-                    .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
-                    .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
-                    .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
-                    .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
-                    .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>')
-                    .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
-                    .replace(/Numero de OS/g, '<br><strong>Número de OS:</strong>')
-                    .replace(/Tipologia/g, '<br><strong>Tipología:</strong>')
-                    .replace(/Comentario de Cierre/g, '<br><strong>Comentario de Cierre:</strong>')
-                    .replace(/coordenadas del suministro/g, '<br><strong>Coordenadas del suministro:</strong>')
-                    .replace(/Comentario de Generacion/g, '<br><strong>Comentario de Generación:</strong>')
-                    .replace(/Coordenadas De cierre/g, '<br><strong>Coordenadas De cierre:</strong>')
-                    .replace(/Fecha Ejec/g, '<br><strong>Fecha Ejec:</strong>')
-                    .replace(/Ejecutada por/g, '<br><strong>Ejecutada por:</strong>')
-                    .replace(/Nombre Cliente/g, '<br><em>Nombre Cliente</em>')
-                    .replace(/Cuenta Contrato/g, '<br><em>Cuenta Contrato</em>')
-                    .replace(/Direccion/g, '<br><em>Direccion</em>')
-                    .replace(/Tarifa/g, '<br><em>Tarifa</em>')
-                    .replace(/Medidor/g, '<br><em>Medidor</em>')
-                    .replace(/Fecha Lect/g, '<br><em>Fecha Lect</em>')
-                    .replace(/Proteccion que lo Alimenta/g, '<br><em>Proteccion que lo Alimenta</em>')
-                    .replace(/Propiedad/g, '<br><em>Propiedad</em>')
-                    .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-                    .replace(/Capacidad Sum/g, '<br><em>Capacidad Sum</em>')
-                    .replace(/Circuito/g, '<br><em>Circuito</em>')
-                    .replace(/Uicacion/g, '<br><em>Uicacion</em>')
-                    .replace(/Cantidad de clientes/g, '<br><em>Cantidad de clientes</em>')
-                    .replace(/Estructura Tx/g, '<br><em>Estructura Tx</em>')
-                    .replace(/Primary Phase ConcatSet/g, '<br><em>Primary Phase ConcatSet</em>')
-                    .replace(/Usos/g, '<br><em>Usos</em>')
-                    .replace(/Voltaje/g, '<br><em>Voltaje</em>')
-                    .replace(/Voltaje Primario Nominal/g, '<br><em>Voltaje Primario Nominal</em>')
-                    .replace(/Estructura/g, '<br><em>Estructura</em>')
-                    .replace(/Aes Circuito/g, '<br><em>Aes Circuito</em>')
-                    .replace(/Municipio/g, '<br><em>Municipio</em>')
-                    .replace(/Fecha Ejec/g, '<br><em>Fecha Ejeco</em>')
-                    .replace(/Fecha Gene/g, '<br><em>Fecha Gene</em>')
-                    .replace(/OS ATOMO/g, '<br><em>OS ATOMO</em>')
-                    .replace(/NIC(Contract Account)/g, '<br><em>NIC(Contract Account)</em>')
-                    .replace(/Comentario de Previa/g, '<br><em>Comentario de Previa</em>')
-                    .replace(/Comentario Generacion/g, '<br><em>Comentario Generacion</em>')
-                    .replace(/Coordenadas/g, '<br><em>Coordenadas</em>')
-                    .replace(/Coordenadas según ATOMO/g, '<br><em>Coordenadas según ATOMO</em>')
-                    .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
-                
-                // Agregamos el div con estilo para aplicar el salto de línea y el formato
+                valor = formatearComentario(valor);
                 html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
             } else {
                 html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
             }
-            // ===============================================
         });
         
-        // ... (el resto de la función, que está bien) ...
         html += '<div class="action-buttons">';
         config.actions.forEach(action => {
             const val = item[action];
             if (!val) return;
             
             if (action.toLowerCase().includes('coordenadas')) {
-                // Usamos la función corregida de coordenadas
                 html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
             } else if (action === 'FotoLink' || action === 'fotolink') {
                 html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
@@ -3521,25 +2793,117 @@ function mostrarResultadosAdicionales(tabla) {
         html += '</div></div>';
     });
     
-    // Restaurar selectedTable original
     selectedTable = selectedTableOriginal;
-    
-    // Guardar el contenido original para poder restaurarlo
-    window.contenidoOriginalBusqueda = contenidoOriginal;
-    
     container.innerHTML = html;
 }
 
- 
+// ===================================================================
+// 📌 MOSTRAR BOTONES DE RESULTADOS ADICIONALES
+// ===================================================================
+
+function mostrarBotonesResultadosAdicionales(resultadosAdicionales) {
+    const container = document.getElementById('searchResults');
+    let html = `
+        <div class="result-card" style="background: #f0fff4; border: 2px solid #22c55e;">
+            <div class="result-header">✅ Información adicional encontrada</div>
+            <p>Se encontró información relacionada:</p>
+            <div class="action-buttons">`;
+    
+    for (const [tabla, datos] of Object.entries(resultadosAdicionales)) {
+        const config = tableConfigs[tabla];
+        const icono = config ? config.icon : '📋';
+        html += `<button class="btn btn-secondary" onclick="mostrarDetalleRelacionados('${tabla}')">
+                    ${icono} Ver ${config.title} (${datos.length})
+                 </button>`;
+    }
+    
+    html += `</div></div>`;
+    container.innerHTML += html;
+    window.resultadosRelacionados = resultadosAdicionales;
+}
+
+// ===================================================================
+// 🔧 FUNCIONES AUXILIARES
+// ===================================================================
 
 function restaurarResultadosOriginales() {
     const container = document.getElementById('searchResults');
-    if (window.contenidoOriginalBusqueda) {
-        container.innerHTML = window.contenidoOriginalBusqueda;
-        // Limpiar la variable temporal
-        delete window.contenidoOriginalBusqueda;
-    } else {
-        container.innerHTML = '<div class="result-card">Realice una nueva búsqueda</div>';
+    container.innerHTML = window.contenidoOriginalBusqueda || '<div class="result-card">Realice una nueva búsqueda</div>';
+    delete window.contenidoOriginalBusqueda;
+}
+
+function mostrarIndicadorBusqueda() {
+    const container = document.getElementById('searchResults');
+    container.innerHTML += `
+        <div id="indicadorBusqueda" class="result-card" style="background: #f0f9ff; border: 2px solid #3b54d3; text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <div class="loading" style="display: block;"></div>
+                <span>Buscando información relacionada...</span>
+            </div>
+        </div>`;
+}
+
+function ocultarIndicadorBusqueda() {
+    const indicador = document.getElementById('indicadorBusqueda');
+    if (indicador) indicador.remove();
+}
+
+function encontrarCampoEquivalente(campoOriginal, configTabla) {
+    const mapaCampos = {
+        'CuentaContrato': ['CuentaContrato'],
+        'Medidor': ['Medidor'], 
+        'NombreCliente': ['NombreCliente'],
+        'OSATMO': ['OSATMO', 'OSATOMO'],
+        'OSSAP': ['OSSAP']
+    };
+    
+    const posiblesCampos = mapaCampos[campoOriginal] || [campoOriginal];
+    
+    for (const field of configTabla.fields) {
+        if (posiblesCampos.includes(field.key)) {
+            return field.key;
+        }
+    }
+    return null;
+}
+
+function tieneCoordenadasValidas(resultados) {
+    return resultados.some(item => {
+        const coordenadas = item.Coordenadas || item.coordenadas || item.Coordenadasgis || item.coordenadasgis;
+        return coordenadas && coordenadas.includes(',');
+    });
+}
+
+function abrirCoordenadas(coordenadas) {
+    if (coordenadas) window.open(`https://www.google.com/maps?q=${coordenadas}`, '_blank');
+}
+
+function verFoto(link) {
+    if (link) window.open(link, '_blank');
+}
+
+async function capturarCoordenadasGPS() {
+    if (!navigator.geolocation || !currentUser) return;
+    try {
+        const posicion = await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => reject(new Error("Timeout")), 2000);
+            navigator.geolocation.getCurrentPosition(
+                pos => { clearTimeout(timeoutId); resolve(pos); },
+                error => { clearTimeout(timeoutId); reject(error); },
+                { enableHighAccuracy: false, timeout: 1500, maximumAge: 600000 }
+            );
+        });
+        const coordenadas = `${posicion.coords.latitude},${posicion.coords.longitude}`;
+        await supabaseClient.from("usuarios").update({ 
+            coordenadas, 
+            ultimaconexion: new Date().toISOString() 
+        }).eq("id", currentUser.id);
+    } catch (error) {
+        if (currentUser) {
+            await supabaseClient.from("usuarios").update({ 
+                ultimaconexion: new Date().toISOString() 
+            }).eq("id", currentUser.id);
+        }
     }
 }
 
