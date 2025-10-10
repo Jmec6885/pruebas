@@ -1174,13 +1174,17 @@ async function confirmarTurnoHoyATTF() {
 }
 
 
-// AÑADIR esta función auxiliar
+// ========================================
+// 🔧 FUNCIÓN AUXILIAR CORREGIDA: Obtener turnos consecutivos
+// ========================================
 function getTurnoConsecutivo(turnoHoyKey) {
+    // Definir todos los turnos consecutivos bloqueados para cada turno
     const relaciones = {
-        "turno3": "turno1",
-        "turno3": "turno4"
+       "turno3": ["turno1", "turno4"]  // Si trabajas 10-6, NO puedes 6-2 ni 8-4
     };
-    return relaciones[turnoHoyKey];
+    
+    // Retornar array de turnos bloqueados (o array vacío si no hay)
+    return relaciones[turnoHoyKey] || [];
 }
 
 function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
@@ -1202,13 +1206,16 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
     
     // Obtener el turno de HOY seleccionado
     const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno_hoy;
-    const turnoConsecutivoKey = getTurnoConsecutivo(turnoHoyKey);
-
+    
+    // 🎯 CAMBIO: Obtener array de turnos consecutivos bloqueados
+    const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
+    
     let opcionesHTML = '';
     
     // Generar opciones de turnos
     Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-        if (key === turnoConsecutivoKey) {
+        // 🎯 CAMBIO: Verificar si está en el array de consecutivos
+        if (turnosConsecutivos.includes(key)) {
             opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
         } else {
             opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
