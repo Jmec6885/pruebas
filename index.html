@@ -647,7 +647,11 @@
     // --- 1. DEFINICIÓN DE VARIABLES GLOBALES (Usar solo 'let', una vez) ---
     let currentUser = null;
     let selectedTable = null;
-    let consultasData = []; 
+    let consultasData = [];
+    // === CONFIGURACIÓN DE VISIBILIDAD ===
+const CONFIG_VISIBILIDAD = {
+    mostrarNombreCliente: false  // Cambiar a true cuando necesites mostrar el nombre
+}; 
 
     // --- 2. CONFIGURACIÓN E INICIALIZACIÓN DE SUPABASE ---
     const SUPABASE_URL = 'https://bsxllefnehbwkuqbelec.supabase.co';
@@ -2062,17 +2066,16 @@ async function incrementarContadorBusquedas() {
 
     const tableConfigs = {
      'consultas_servicios': {
-        title: 'Consultas de Servicios',
-        icon: '🏠',
-        fields: [
-          { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
-          { key: 'Medidor', label: 'Medidor', type: 'exact' },
-          { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
-        ],
-        resultFields: ['CuentaContrato', 'Medidor', 'NombreCliente', 'ComentarioGeneral'],
-        // ✅ Corregidos los nombres de acciones
-        actions: ['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
-      },
+    title: 'Consultas de Servicios',
+    icon: '🏠',
+    fields: [
+      { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+      { key: 'Medidor', label: 'Medidor', type: 'exact' },
+      { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like', oculto: true }  // ← AGREGADO oculto: true
+    ],
+    resultFields: ['CuentaContrato', 'Medidor', 'NombreCliente', 'ComentarioGeneral'],
+    actions: ['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
+},
       'Consumos': {
         title: 'Consumos',
         icon: '📊',
@@ -2538,17 +2541,23 @@ async function logout() {
     }
     
     // Caso normal para otras tablas
-    let html = '';
-    config.fields.forEach(field => {
-        html += `
-            <div class="form-group">
-                <label>${field.label}:</label>
-                <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label.toLowerCase()}" />
-                <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
-            </div>
-        `;
-    });
-    searchGrid.innerHTML = html;
+    // Caso normal para otras tablas
+let html = '';
+config.fields.forEach(field => {
+    // 🎯 Ocultar campo si tiene oculto: true Y la config dice que no mostrar
+    if (field.oculto && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
+        return; // Saltar este campo
+    }
+    
+    html += `
+        <div class="form-group">
+            <label>${field.label}:</label>
+            <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label.toLowerCase()}" />
+            <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
+        </div>
+    `;
+});
+searchGrid.innerHTML = html;
 }
 
     function volverATablas() {
@@ -3074,6 +3083,9 @@ async function buscar(campo, tipo) {
         return;
     }
 
+    // 🆕 LIMPIAR AUTOMÁTICAMENTE OTROS CAMPOS
+    limpiarOtrosCampos(campo);
+
     await incrementarContadorBusquedas();
     
     const valores = valor.includes(',') ? valor.split(',').map(v => v.trim()).filter(v => v) : [valor];
@@ -3100,6 +3112,30 @@ async function buscar(campo, tipo) {
     }
 }
 
+
+// ========================================
+// 🧹 FUNCIÓN: Limpiar automáticamente otros campos de búsqueda
+// ========================================
+function limpiarOtrosCampos(campoActual) {
+    const config = tableConfigs[selectedTable];
+    if (!config || !config.fields) return;
+    
+    // Recorrer todos los campos de la tabla actual
+    config.fields.forEach(field => {
+        // Si NO es el campo actual, limpiarlo
+        if (field.key !== campoActual) {
+            const input = document.getElementById(`search${field.key}`);
+            if (input) {
+                input.value = ''; // Limpiar el valor
+            }
+        }
+    });
+    
+    console.log(`🧹 Campos limpiados. Buscando solo por: ${campoActual}`);
+}
+
+
+
 // ===================================================================
 // 📊 MOSTRAR RESULTADOS PRINCIPALES
 // ===================================================================
@@ -3120,15 +3156,20 @@ function mostrarResultados(resultados) {
     resultados.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
         config.resultFields.forEach(field => {
-            let valor = String(item[field] || 'N/A');
-            
-            if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
-                valor = formatearComentario(valor);
-                html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-            } else {
-                html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-            }
-        });
+    // 🎯 Ocultar NombreCliente en resultados si la config lo indica
+    if (field === 'NombreCliente' && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
+        return; // No mostrar este campo
+    }
+    
+    let valor = String(item[field] || 'N/A');
+    
+    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
+        valor = formatearComentario(valor);
+        html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
+    } else {
+        html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
+    }
+});
         
         html += generarBotonesAccion(item, index, config);
         html += '</div>'; // Cierre result-card
@@ -3424,15 +3465,20 @@ function mostrarDetalleRelacionados(tabla) {
     datos.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
         config.resultFields.forEach(field => {
-            let valor = String(item[field] || 'N/A');
-            
-            if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
-                valor = formatearComentario(valor);
-                html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-            } else {
-                html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-            }
-        });
+    // 🎯 Ocultar NombreCliente en resultados relacionados
+    if (field === 'NombreCliente' && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
+        return; // No mostrar este campo
+    }
+    
+    let valor = String(item[field] || 'N/A');
+    
+    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
+        valor = formatearComentario(valor);
+        html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
+    } else {
+        html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
+    }
+});
         
         html += '<div class="action-buttons">';
         config.actions.forEach(action => {
