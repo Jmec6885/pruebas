@@ -571,6 +571,12 @@
                         <div class="table-title">TX y Cortes</div>
                         <div class="table-description">Transformadores y cortes de energía</div>
                     </div>
+
+		    <div class="table-option" onclick="seleccionarTabla('usuarios')">
+                        <span class="table-icon">👥</span>
+    			<div class="table-title">Gestión de Usuarios</div>
+    			<div class="table-description">Administrar usuarios del sistema</div>
+		    </div>
                 </div>
             </div>
         </div>
@@ -1896,9 +1902,33 @@ function mostrarTablasSegunRol() {
         return;
     }
     
+    console.log('🔍 Filtrando tablas para rol:', currentUser.rol);
     const tableOptions = document.querySelectorAll('.table-option');
     
-    // Mostrar/ocultar tablas según rol
+    // 🎯 ADMINISTRADOR: Ve TODO incluyendo usuarios
+    if (currentUser.rol === 'Administrador') {
+        tableOptions.forEach(option => {
+            option.style.display = 'block';
+        });
+        console.log('✅ Administrador: Todas las tablas visibles');
+        return;
+    }
+    
+    // 🎯 SUPERVISOR: Ve TODO EXCEPTO usuarios
+    if (currentUser.rol === 'Supervisor') {
+        tableOptions.forEach(option => {
+            const onclick = option.getAttribute('onclick');
+            if (onclick && !onclick.includes('usuarios')) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        console.log('✅ Supervisor: Todas menos usuarios');
+        return;
+    }
+    
+    // 🎯 LECTURA: Solo consultas_servicios
     if (currentUser.rol === 'Lectura') {
         tableOptions.forEach(option => {
             const onclick = option.getAttribute('onclick');
@@ -1908,7 +1938,12 @@ function mostrarTablasSegunRol() {
                 option.style.display = 'none';
             }
         });
-    } else if (currentUser.rol === 'ATTF' || currentUser.rol === 'Poda') {
+        console.log('✅ Lectura: Solo consultas_servicios');
+        return;
+    }
+    
+    // 🎯 ATTF y PODA: consultas_servicios + TX y Cortes
+    if (currentUser.rol === 'ATTF' || currentUser.rol === 'Poda') {
         tableOptions.forEach(option => {
             const onclick = option.getAttribute('onclick');
             if (onclick && (onclick.includes('consultas_servicios') || onclick.includes('TX y Cortes'))) {
@@ -1917,43 +1952,35 @@ function mostrarTablasSegunRol() {
                 option.style.display = 'none';
             }
         });
-    } else if (currentUser.rol === 'Contratista') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            // Mostrar todo excepto usuarios
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    } else if (currentUser.rol === 'Supervisor') {
-        // Supervisor ve TODO EXCEPTO usuarios
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    } else if (currentUser.rol === 'Administrador') {
-        // 🎯 SOLO Administrador ve TODO incluyendo usuarios
-        tableOptions.forEach(option => {
-            option.style.display = 'block';
-        });
-    } else {
-        // Consulta y otros: Todo excepto usuarios
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
+        console.log('✅ ATTF/Poda: consultas_servicios + TX y Cortes');
+        return;
     }
+    
+    // 🎯 CONTRATISTA y CONSULTA: Todo excepto usuarios
+    if (currentUser.rol === 'Contratista' || currentUser.rol === 'Consulta') {
+        tableOptions.forEach(option => {
+            const onclick = option.getAttribute('onclick');
+            if (onclick && !onclick.includes('usuarios')) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        console.log('✅ Contratista/Consulta: Todo excepto usuarios');
+        return;
+    }
+    
+    // 🎯 DEFAULT: Todo excepto usuarios
+    tableOptions.forEach(option => {
+        const onclick = option.getAttribute('onclick');
+        if (onclick && !onclick.includes('usuarios')) {
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
 }
+
 
 async function desbloquearUsuario(username) {
     if (!currentUser || currentUser.rol !== 'Supervisor') {
@@ -2429,62 +2456,6 @@ function generarKMLString(ubicaciones) {
 
 
 
-
-
-function mostrarTablasSegunRol() {
-    if (!currentUser || !currentUser.rol) {
-        console.log('❌ currentUser no está disponible');
-        return;
-    }
-    
-    const tableOptions = document.querySelectorAll('.table-option');
-    
-    // Mostrar/ocultar tablas según rol
-    if (currentUser.rol === 'Lectura') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && onclick.includes('consultas_servicios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    } else if (currentUser.rol === 'ATTF' || currentUser.rol === 'Poda') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && (onclick.includes('consultas_servicios') || onclick.includes('TX y Cortes'))) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    } else if (currentUser.rol === 'Contratista') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            // Mostrar todo excepto usuarios
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    } else if (currentUser.rol === 'Supervisor') {
-        // 🆕 Supervisor ve TODO incluyendo usuarios
-        tableOptions.forEach(option => {
-            option.style.display = 'block';
-        });
-    } else {
-        // Consulta y otros: Todo excepto usuarios
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    }
-}
 
 
 function iniciarVerificacionSesion() {
