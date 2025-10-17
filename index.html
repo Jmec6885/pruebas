@@ -1032,7 +1032,7 @@ iniciarVerificacionSesion();
 guardarDatosOffline();
 mostrarTablasSegunRol();
 
-// 🔄 Forzar actualización de la página para obtener última versión
+
 // 🔄 Mostrar mensaje de actualización y recargar
 setTimeout(() => {
     document.body.innerHTML = `
@@ -1069,10 +1069,7 @@ setTimeout(() => {
     }, 800);
 }, 300);
 
-} 
-
-
-catch (err) {
+} catch (err) {
     console.error('Error de login:', err);
     alert('Error de conexión. Por favor intente nuevamente.');
 }
