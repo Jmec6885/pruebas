@@ -2908,10 +2908,10 @@ function seccionExcepcionesHorario(user) {
    
     try {
         const { data, error } = await supabaseClient
-            .from('usuarios')
-            .select('*')
-            .eq('id', userId)
-            .single();
+    .from('usuarios')
+    .select('id, usuario, rol, activo, razon_bloqueo, ultima_actividad, ultimaconexion, turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana, descanso_fecha_inicio, descanso_fecha_fin, turno_regreso, fecha_turno_regreso, contador_turnos, estado_ciclo, domingo_permitido, domingo_fecha, horario_excepcional_inicio, horario_excepcional_fin, fecha_excepcional')
+    .eq('id', userId)
+    .single();
         
         if (error) {
             alert('Error al cargar usuario: ' + error.message);
