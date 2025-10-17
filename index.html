@@ -1,5 +1,3 @@
-nueva prueba para rol poda y fallas con días de descanso
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1026,18 +1024,57 @@ if (checkInactividad.inactivo) {
 
         // Para otros roles: acceso directo
         document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
-        document.getElementById('userInfo').classList.remove('hidden');
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('tableSelectionSection').style.display = 'block';
+document.getElementById('userInfo').classList.remove('hidden');
+document.getElementById('loginSection').style.display = 'none';
+document.getElementById('tableSelectionSection').style.display = 'block';
 
-        iniciarVerificacionSesion();
-        guardarDatosOffline();
-        mostrarTablasSegunRol();
+iniciarVerificacionSesion();
+guardarDatosOffline();
+mostrarTablasSegunRol();
 
-    } catch (err) {
-        console.error('Error de login:', err);
-        alert('Error de conexión. Por favor intente nuevamente.');
-    }
+// 🔄 Forzar actualización de la página para obtener última versión
+// 🔄 Mostrar mensaje de actualización y recargar
+setTimeout(() => {
+    document.body.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+        ">
+            <div style="
+                background: white;
+                padding: 40px;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                text-align: center;
+                max-width: 400px;
+            ">
+                <div class="loading" style="display: block; margin: 0 auto 20px;"></div>
+                <h2 style="color: #2d3748; margin: 0 0 10px 0; font-size: 24px;">🔄 Actualizando...</h2>
+                <p style="color: #666; margin: 0; font-size: 16px;">Cargando última versión del sistema</p>
+            </div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        location.reload(true);
+    }, 800);
+}, 300);
+
+} 
+
+
+catch (err) {
+    console.error('Error de login:', err);
+    alert('Error de conexión. Por favor intente nuevamente.');
 }
 
     // ========================================
@@ -3064,16 +3101,15 @@ async function resetearUsuario(userId) {
             .eq('id', userId);
         
         if (error) {
-            alert('Error al resetear: ' + error.message);
+            alert('Error: ' + error.message);
             return;
         }
         
-        alert('✅ Usuario reseteado exitosamente');
+        alert('✅ Usuario desbloqueado y reseteado');
         buscarUsuarioAdmin();
         
     } catch (err) {
         console.error('Error:', err);
-        alert('Error al resetear usuario');
     }
 }
 
