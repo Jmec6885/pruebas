@@ -3229,6 +3229,139 @@ async function cargarInterfazKMLRuta() {
 }
 
 
+	// ========================================
+// 🗺️ GENERAR KML POR UNIDAD SELECCIONADA
+// ========================================
+async function generarKMLPorUnidad() {
+    const unidadSeleccionada = document.getElementById('selectUnidad').value;
+    
+    if (!unidadSeleccionada) {
+        alert('Por favor seleccione una unidad');
+        return;
+    }
+    
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    
+    try {
+        // Buscar todas las OS Pendientes de esa unidad
+        const { data: osPendientes, error } = await supabaseClient
+            .from('OS Pendientes')
+            .select('*')
+            .eq('Unidad', unidadSeleccionada);
+        
+        if (error) {
+            resultsContainer.innerHTML = '<div class="result-card">❌ Error al buscar OS</div>';
+            return;
+        }
+        
+        if (!osPendientes || osPendientes.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+                    <div class="result-header">⚠️ Sin resultados</div>
+                    <p>No se encontraron OS Pendientes para la unidad: <strong>${unidadSeleccionada}</strong></p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Filtrar por tipo de coordenadas
+        const conCoordenadasLector = osPendientes.filter(os => 
+            os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
+        );
+        
+        const conCoordenadasGIS = osPendientes.filter(os => 
+            os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
+        );
+        
+        // Guardar en variables globales para descarga
+        window.kmlDataLector = conCoordenadasLector;
+        window.kmlDataGIS = conCoordenadasGIS;
+        
+        // Mostrar resultados
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+                <div class="result-header">✅ Búsqueda completada - ${unidadSeleccionada}</div>
+                
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <strong>📊 Resumen:</strong><br>
+                    • Total de OS buscadas: <strong>${osPendientes.length}</strong><br>
+                    • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
+                    • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                    <button class="btn btn-secondary" 
+                            onclick="descargarKMLLector()" 
+                            ${conCoordenadasLector.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                        📥 Descargar KML Lector<br>
+                        <small>(${conCoordenadasLector.length} puntos)</small>
+                    </button>
+                    
+                    <button class="btn btn-secondary" 
+                            onclick="descargarKMLGIS()" 
+                            ${conCoordenadasGIS.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                        📥 Descargar KML GIS<br>
+                        <small>(${conCoordenadasGIS.length} puntos)</small>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+    } catch (err) {
+        console.error('Error generando KML:', err);
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+    }
+}
+
+	// ========================================
+// 📥 DESCARGAR KML COORDENADAS LECTOR
+// ========================================
+function descargarKMLLector() {
+    if (!window.kmlDataLector || window.kmlDataLector.length === 0) {
+        alert('No hay coordenadas de lector para descargar');
+        return;
+    }
+    
+    const ubicaciones = window.kmlDataLector.map(os => ({
+        etiqueta: os.OSATMO || 'Sin OS',
+        coordenadas: os.Coordenadas
+    }));
+    
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KML_Lector_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+	// ========================================
+// 📥 DESCARGAR KML COORDENADAS GIS
+// ========================================
+function descargarKMLGIS() {
+    if (!window.kmlDataGIS || window.kmlDataGIS.length === 0) {
+        alert('No hay coordenadas GIS para descargar');
+        return;
+    }
+    
+    const ubicaciones = window.kmlDataGIS.map(os => ({
+        etiqueta: os.OSATMO || 'Sin OS',
+        coordenadas: os.Coordendasgis
+    }));
+    
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KML_GIS_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 // ========================================
 // 🧹 FUNCIÓN: Limpiar automáticamente otros campos de búsqueda
 // ========================================
