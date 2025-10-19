@@ -2571,6 +2571,13 @@ async function logout() {
         `;
         return;
     }
+	// 🆕 Caso especial para KML Ruta
+if (selectedTable === 'kml_ruta') {
+    cargarInterfazKMLRuta();
+    return;
+}
+
+
     
     // Caso normal para otras tablas
     
@@ -3148,6 +3155,77 @@ function transformarUsuarioAUnidad(usuario) {
            usuario.slice(2, 5) + '-' + 
            usuario.slice(5, 8) + '-' + 
            usuario.slice(8);
+}
+
+
+	// ========================================
+// 📍 CARGAR INTERFAZ KML RUTA
+// ========================================
+async function cargarInterfazKMLRuta() {
+    const searchGrid = document.getElementById('searchGrid');
+    
+    // Mostrar indicador de carga
+    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    
+    try {
+        // Obtener lista de unidades únicas de OS Pendientes
+        const { data: unidades, error } = await supabaseClient
+            .from('OS Pendientes')
+            .select('Unidad')
+            .not('Unidad', 'is', null);
+        
+        if (error) {
+            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar unidades</div>';
+            return;
+        }
+        
+        // Obtener unidades únicas y ordenadas
+        const unidadesUnicas = [...new Set(unidades.map(u => u.Unidad))].sort();
+        
+        // Filtrar según rol
+        let unidadesFiltradas = [];
+        
+        if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor') {
+            // Ver todas las unidades
+            unidadesFiltradas = unidadesUnicas;
+        } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
+            // Solo su unidad
+            const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
+            unidadesFiltradas = unidadesUnicas.filter(u => u === miUnidad);
+        } else {
+            searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
+            return;
+        }
+        
+        if (unidadesFiltradas.length === 0) {
+            searchGrid.innerHTML = '<div class="result-card">⚠️ No se encontraron unidades disponibles</div>';
+            return;
+        }
+        
+        // Generar interfaz
+        searchGrid.innerHTML = `
+            <div class="form-group">
+                <label>📍 Seleccionar Unidad:</label>
+                <select id="selectUnidad" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una unidad --</option>
+                    ${unidadesFiltradas.map(u => `<option value="${u}">${u}</option>`).join('')}
+                </select>
+                <small style="color: #666; display: block; margin-top: 8px;">
+                    ${unidadesFiltradas.length} unidad(es) disponible(s)
+                </small>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarKMLPorUnidad()" style="font-size: 16px; padding: 15px 30px;">
+                    🗺️ Generar KML
+                </button>
+            </div>
+        `;
+        
+    } catch (err) {
+        console.error('Error cargando KML Ruta:', err);
+        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+    }
 }
 
 
