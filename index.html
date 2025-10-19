@@ -2571,33 +2571,32 @@ async function logout() {
         `;
         return;
     }
-	// 🆕 Caso especial para KML Ruta
-if (selectedTable === 'kml_ruta') {
-    cargarInterfazKMLRuta();
-    return;
-}
-
-
     
-    // Caso normal para otras tablas
-    
-let html = '';
-config.resultFields.forEach(field => {
-    // 🎯 Ocultar campos solo-admin
-    if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field) && currentUser.rol !== 'Administrador') {
+    // 🆕 Caso especial para KML Ruta
+    if (selectedTable === 'kml_ruta') {
+        cargarInterfazKMLRuta();
         return;
     }
     
-    html += `
-        <div class="form-group">
-            <label>${field.label}:</label>
-            <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label.toLowerCase()}" />
-            <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
-        </div>
-    `;
-});
-searchGrid.innerHTML = html;
+    // Caso normal para otras tablas
+    let html = '';
+    config.fields.forEach(field => {
+        // 🎯 Ocultar campos solo-admin
+        if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field.key) && currentUser.rol !== 'Administrador') {
+            return;
+        }
+        
+        html += `
+            <div class="form-group">
+                <label>${field.label}:</label>
+                <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label ? field.label.toLowerCase() : ''}" />
+                <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
+            </div>
+        `;
+    });
+    searchGrid.innerHTML = html;
 }
+
 
     function volverATablas() {
       document.getElementById('searchSection').style.display = 'none';
@@ -3497,8 +3496,10 @@ function mostrarResultados(resultados) {
     resultados.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
         config.resultFields.forEach(field => {
-    // 🎯 Ocultar NombreCliente en resultados si la config lo indica
-    if (field === 'NombreCliente' && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
+    // 🎯 Ocultar campos solo-admin
+    if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field) && currentUser.rol !== 'Administrador') {
+        return;
+    }
         return; // No mostrar este campo
     }
     
