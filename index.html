@@ -3496,10 +3496,8 @@ function mostrarResultados(resultados) {
     resultados.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
         config.resultFields.forEach(field => {
-    // 🎯 Ocultar campos solo-admin
-    if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field) && currentUser.rol !== 'Administrador') {
-        return;
-    }
+    // 🎯 Ocultar NombreCliente en resultados si la config lo indica
+    if (field === 'NombreCliente' && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
         return; // No mostrar este campo
     }
     
