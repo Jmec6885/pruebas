@@ -583,6 +583,12 @@
     			<div class="table-title">KML Ruta</div>
    			 <div class="table-description">Generar rutas por unidad</div>
 		    </div>
+		    
+		    <div class="table-option" onclick="seleccionarTabla('detalle_os')">
+    			<span class="table-icon">📊</span>
+    			<div class="table-title">Detalle OS</div>
+    			<div class="table-description">Análisis por unidad y estado</div>
+		    </div>
                 </div>
             </div>
         </div>
@@ -2173,6 +2179,15 @@ async function incrementarContadorBusquedas() {
     resultFields: [],
     actions: [],
     esKMLRuta: true
+},
+    'detalle_os': {
+    title: 'Detalle OS',
+    icon: '📊',
+    fields: [],
+    resultFields: [],
+    actions: [],
+    esDetalleOS: true,
+    rolesPermitidos: ['Administrador', 'Supervisor']
 }
 };
 
@@ -2577,6 +2592,12 @@ async function logout() {
         cargarInterfazKMLRuta();
         return;
     }
+
+    // 🆕 Caso especial para Detalle OS
+if (selectedTable === 'detalle_os') {
+    cargarInterfazDetalleOS();
+    return;
+}
     
     // Caso normal para otras tablas
     let html = '';
@@ -3361,6 +3382,488 @@ function descargarKMLGIS() {
     URL.revokeObjectURL(url);
 }
 
+	// ========================================
+// 📊 CARGAR INTERFAZ DETALLE OS
+// ========================================
+async function cargarInterfazDetalleOS() {
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+    
+    searchGrid.innerHTML = `
+        <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 10px 0; color: #1565c0;">📊 Análisis de OS Pendientes</h3>
+            <p style="margin: 0; color: #666;">Cargando datos de todas las unidades...</p>
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+        </div>
+    `;
+    
+    resultsContainer.innerHTML = '';
+    
+    try {
+        // Obtener todas las OS Pendientes
+        const { data: osPendientes, error } = await supabaseClient
+            .from('OS Pendientes')
+            .select('*');
+        
+        if (error) {
+            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
+            return;
+        }
+        
+        if (!osPendientes || osPendientes.length === 0) {
+            searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes registradas</div>';
+            return;
+        }
+        
+        // Procesar y agrupar datos
+        const datosAgrupados = procesarOSPendientes(osPendientes);
+        
+        // Contar totales
+        const totalReguladas = Object.values(datosAgrupados.reguladas)
+            .reduce((sum, unidad) => {
+                return sum + Object.values(unidad.porRango).flat().length;
+            }, 0);
+        
+        const totalNoReguladas = Object.values(datosAgrupados.noReguladas)
+            .reduce((sum, unidad) => {
+                return sum + Object.values(unidad.porRango).flat().length;
+            }, 0);
+        
+        // Mostrar resumen
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+                <div class="result-header">✅ Análisis completado</div>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <strong>📊 Resumen General:</strong><br>
+                    • Total de OS: <strong>${osPendientes.length}</strong><br>
+                    • OS Reguladas: <strong>${totalReguladas}</strong><br>
+                    • OS No Reguladas: <strong>${totalNoReguladas}</strong><br>
+                    • Unidades analizadas: <strong>${[...new Set(osPendientes.map(os => os.Unidad))].length}</strong>
+                </div>
+            </div>
+        `;
+        
+        // Guardar datos procesados globalmente
+        window.datosDetalleOS = datosAgrupados;
+        
+        console.log('✅ Datos procesados:', datosAgrupados);
+        console.log('📊 Reguladas:', totalReguladas, '| No Reguladas:', totalNoReguladas);
+        
+        // Generar y mostrar las 4 tablas
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: white; padding: 30px;">
+                
+                <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
+                    📊 REGULADAS - Por Rango de Días
+                </h2>
+                ${generarTablaPorRango(datosAgrupados.reguladas, 'reguladas')}
+                
+                <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
+                    📊 NO REGULADAS - Por Rango de Días
+                </h2>
+                ${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
+                
+                <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
+                    ⚠️ REGULADAS - Por Condición
+                </h2>
+                ${generarTablaPorCondicion(datosAgrupados.reguladas, 'reguladas')}
+                
+                <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
+                    ⚠️ NO REGULADAS - Por Condición
+                </h2>
+                ${generarTablaPorCondicion(datosAgrupados.noReguladas, 'noReguladas')}
+                
+            </div>
+        `;
+        
+    } catch (err) {
+        console.error('Error cargando Detalle OS:', err);
+        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+    }
+}
+
+	// ========================================
+// 📅 CALCULAR DÍAS DESDE GENERACIÓN
+// ========================================
+function calcularDias(fechaGen) {
+    if (!fechaGen) return null;
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0); // Normalizar a medianoche
+    
+    const fechaGeneracion = new Date(fechaGen);
+    fechaGeneracion.setHours(0, 0, 0, 0);
+    
+    // Diferencia en milisegundos
+    const diffMs = hoy - fechaGeneracion;
+    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // +1 porque el día de generación cuenta como día 1
+    return diffDias + 1;
+}
+
+	// ========================================
+// 📊 DETERMINAR RANGO POR DÍAS
+// ========================================
+function determinarRango(dias) {
+    if (dias === null || dias === undefined) return 'Sin datos';
+    
+    if (dias <= 5) return '0-5';
+    if (dias <= 10) return '6-10';
+    if (dias <= 15) return '11-15';
+    if (dias <= 20) return '16-20';
+    if (dias <= 30) return '21-30';
+    if (dias <= 45) return '31-45';
+    if (dias <= 180) return '46-180';
+    return '>180';
+}
+
+// ========================================
+// ⚠️ DETERMINAR CONDICIÓN (TEMPORAL - Sin Dias_por_OS)
+// ========================================
+function determinarCondicion(dias, diasPorOS) {
+    if (dias === null || dias === undefined) return 'Sin datos';
+    
+    // Por ahora asumimos 15 días estándar (TEMPORAL)
+    // En PARTE 3 lo haremos dinámico según tipología
+    const plazoEstandar = diasPorOS || 15;
+    
+    const diferencia = plazoEstandar - dias;
+    
+    if (diferencia < 0) return 'VENCIDO';
+    if (diferencia === 0) return 'HOY';
+    if (diferencia === 1) return 'MAÑANA';
+    return 'EN TIEMPO';
+}
+
+
+	// ========================================
+// 🗂️ AGRUPAR Y PROCESAR OS PENDIENTES
+// ========================================
+function procesarOSPendientes(osPendientes) {
+    const datosAgrupados = {
+        reguladas: {},
+        noReguladas: {}
+    };
+    
+    osPendientes.forEach(os => {
+        // Calcular días y clasificaciones
+        const dias = calcularDias(os['Fecha Gen.']);
+        const rango = determinarRango(dias);
+        const condicion = determinarCondicion(dias, os.Dias_por_OS);
+        
+        // Determinar tipo (Regulado/No Regulado)
+        const tipo = os.Tipo_de_OS === 'Regulado' ? 'reguladas' : 'noReguladas';
+        const unidad = os.Unidad || 'Sin Unidad';
+        
+        // Inicializar unidad si no existe
+        if (!datosAgrupados[tipo][unidad]) {
+            datosAgrupados[tipo][unidad] = {
+                porRango: {
+                    '0-5': [],
+                    '6-10': [],
+                    '11-15': [],
+                    '16-20': [],
+                    '21-30': [],
+                    '31-45': [],
+                    '46-180': [],
+                    '>180': []
+                },
+                porCondicion: {
+                    'HOY': [],
+                    'MAÑANA': [],
+                    'EN TIEMPO': [],
+                    'VENCIDO': []
+                }
+            };
+        }
+        
+        // Agregar OS a sus categorías
+        const osConDatos = {
+            ...os,
+            dias_calculados: dias,
+            rango: rango,
+            condicion: condicion
+        };
+        
+        datosAgrupados[tipo][unidad].porRango[rango].push(osConDatos);
+        datosAgrupados[tipo][unidad].porCondicion[condicion].push(osConDatos);
+    });
+    
+    return datosAgrupados;
+}
+
+	// ========================================
+// 📊 GENERAR TABLA POR RANGO DE DÍAS
+// ========================================
+function generarTablaPorRango(datos, tipoOS) {
+    const unidades = Object.keys(datos).sort();
+    
+    if (unidades.length === 0) {
+        return `<p style="color: #666; text-align: center;">No hay datos de OS ${tipoOS}</p>`;
+    }
+    
+    const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
+    
+    let html = `
+        <div style="overflow-x: auto; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <thead>
+                    <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
+                        ${rangos.map(r => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${r}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    unidades.forEach((unidad, idx) => {
+        const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
+        html += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;" id="fila_${tipoOS}_rango_${idx}">`;
+        html += `<td style="padding: 12px; font-weight: 600; color: #2d3748; border-right: 1px solid #e2e8f0;">${unidad}</td>`;
+        
+        rangos.forEach(rango => {
+            const count = datos[unidad].porRango[rango].length;
+            const hasData = count > 0;
+            
+            html += `
+                <td style="padding: 12px; text-align: center; border-right: 1px solid #e2e8f0; cursor: ${hasData ? 'pointer' : 'default'};" 
+                    ${hasData ? `onclick="toggleDetalleRango('${unidad}', '${rango}', '${tipoOS}', ${idx})"` : ''}>
+                    <span style="
+                        display: inline-block;
+                        min-width: 30px;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        font-weight: 600;
+                        background: ${hasData ? '#e3f2fd' : '#f5f5f5'};
+                        color: ${hasData ? '#1976d2' : '#999'};
+                        ${hasData ? 'box-shadow: 0 2px 4px rgba(25,118,210,0.2);' : ''}
+                    ">
+                        ${count}
+                    </span>
+                </td>`;
+        });
+        
+        html += `</tr>`;
+        
+        // Fila oculta para el detalle
+        html += `
+            <tr id="detalle_${tipoOS}_rango_${idx}" style="display: none; background: #fff3cd;">
+                <td colspan="${rangos.length + 1}" style="padding: 15px;">
+                    <div id="contenido_detalle_${tipoOS}_rango_${idx}"></div>
+                </td>
+            </tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    
+    return html;
+}
+
+	// ========================================
+// ⚠️ GENERAR TABLA POR CONDICIÓN
+// ========================================
+function generarTablaPorCondicion(datos, tipoOS) {
+    const unidades = Object.keys(datos).sort();
+    
+    if (unidades.length === 0) {
+        return `<p style="color: #666; text-align: center;">No hay datos de OS ${tipoOS}</p>`;
+    }
+    
+    const condiciones = ['HOY', 'MAÑANA', 'EN TIEMPO', 'VENCIDO'];
+    const coloresCondicion = {
+        'HOY': '#ef5350',
+        'MAÑANA': '#ffa726',
+        'EN TIEMPO': '#66bb6a',
+        'VENCIDO': '#d32f2f'
+    };
+    
+    let html = `
+        <div style="overflow-x: auto; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <thead>
+                    <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
+                        ${condiciones.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    unidades.forEach((unidad, idx) => {
+        const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
+        html += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;" id="fila_${tipoOS}_condicion_${idx}">`;
+        html += `<td style="padding: 12px; font-weight: 600; color: #2d3748; border-right: 1px solid #e2e8f0;">${unidad}</td>`;
+        
+        condiciones.forEach(condicion => {
+            const count = datos[unidad].porCondicion[condicion].length;
+            const hasData = count > 0;
+            const color = coloresCondicion[condicion];
+            
+            html += `
+                <td style="padding: 12px; text-align: center; border-right: 1px solid #e2e8f0; cursor: ${hasData ? 'pointer' : 'default'};" 
+                    ${hasData ? `onclick="toggleDetalleCondicion('${unidad}', '${condicion}', '${tipoOS}', ${idx})"` : ''}>
+                    <span style="
+                        display: inline-block;
+                        min-width: 30px;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        font-weight: 600;
+                        background: ${hasData ? color + '20' : '#f5f5f5'};
+                        color: ${hasData ? color : '#999'};
+                        ${hasData ? `box-shadow: 0 2px 4px ${color}40;` : ''}
+                    ">
+                        ${count}
+                    </span>
+                </td>`;
+        });
+        
+        html += `</tr>`;
+        
+        // Fila oculta para el detalle
+        html += `
+            <tr id="detalle_${tipoOS}_condicion_${idx}" style="display: none; background: #e8f5e9;">
+                <td colspan="${condiciones.length + 1}" style="padding: 15px;">
+                    <div id="contenido_detalle_${tipoOS}_condicion_${idx}"></div>
+                </td>
+            </tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    
+    return html;
+}
+
+	
+	// ========================================
+// 🔽 TOGGLE DETALLE POR RANGO
+// ========================================
+function toggleDetalleRango(unidad, rango, tipoOS, idx) {
+    const filaDetalle = document.getElementById(`detalle_${tipoOS}_rango_${idx}`);
+    const contenidoDetalle = document.getElementById(`contenido_detalle_${tipoOS}_rango_${idx}`);
+    
+    // Si ya está visible, ocultarlo
+    if (filaDetalle.style.display === 'table-row') {
+        filaDetalle.style.display = 'none';
+        return;
+    }
+    
+    // Obtener OS de esa unidad y rango
+    const datos = tipoOS === 'reguladas' ? window.datosDetalleOS.reguladas : window.datosDetalleOS.noReguladas;
+    const osList = datos[unidad].porRango[rango];
+    
+    if (!osList || osList.length === 0) {
+        contenidoDetalle.innerHTML = '<p style="color: #666;">No hay OS en este rango</p>';
+        filaDetalle.style.display = 'table-row';
+        return;
+    }
+    
+    // Generar HTML del detalle
+    let html = `
+        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <strong style="color: #2d3748; font-size: 16px;">
+                    📋 ${unidad} - Rango ${rango} días (${osList.length} OS)
+                </strong>
+                <button onclick="toggleDetalleRango('${unidad}', '${rango}', '${tipoOS}', ${idx})" 
+                        style="background: #ef5350; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    ✕ Cerrar
+                </button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;">`;
+    
+    osList.forEach((os, i) => {
+        html += `
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 3px solid #1976d2;">
+                <div style="font-weight: 600; color: #1976d2; margin-bottom: 8px;">
+                    ${i + 1}. OS: ${os.OSATMO || 'N/A'}
+                </div>
+                <div style="font-size: 14px; color: #666; line-height: 1.6;">
+                    <strong>Tipología:</strong> ${os.Tipologia || 'Sin tipología'}<br>
+                    <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+                    <strong>Días:</strong> ${os.dias_calculados} días<br>
+                    <strong>Estado:</strong> ${os.Estado_ATOMO || 'N/A'}
+                </div>
+            </div>`;
+    });
+    
+    html += `</div></div>`;
+    
+    contenidoDetalle.innerHTML = html;
+    filaDetalle.style.display = 'table-row';
+}
+
+
+	// ========================================
+// 🔽 TOGGLE DETALLE POR CONDICIÓN
+// ========================================
+function toggleDetalleCondicion(unidad, condicion, tipoOS, idx) {
+    const filaDetalle = document.getElementById(`detalle_${tipoOS}_condicion_${idx}`);
+    const contenidoDetalle = document.getElementById(`contenido_detalle_${tipoOS}_condicion_${idx}`);
+    
+    // Si ya está visible, ocultarlo
+    if (filaDetalle.style.display === 'table-row') {
+        filaDetalle.style.display = 'none';
+        return;
+    }
+    
+    // Obtener OS de esa unidad y condición
+    const datos = tipoOS === 'reguladas' ? window.datosDetalleOS.reguladas : window.datosDetalleOS.noReguladas;
+    const osList = datos[unidad].porCondicion[condicion];
+    
+    if (!osList || osList.length === 0) {
+        contenidoDetalle.innerHTML = '<p style="color: #666;">No hay OS en esta condición</p>';
+        filaDetalle.style.display = 'table-row';
+        return;
+    }
+    
+    // Colores por condición
+    const coloresCondicion = {
+        'HOY': '#ef5350',
+        'MAÑANA': '#ffa726',
+        'EN TIEMPO': '#66bb6a',
+        'VENCIDO': '#d32f2f'
+    };
+    const color = coloresCondicion[condicion];
+    
+    // Generar HTML del detalle
+    let html = `
+        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <strong style="color: #2d3748; font-size: 16px;">
+                    ⚠️ ${unidad} - ${condicion} (${osList.length} OS)
+                </strong>
+                <button onclick="toggleDetalleCondicion('${unidad}', '${condicion}', '${tipoOS}', ${idx})" 
+                        style="background: ${color}; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    ✕ Cerrar
+                </button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;">`;
+    
+    osList.forEach((os, i) => {
+        html += `
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 3px solid ${color};">
+                <div style="font-weight: 600; color: ${color}; margin-bottom: 8px;">
+                    ${i + 1}. OS: ${os.OSATMO || 'N/A'}
+                </div>
+                <div style="font-size: 14px; color: #666; line-height: 1.6;">
+                    <strong>Tipología:</strong> ${os.Tipologia || 'Sin tipología'}<br>
+                    <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+                    <strong>Días:</strong> ${os.dias_calculados} días<br>
+                    <strong>Condición:</strong> ${os.condicion}<br>
+                    <strong>Estado:</strong> ${os.Estado_ATOMO || 'N/A'}
+                </div>
+            </div>`;
+    });
+    
+    html += `</div></div>`;
+    
+    contenidoDetalle.innerHTML = html;
+    filaDetalle.style.display = 'table-row';
+}
+
+
+	
+
+
 // ========================================
 // 🧹 FUNCIÓN: Limpiar automáticamente otros campos de búsqueda
 // ========================================
@@ -4019,6 +4522,13 @@ function seleccionarTabla(tableName) {
         alert('Su rol solo permite acceso a Consultas de Servicios');
         return;
     }
+    // Validar acceso a Detalle OS
+if (tableName === 'detalle_os') {
+    if (currentUser.rol !== 'Administrador' && currentUser.rol !== 'Supervisor') {
+        alert('⚠️ Solo Administradores y Supervisores pueden acceder a Detalle OS');
+        return;
+    }
+}
 
     selectedTable = tableName; 
     const config = tableConfigs[tableName];
