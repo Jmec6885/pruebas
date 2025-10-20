@@ -3400,8 +3400,8 @@ async function cargarInterfazDetalleOS() {
     resultsContainer.innerHTML = '';
     
     try {
-        // Obtener todas las OS Pendientes
-        // Traer TODAS las OS Pendientes (sin límite de 1000)
+        
+	// Traer TODAS las OS (solo columnas necesarias para optimizar)
 let osPendientes = [];
 let desde = 0;
 const porPagina = 1000;
@@ -3410,11 +3410,12 @@ let hayMas = true;
 while (hayMas) {
     const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('*')
+        .select('OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO')
         .range(desde, desde + porPagina - 1);
     
     if (error) {
-        searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
+        console.error('Error cargando página:', error);
+        searchGrid.innerHTML = '<div class="result-card">❌ Error: ' + error.message + '</div>';
         return;
     }
     
@@ -3422,7 +3423,15 @@ while (hayMas) {
         osPendientes = osPendientes.concat(data);
         desde += porPagina;
         
-        // Si trajo menos de 1000, ya no hay más
+        // Actualizar indicador de progreso
+        searchGrid.innerHTML = `
+            <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center;">
+                <h3 style="color: #1565c0;">Cargando datos...</h3>
+                <p style="color: #666;">Registros cargados: <strong>${osPendientes.length}</strong></p>
+                <div class="loading" style="display: block; margin: 20px auto;"></div>
+            </div>
+        `;
+        
         if (data.length < porPagina) {
             hayMas = false;
         }
@@ -3431,7 +3440,7 @@ while (hayMas) {
     }
 }
 
-console.log(`✅ Total de OS cargadas: ${osPendientes.length}`);
+console.log(`✅ Total cargado: ${osPendientes.length} OS`);
         
         if (error) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
