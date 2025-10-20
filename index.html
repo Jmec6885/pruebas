@@ -3401,9 +3401,37 @@ async function cargarInterfazDetalleOS() {
     
     try {
         // Obtener todas las OS Pendientes
-        const { data: osPendientes, error } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*');
+        // Traer TODAS las OS Pendientes (sin límite de 1000)
+let osPendientes = [];
+let desde = 0;
+const porPagina = 1000;
+let hayMas = true;
+
+while (hayMas) {
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('*')
+        .range(desde, desde + porPagina - 1);
+    
+    if (error) {
+        searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
+        return;
+    }
+    
+    if (data && data.length > 0) {
+        osPendientes = osPendientes.concat(data);
+        desde += porPagina;
+        
+        // Si trajo menos de 1000, ya no hay más
+        if (data.length < porPagina) {
+            hayMas = false;
+        }
+    } else {
+        hayMas = false;
+    }
+}
+
+console.log(`✅ Total de OS cargadas: ${osPendientes.length}`);
         
         if (error) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
