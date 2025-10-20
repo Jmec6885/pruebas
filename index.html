@@ -3407,40 +3407,13 @@ let desde = 0;
 const porPagina = 1000;
 let hayMas = true;
 
-while (hayMas) {
-    const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO')
-        .range(desde, desde + porPagina - 1);
-    
-    if (error) {
-        console.error('Error cargando página:', error);
-        searchGrid.innerHTML = '<div class="result-card">❌ Error: ' + error.message + '</div>';
-        return;
-    }
-    
-    if (data && data.length > 0) {
-        osPendientes = osPendientes.concat(data);
-        desde += porPagina;
-        
-        // Actualizar indicador de progreso
-        searchGrid.innerHTML = `
-            <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center;">
-                <h3 style="color: #1565c0;">Cargando datos...</h3>
-                <p style="color: #666;">Registros cargados: <strong>${osPendientes.length}</strong></p>
-                <div class="loading" style="display: block; margin: 20px auto;"></div>
-            </div>
-        `;
-        
-        if (data.length < porPagina) {
-            hayMas = false;
-        }
-    } else {
-        hayMas = false;
-    }
-}
+// Traer TODAS las filas (forzar sin límite)
+const { data: osPendientes, error, count } = await supabaseClient
+    .from('OS Pendientes')
+    .select('OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO', { count: 'exact' })
+    .limit(15000); // Forzar límite alto
 
-console.log(`✅ Total cargado: ${osPendientes.length} OS`);
+console.log(`✅ Total cargado: ${osPendientes ? osPendientes.length : 0} de ${count} registros`);
         
         if (error) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
