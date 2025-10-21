@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -3463,9 +3461,9 @@ async function cargarInterfazDetalleOS() {
     resultsContainer.innerHTML = '';
     try {
         // ✅ USAR SOLO ESTO:
-        const { data: osPendientes, count } = await fetchAllFromTable(
-            'OS Pendientes',
-            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO'
+        const { data: osPendientes, count } = await supabaseClient
+    .from('OS Pendientes')
+    .select('OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP')
         );
 
         console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
