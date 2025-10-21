@@ -3463,7 +3463,7 @@ async function cargarInterfazDetalleOS() {
         // ✅ USAR SOLO ESTO:
         const { data: osPendientes, count } = await fetchAllFromTable(
             'OS Pendientes',
-            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP, Comentario'
+            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP, Comentario, Unicom, Direccion'
         );
 
         console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
@@ -4426,9 +4426,11 @@ function toggleDetalleRango(unidad, rango, tipoOS, idx) {
                 <div style="font-size: 14px; color: #666; line-height: 1.6;">
                     <strong>Tipología:</strong> ${os.Tipologia || 'Sin tipología'}<br>
                     <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+		    <strong>Unicom:</strong> ${os.Unicom || 'N/A'}<br>
                     <strong>Días:</strong> ${os.dias_calculados} días<br>
 		    <strong>Fecha Gen.:</strong> ${os['Fecha Gen.'] || 'N/A'}<br>
                     <strong>Estado:</strong> ${os.Estado_ATOMO || 'N/A'}
+		    <strong>Direccion:</strong> ${os.Direccion || 'Sin Direccion'}<br>
                 </div>
             </div>`;
     });
@@ -4495,10 +4497,11 @@ function toggleDetalleCondicion(unidad, condicion, tipoOS, idx) {
                 <div style="font-size: 14px; color: #666; line-height: 1.6;">
                     <strong>Tipología:</strong> ${os.Tipologia || 'Sin tipología'}<br>
                     <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+		    <strong>Uicom:</strong> ${os.Unicom || 'N/A'}<br>
                     <strong>Días:</strong> ${os.dias_calculados} días<br>
 		    <strong>Fecha Gen.:</strong> ${os['Fecha Gen.'] || 'N/A'}<br>
-                    <strong>Condición:</strong> ${os.condicion}<br>
                     <strong>Estado:</strong> ${os.Estado_ATOMO || 'N/A'}
+		    <strong>Direccion:</strong> ${os.Direccion || 'Sin Direccion'}<br>
                 </div>
             </div>`;
     });
