@@ -3247,15 +3247,11 @@ function transformarUsuarioAUnidad(usuario) {
 async function cargarInterfazKMLRuta() {
     const searchGrid = document.getElementById('searchGrid');
     
-    // Mostrar indicador de carga
     searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // Obtener lista de unidades únicas de OS Pendientes
-        const { data: unidadesData } = await fetchAllFromTable('OS Pendientes', 'Unidad');
-            .from('OS Pendientes')
-            .select('Unidad')
-            .not('Unidad', 'is', null);
+        // ✅ CORRECCIÓN
+        const { data: unidades, error } = await fetchAllFromTable('OS Pendientes', 'Unidad');
         
         if (error) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar unidades</div>';
