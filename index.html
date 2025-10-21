@@ -4514,67 +4514,149 @@ function toggleDetalleCondicion(unidad, condicion, tipoOS, idx) {
 
 
 	// ========================================
-// 📡 TABLA UNICOM POR RANGO
+// 📡 TABLA UNICOM POR RANGO (EXPANDIBLE)
 // ========================================
 function generarTablaUnicomPorRango(osPendientes) {
     const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
-    const contadores = {};
+    const osPorRango = {};
     
-    rangos.forEach(r => contadores[r] = 0);
+    rangos.forEach(r => osPorRango[r] = []);
     
     osPendientes.forEach(os => {
         if (os.Unicom) {
             const dias = calcularDias(os['Fecha Gen.']);
             const rango = determinarRango(dias);
-            if (contadores[rango] !== undefined) contadores[rango]++;
+            if (osPorRango[rango]) {
+                osPorRango[rango].push({...os, dias_calculados: dias, rango: rango});
+            }
         }
     });
     
-    let html = `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"><thead><tr style="background: #00acc1; color: white;"><th style="padding: 15px;">Columna</th>`;
+    // Guardar globalmente
+    window.unicomPorRango = osPorRango;
+    
+    let html = `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <thead><tr style="background: #00acc1; color: white;"><th style="padding: 15px;">Columna</th>`;
     
     rangos.forEach(r => html += `<th style="padding: 15px; text-align: center;">${r}</th>`);
-    html += `</tr></thead><tbody><tr style="background: #f8f9fa;"><td style="padding: 12px; font-weight: 600;">UNICOM</td>`;
+    html += `</tr></thead><tbody><tr style="background: #f8f9fa;" id="fila_unicom_rango"><td style="padding: 12px; font-weight: 600;">UNICOM</td>`;
     
     rangos.forEach(r => {
-        const count = contadores[r];
-        html += `<td style="padding: 12px; text-align: center;"><span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? '#b2ebf2' : '#f5f5f5'}; color: ${count > 0 ? '#006064' : '#999'};">${count}</span></td>`;
+        const count = osPorRango[r].length;
+        html += `<td style="padding: 12px; text-align: center; cursor: ${count > 0 ? 'pointer' : 'default'};" ${count > 0 ? `onclick="toggleDetalleUnicomRango('${r}')"` : ''}>
+        <span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? '#b2ebf2' : '#f5f5f5'}; color: ${count > 0 ? '#006064' : '#999'};">${count}</span></td>`;
     });
     
-    html += `</tr></tbody></table></div>`;
+    html += `</tr><tr id="detalle_unicom_rango" style="display: none; background: #e0f7fa;"><td colspan="${rangos.length + 1}" style="padding: 15px;"><div id="contenido_detalle_unicom_rango"></div></td></tr></tbody></table></div>`;
     return html;
 }
 
 // ========================================
-// 📡 TABLA UNICOM POR CONDICIÓN
+// 📡 TABLA UNICOM POR CONDICIÓN (EXPANDIBLE)
 // ========================================
 function generarTablaUnicomPorCondicion(osPendientes) {
     const condiciones = ['HOY', 'MAÑANA', 'EN TIEMPO', 'VENCIDO'];
-    const contadores = {};
+    const osPorCondicion = {};
     
-    condiciones.forEach(c => contadores[c] = 0);
+    condiciones.forEach(c => osPorCondicion[c] = []);
     
     osPendientes.forEach(os => {
         if (os.Unicom) {
             const dias = calcularDias(os['Fecha Gen.']);
             const condicion = determinarCondicion(dias, os.Dias_por_OS);
-            if (contadores[condicion] !== undefined) contadores[condicion]++;
+            if (osPorCondicion[condicion]) {
+                osPorCondicion[condicion].push({...os, dias_calculados: dias, condicion: condicion});
+            }
         }
     });
     
-    let html = `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"><thead><tr style="background: #26c6da; color: white;"><th style="padding: 15px;">Columna</th>`;
-    
-    condiciones.forEach(c => html += `<th style="padding: 15px; text-align: center;">${c}</th>`);
-    html += `</tr></thead><tbody><tr style="background: #f8f9fa;"><td style="padding: 12px; font-weight: 600;">UNICOM</td>`;
+    // Guardar globalmente
+    window.unicomPorCondicion = osPorCondicion;
     
     const colores = {'HOY': '#ef5350', 'MAÑANA': '#ffa726', 'EN TIEMPO': '#66bb6a', 'VENCIDO': '#d32f2f'};
     
+    let html = `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <thead><tr style="background: #26c6da; color: white;"><th style="padding: 15px;">Columna</th>`;
+    
+    condiciones.forEach(c => html += `<th style="padding: 15px; text-align: center;">${c}</th>`);
+    html += `</tr></thead><tbody><tr style="background: #f8f9fa;" id="fila_unicom_condicion"><td style="padding: 12px; font-weight: 600;">UNICOM</td>`;
+    
     condiciones.forEach(c => {
-        const count = contadores[c];
-        html += `<td style="padding: 12px; text-align: center;"><span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? colores[c]+'20' : '#f5f5f5'}; color: ${count > 0 ? colores[c] : '#999'};">${count}</span></td>`;
+        const count = osPorCondicion[c].length;
+        html += `<td style="padding: 12px; text-align: center; cursor: ${count > 0 ? 'pointer' : 'default'};" ${count > 0 ? `onclick="toggleDetalleUnicomCondicion('${c}')"` : ''}>
+        <span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? colores[c]+'20' : '#f5f5f5'}; color: ${count > 0 ? colores[c] : '#999'};">${count}</span></td>`;
     });
     
-    html += `</tr></tbody></table></div>`;
+    html += `</tr><tr id="detalle_unicom_condicion" style="display: none; background: #fff3e0;"><td colspan="${condiciones.length + 1}" style="padding: 15px;"><div id="contenido_detalle_unicom_condicion"></div></td></tr></tbody></table></div>`;
     return html;
+}
+
+// ========================================
+// 🔽 TOGGLE UNICOM RANGO
+// ========================================
+function toggleDetalleUnicomRango(rango) {
+    const filaDetalle = document.getElementById('detalle_unicom_rango');
+    const contenido = document.getElementById('contenido_detalle_unicom_rango');
+    
+    if (filaDetalle.style.display === 'table-row') {
+        filaDetalle.style.display = 'none';
+        return;
+    }
+    
+    const osList = window.unicomPorRango[rango];
+    let html = `<div style="background: white; padding: 15px; border-radius: 8px;"><strong style="color: #00acc1;">📡 UNICOM - Rango ${rango} (${osList.length} OS)</strong>
+    <button onclick="toggleDetalleUnicomRango('${rango}')" style="float: right; background: #ef5350; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;">✕ Cerrar</button>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 15px; max-height: 400px; overflow-y: auto;">`;
+    
+    osList.forEach((os, i) => {
+        html += `<div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 3px solid #00acc1;">
+        <div style="font-weight: 600; color: #00acc1; margin-bottom: 8px;">${i + 1}. OS: ${os.OSATMO || 'N/A'}</div>
+        <div style="font-size: 14px; color: #666; line-height: 1.6;">
+        <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+        <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+        <strong>Días:</strong> ${os.dias_calculados}<br>
+        <strong>Unidad:</strong> ${os.Unidad || 'N/A'}</div></div>`;
+    });
+    
+    html += `</div></div>`;
+    contenido.innerHTML = html;
+    filaDetalle.style.display = 'table-row';
+}
+
+// ========================================
+// 🔽 TOGGLE UNICOM CONDICIÓN
+// ========================================
+function toggleDetalleUnicomCondicion(condicion) {
+    const filaDetalle = document.getElementById('detalle_unicom_condicion');
+    const contenido = document.getElementById('contenido_detalle_unicom_condicion');
+    
+    if (filaDetalle.style.display === 'table-row') {
+        filaDetalle.style.display = 'none';
+        return;
+    }
+    
+    const osList = window.unicomPorCondicion[condicion];
+    const colores = {'HOY': '#ef5350', 'MAÑANA': '#ffa726', 'EN TIEMPO': '#66bb6a', 'VENCIDO': '#d32f2f'};
+    const color = colores[condicion];
+    
+    let html = `<div style="background: white; padding: 15px; border-radius: 8px;"><strong style="color: ${color};">📡 UNICOM - ${condicion} (${osList.length} OS)</strong>
+    <button onclick="toggleDetalleUnicomCondicion('${condicion}')" style="float: right; background: ${color}; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;">✕ Cerrar</button>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 15px; max-height: 400px; overflow-y: auto;">`;
+    
+    osList.forEach((os, i) => {
+        html += `<div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 3px solid ${color};">
+        <div style="font-weight: 600; color: ${color}; margin-bottom: 8px;">${i + 1}. OS: ${os.OSATMO || 'N/A'}</div>
+        <div style="font-size: 14px; color: #666; line-height: 1.6;">
+        <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+        <strong>Medidor:</strong> ${os.Medidor || 'N/A'}<br>
+        <strong>Días:</strong> ${os.dias_calculados}<br>
+        <strong>Condición:</strong> ${os.condicion}<br>
+        <strong>Unidad:</strong> ${os.Unidad || 'N/A'}</div></div>`;
+    });
+    
+    html += `</div></div>`;
+    contenido.innerHTML = html;
+    filaDetalle.style.display = 'table-row';
 }
 
 
