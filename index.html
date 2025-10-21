@@ -3558,7 +3558,10 @@ async function cargarInterfazDetalleOS() {
     }
 }
 
-	let festivosCache = [];
+	// ========================================
+// 📅 CARGAR FESTIVOS DESDE SUPABASE
+// ========================================
+let festivosCache = [];
 
 async function cargarFestivos() {
     try {
@@ -3574,6 +3577,36 @@ async function cargarFestivos() {
     } catch (err) {
         console.error('Error cargando festivos:', err);
     }
+}
+
+// ========================================
+// 📅 CALCULAR DÍAS HÁBILES (EXCLUYE SÁB/DOM/FESTIVOS)
+// ========================================
+function calcularDiasHabiles(fechaGen) {
+    if (!fechaGen) return null;
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const fechaInicio = new Date(fechaGen);
+    fechaInicio.setHours(0, 0, 0, 0);
+    
+    let diasHabiles = 0;
+    let fechaActual = new Date(fechaInicio);
+    
+    while (fechaActual <= hoy) {
+        const diaSemana = fechaActual.getDay(); // 0=Domingo, 6=Sábado
+        const fechaStr = fechaActual.toISOString().split('T')[0];
+        
+        // Contar si NO es sábado, NO es domingo, NO es festivo
+        if (diaSemana !== 0 && diaSemana !== 6 && !festivosCache.includes(fechaStr)) {
+            diasHabiles++;
+        }
+        
+        fechaActual.setDate(fechaActual.getDate() + 1);
+    }
+    
+    return diasHabiles;
 }
 	
 
@@ -3655,12 +3688,20 @@ function procesarOSPendientes(osPendientes) {
     const condicion = determinarCondicion(dias, os.Dias_por_OS);
     
     const tipo = esRegulada ? 'reguladas' : 'noReguladas';
-       const unidad = os.Unidad || 'Sin Unidad';
+        
+        // Determinar tipo (Regulado/No Regulado)
+        // ✅ Acepta "Regulado", "Regulada", "regulado", "regulada"
+	// ✅ Detecta "Regulada/o" y "No Regulada/o"
+	const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+	const tipo = (valorTipo.includes('regulad') && !valorTipo.includes('no')) 
+    ? 'reguladas' 
+    : 'noReguladas';
+        const unidad = os.Unidad || 'Sin Unidad';
         
         // Inicializar unidad si no existe
         if (!datosAgrupados[tipo][unidad]) {
             datosAgrupados[tipo][unidad] = {
-                  porRango: {
+                porRango: {
                     '0-5': [],
                     '6-10': [],
                     '11-15': [],
