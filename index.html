@@ -3608,7 +3608,9 @@ function procesarOSPendientes(osPendientes) {
         
         // Determinar tipo (Regulado/No Regulado)
         // ✅ Acepta "Regulado", "Regulada", "regulado", "regulada"
-	const tipo = (os.Tipo_de_OS && os.Tipo_de_OS.toLowerCase().includes('regulad')) 
+	// ✅ Detecta "Regulada/o" y "No Regulada/o"
+	const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+	const tipo = (valorTipo.includes('regulad') && !valorTipo.includes('no')) 
     ? 'reguladas' 
     : 'noReguladas';
         const unidad = os.Unidad || 'Sin Unidad';
