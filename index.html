@@ -2191,6 +2191,39 @@ async function incrementarContadorBusquedas() {
 }
 };
 
+	async function fetchAllFromTable(tableName, columns = '*') {
+    const batchSize = 1000;
+    let allData = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error, count } = await supabaseClient
+            .from(tableName)
+            .select(columns, { count: offset === 0 ? 'exact' : undefined })
+            .range(offset, offset + batchSize - 1);
+
+        if (error) {
+            console.error('Error en fetchAllFromTable:', error);
+            throw error;
+        }
+
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            console.log(`✅ Cargadas ${allData.length} de ${count || '?'} filas...`);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+        } else {
+            hasMore = false;
+        }
+    }
+
+    return { data: allData, count: allData.length };
+}
+
+// ✅ Variables para las gráficas
+let consumosChart = null;
+
     // ✅ Variables para las gráficas
     let consumosChart = null;
     let lecturasChart = null;
@@ -2688,7 +2721,7 @@ function mostrarResultadosUsuarios(usuarios) {
                 <div class="result-item"><strong>Usuario:</strong> ${user.usuario}</div>
                 <div class="result-item"><strong>Rol:</strong> ${user.rol}</div>
                 <div class="result-item"><strong>Activo:</strong> ${user.activo ? '✅ Sí' : '❌ No'}</div>
-                <div class="result-item"><strong>Bloqueado:</strong> ${user.bloqueado ? '🚫 Sí' : '✅ No'}</div>
+                <div class="result-item"><strong>Bloqueado:</strong> ${user.razon_bloqueo ? '🚫 Sí' : '✅ No'}</div>
                 <div class="action-buttons">
                     <button class="btn btn-secondary" onclick="editarUsuario(${user.id})">✏️ Editar</button>
                 </div>
@@ -3178,6 +3211,38 @@ function transformarUsuarioAUnidad(usuario) {
 }
 
 
+	async function fetchAllFromTable(tableName, columns = '*') {
+    const batchSize = 1000;
+    let allData = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error, count } = await supabaseClient
+            .from(tableName)
+            .select(columns, { count: offset === 0 ? 'exact' : undefined })
+            .range(offset, offset + batchSize - 1);
+
+        if (error) {
+            console.error('Error en fetchAllFromTable:', error);
+            throw error;
+        }
+
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            console.log(`✅ Cargadas ${allData.length} de ${count || '?'} filas...`);
+            offset += batchSize;
+            hasMore = data.length === batchSize; // Si trajo menos de 1000, es la última página
+        } else {
+            hasMore = false;
+        }
+    }
+
+    return { data: allData, count: allData.length };
+}
+
+
+
 	// ========================================
 // 📍 CARGAR INTERFAZ KML RUTA
 // ========================================
@@ -3189,7 +3254,7 @@ async function cargarInterfazKMLRuta() {
     
     try {
         // Obtener lista de unidades únicas de OS Pendientes
-        const { data: unidades, error } = await supabaseClient
+        const { data: unidadesData } = await fetchAllFromTable('OS Pendientes', 'Unidad');
             .from('OS Pendientes')
             .select('Unidad')
             .not('Unidad', 'is', null);
@@ -3388,7 +3453,6 @@ function descargarKMLGIS() {
 async function cargarInterfazDetalleOS() {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
-    
     searchGrid.innerHTML = `
         <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
             <h3 style="margin: 0 0 10px 0; color: #1565c0;">📊 Análisis de OS Pendientes</h3>
@@ -3396,30 +3460,16 @@ async function cargarInterfazDetalleOS() {
             <div class="loading" style="display: block; margin: 20px auto;"></div>
         </div>
     `;
-    
     resultsContainer.innerHTML = '';
-    
     try {
-        
-	// Traer TODAS las OS (solo columnas necesarias para optimizar)
-let osPendientes = [];
-let desde = 0;
-const porPagina = 1000;
-let hayMas = true;
+        // ✅ USAR SOLO ESTO:
+        const { data: osPendientes, count } = await fetchAllFromTable(
+            'OS Pendientes',
+            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO'
+        );
 
-// Traer TODAS las filas (forzar sin límite)
-const { data: osPendientes, error, count } = await supabaseClient
-    .from('OS Pendientes')
-    .select('OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO', { count: 'exact' })
-    .limit(15000); // Forzar límite alto
+        console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
 
-console.log(`✅ Total cargado: ${osPendientes ? osPendientes.length : 0} de ${count} registros`);
-        
-        if (error) {
-            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar datos</div>';
-            return;
-        }
-        
         if (!osPendientes || osPendientes.length === 0) {
             searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes registradas</div>';
             return;
