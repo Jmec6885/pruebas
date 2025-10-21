@@ -3659,6 +3659,7 @@ function procesarOSPendientes(osPendientes) {
         
         // Inicializar unidad si no existe
         if (!datosAgrupados[tipo][unidad]) {
+            datosAgrupados[tipo][unidad] = {
                   porRango: {
                     '0-5': [],
                     '6-10': [],
