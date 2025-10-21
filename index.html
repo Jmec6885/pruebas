@@ -3607,7 +3607,10 @@ function procesarOSPendientes(osPendientes) {
         const condicion = determinarCondicion(dias, os.Dias_por_OS);
         
         // Determinar tipo (Regulado/No Regulado)
-        const tipo = os.Tipo_de_OS === 'Regulado' ? 'reguladas' : 'noReguladas';
+        // ✅ Acepta "Regulado", "Regulada", "regulado", "regulada"
+	const tipo = (os.Tipo_de_OS && os.Tipo_de_OS.toLowerCase().includes('regulad')) 
+    ? 'reguladas' 
+    : 'noReguladas';
         const unidad = os.Unidad || 'Sin Unidad';
         
         // Inicializar unidad si no existe
