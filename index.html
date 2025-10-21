@@ -1,3 +1,5 @@
+nueva prueba para rol poda y fallas con días de descanso
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -3689,14 +3691,7 @@ function procesarOSPendientes(osPendientes) {
     
     const tipo = esRegulada ? 'reguladas' : 'noReguladas';
         
-        // Determinar tipo (Regulado/No Regulado)
-        // ✅ Acepta "Regulado", "Regulada", "regulado", "regulada"
-	// ✅ Detecta "Regulada/o" y "No Regulada/o"
-	const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
-	const tipo = (valorTipo.includes('regulad') && !valorTipo.includes('no')) 
-    ? 'reguladas' 
-    : 'noReguladas';
-        const unidad = os.Unidad || 'Sin Unidad';
+       const unidad = os.Unidad || 'Sin Unidad';
         
         // Inicializar unidad si no existe
         if (!datosAgrupados[tipo][unidad]) {
