@@ -3463,7 +3463,7 @@ async function cargarInterfazDetalleOS() {
         // ✅ USAR SOLO ESTO:
         const { data: osPendientes, count } = await fetchAllFromTable(
             'OS Pendientes',
-            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP'
+            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP, Comentario'
         );
 
         console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
