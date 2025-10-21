@@ -4171,7 +4171,7 @@ function generarBotonesAccion(item, index, config) {
         
         // Roles sin acceso a gráficas
         const sinGraficas = ['Lectura', 'Contratista', 'ATTF', 'Poda'];
-        const puedeVerGraficas = !sinGraficas.includes(currentUser.rol);
+        const puedeVerGraficas = currentUser && currentUser.rol && !sinGraficas.includes(currentUser.rol);
         
         if (isCoordenadasLector) {
             html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
