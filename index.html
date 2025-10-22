@@ -4746,7 +4746,12 @@ async function capturarCoordenadaReal(cuentaContrato, medidor, index) {
                 </div>`;
         },
         (error) => {
-            alert('No se pudo obtener la ubicación. Activa el GPS.');
+    console.error('Error GPS:', error);
+    let mensaje = 'No se pudo obtener ubicación.\n\n';
+    if (error.code === 1) mensaje += 'Permiso denegado. Habilita ubicación en el navegador.';
+    else if (error.code === 2) mensaje += 'Ubicación no disponible. Activa GPS del dispositivo.';
+    else if (error.code === 3) mensaje += 'Tiempo agotado. Intenta de nuevo.';
+    alert(mensaje);
             displayDiv.innerHTML = '<p style="color: #d32f2f;">❌ Error GPS</p>';
         },
         {
