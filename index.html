@@ -2608,15 +2608,23 @@ async function logout() {
     
     // 🆕 Caso especial para gestión de usuarios
     if (selectedTable === 'usuarios') {
-        searchGrid.innerHTML = `
-            <div class="form-group">
+    searchGrid.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
+            <div class="form-group" style="margin: 0;">
                 <label>Buscar Usuario:</label>
                 <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
-                <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()">🔍 Buscar</button>
             </div>
-        `;
-        return;
-    }
+            <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); width: auto; padding: 15px 30px;">
+                ➕ Crear Nuevo Usuario
+            </button>
+        </div>
+    `;
+    return;
+}
     
     // 🆕 Caso especial para KML Ruta
     if (selectedTable === 'kml_ruta') {
@@ -3149,6 +3157,151 @@ async function resetearUsuario(userId) {
     }
 }
 
+	// ========================================
+// ➕ MOSTRAR FORMULARIO NUEVO USUARIO
+// ========================================
+function mostrarFormularioNuevoUsuario() {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #f0fff4; border: 2px solid #4caf50;">
+            <div class="result-header">➕ Crear Nuevo Usuario</div>
+            
+            <div style="max-width: 500px; margin: 0 auto;">
+                
+                <div class="form-group">
+                    <label>👤 Nombre de Usuario:</label>
+                    <input type="text" id="nuevo_usuario" placeholder="Ej: CLOPCPAC001" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <small style="color: #666; display: block; margin-top: 5px;">Sin espacios, solo letras y números</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>🔑 Contraseña:</label>
+                    <input type="password" id="nuevo_password" placeholder="Ingrese contraseña" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                </div>
+                
+                <div class="form-group">
+                    <label>🔑 Confirmar Contraseña:</label>
+                    <input type="password" id="nuevo_password_confirm" placeholder="Confirme contraseña" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                </div>
+                
+                <div class="form-group">
+                    <label>🎭 Rol:</label>
+                    <select id="nuevo_rol" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                        <option value="">-- Seleccione un rol --</option>
+                        <option value="Administrador">Administrador</option>
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="Consulta">Consulta</option>
+                        <option value="Lectura">Lectura</option>
+                        <option value="Contratista">Contratista</option>
+                        <option value="ATTF">ATTF</option>
+                        <option value="Poda">Poda</option>
+                    </select>
+                </div>
+                
+                <div class="action-buttons" style="margin-top: 25px;">
+                    <button class="btn btn-secondary" onclick="guardarNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                        💾 Guardar Usuario
+                    </button>
+                    <button class="btn btn-danger" onclick="document.getElementById('searchResults').innerHTML = ''">
+                        ✕ Cancelar
+                    </button>
+                </div>
+                
+            </div>
+        </div>
+    `;
+}
+
+	// ========================================
+// 💾 GUARDAR NUEVO USUARIO
+// ========================================
+async function guardarNuevoUsuario() {
+    const usuario = document.getElementById('nuevo_usuario').value.trim();
+    const password = document.getElementById('nuevo_password').value.trim();
+    const passwordConfirm = document.getElementById('nuevo_password_confirm').value.trim();
+    const rol = document.getElementById('nuevo_rol').value;
+    
+    // Validaciones
+    if (!usuario || !password || !passwordConfirm || !rol) {
+        alert('⚠️ Por favor complete todos los campos');
+        return;
+    }
+    
+    if (usuario.length < 4) {
+        alert('⚠️ El usuario debe tener al menos 4 caracteres');
+        return;
+    }
+    
+    if (password !== passwordConfirm) {
+        alert('⚠️ Las contraseñas no coinciden');
+        return;
+    }
+    
+    if (password.length < 6) {
+        alert('⚠️ La contraseña debe tener al menos 6 caracteres');
+        return;
+    }
+    
+    // Verificar si el usuario ya existe
+    const { data: existente } = await supabaseClient
+        .from('usuarios')
+        .select('usuario')
+        .eq('usuario', usuario)
+        .single();
+    
+    if (existente) {
+        alert('❌ El usuario "' + usuario + '" ya existe');
+        return;
+    }
+    
+    // Confirmación
+    const confirmar = confirm(
+        `¿Crear nuevo usuario?\n\n` +
+        `Usuario: ${usuario}\n` +
+        `Rol: ${rol}\n\n` +
+        `✅ SÍ - Crear usuario\n` +
+        `❌ NO - Cancelar`
+    );
+    
+    if (!confirmar) return;
+    
+    // Crear usuario
+    const { error } = await supabaseClient
+        .from('usuarios')
+        .insert({
+            usuario: usuario,
+            password: password,
+            rol: rol,
+            activo: true,
+            Contador: 0,
+            sessionactiva: false,
+            ultima_actividad: new Date().toISOString()
+        });
+    
+    if (error) {
+        alert('❌ Error al crear usuario: ' + error.message);
+        return;
+    }
+    
+    // Éxito
+    alert('✅ Usuario creado exitosamente\n\nUsuario: ' + usuario + '\nRol: ' + rol);
+    
+    document.getElementById('searchResults').innerHTML = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">✅ Usuario Creado</div>
+            <div style="padding: 20px; text-align: center;">
+                <p style="font-size: 18px; color: #2e7d32; margin: 0 0 10px 0;">
+                    <strong>Usuario "${usuario}" creado correctamente</strong>
+                </p>
+                <p style="color: #666; margin: 0;">Rol asignado: <strong>${rol}</strong></p>
+            </div>
+        </div>
+    `;
+}
 
 
    // ===================================================================
