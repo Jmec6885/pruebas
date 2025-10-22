@@ -4695,6 +4695,70 @@ function toggleDetalleUnicomCondicion(unicom, condicion) {
     document.body.insertAdjacentHTML('beforeend', html);
 }
 
+
+	// ========================================
+// 📍 CAPTURAR COORDENADA REAL
+// ========================================
+async function capturarCoordenadaReal(cuentaContrato, medidor, index) {
+    if (!navigator.geolocation) {
+        alert('Tu dispositivo no soporta geolocalización');
+        return;
+    }
+    
+    const displayDiv = document.getElementById(`coordRealDisplay_${index}`);
+    displayDiv.innerHTML = '<div class="loading" style="display: block; margin: 10px auto;"></div><p style="text-align: center; color: #666;">Obteniendo coordenadas GPS...</p>';
+    
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            const coordenadas = `${lat}, ${lng}`;
+            
+            const confirmar = confirm(`¿Guardar esta coordenada?\n\nCuenta: ${cuentaContrato}\nMedidor: ${medidor}\nCoordenada: ${coordenadas}`);
+            
+            if (!confirmar) {
+                displayDiv.innerHTML = '';
+                return;
+            }
+            
+            // Guardar en tabla coordenadas_reales (upsert = inserta o actualiza)
+            const { error } = await supabaseClient
+                .from('coordenadas_reales')
+                .upsert({
+                    CuentaContrato: cuentaContrato,
+                    Medidor: medidor,
+                    CoordenadasReales: coordenadas,
+                    usuario_capturo: currentUser.usuario
+                }, {
+                    onConflict: 'CuentaContrato,Medidor'
+                });
+            
+            if (error) {
+                alert('Error al guardar: ' + error.message);
+                displayDiv.innerHTML = '<p style="color: #d32f2f;">❌ Error al guardar</p>';
+                return;
+            }
+            
+            displayDiv.innerHTML = `
+                <div style="background: #e8f5e9; padding: 10px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #2e7d32;">✅ Coordenada Real Guardada:</strong><br>
+                    <a href="https://www.google.com/maps?q=${coordenadas}" target="_blank" style="color: #1976d2; text-decoration: underline;">${coordenadas}</a>
+                </div>`;
+        },
+        (error) => {
+            alert('No se pudo obtener la ubicación. Activa el GPS.');
+            displayDiv.innerHTML = '<p style="color: #d32f2f;">❌ Error GPS</p>';
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
+
+
 // ========================================
 // 🧹 FUNCIÓN: Limpiar automáticamente otros campos de búsqueda
 // ========================================
@@ -4829,6 +4893,11 @@ function mostrarResultados(resultados) {
     
     resultados.forEach((item, index) => {
         html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
+
+	// Buscar si tiene coordenada real guardada
+if (selectedTable === 'consultas_servicios') {
+    verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
+}
         config.resultFields.forEach(field => {
     // 🎯 Ocultar NombreCliente en resultados si la config lo indica
     if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field) && currentUser.rol !== 'Administrador') {
@@ -4846,6 +4915,16 @@ function mostrarResultados(resultados) {
 });
         
         html += generarBotonesAccion(item, index, config);
+
+// Botón Coordenadas Reales (solo para consultas_servicios)
+if (selectedTable === 'consultas_servicios') {
+    html += `<div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+        <button class="btn btn-secondary" onclick="capturarCoordenadaReal('${item.CuentaContrato}', '${item.Medidor}', ${index})" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            📍 Capturar Coordenada Real
+        </button>
+        <div id="coordRealDisplay_${index}" style="margin-top: 10px;"></div>
+    </div>`;
+}
         html += '</div>'; // Cierre result-card
     });
 
@@ -4857,6 +4936,29 @@ function mostrarResultados(resultados) {
     }
     
     container.innerHTML = html;
+}
+
+	// ========================================
+// 🔍 VERIFICAR COORDENADA REAL EXISTENTE
+// ========================================
+async function verificarCoordenadaReal(cuentaContrato, medidor, index) {
+    const { data } = await supabaseClient
+        .from('coordenadas_reales')
+        .select('CoordenadasReales')
+        .eq('CuentaContrato', cuentaContrato)
+        .eq('Medidor', medidor)
+        .single();
+    
+    if (data && data.CoordenadasReales) {
+        const displayDiv = document.getElementById(`coordRealDisplay_${index}`);
+        if (displayDiv) {
+            displayDiv.innerHTML = `
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; border-left: 4px solid #2196f3; margin-top: 10px;">
+                    <strong style="color: #1565c0;">📍 Coordenada Real:</strong><br>
+                    <a href="https://www.google.com/maps?q=${data.CoordenadasReales}" target="_blank" style="color: #1976d2; text-decoration: underline;">${data.CoordenadasReales}</a>
+                </div>`;
+        }
+    }
 }
 
 // ===================================================================
