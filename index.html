@@ -3904,15 +3904,18 @@ function procesarOSPendientes(osPendientes) {
 
 
 
+// ========================================
+// 📊 GENERAR TABLA POR RANGO DE DÍAS
+// ========================================
 function generarTablaPorRango(datos, tipoOS) {
     const unidades = Object.keys(datos).sort();
-    
     if (unidades.length === 0) {
         return `<p style="color: #666; text-align: center;">No hay datos de OS ${tipoOS}</p>`;
     }
-    
     const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
-    
+    // ✅ DEFINIR 'condiciones' aquí, igual que en generarTablaPorCondicion
+    const condiciones = ['HOY', 'MAÑANA', 'EN TIEMPO', 'VENCIDO'];
+
     let html = `
         <div style="overflow-x: auto; margin: 20px 0;">
             <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -3924,16 +3927,13 @@ function generarTablaPorRango(datos, tipoOS) {
     </tr>
 </thead>
                 <tbody>`;
-    
     unidades.forEach((unidad, idx) => {
         const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
         html += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;" id="fila_${tipoOS}_rango_${idx}">`;
         html += `<td style="padding: 12px; font-weight: 600; color: #2d3748; border-right: 1px solid #e2e8f0;">${unidad}</td>`;
-        
         rangos.forEach(rango => {
             const count = datos[unidad].porRango[rango].length;
             const hasData = count > 0;
-            
             html += `
                 <td style="padding: 12px; text-align: center; border-right: 1px solid #e2e8f0; cursor: ${hasData ? 'pointer' : 'default'};" 
                     ${hasData ? `onclick="toggleDetalleRango('${unidad}', '${rango}', '${tipoOS}', ${idx})"` : ''}>
@@ -3951,24 +3951,18 @@ function generarTablaPorRango(datos, tipoOS) {
                     </span>
                 </td>`;
         });
-    
-        // 🚀 CÁLCULO DEL TOTAL: Ahora 'condiciones' está definida globalmente.
-        const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0); 
+        const total = condiciones.reduce((sum, c) => sum + (datos[unidad].porCondicion[c] || []).length, 0);
         html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
-
         html += `</tr>`;
-        
         // Fila oculta para el detalle
         html += `
             <tr id="detalle_${tipoOS}_rango_${idx}" style="display: none; background: #fff3cd;">
-                <td colspan="${rangos.length + 2}" style="padding: 15px;">
+                <td colspan="${rangos.length + 1}" style="padding: 15px;">
                     <div id="contenido_detalle_${tipoOS}_rango_${idx}"></div>
                 </td>
             </tr>`;
     });
-    
     html += `</tbody></table></div>`;
-    
     return html;
 }
 
