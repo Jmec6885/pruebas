@@ -3904,9 +3904,6 @@ function procesarOSPendientes(osPendientes) {
 
 
 
-// ========================================
-// 📊 GENERAR TABLA POR RANGO DE DÍAS (COMPLETA Y CORREGIDA)
-// ========================================
 function generarTablaPorRango(datos, tipoOS) {
     const unidades = Object.keys(datos).sort();
     
@@ -3914,7 +3911,6 @@ function generarTablaPorRango(datos, tipoOS) {
         return `<p style="color: #666; text-align: center;">No hay datos de OS ${tipoOS}</p>`;
     }
     
-    // Los rangos definidos en la función
     const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     
     let html = `
@@ -3923,7 +3919,7 @@ function generarTablaPorRango(datos, tipoOS) {
                 <thead>
     <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
         <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
-        ${rangos.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
+        ${rangos.map(r => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${r}</th>`).join('')}
         <th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
     </tr>
 </thead>
@@ -3956,9 +3952,8 @@ function generarTablaPorRango(datos, tipoOS) {
                 </td>`;
         });
     
-        
-        // CÁLCULO DEL TOTAL USANDO 'CONDICIONES' (Asumiendo que 'condiciones' está definida GLOBALMENTE)
-        const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0);
+        // 🚀 CÁLCULO DEL TOTAL: Ahora 'condiciones' está definida globalmente.
+        const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0); 
         html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
 
         html += `</tr>`;
