@@ -3921,11 +3921,12 @@ function generarTablaPorRango(datos, tipoOS) {
         <div style="overflow-x: auto; margin: 20px 0;">
             <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <thead>
-                    <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
-                        ${rangos.map(r => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${r}</th>`).join('')}
-                    </tr>
-                </thead>
+    <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
+        ${condiciones.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
+        <th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
+    </tr>
+</thead>
                 <tbody>`;
     
     unidades.forEach((unidad, idx) => {
@@ -3954,8 +3955,12 @@ function generarTablaPorRango(datos, tipoOS) {
                     </span>
                 </td>`;
         });
+	
         
-        html += `</tr>`;
+        const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0);
+html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
+
+html += `</tr>`;
         
         // Fila oculta para el detalle
         html += `
@@ -3993,11 +3998,12 @@ function generarTablaPorCondicion(datos, tipoOS) {
         <div style="overflow-x: auto; margin: 20px 0;">
             <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <thead>
-                    <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
-                        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
-                        ${condiciones.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
-                    </tr>
-                </thead>
+    <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
+        ${condiciones.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
+        <th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
+    </tr>
+</thead>
                 <tbody>`;
     
     unidades.forEach((unidad, idx) => {
@@ -4009,6 +4015,7 @@ function generarTablaPorCondicion(datos, tipoOS) {
             const count = datos[unidad].porCondicion[condicion].length;
             const hasData = count > 0;
             const color = coloresCondicion[condicion];
+	
             
             html += `
                 <td style="padding: 12px; text-align: center; border-right: 1px solid #e2e8f0; cursor: ${hasData ? 'pointer' : 'default'};" 
@@ -4028,7 +4035,10 @@ function generarTablaPorCondicion(datos, tipoOS) {
                 </td>`;
         });
         
-        html += `</tr>`;
+        const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0);
+html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
+
+html += `</tr>`;
         
         // Fila oculta para el detalle
         html += `
@@ -4101,7 +4111,8 @@ function generarTablaEstadoAtomoPorRango(datos) {
                     <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                         <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Rango Días</th>
                         ${estados.map(e => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${e}</th>`).join('')}
-                    </tr>
+<th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
+</tr>
                 </thead>
                 <tbody>`;
     
@@ -4132,12 +4143,15 @@ function generarTablaEstadoAtomoPorRango(datos) {
                 </td>`;
         });
         
-        html += `</tr>`;
+        const total = estados.reduce((sum, estado) => sum + agrupado[estado][rango].length, 0);
+html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px;">${total}</td>`;
+
+html += `</tr>`;
         
         // Fila oculta para detalle
         html += `
             <tr id="detalle_estado_rango_${idx}" style="display: none; background: #fff3cd;">
-                <td colspan="${estados.length + 1}" style="padding: 15px;">
+                <td colspan="${estados.length + 2}" style="padding: 15px;">
                     <div id="contenido_detalle_estado_rango_${idx}"></div>
                 </td>
             </tr>`;
@@ -4268,6 +4282,8 @@ function generarTablaEstadoSapVsAtomo(datos) {
                     <tr style="background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%); color: white;">
                         <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Estado SAP</th>
                         ${estadosAtomo.map(e => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${e}</th>`).join('')}
+<th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
+</tr>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -4298,13 +4314,18 @@ function generarTablaEstadoSapVsAtomo(datos) {
                     </span>
                 </td>`;
         });
+
+	const total = estadosAtomo.reduce((sum, atomo) => sum + agrupado[sap][atomo].length, 0);
+html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px;">${total}</td>`;
+
+html += `</tr>`;
         
         html += `</tr>`;
         
         // Fila oculta para detalle
         html += `
             <tr id="detalle_sap_atomo_${idx}" style="display: none; background: #e0f7fa;">
-                <td colspan="${estadosAtomo.length + 1}" style="padding: 15px;">
+                <td colspan="${estadosAtomo.length + 2}" style="padding: 15px;">
                     <div id="contenido_detalle_sap_atomo_${idx}"></div>
                 </td>
             </tr>`;
@@ -4699,6 +4720,7 @@ function generarTablaUnicomPorRango(osPendientes) {
     <thead><tr style="background: #00acc1; color: white;"><th style="padding: 15px; text-align: left;">UNICOM</th>`;
     
     rangos.forEach(r => html += `<th style="padding: 15px; text-align: center;">${r}</th>`);
+    html += `<th style="padding: 15px; text-align: center; background: rgba(0,0,0,0.1);">TOTAL</th>`;
     html += `</tr></thead><tbody>`;
     
     unicoms.forEach((unicom, idx) => {
@@ -4710,6 +4732,8 @@ function generarTablaUnicomPorRango(osPendientes) {
             html += `<td style="padding: 12px; text-align: center; cursor: ${count > 0 ? 'pointer' : 'default'};" ${count > 0 ? `onclick="toggleDetalleUnicomRango('${unicom}', '${rango}')"` : ''}>
             <span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? '#b2ebf2' : '#f5f5f5'}; color: ${count > 0 ? '#006064' : '#999'};">${count}</span></td>`;
         });
+	const total = rangos.reduce((sum, rango) => sum + datosPorUnicom[unicom][rango].length, 0);
+html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05);">${total}</td>`;
         
         html += `</tr>`;
     });
@@ -4756,7 +4780,8 @@ function generarTablaUnicomPorCondicion(osPendientes) {
     <thead><tr style="background: #26c6da; color: white;"><th style="padding: 15px; text-align: left;">UNICOM</th>`;
     
     condiciones.forEach(c => html += `<th style="padding: 15px; text-align: center;">${c}</th>`);
-    html += `</tr></thead><tbody>`;
+html += `<th style="padding: 15px; text-align: center; background: rgba(0,0,0,0.1);">TOTAL</th>`;
+html += `</tr></thead><tbody>`;
     
     unicoms.forEach((unicom, idx) => {
         const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
