@@ -3923,7 +3923,7 @@ function generarTablaPorRango(datos, tipoOS) {
                 <thead>
     <tr style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
         <th style="padding: 15px; text-align: left; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">Unidad</th>
-        ${condiciones.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
+        ${rangos.map(c => `<th style="padding: 15px; text-align: center; font-weight: 600; border-right: 1px solid rgba(255,255,255,0.2);">${c}</th>`).join('')}
         <th style="padding: 15px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2);">TOTAL</th>
     </tr>
 </thead>
