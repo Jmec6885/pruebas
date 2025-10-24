@@ -3904,9 +3904,8 @@ function procesarOSPendientes(osPendientes) {
 
 
 
-
-	// ========================================
-// 📊 GENERAR TABLA POR RANGO DE DÍAS
+// ========================================
+// 📊 GENERAR TABLA POR RANGO DE DÍAS (COMPLETA Y CORREGIDA)
 // ========================================
 function generarTablaPorRango(datos, tipoOS) {
     const unidades = Object.keys(datos).sort();
@@ -3915,6 +3914,7 @@ function generarTablaPorRango(datos, tipoOS) {
         return `<p style="color: #666; text-align: center;">No hay datos de OS ${tipoOS}</p>`;
     }
     
+    // Los rangos definidos en la función
     const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     
     let html = `
@@ -3955,17 +3955,18 @@ function generarTablaPorRango(datos, tipoOS) {
                     </span>
                 </td>`;
         });
-	
+    
         
+        // CÁLCULO DEL TOTAL USANDO 'CONDICIONES' (Asumiendo que 'condiciones' está definida GLOBALMENTE)
         const total = condiciones.reduce((sum, c) => sum + datos[unidad].porCondicion[c].length, 0);
-html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
+        html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05); font-size: 16px; border-right: 1px solid #e2e8f0;">${total}</td>`;
 
-html += `</tr>`;
+        html += `</tr>`;
         
         // Fila oculta para el detalle
         html += `
             <tr id="detalle_${tipoOS}_rango_${idx}" style="display: none; background: #fff3cd;">
-                <td colspan="${rangos.length + 1}" style="padding: 15px;">
+                <td colspan="${rangos.length + 2}" style="padding: 15px;">
                     <div id="contenido_detalle_${tipoOS}_rango_${idx}"></div>
                 </td>
             </tr>`;
