@@ -1086,7 +1086,7 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 async function loginATTF(userData) {
     console.log('👷 Iniciando flujo ATTF');
     
-    const ahora = new Date();
+    const ahora = new Date(); // Declarar 'ahora' solo una vez
     const fechaHoy = ahora.toISOString().split('T')[0];
     const horaActual = ahora.getHours();
     const contadorActual = parseInt(userData.contador_turnos) || 0;
@@ -1165,7 +1165,6 @@ async function loginATTF(userData) {
     console.log('⚠️ Sin turno programado, requiere configuración');
     mostrarConfiguracionInicialATTF();
 }
-
 
 
 function calcularDiasSinActividad(ultimaActividad) {
