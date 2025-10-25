@@ -1086,19 +1086,17 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 async function loginATTF(userData) {
     console.log('👷 Iniciando flujo ATTF');
     
-    const ahora = new Date(); // Declarar 'ahora' solo una vez
+    const ahora = new Date(); // Única declaración de 'ahora'
     const fechaHoy = ahora.toISOString().split('T')[0];
     const horaActual = ahora.getHours();
     const contadorActual = parseInt(userData.contador_turnos) || 0;
     
-    // 1. Verificar si está en día de descanso
     if (verificarDiaDescanso(userData)) {
         alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
         logout();
         return;
     }
     
-    // 2. Verificar si necesita configuración inicial o reset
     const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
     if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1) {
         console.log('🔧 Requiere configuración inicial - Descanso flexible permitido');
@@ -1106,11 +1104,9 @@ async function loginATTF(userData) {
         return;
     }
     
-    // 3. Check para día 8 (post-descanso, pedir turno día 9 con advertencia)
-    if (contadorActual === 0 && userData.fecha_turno_regreso === fechaHoy) {  // Día de regreso (día 8)
-        // Calcular días de descanso propuestos (después de 5 turnos desde hoy)
+    if (contadorActual === 0 && userData.fecha_turno_regreso === fechaHoy) {
         const fechaDescansoPropuestaInicio = new Date(ahora);
-        fechaDescansoPropuestaInicio.setDate(fechaDescansoPropuestaInicio.getDate() + 6);  // Día 6 post-regreso
+        fechaDescansoPropuestaInicio.setDate(fechaDescansoPropuestaInicio.getDate() + 6);
         const fechaDescansoPropuestaInicioStr = fechaDescansoPropuestaInicio.toISOString().split('T')[0];
         const fechaDescansoPropuestaFin = new Date(fechaDescansoPropuestaInicio);
         fechaDescansoPropuestaFin.setDate(fechaDescansoPropuestaFin.getDate() + 1);
@@ -1119,52 +1115,44 @@ async function loginATTF(userData) {
         const advertencia = `Sus días de descanso calculados son:\n${fechaDescansoPropuestaInicioStr} y ${fechaDescansoPropuestaFinStr}\n\n¿OK o Cambiar?`;
         const cambiar = confirm(advertencia + '\n\nPresione Cancelar para Cambiar.');
         
-        if (!cambiar) {  // Si presiona Cancelar (cambiar)
-            // Llamar a función para elegir nuevos días (con límites)
+        if (!cambiar) {
             mostrarSeleccionDescansoConLimites(fechaHoy);
             return;
-        } else {  // Si presiona OK
-            // Guardar propuestos automáticamente
+        } else {
             await supabaseClient.from('usuarios').update({
                 descanso_fecha_inicio: fechaDescansoPropuestaInicioStr,
                 descanso_fecha_fin: fechaDescansoPropuestaFinStr
             }).eq('id', userData.id);
         }
         
-        // Proceder a pedir turno para día 9
-        mostrarProgramarTurnoManana(true);  // Siempre con opción descanso
+        mostrarProgramarTurnoManana(true);
         return;
     }
     
-    // 4. Verificar si tiene turno programado para HOY
     if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
         console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
         
-        // Validar ventana horaria
         if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
             alert(`No estás en el horario de tu turno programado.\n\nTurno: ${TURNOS_ATTF[userData.turno_hoy].nombre}\n\nContacta al administrador si necesitas corregir tu turno.`);
             logout();
             return;
         }
         
-        // Verificar contador para determinar acción
         if (contadorActual >= 5) {
-            // Día 5: Forzar descanso automático
             console.log('📅 Día 5: Descanso automático obligatorio');
             mostrarForzarDescansoATTF();
             return;
         } else {
-            // Días 1-4: Programar turno siguiente con opción descanso
             console.log(`📊 Día ${contadorActual + 1}: Programar turno correlativo`);
-            mostrarProgramarTurnoManana(true);  // Siempre con opción descanso
+            mostrarProgramarTurnoManana(true);
             return;
         }
     }
     
-    // 5. Si llegó aquí, necesita configuración
     console.log('⚠️ Sin turno programado, requiere configuración');
     mostrarConfiguracionInicialATTF();
 }
+
 
 
 function calcularDiasSinActividad(ultimaActividad) {
