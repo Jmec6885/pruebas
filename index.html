@@ -1082,12 +1082,14 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
     return { valido: true };
 }
 
+
 async function loginATTF(userData) {
     console.log('👷 Iniciando flujo ATTF');
     
     const ahora = new Date();
     const fechaHoy = ahora.toISOString().split('T')[0];
     const horaActual = ahora.getHours();
+    const contadorActual = parseInt(userData.contador_turnos) || 0;
     
     // 1. Verificar si está en día de descanso
     if (verificarDiaDescanso(userData)) {
@@ -1098,15 +1100,43 @@ async function loginATTF(userData) {
     
     // 2. Verificar si necesita configuración inicial o reset
     const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
-    
-    // 🎯 CAMBIO: Primera vez o post-bloqueo (con opción descanso flexible)
     if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1) {
         console.log('🔧 Requiere configuración inicial - Descanso flexible permitido');
         mostrarConfiguracionInicialATTF();
         return;
     }
     
-    // 3. Verificar si tiene turno programado para HOY
+    // 3. Check para día 8 (post-descanso, pedir turno día 9 con advertencia)
+    if (contadorActual === 0 && userData.fecha_turno_regreso === fechaHoy) {  // Día de regreso (día 8)
+        // Calcular días de descanso propuestos (después de 5 turnos desde hoy)
+        const fechaDescansoPropuestaInicio = new Date(ahora);
+        fechaDescansoPropuestaInicio.setDate(fechaDescansoPropuestaInicio.getDate() + 6);  // Día 6 post-regreso
+        const fechaDescansoPropuestaInicioStr = fechaDescansoPropuestaInicio.toISOString().split('T')[0];
+        const fechaDescansoPropuestaFin = new Date(fechaDescansoPropuestaInicio);
+        fechaDescansoPropuestaFin.setDate(fechaDescansoPropuestaFin.getDate() + 1);
+        const fechaDescansoPropuestaFinStr = fechaDescansoPropuestaFin.toISOString().split('T')[0];
+        
+        const advertencia = `Sus días de descanso calculados son:\n${fechaDescansoPropuestaInicioStr} y ${fechaDescansoPropuestaFinStr}\n\n¿OK o Cambiar?`;
+        const cambiar = confirm(advertencia + '\n\nPresione Cancelar para Cambiar.');
+        
+        if (!cambiar) {  // Si presiona Cancelar (cambiar)
+            // Llamar a función para elegir nuevos días (con límites)
+            mostrarSeleccionDescansoConLimites(fechaHoy);
+            return;
+        } else {  // Si presiona OK
+            // Guardar propuestos automáticamente
+            await supabaseClient.from('usuarios').update({
+                descanso_fecha_inicio: fechaDescansoPropuestaInicioStr,
+                descanso_fecha_fin: fechaDescansoPropuestaFinStr
+            }).eq('id', userData.id);
+        }
+        
+        // Proceder a pedir turno para día 9
+        mostrarProgramarTurnoManana(true);  // Siempre con opción descanso
+        return;
+    }
+    
+    // 4. Verificar si tiene turno programado para HOY
     if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
         console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
         
@@ -1118,26 +1148,23 @@ async function loginATTF(userData) {
         }
         
         // Verificar contador para determinar acción
-        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-        
-        if (contadorTurnos >= 5) {
+        if (contadorActual >= 5) {
             // Día 5: Forzar descanso automático
             console.log('📅 Día 5: Descanso automático obligatorio');
             mostrarForzarDescansoATTF();
             return;
         } else {
-            // 🎯 CAMBIO: Días 1-4: Sin opción descanso (solo turnos)
-            console.log(`📊 Día ${contadorTurnos + 1}: Programar turno correlativo`);
-            mostrarProgramarTurnoManana(false); // Sin opción descanso
+            // Días 1-4: Programar turno siguiente con opción descanso
+            console.log(`📊 Día ${contadorActual + 1}: Programar turno correlativo`);
+            mostrarProgramarTurnoManana(true);  // Siempre con opción descanso
             return;
         }
     }
     
-    // 4. Si llegó aquí, necesita configuración
+    // 5. Si llegó aquí, necesita configuración
     console.log('⚠️ Sin turno programado, requiere configuración');
     mostrarConfiguracionInicialATTF();
 }
-
 
 
 
@@ -1299,9 +1326,9 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
     });
     
     // 🎯 CAMBIO: Solo agregar opción descanso si está permitido (primera vez)
-    if (mostrarOpcionDescanso) {
+   
         opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
-    }
+    
     
     loginSection.innerHTML = `
         <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
@@ -1329,6 +1356,57 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
             Cancelar
         </button>
     `;
+}
+
+
+
+	function mostrarSeleccionDescansoConLimites(fechaHoy) {
+    const loginSection = document.getElementById('loginSection');
+    
+    // Calcular límites (día 2 a 6)
+    const fechaMinima = new Date(fechaHoy);
+    fechaMinima.setDate(fechaMinima.getDate() + 1);
+    const fechaMinimaStr = fechaMinima.toISOString().split('T')[0];
+    
+    const fechaMaxima = new Date(fechaHoy);
+    fechaMaxima.setDate(fechaMaxima.getDate() + 5);
+    const fechaMaximaStr = fechaMaxima.toISOString().split('T')[0];
+    
+    loginSection.innerHTML = `
+        <h1 class="titulo-degradado">CLESA</h1>
+        <p class="subtitulo">Cambiar Días de Descanso</p>
+        <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <strong>Configura tu descanso:</strong>
+            <p>El inicio debe ser entre mañana (${fechaMinimaStr}) y máximo ${fechaMaximaStr} (no exceder 5 turnos).</p>
+        </div>
+        <div class="form-group">
+            <label>Primer día de descanso:</label>
+            <input type="date" id="fechaDescansoInicio" min="${fechaMinimaStr}" max="${fechaMaximaStr}" onchange="calcularFechaFin()" />
+        </div>
+        <div class="form-group">
+            <label>Segundo día de descanso:</label>
+            <input type="date" id="fechaDescansoFin" readonly />
+        </div>
+        <button class="btn" onclick="confirmarCambioDescansoATTF()">✅ Confirmar Cambio</button>
+    `;
+}
+
+async function confirmarCambioDescansoATTF() {
+    const fechaInicio = document.getElementById('fechaDescansoInicio').value;
+    const fechaFin = document.getElementById('fechaDescansoFin').value;
+    
+    if (!fechaInicio || !fechaFin) {
+        alert('Complete las fechas');
+        return;
+    }
+    
+    await supabaseClient.from('usuarios').update({
+        descanso_fecha_inicio: fechaInicio,
+        descanso_fecha_fin: fechaFin
+    }).eq('id', currentUser.id);
+    
+    alert('✅ Días de descanso actualizados');
+    mostrarProgramarTurnoManana(false);  // Proceder a turno día 9
 }
 
 
@@ -1810,6 +1888,27 @@ async function confirmarDescansoPoda() {
 
 
 async function limpiarDiasDescansoViejos() {
+    const ahora = new Date();
+    const fechaHoyStr = ahora.toISOString().split('T')[0];
+    
+    const { data: usuarios, error } = await supabaseClient
+        .from('usuarios')
+        .select('id, turno_regreso, fecha_turno_regreso, descanso_fecha_fin');
+    
+    // ... código igual ...
+    
+    // NUEVO: Resetear si descanso viejo (>30 días)
+    updates = updates.filter(update => {
+        if (update) {
+            const diasDesdeRegreso = calcularDias(update.fecha_turno_regreso);
+            if (diasDesdeRegreso > 30) {
+                update.estado_ciclo = 'primera_vez';  // Forzar reconfiguración mensual
+            }
+            return true;
+        }
+        return false;
+    });
+
     // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
     const ahora = new Date();
     const fechaHoyStr = ahora.toISOString().split('T')[0];
