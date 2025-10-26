@@ -1107,31 +1107,32 @@ async function loginATTF(userData) {
     }
     
     // 3. Verificar si tiene turno programado para HOY
-    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
-        console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
-        
-        // Validar ventana horaria
-        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-            alert(`No estás en el horario de tu turno programado.\n\nTurno: ${TURNOS_ATTF[userData.turno_hoy].nombre}\n\nContacta al administrador si necesitas corregir tu turno.`);
-            logout();
-            return;
-        }
-        
-        // Verificar contador para determinar acción
-        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-        
-        if (contadorTurnos >= 5) {
-            // Día 5: Forzar descanso automático
-            console.log('📅 Día 5: Descanso automático obligatorio');
-            mostrarForzarDescansoATTF();
-            return;
-        } else {
-            // 🎯 CAMBIO: Días 1-4: Sin opción descanso (solo turnos)
-            console.log(`📊 Día ${contadorTurnos + 1}: Programar turno correlativo`);
-            mostrarProgramarTurnoManana(false); // Sin opción descanso
-            return;
-        }
+    
+if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
+    console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
+    
+    // Validar ventana horaria
+    if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+        alert(`No estás en el horario de tu turno programado...`);
+        logout();
+        return;
     }
+    
+    // Verificar contador para determinar acción
+    const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+    
+    if (contadorTurnos >= 5) {
+        // Día 5: Forzar descanso automático
+        console.log('📅 Día 5: Descanso automático obligatorio');
+        mostrarForzarDescansoATTF();
+        return;
+    } else {
+        // Programar turno mañana + verificar descanso programado
+        console.log(`📊 Día ${contadorTurnos + 1}: Programar turno mañana`);
+        mostrarProgramarTurnoMañanaConDescanso(userData);
+        return;
+    }
+}
     
     // 4. Si llegó aquí, necesita configuración
     console.log('⚠️ Sin turno programado, requiere configuración');
@@ -1540,6 +1541,102 @@ async function confirmarTurnoMananaATTF() {
         accederMenuATTF();
     }
 }
+
+	// ========================================
+// 🔄 PROGRAMAR TURNO MAÑANA + VALIDAR DESCANSO
+// ========================================
+function mostrarProgramarTurnoMañanaConDescanso(userData) {
+    const turnoHoyKey = userData.turno_hoy;
+    const contadorActual = parseInt(userData.contador_turnos) || 0;
+    
+    // Calcular próximo descanso automático (días 6-7 del ciclo)
+    const ahora = new Date();
+    const diasHastaDescanso = 5 - contadorActual;
+    
+    const fechaDescansoInicio = new Date(ahora);
+    fechaDescansoInicio.setDate(fechaDescansoInicio.getDate() + diasHastaDescanso);
+    const fechaDescansoInicioStr = fechaDescansoInicio.toISOString().split('T')[0];
+    
+    const fechaDescansoFin = new Date(fechaDescansoInicio);
+    fechaDescansoFin.setDate(fechaDescansoFin.getDate() + 1);
+    const fechaDescansoFinStr = fechaDescansoFin.toISOString().split('T')[0];
+    
+    // Obtener turnos disponibles (bloqueando consecutivos)
+    const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
+    let opcionesHTML = '';
+    
+    Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
+        if (turnosConsecutivos.includes(key)) {
+            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+        } else {
+            opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+        }
+    });
+    
+    const loginSection = document.getElementById('loginSection');
+    loginSection.innerHTML = `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+        <h1 class="titulo-degradado">CLESA</h1>
+        <p class="subtitulo">Programar Turno de Mañana</p>
+        
+        <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+            <strong>📊 Día ${contadorActual + 1} de 5</strong>
+        </div>
+        
+        <div class="form-group">
+            <label>Turno de MAÑANA:</label>
+            <select id="turnoManana" class="form-control">
+                <option value="">-- Seleccione --</option>
+                ${opcionesHTML}
+            </select>
+        </div>
+        
+        <button class="btn" onclick="validarDescansoATTF('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')">
+            ✅ Continuar
+        </button>
+    `;
+}
+
+
+	// ========================================
+// ⚠️ VALIDAR DESCANSO PROGRAMADO
+// ========================================
+function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
+    const turnoManana = document.getElementById('turnoManana').value;
+    
+    if (!turnoManana) {
+        alert('Por favor seleccione el turno de mañana');
+        return;
+    }
+    
+    // Guardar turno de mañana temporalmente
+    window.turnoMañanaSeleccionado = turnoManana;
+    
+    const loginSection = document.getElementById('loginSection');
+    loginSection.innerHTML = `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+        <h1 class="titulo-degradado">CLESA</h1>
+        <p class="subtitulo">Confirmación de Descanso</p>
+        
+        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <strong style="font-size: 18px;">⚠️ Tus próximos días de descanso serán:</strong><br><br>
+            <div style="font-size: 20px; font-weight: 600; color: #2d3748;">
+                📅 ${fechaInicioAuto}<br>
+                📅 ${fechaFinAuto}
+            </div>
+        </div>
+        
+        <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <button class="btn" onclick="confirmarDescansoAutomaticoATTF('${fechaInicioAuto}', '${fechaFinAuto}')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                ✅ Aceptar
+            </button>
+            <button class="btn btn-secondary" onclick="cambiarFechasDescansoATTF()">
+                🔄 Cambiar Fechas
+            </button>
+        </div>
+    `;
+}
+
 
 
 function accederMenuATTF() {
