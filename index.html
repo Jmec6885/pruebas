@@ -1,3 +1,5 @@
+nueva prueba para rol poda y fallas con días de descanso
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -10,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js "></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2 "></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* Variables de color para toda la aplicación */
         :root {
@@ -2714,9 +2717,12 @@ async function logout() {
             <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
         </div>
         
-        <div style="text-align: center; margin-top: 20px;">
-            <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); width: auto; padding: 15px 30px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+            <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
                 ➕ Crear Nuevo Usuario
+            </button>
+            <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                📤 Actualización Masiva
             </button>
         </div>
     `;
@@ -3399,6 +3405,502 @@ async function guardarNuevoUsuario() {
         </div>
     `;
 }
+
+	// ========================================
+// 📤 MOSTRAR INTERFAZ ACTUALIZACIÓN MASIVA
+// ========================================
+function mostrarActualizacionMasiva() {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e8eaf6; border: 2px solid #5c6bc0;">
+            <div class="result-header">📤 Actualización Masiva de Consulta Suministros</div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <strong>⚠️ Importante:</strong><br>
+                • Solo para rol <strong>Administrador</strong><br>
+                • Actualiza registros existentes (no crea nuevos)<br>
+                • Proceso irreversible
+            </div>
+            
+            <div style="max-width: 700px; margin: 0 auto;">
+                
+                <div class="form-group">
+                    <label style="font-size: 16px; font-weight: 600; color: #2d3748;">
+                        🎯 Seleccionar Tipo de Actualización:
+                    </label>
+                    <select id="tipoActualizacion" onchange="mostrarInstruccionesArchivo()" 
+                            style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                        <option value="">-- Seleccione una opción --</option>
+                        <option value="medidor_comentario">Actualizar Medidor + Comentario General</option>
+                        <option value="nombre_cuenta">Actualizar Nombre Cliente + Cuenta Contrato</option>
+                        <option value="grafica">Actualizar Gráfica</option>
+                    </select>
+                </div>
+                
+                <div id="instruccionesArchivo" style="display: none; background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #2196f3;">
+                    <!-- Se llena dinámicamente -->
+                </div>
+                
+                <div class="form-group">
+                    <label style="font-size: 16px; font-weight: 600; color: #2d3748;">
+                        📁 Subir Archivo:
+                    </label>
+                    <input type="file" id="archivoActualizacion" accept=".xlsx,.xls,.csv" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 14px;">
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        Formatos aceptados: Excel (.xlsx, .xls) o CSV
+                    </small>
+                </div>
+                
+                <div class="action-buttons" style="margin-top: 25px;">
+                    <button class="btn btn-secondary" onclick="procesarActualizacionMasiva()" 
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        ⚡ Procesar Actualización
+                    </button>
+                    <button class="btn btn-danger" onclick="document.getElementById('searchResults').innerHTML = ''">
+                        ✕ Cancelar
+                    </button>
+                </div>
+                
+            </div>
+        </div>
+    `;
+}
+
+
+	// ========================================
+// 📋 MOSTRAR INSTRUCCIONES SEGÚN TIPO
+// ========================================
+function mostrarInstruccionesArchivo() {
+    const tipo = document.getElementById('tipoActualizacion').value;
+    const contenedor = document.getElementById('instruccionesArchivo');
+    
+    if (!tipo) {
+        contenedor.style.display = 'none';
+        return;
+    }
+    
+    let html = '<strong>📋 Formato requerido del archivo:</strong><br><br>';
+    
+    if (tipo === 'medidor_comentario') {
+        html += `
+            <strong>Columnas (en este orden):</strong><br>
+            1. CuentaContrato<br>
+            2. Medidor<br>
+            3. ComentarioGeneral<br><br>
+            <strong>Búsqueda:</strong> Por CuentaContrato<br>
+            <strong>Actualiza:</strong> Medidor y ComentarioGeneral
+        `;
+    } else if (tipo === 'nombre_cuenta') {
+        html += `
+            <strong>Columnas (en este orden):</strong><br>
+            1. CuentaContrato<br>
+            2. Medidor<br>
+            3. NombreCliente<br><br>
+            <strong>Búsqueda:</strong> Por Medidor<br>
+            <strong>Actualiza:</strong> CuentaContrato y NombreCliente
+        `;
+    } else if (tipo === 'grafica') {
+        html += `
+            <strong>Columnas (en este orden):</strong><br>
+            1. CuentaContrato<br>
+            2. Grafica<br><br>
+            <strong>Búsqueda:</strong> Por CuentaContrato<br>
+            <strong>Actualiza:</strong> Grafica
+        `;
+    }
+    
+    contenedor.innerHTML = html;
+    contenedor.style.display = 'block';
+}
+
+	
+	// ========================================
+// ⚡ PROCESAR ACTUALIZACIÓN MASIVA
+// ========================================
+async function procesarActualizacionMasiva() {
+    const tipo = document.getElementById('tipoActualizacion').value;
+    const archivoInput = document.getElementById('archivoActualizacion');
+    
+    // Validaciones
+    if (!tipo) {
+        alert('⚠️ Por favor seleccione el tipo de actualización');
+        return;
+    }
+    
+    if (!archivoInput.files || archivoInput.files.length === 0) {
+        alert('⚠️ Por favor seleccione un archivo');
+        return;
+    }
+    
+    const archivo = archivoInput.files[0];
+    const extension = archivo.name.split('.').pop().toLowerCase();
+    
+    if (!['xlsx', 'xls', 'csv'].includes(extension)) {
+        alert('⚠️ Formato de archivo no válido. Use Excel (.xlsx, .xls) o CSV');
+        return;
+    }
+    
+    // Mostrar loading
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0; margin: 20px 0;">Procesando archivo...</h3>
+            <p style="color: #666;">Por favor espere, esto puede tomar unos momentos</p>
+        </div>
+    `;
+    
+    try {
+        // Leer archivo
+        const datos = await leerArchivoActualizacion(archivo, extension);
+        
+        if (!datos || datos.length === 0) {
+            alert('❌ El archivo está vacío o no se pudo leer');
+            mostrarActualizacionMasiva();
+            return;
+        }
+        
+        // Validar estructura según tipo
+        const validacion = validarEstructuraArchivo(datos, tipo);
+        
+        if (!validacion.valido) {
+            alert(`❌ Error en estructura del archivo:\n\n${validacion.mensaje}`);
+            mostrarActualizacionMasiva();
+            return;
+        }
+        
+        // Buscar coincidencias en BD
+        const resultado = await buscarCoincidencias(datos, tipo);
+        
+        // Mostrar preview de actualización
+        mostrarPreviewActualizacion(resultado, tipo);
+        
+    } catch (error) {
+        console.error('Error procesando archivo:', error);
+        alert('❌ Error al procesar el archivo: ' + error.message);
+        mostrarActualizacionMasiva();
+    }
+}
+
+	// ========================================
+// 📖 LEER ARCHIVO (EXCEL O CSV)
+// ========================================
+async function leerArchivoActualizacion(archivo, extension) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = async (e) => {
+            try {
+                let datos = [];
+                
+                if (extension === 'csv') {
+                    // Leer CSV
+                    const texto = e.target.result;
+                    const lineas = texto.split('\n').filter(l => l.trim());
+                    
+                    // Saltar header y procesar
+                    for (let i = 1; i < lineas.length; i++) {
+                        const valores = lineas[i].split(',').map(v => v.trim());
+                        if (valores.length > 0 && valores[0]) {
+                            datos.push(valores);
+                        }
+                    }
+                } else {
+                    // Leer Excel con SheetJS
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    
+                    // Saltar header
+                    datos = jsonData.slice(1).filter(row => row.length > 0 && row[0]);
+                }
+                
+                console.log(`✅ Archivo leído: ${datos.length} filas`);
+                resolve(datos);
+                
+            } catch (error) {
+                reject(error);
+            }
+        };
+        
+        reader.onerror = () => reject(new Error('Error al leer el archivo'));
+        
+        if (extension === 'csv') {
+            reader.readAsText(archivo);
+        } else {
+            reader.readAsArrayBuffer(archivo);
+        }
+    });
+}
+
+
+	// ========================================
+// ✅ VALIDAR ESTRUCTURA DEL ARCHIVO
+// ========================================
+function validarEstructuraArchivo(datos, tipo) {
+    let columnasRequeridas = 0;
+    let nombreColumnas = '';
+    
+    if (tipo === 'medidor_comentario') {
+        columnasRequeridas = 3;
+        nombreColumnas = 'CuentaContrato, Medidor, ComentarioGeneral';
+    } else if (tipo === 'nombre_cuenta') {
+        columnasRequeridas = 3;
+        nombreColumnas = 'CuentaContrato, Medidor, NombreCliente';
+    } else if (tipo === 'grafica') {
+        columnasRequeridas = 2;
+        nombreColumnas = 'CuentaContrato, Grafica';
+    }
+    
+    // Validar que todas las filas tengan el número correcto de columnas
+    for (let i = 0; i < datos.length; i++) {
+        if (datos[i].length < columnasRequeridas) {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: Se esperan ${columnasRequeridas} columnas (${nombreColumnas}), pero solo se encontraron ${datos[i].length}`
+            };
+        }
+    }
+    
+    return { valido: true };
+}
+
+	// ========================================
+// 🔍 BUSCAR COINCIDENCIAS EN BD
+// ========================================
+async function buscarCoincidencias(datos, tipo) {
+    const encontrados = [];
+    const noEncontrados = [];
+    
+    for (const fila of datos) {
+        let campoBusqueda, valorBusqueda, datosActualizar;
+        
+        if (tipo === 'medidor_comentario') {
+            campoBusqueda = 'CuentaContrato';
+            valorBusqueda = String(fila[0]).trim();
+            datosActualizar = {
+                Medidor: String(fila[1]).trim(),
+                ComentarioGeneral: String(fila[2]).trim()
+            };
+        } else if (tipo === 'nombre_cuenta') {
+            campoBusqueda = 'Medidor';
+            valorBusqueda = String(fila[1]).trim();
+            datosActualizar = {
+                CuentaContrato: String(fila[0]).trim(),
+                NombreCliente: String(fila[2]).trim()
+            };
+        } else if (tipo === 'grafica') {
+            campoBusqueda = 'CuentaContrato';
+            valorBusqueda = String(fila[0]).trim();
+            datosActualizar = {
+                Grafica: String(fila[1]).trim()
+            };
+        }
+        
+        // Buscar en BD
+        const { data, error } = await supabaseClient
+            .from('consultas_servicios')
+            .select('id')
+            .eq(campoBusqueda, valorBusqueda)
+            .single();
+        
+        if (data && !error) {
+            encontrados.push({
+                id: data.id,
+                busqueda: valorBusqueda,
+                datos: datosActualizar
+            });
+        } else {
+            noEncontrados.push({
+                busqueda: valorBusqueda,
+                campo: campoBusqueda
+            });
+        }
+    }
+    
+    return { encontrados, noEncontrados, tipo };
+}
+
+
+	// ========================================
+// 👁️ MOSTRAR PREVIEW DE ACTUALIZACIÓN
+// ========================================
+function mostrarPreviewActualizacion(resultado, tipo) {
+    const { encontrados, noEncontrados } = resultado;
+    const resultsContainer = document.getElementById('searchResults');
+    
+    let nombreTipo = '';
+    if (tipo === 'medidor_comentario') nombreTipo = 'Medidor + Comentario General';
+    else if (tipo === 'nombre_cuenta') nombreTipo = 'Nombre Cliente + Cuenta Contrato';
+    else if (tipo === 'grafica') nombreTipo = 'Gráfica';
+    
+    let html = `
+        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+            <div class="result-header">⚠️ Confirmación de Actualización</div>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="font-size: 18px; color: #2d3748;">📊 Resumen:</strong><br><br>
+                <div style="font-size: 16px; line-height: 2;">
+                    • Tipo: <strong>${nombreTipo}</strong><br>
+                    • Total de registros en archivo: <strong>${encontrados.length + noEncontrados.length}</strong><br>
+                    • ✅ Registros encontrados (se actualizarán): <strong style="color: #2e7d32;">${encontrados.length}</strong><br>
+                    • ❌ Registros no encontrados (se ignorarán): <strong style="color: #d32f2f;">${noEncontrados.length}</strong>
+                </div>
+            </div>
+    `;
+    
+    // Mostrar no encontrados si existen
+    if (noEncontrados.length > 0) {
+        html += `
+            <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #d32f2f; max-height: 200px; overflow-y: auto;">
+                <strong style="color: #c62828;">❌ Registros NO encontrados:</strong><br><br>
+                <div style="font-size: 14px; line-height: 1.8;">`;
+        
+        noEncontrados.slice(0, 10).forEach(item => {
+            html += `• ${item.campo}: <strong>${item.busqueda}</strong><br>`;
+        });
+        
+        if (noEncontrados.length > 10) {
+            html += `<br><em>... y ${noEncontrados.length - 10} más</em>`;
+        }
+        
+        html += `</div></div>`;
+    }
+    
+    // Botones de confirmación
+    html += `
+            <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #2196f3;">
+                <strong style="font-size: 16px; color: #1565c0;">⚠️ Esta acción es IRREVERSIBLE</strong><br>
+                <p style="margin: 10px 0 0 0; color: #666;">
+                    Los datos actuales serán reemplazados por los del archivo.
+                </p>
+            </div>
+            
+            <div class="action-buttons" style="margin-top: 25px;">
+                <button class="btn btn-secondary" onclick="ejecutarActualizacionMasiva(${JSON.stringify(encontrados).replace(/"/g, '&quot;')}, '${tipo}')" 
+                        style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 18px; padding: 18px 30px;">
+                    ✅ Confirmar y Actualizar (${encontrados.length} registros)
+                </button>
+                <button class="btn btn-danger" onclick="mostrarActualizacionMasiva()" style="font-size: 16px; padding: 15px 25px;">
+                    ✕ Cancelar
+                </button>
+            </div>
+            
+        </div>
+    `;
+    
+    resultsContainer.innerHTML = html;
+}
+
+	// ========================================
+// 🚀 EJECUTAR ACTUALIZACIÓN MASIVA
+// ========================================
+async function ejecutarActualizacionMasiva(encontrados, tipo) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Mostrar progreso
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0; margin: 20px 0;">Actualizando registros...</h3>
+            <p style="color: #666; font-size: 18px;" id="progresoActualizacion">0 / ${encontrados.length}</p>
+        </div>
+    `;
+    
+    const exitosos = [];
+    const fallidos = [];
+    
+    // Actualizar uno por uno
+    for (let i = 0; i < encontrados.length; i++) {
+        const item = encontrados[i];
+        
+        try {
+            const { error } = await supabaseClient
+                .from('consultas_servicios')
+                .update(item.datos)
+                .eq('id', item.id);
+            
+            if (error) {
+                fallidos.push({ busqueda: item.busqueda, error: error.message });
+            } else {
+                exitosos.push(item.busqueda);
+            }
+            
+        } catch (err) {
+            fallidos.push({ busqueda: item.busqueda, error: err.message });
+        }
+        
+        // Actualizar progreso
+        document.getElementById('progresoActualizacion').textContent = `${i + 1} / ${encontrados.length}`;
+    }
+    
+    // Mostrar resultado final
+    mostrarResultadoActualizacion(exitosos, fallidos, tipo);
+}
+
+// ========================================
+// 📊 MOSTRAR RESULTADO FINAL
+// ========================================
+function mostrarResultadoActualizacion(exitosos, fallidos, tipo) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    let nombreTipo = '';
+    if (tipo === 'medidor_comentario') nombreTipo = 'Medidor + Comentario General';
+    else if (tipo === 'nombre_cuenta') nombreTipo = 'Nombre Cliente + Cuenta Contrato';
+    else if (tipo === 'grafica') nombreTipo = 'Gráfica';
+    
+    let html = `
+        <div class="result-card" style="background: ${fallidos.length === 0 ? '#e8f5e9' : '#fff3cd'}; border: 2px solid ${fallidos.length === 0 ? '#4caf50' : '#ffc107'};">
+            <div class="result-header">${fallidos.length === 0 ? '✅' : '⚠️'} Actualización Completada</div>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="font-size: 18px; color: #2d3748;">📊 Resultado Final:</strong><br><br>
+                <div style="font-size: 16px; line-height: 2;">
+                    • Tipo de actualización: <strong>${nombreTipo}</strong><br>
+                    • ✅ Registros actualizados correctamente: <strong style="color: #2e7d32;">${exitosos.length}</strong><br>
+                    • ❌ Registros con errores: <strong style="color: #d32f2f;">${fallidos.length}</strong>
+                </div>
+            </div>
+    `;
+    
+    // Mostrar fallidos si existen
+    if (fallidos.length > 0) {
+        html += `
+            <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #d32f2f; max-height: 250px; overflow-y: auto;">
+                <strong style="color: #c62828;">❌ Errores encontrados:</strong><br><br>
+                <div style="font-size: 14px; line-height: 1.8;">`;
+        
+        fallidos.forEach(item => {
+            html += `• ${item.busqueda}: <span style="color: #666;">${item.error}</span><br>`;
+        });
+        
+        html += `</div></div>`;
+    }
+    
+    html += `
+            <div style="text-align: center; margin-top: 25px;">
+                <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: auto; padding: 15px 30px;">
+                    🔄 Nueva Actualización
+                </button>
+                <button class="btn btn-secondary" onclick="document.getElementById('searchResults').innerHTML = ''" style="width: auto; padding: 15px 30px; margin-left: 15px;">
+                    ✕ Cerrar
+                </button>
+            </div>
+            
+        </div>
+    `;
+    
+    resultsContainer.innerHTML = html;
+    
+    console.log(`✅ Actualización completada: ${exitosos.length} exitosos, ${fallidos.length} fallidos`);
+}
+
+	
+
+
 
 
    // ===================================================================
