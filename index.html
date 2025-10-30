@@ -4774,6 +4774,7 @@ async function cargarInterfazIPR() {
 
 
 
+// ========================================
 // 🔍 BUSCAR DATOS DE MEDIDOR EN CONSULTA SUMINISTRO
 // ========================================
 async function buscarDatosMedidorIPR() {
@@ -4790,7 +4791,6 @@ async function buscarDatosMedidorIPR() {
         return;
     }
     
-    // Mostrar loading en el contenedor
     const datosDiv = document.getElementById('datosAutocompletar');
     if (!datosDiv) {
         console.error('❌ Contenedor datosAutocompletar no existe');
@@ -4812,13 +4812,26 @@ async function buscarDatosMedidorIPR() {
         
         console.log('📊 Resultado búsqueda:', data, error);
         
+        // ⚠️ MEDIDOR NO ENCONTRADO - MODO MANUAL
         if (error || !data) {
-            console.error('❌ Error o sin datos:', error);
-            datosDiv.innerHTML = `
-                <div style="background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336; margin-top: 20px;">
-                    <strong style="color: #c62828;">❌ Medidor no encontrado</strong><br>
-                    <p style="margin: 10px 0 0 0; color: #666;">El medidor "${medidor}" no existe en Consulta Suministro</p>
-                </div>`;
+            console.log('⚠️ Medidor NO encontrado - Activando modo manual');
+            
+            const confirmar = confirm(
+                '⚠️ MODO MANUAL ACTIVADO\n\n' +
+                `El medidor "${medidor}" NO existe en Consulta Suministro.\n\n` +
+                'Deberás completar TODOS los campos manualmente.\n\n' +
+                '¿Deseas continuar?'
+            );
+            
+            if (!confirmar) {
+                datosDiv.style.display = 'none';
+                inputMedidor.value = '';
+                return;
+            }
+            
+            // Generar formulario MANUAL (todos los campos editables)
+            const unidadTransformada = transformarUsuarioAUnidad(currentUser.usuario);
+            datosDiv.innerHTML = generarFormularioIPRManual(unidadTransformada, medidor);
             return;
         }
         
@@ -4860,10 +4873,10 @@ async function buscarDatosMedidorIPR() {
         const unidadTransformada = transformarUsuarioAUnidad(currentUser.usuario);
         console.log('🏢 Unidad transformada:', unidadTransformada);
         
-        // 📝 Generar formulario con datos
-        datosDiv.innerHTML = generarFormularioIPRConDatos(unidadTransformada, data.CuentaContrato, datosExtraidos);
+        // 📝 Generar formulario AUTOMÁTICO (datos prellenados)
+        datosDiv.innerHTML = generarFormularioIPRAutomatico(unidadTransformada, data.CuentaContrato, datosExtraidos);
         
-        console.log('✅ Formulario generado correctamente');
+        console.log('✅ Formulario automático generado');
         
     } catch (err) {
         console.error('❌ Error en búsqueda:', err);
@@ -4874,6 +4887,189 @@ async function buscarDatosMedidorIPR() {
             </div>`;
     }
 }
+
+
+
+		// ========================================
+// 📋 GENERAR FORMULARIO IPR AUTOMÁTICO (Datos de BD)
+// ========================================
+function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
+    return `
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+            <strong style="color: #2e7d32;">✅ Datos encontrados en Consulta Suministro</strong>
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🏢 Unidad:</label>
+            <input type="text" id="ipr_unidad" readonly value="${unidad}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📄 NIC (Cuenta Contrato):</label>
+            <input type="text" id="ipr_nic" readonly value="${nic || 'N/A'}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📋 Forma:</label>
+            <input type="text" id="ipr_forma" readonly value="${datosExtraidos.forma}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca y Tipo:</label>
+            <input type="text" id="ipr_marca" readonly value="${datosExtraidos.marca}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">⚡ Voltaje:</label>
+            <input type="text" id="ipr_voltaje" readonly value="${datosExtraidos.voltaje}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <hr style="margin: 30px 0; border: 1px solid #e2e8f0;">
+        
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <strong style="color: #e65100;">📝 Completar información manualmente</strong>
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">⚠️ Causa de Retiro: <span style="color: #d32f2f;">*</span></label>
+            <select id="ipr_causa" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <option value="">-- Seleccione una causa --</option>
+                ${generarOpcionesCausaRetiro()}
+            </select>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn" onclick="guardarRegistroIPR()" style="font-size: 18px; padding: 18px 40px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                💾 Guardar Registro
+            </button>
+        </div>
+    `;
+}
+
+
+	// ========================================
+// 📋 GENERAR FORMULARIO IPR MANUAL (Todos los campos editables)
+// ========================================
+function generarFormularioIPRManual(unidad, medidor) {
+    return `
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+            <strong style="color: #e65100;">⚠️ MODO MANUAL ACTIVADO</strong><br>
+            <p style="margin: 10px 0 0 0; color: #666;">El medidor "${medidor}" no está en Consulta Suministro. Complete TODOS los campos manualmente.</p>
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🏢 Unidad:</label>
+            <input type="text" id="ipr_unidad" readonly value="${unidad}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+            <small style="color: #666; display: block; margin-top: 5px;">Unidad automática (usuario logueado)</small>
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📄 NIC (Cuenta Contrato): <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_nic" placeholder="Ingrese NIC (solo números)" 
+                   oninput="validarNICManual(this)" maxlength="15"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+            <small id="nic_validacion" style="display: block; margin-top: 5px;"></small>
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📋 Forma: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_forma" placeholder="Ej: 233-15S" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca y Tipo: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_marca" placeholder="Ej: LANDIS+GYR E650 S4X RXR" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">⚡ Voltaje: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_voltaje" placeholder="Ej: 120/480V" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <hr style="margin: 30px 0; border: 1px solid #e2e8f0;">
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">⚠️ Causa de Retiro: <span style="color: #d32f2f;">*</span></label>
+            <select id="ipr_causa" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <option value="">-- Seleccione una causa --</option>
+                ${generarOpcionesCausaRetiro()}
+            </select>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn" onclick="guardarRegistroIPR()" style="font-size: 18px; padding: 18px 40px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                💾 Guardar Registro (Modo Manual)
+            </button>
+        </div>
+    `;
+}
+
+// ========================================
+// ✅ VALIDAR NIC MANUAL (Solo números + Validar en BD)
+// ========================================
+async function validarNICManual(input) {
+    const valor = input.value;
+    const validacion = document.getElementById('nic_validacion');
+    
+    // Permitir solo números
+    input.value = valor.replace(/[^0-9]/g, '');
+    
+    if (input.value.length === 0) {
+        validacion.innerHTML = '';
+        validacion.style.color = '#666';
+        return;
+    }
+    
+    // Validar longitud mínima (12 dígitos)
+    if (input.value.length < 12) {
+        validacion.innerHTML = '⚠️ El NIC debe tener al menos 12 dígitos';
+        validacion.style.color = '#ff9800';
+        return;
+    }
+    
+    // Validar contra Consulta Suministro
+    try {
+        const { data, error } = await supabaseClient
+            .from('consultas_servicios')
+            .select('CuentaContrato')
+            .eq('CuentaContrato', input.value)
+            .single();
+        
+        if (data) {
+            validacion.innerHTML = '✅ NIC válido (existe en sistema)';
+            validacion.style.color = '#4caf50';
+        } else {
+            validacion.innerHTML = '⚠️ NIC no encontrado en sistema (se guardará de todas formas)';
+            validacion.style.color = '#ff9800';
+        }
+    } catch (err) {
+        validacion.innerHTML = '⚠️ Error validando NIC';
+        validacion.style.color = '#f44336';
+    }
+}
+
+
 
 
 	// ========================================
@@ -5046,26 +5242,36 @@ function extraerDatosComentario(comentario) {
 async function guardarRegistroIPR() {
     // Validar campos obligatorios
     const medidor = document.getElementById('ipr_medidor').value.trim();
+    const nic = document.getElementById('ipr_nic').value.trim();
+    const forma = document.getElementById('ipr_forma').value.trim();
+    const marca = document.getElementById('ipr_marca').value.trim();
+    const voltaje = document.getElementById('ipr_voltaje').value.trim();
     const numOS = document.getElementById('ipr_numos').value.trim();
     const causa = document.getElementById('ipr_causa').value;
     
-    if (!medidor || !numOS || !causa) {
-        alert('⚠️ Por favor complete todos los campos obligatorios:\n\n• Medidor\n• NUM. O/S\n• Causa de Retiro');
+    // 🆕 Validación completa (todos los campos obligatorios)
+    if (!medidor || !nic || !forma || !marca || !voltaje || !numOS || !causa) {
+        alert('⚠️ Por favor complete TODOS los campos obligatorios:\n\n• Medidor\n• NIC\n• Forma\n• Marca/Tipo\n• Voltaje\n• NUM. O/S\n• Causa de Retiro');
         return;
     }
     
-    // Obtener datos autocompletados
+    // 🆕 Validar que NIC sea solo números
+    if (!/^\d+$/.test(nic)) {
+        alert('⚠️ El NIC debe contener solo números');
+        return;
+    }
+    
+    // Obtener unidad
     const unidad = document.getElementById('ipr_unidad').value;
-    const nic = document.getElementById('ipr_nic').value;
-    const forma = document.getElementById('ipr_forma').value;
-    const marca = document.getElementById('ipr_marca').value;
-    const voltaje = document.getElementById('ipr_voltaje').value;
     
     // Confirmación
     const confirmar = confirm(
         `¿Guardar registro de retiro?\n\n` +
         `📦 Medidor: ${medidor}\n` +
         `📄 NIC: ${nic}\n` +
+        `📋 Forma: ${forma}\n` +
+        `🏷️ Marca: ${marca}\n` +
+        `⚡ Voltaje: ${voltaje}\n` +
         `📑 NUM. O/S: ${numOS}\n` +
         `⚠️ Causa: ${causa}\n\n` +
         `✅ SÍ - Guardar\n` +
@@ -5110,6 +5316,8 @@ async function guardarRegistroIPR() {
     }
 }
 
+
+	
 	// ========================================
 // 🗑️ LIMPIAR REGISTROS VIEJOS (30+ DÍAS)
 // ========================================
