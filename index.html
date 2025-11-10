@@ -1031,6 +1031,7 @@ if (checkInactividad.inactivo) {
             .eq('id', data.id);
 
         currentUser = { ...data, session_token: sessionToken };
+guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_token
         
         // 6. Actualizar timestamp de actividad
         await supabaseClient
@@ -1064,9 +1065,7 @@ if (checkInactividad.inactivo) {
 
         // 🔄 Mostrar mensaje de actualización y recargar
         // 🔄 Forzar actualización de la página para obtener última versión
-	setTimeout(() => {
-    	location.reload(true);
-   }, 500);
+	
 
     } catch (err) {
         console.error('Error de login:', err);
@@ -5736,7 +5735,11 @@ function exportarExcelIPR() {
         XLSX.utils.book_append_sheet(wb, ws, 'Retiro Medidores');
         
         // Generar nombre de archivo
-        const fechaHoy = new Date().toISOString().split('T')[0];
+        const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const fechaHoy = `${year}-${month}-${day}`;
         let nombreArchivo = `IPR_${fechaHoy}`;
         
         if (filtroUnidad && filtroUnidad.value) {
