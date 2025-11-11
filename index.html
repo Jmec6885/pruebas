@@ -4812,15 +4812,15 @@ async function guardarRegistroIPR() {
         return;
     }
     
-    // Obtener código y causa de la selección
+    // ✅ Obtener código Y causa SEPARADOS
     const causaSeleccionada = window.causasIPR[parseInt(causaIndex)];
-    const codigo = causaSeleccionada.codigo;
-    const causaDescripcion = causaSeleccionada.causa;
+    const codigo = causaSeleccionada.codigo;              // "Z90"
+    const causaDescripcion = causaSeleccionada.causa;     // "Medidor sin sello"
     
     // Obtener unidad
     const unidad = document.getElementById('ipr_unidad').value;
     
-    // Confirmación
+    // ✅ Confirmación con CODIGO y CAUSA separados
     const confirmar = confirm(
         `¿Guardar registro de retiro?\n\n` +
         `📦 Medidor: ${medidor}\n` +
@@ -4830,8 +4830,8 @@ async function guardarRegistroIPR() {
         `🔧 Tipo: ${tipo}\n` +
         `⚡ Voltaje: ${voltaje}\n` +
         `📑 NUM. O/S: ${numOS}\n` +
-        `🔢 Código: ${codigo}\n` +
-        `⚠️ Causa: ${causaDescripcion}\n\n` +
+        `🔢 Código: ${codigo}\n` +                      // Solo "Z90"
+        `⚠️ Causa: ${causaDescripcion}\n\n` +           // Solo "Medidor sin sello"
         `✅ SÍ - Guardar\n` +
         `❌ NO - Cancelar`
     );
@@ -4839,20 +4839,20 @@ async function guardarRegistroIPR() {
     if (!confirmar) return;
     
     try {
-        // 💾 Guardar en Supabase
+        // ✅ INSERT con CODIGO y CAUSA en columnas SEPARADAS
         const { error } = await supabaseClient
             .from('retiro_medidores')
             .insert({
-                codigo: codigo,
+                codigo: codigo,                    // Columna "codigo" → "Z90"
                 unidad: unidad,
                 nic: nic,
                 num_os: numOS,
                 medidor: medidor,
                 forma: forma,
                 marca: marca,
-                tipo: tipo, // ✅ AGREGADO
+                tipo: tipo,
                 voltaje: voltaje,
-                causa_retiro: causaDescripcion,
+                causa_retiro: causaDescripcion,   // Columna "causa_retiro" → "Medidor sin sello"
                 fecha: new Date().toISOString().split('T')[0],
                 usuario_registro: currentUser.usuario
             });
@@ -4868,14 +4868,13 @@ async function guardarRegistroIPR() {
         // Limpiar formulario y recargar
         document.getElementById('ipr_medidor').value = '';
         document.getElementById('datosAutocompletar').style.display = 'none';
-        cargarRegistrosIPR(); // Recargar lista
+        cargarRegistrosIPR();
         
     } catch (err) {
         console.error('Error guardando registro:', err);
         alert('❌ Error de conexión. Intente nuevamente.');
     }
 }
-
 
 
 
@@ -5537,42 +5536,43 @@ function mostrarRegistrosIPR(registros) {
             <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead>
-                        <tr style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white;">
-                            <th style="padding: 10px; text-align: center;">ID</th>
-                            <th style="padding: 10px; text-align: center;">Fecha</th>
-                            <th style="padding: 10px; text-align: left;">Unidad</th>
-                            <th style="padding: 10px; text-align: left;">NIC</th>
-                            <th style="padding: 10px; text-align: left;">NUM. O/S</th>
-                            <th style="padding: 10px; text-align: left;">Medidor</th>
-                            <th style="padding: 10px; text-align: left;">Forma</th>
-                            <th style="padding: 10px; text-align: left;">Marca</th>
-                            <th style="padding: 10px; text-align: left;">Tipo</th> <!-- ✅ AGREGADO -->
-                            <th style="padding: 10px; text-align: left;">Voltaje</th>
-                            <th style="padding: 10px; text-align: left;">Causa</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+    <tr style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white;">
+        <th style="padding: 10px; text-align: center;">CODIGO</th>  <!-- ✅ AGREGAR -->
+        <th style="padding: 10px; text-align: center;">ID</th>
+        <th style="padding: 10px; text-align: left;">Unidad</th>
+        <th style="padding: 10px; text-align: left;">NIC</th>
+        <th style="padding: 10px; text-align: left;">NUM. O/S</th>
+        <th style="padding: 10px; text-align: left;">Medidor</th>
+        <th style="padding: 10px; text-align: left;">Forma</th>
+        <th style="padding: 10px; text-align: left;">Marca</th>
+        <th style="padding: 10px; text-align: left;">Tipo</th>
+        <th style="padding: 10px; text-align: left;">Voltaje</th>
+        <th style="padding: 10px; text-align: left;">Causa de Retiro</th> <!-- ✅ RENOMBRAR -->
+    </tr>
+</thead>                    <tbody>`;
     
     registrosPagina.forEach((registro, idx) => {
-        const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
-        const fechaFormateada = new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES');
-        
-        html += `
-            <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 10px; text-align: center; font-weight: 600;">${registro.id}</td>
-                <td style="padding: 10px; text-align: center;">${fechaFormateada}</td>
-                <td style="padding: 10px;">${registro.unidad || 'N/A'}</td>
-                <td style="padding: 10px;">${registro.nic || 'N/A'}</td>
-                <td style="padding: 10px; font-weight: 600; color: #1976d2;">${registro.num_os}</td>
-                <td style="padding: 10px; font-weight: 600;">${registro.medidor}</td>
-                <td style="padding: 10px;">${registro.forma || 'N/A'}</td>
-                <td style="padding: 10px;">${registro.marca || 'N/A'}</td>
-                <td style="padding: 10px;">${registro.tipo || 'N/A'}</td> <!-- ✅ AGREGADO -->
-                <td style="padding: 10px;">${registro.voltaje || 'N/A'}</td>
-                <td style="padding: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${registro.codigo} - ${registro.causa_retiro}">${registro.codigo} - ${registro.causa_retiro}</td>
-            </tr>`;
-    });
+    const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
+    const fechaFormateada = new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES');
     
+    html += `
+        <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 10px; text-align: center; font-weight: 700; color: #1976d2;">${registro.codigo || 'N/A'}</td>  <!-- ✅ AGREGAR -->
+            <td style="padding: 10px; text-align: center; font-weight: 600;">${registro.id}</td>
+            <td style="padding: 10px;">${registro.unidad || 'N/A'}</td>
+            <td style="padding: 10px;">${registro.nic || 'N/A'}</td>
+            <td style="padding: 10px; font-weight: 600; color: #1976d2;">${registro.num_os}</td>
+            <td style="padding: 10px; font-weight: 600;">${registro.medidor}</td>
+            <td style="padding: 10px;">${registro.forma || 'N/A'}</td>
+            <td style="padding: 10px;">${registro.marca || 'N/A'}</td>
+            <td style="padding: 10px;">${registro.tipo || 'N/A'}</td>
+            <td style="padding: 10px;">${registro.voltaje || 'N/A'}</td>
+            <td style="padding: 10px; max-width: 250px; overflow: hidden; text-overflow: ellipsis;" 
+                title="${registro.causa_retiro}">
+                ${registro.causa_retiro}  <!-- ✅ SOLO LA CAUSA -->
+            </td>
+        </tr>`;
+});    
     html += `
                     </tbody>
                 </table>
@@ -5717,8 +5717,7 @@ function exportarExcelIPR() {
         return;
     }
     
-    let registrosExportar = [...window.registrosIPR];
-    
+    let registrosExportar = [...window.registrosIPR];    
     // Aplicar filtros si existen
     const filtroUnidad = document.getElementById('filtro_unidad_ipr');
     const filtroFecha = document.getElementById('filtro_fecha_ipr');
@@ -5753,27 +5752,27 @@ function exportarExcelIPR() {
     if (!confirmar) return;
     
     try {
-        // Preparar datos para Excel (ORDEN ESPECÍFICO)
+        // ✅ ORDEN CORRECTO DE COLUMNAS
         const datosExcel = registrosExportar.map(registro => ({
-            'CODIGO': registro.codigo,
-            'ID': registro.id,
-            'Unidad': registro.unidad || 'N/A',
-            'NIC': registro.nic || 'N/A',
-            'NUM. O/S': registro.num_os,
-            'Medidor': registro.medidor,
-            'Forma': registro.forma || 'N/A',
-            'Marca': registro.marca || 'N/A',
-            'Tipo': registro.tipo || 'N/A',
-            'Voltaje': registro.voltaje || 'N/A',
-            'Causa de Retiro': registro.causa_retiro,
-            'Fecha': new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES')
+            'CODIGO': registro.codigo || 'N/A',              // 1
+            'ID': registro.id,                               // 2
+            'Unidad': registro.unidad || 'N/A',              // 3
+            'NIC': registro.nic || 'N/A',                    // 4
+            'NUM. O/S': registro.num_os,                     // 5
+            'Medidor': registro.medidor,                     // 6
+            'Forma': registro.forma || 'N/A',                // 7
+            'Marca': registro.marca || 'N/A',                // 8
+            'Tipo': registro.tipo || 'N/A',                  // 9
+            'Voltaje': registro.voltaje || 'N/A',            // 10
+            'Causa de Retiro': registro.causa_retiro,        // 11 ✅ SOLO CAUSA
+            'Fecha': new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES') // 12
         }));
         
         // Crear libro de Excel
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(datosExcel);
         
-        // Ajustar ancho de columnas
+        // ✅ AJUSTAR ANCHO DE COLUMNAS (12 columnas)
         const columnWidths = [
             { wch: 8 },   // CODIGO
             { wch: 8 },   // ID
@@ -5797,6 +5796,9 @@ function exportarExcelIPR() {
         const fechaHoy = new Date().toISOString().split('T')[0];
         let nombreArchivo = `IPR_${fechaHoy}`;
         
+        const filtroUnidad = document.getElementById('filtro_unidad_ipr');
+        const filtroFecha = document.getElementById('filtro_fecha_ipr');
+        
         if (filtroUnidad && filtroUnidad.value) {
             nombreArchivo += `_${filtroUnidad.value}`;
         }
@@ -5816,8 +5818,7 @@ function exportarExcelIPR() {
         console.error('Error exportando Excel:', err);
         alert('❌ Error al generar Excel. Intente nuevamente.');
     }
-}
-	
+}	
 
 
 	// ========================================
