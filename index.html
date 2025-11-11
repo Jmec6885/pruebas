@@ -4775,6 +4775,24 @@ async function cargarInterfazIPR() {
     cargarRegistrosIPR();
 }
 
+function actualizarCodigoCausa() {
+  const index = this.value;
+  const causas = window.causasIPR;
+  const inputCodigo = document.getElementById('ipr_codigo_causa');
+  if (index !== '' && causas && causas[index]) {
+    inputCodigo.value = causas[index].codigo;
+  } else {
+    inputCodigo.value = '';
+  }
+}
+
+// Luego, al cargar el formulario:
+const selectCausa = document.getElementById('ipr_causa');
+if (selectCausa) {
+  selectCausa.removeEventListener('change', actualizarCodigoCausa); // limpiar previo
+  selectCausa.addEventListener('change', actualizarCodigoCausa);
+}
+
 async function guardarRegistroIPR() {
     // Validar campos obligatorios
     const medidor = document.getElementById('ipr_medidor').value.trim();
@@ -5200,6 +5218,12 @@ function generarFormularioIPRConDatos(unidad, nic, datosExtraidos) {
         <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
             <strong style="color: #2e7d32;">✅ Datos encontrados - Verificar información</strong>
         </div>
+
+	<div class="form-group">
+      <label style="font-weight: 600; color: #2d3748;">🔢 Código de Causa:</label>
+      <input type="text" id="ipr_codigo_causa" readonly
+             style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+    </div>
         
         <div class="form-group">
             <label style="font-weight: 600; color: #2d3748;">🏢 Unidad:</label>
