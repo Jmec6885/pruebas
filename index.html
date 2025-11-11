@@ -5055,112 +5055,58 @@ async function buscarDatosMedidorIPR() {
         console.error('❌ Input medidor no existe');
         return;
     }
-    
+
     const medidor = inputMedidor.value.trim();
-    
     if (!medidor) {
         alert('⚠️ Por favor ingrese un número de medidor');
         return;
     }
-    
+
     const datosDiv = document.getElementById('datosAutocompletar');
     if (!datosDiv) {
         console.error('❌ Contenedor datosAutocompletar no existe');
         return;
     }
-    
+
     datosDiv.style.display = 'block';
     datosDiv.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div><p style="text-align: center; color: #666;">Buscando medidor en Consulta Suministro...</p>';
-    
+
     try {
         console.log('🔍 Buscando medidor:', medidor);
-        
-        // 🔍 Buscar en consultas_servicios
-const { data, error } = await supabaseClient
-    .from('consultas_servicios')
-    .select('CuentaContrato, Medidor, ComentarioGeneral')
-    .eq('Medidor', medidor);  // ← SIN .single()
 
-console.log('📊 Resultado búsqueda:', data, error);
+        const { data, error } = await supabaseClient
+            .from('consultas_servicios')
+            .select('id, CuentaContrato, Medidor, ComentarioGeneral')
+            .eq('Medidor', medidor);
 
-// ⚠️ MEDIDOR NO ENCONTRADO
-if (error || !data || data.length === 0) {
-    console.log('⚠️ Medidor NO encontrado - Activando modo manual');
-    // ... resto del código manual
-    return;
-}
-
-// ✅ MEDIDOR(ES) ENCONTRADO(S)
-if (data.length === 1) {
-    // Caso simple: Solo un resultado
-    procesarMedidorUnico(data[0]);
-} else {
-    // Caso múltiple: Mostrar selector
-    mostrarSelectorMedidores(data, medidor);
-}
-            
+        // ✅ Manejo de error o sin resultados
+        if (error || !data || data.length === 0) {
+            console.log('⚠️ Medidor NO encontrado - Activando modo manual');
             const confirmar = confirm(
                 '⚠️ MODO MANUAL ACTIVADO\n\n' +
                 `El medidor "${medidor}" NO existe en Consulta Suministro.\n\n` +
                 'Deberás completar TODOS los campos manualmente.\n\n' +
                 '¿Deseas continuar?'
             );
-            
+
             if (!confirmar) {
                 datosDiv.style.display = 'none';
                 inputMedidor.value = '';
                 return;
             }
-            
-            // Generar formulario MANUAL (todos los campos editables)
+
             const unidadTransformada = transformarUsuarioAUnidad(currentUser.usuario);
             datosDiv.innerHTML = generarFormularioIPRManual(unidadTransformada, medidor);
             return;
         }
-        
-        console.log('✅ Medidor encontrado en Consulta Suministro');
-        
-        // ✅ Validar si ya fue retirado
-        const { data: existente } = await supabaseClient
-            .from('retiro_medidores')
-            .select('nic, num_os, fecha')
-            .eq('medidor', medidor)
-            .order('fecha', { ascending: false })
-            .limit(1);
-        
-        if (existente && existente.length > 0) {
-            const registro = existente[0];
-            const fechaRetiro = new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES');
-            const confirmar = confirm(
-                `⚠️ ADVERTENCIA\n\n` +
-                `Este medidor YA fue retirado anteriormente:\n\n` +
-                `• Cuenta: ${registro.nic}\n` +
-                `• Fecha retiro: ${fechaRetiro}\n` +
-                `• NUM. O/S: ${registro.num_os}\n\n` +
-                `¿Desea registrarlo nuevamente?`
-            );
-            
-            if (!confirmar) {
-                datosDiv.style.display = 'none';
-                inputMedidor.value = '';
-                return;
-            }
+
+        // ✅ Caso con resultados
+        if (data.length === 1) {
+            procesarMedidorUnico(data[0]);
+        } else {
+            mostrarSelectorMedidores(data, medidor);
         }
-        
-        // 📦 Extraer datos del ComentarioGeneral
-        console.log('📝 ComentarioGeneral:', data.ComentarioGeneral);
-        const datosExtraidos = extraerDatosComentario(data.ComentarioGeneral);
-        console.log('📊 Datos extraídos:', datosExtraidos);
-        
-        // 🏢 Obtener unidad transformada
-        const unidadTransformada = transformarUsuarioAUnidad(currentUser.usuario);
-        console.log('🏢 Unidad transformada:', unidadTransformada);
-        
-        // 📝 Generar formulario AUTOMÁTICO (datos prellenados)
-        datosDiv.innerHTML = generarFormularioIPRAutomatico(unidadTransformada, data.CuentaContrato, datosExtraidos);
-        
-        console.log('✅ Formulario automático generado');
-        
+
     } catch (err) {
         console.error('❌ Error en búsqueda:', err);
         datosDiv.innerHTML = `
@@ -5170,7 +5116,6 @@ if (data.length === 1) {
             </div>`;
     }
 }
-
 
 
 		function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
