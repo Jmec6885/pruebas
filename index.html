@@ -4775,6 +4775,108 @@ async function cargarInterfazIPR() {
     cargarRegistrosIPR();
 }
 
+async function guardarRegistroIPR() {
+    // Validar campos obligatorios
+    const medidor = document.getElementById('ipr_medidor').value.trim();
+    const nic = document.getElementById('ipr_nic').value.trim();
+    const forma = document.getElementById('ipr_forma').value.trim();
+    const marca = document.getElementById('ipr_marca').value.trim();
+    
+    // ✅ CORREGIDO: Validar existencia de ipr_tipo
+    const tipoElement = document.getElementById('ipr_tipo');
+    const tipo = tipoElement ? tipoElement.value.trim() : '';
+    
+    const voltaje = document.getElementById('ipr_voltaje').value.trim();
+    const numOS = document.getElementById('ipr_numos').value.trim();
+    const causaIndex = document.getElementById('ipr_causa').value;
+    
+    // Validación completa
+    if (!medidor || !nic || !forma || !marca || !tipo || !voltaje || !numOS || !causaIndex) {
+        alert('⚠️ Por favor complete TODOS los campos obligatorios:\n\n• Medidor\n• NIC\n• Forma\n• Marca\n• Tipo\n• Voltaje\n• NUM. O/S\n• Causa de Retiro');
+        return;
+    }
+    
+    // Validar que NIC y NUM.OS sean solo números
+    if (!/^\d+$/.test(nic)) {
+        alert('⚠️ El NIC debe contener solo números');
+        return;
+    }
+    
+    if (!/^\d+$/.test(numOS)) {
+        alert('⚠️ NUM. O/S debe contener solo números');
+        return;
+    }
+    
+    if (!/^\d+$/.test(medidor)) {
+        alert('⚠️ El Medidor debe contener solo números');
+        return;
+    }
+    
+    // Obtener código y causa de la selección
+    const causaSeleccionada = window.causasIPR[parseInt(causaIndex)];
+    const codigo = causaSeleccionada.codigo;
+    const causaDescripcion = causaSeleccionada.causa;
+    
+    // Obtener unidad
+    const unidad = document.getElementById('ipr_unidad').value;
+    
+    // Confirmación
+    const confirmar = confirm(
+        `¿Guardar registro de retiro?\n\n` +
+        `📦 Medidor: ${medidor}\n` +
+        `📄 NIC: ${nic}\n` +
+        `📋 Forma: ${forma}\n` +
+        `🏷️ Marca: ${marca}\n` +
+        `🔧 Tipo: ${tipo}\n` +
+        `⚡ Voltaje: ${voltaje}\n` +
+        `📑 NUM. O/S: ${numOS}\n` +
+        `🔢 Código: ${codigo}\n` +
+        `⚠️ Causa: ${causaDescripcion}\n\n` +
+        `✅ SÍ - Guardar\n` +
+        `❌ NO - Cancelar`
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        // 💾 Guardar en Supabase
+        const { error } = await supabaseClient
+            .from('retiro_medidores')
+            .insert({
+                codigo: codigo,
+                unidad: unidad,
+                nic: nic,
+                num_os: numOS,
+                medidor: medidor,
+                forma: forma,
+                marca: marca,
+                tipo: tipo, // ✅ AGREGADO
+                voltaje: voltaje,
+                causa_retiro: causaDescripcion,
+                fecha: new Date().toISOString().split('T')[0],
+                usuario_registro: currentUser.usuario
+            });
+        
+        if (error) {
+            alert('❌ Error al guardar: ' + error.message);
+            return;
+        }
+        
+        // ✅ Éxito
+        alert('✅ Registro guardado correctamente');
+        
+        // Limpiar formulario y recargar
+        document.getElementById('ipr_medidor').value = '';
+        document.getElementById('datosAutocompletar').style.display = 'none';
+        cargarRegistrosIPR(); // Recargar lista
+        
+    } catch (err) {
+        console.error('Error guardando registro:', err);
+        alert('❌ Error de conexión. Intente nuevamente.');
+    }
+}
+
+
 
 
 // ========================================
@@ -4893,10 +4995,7 @@ async function buscarDatosMedidorIPR() {
 
 
 
-		// ========================================
-// 📋 GENERAR FORMULARIO IPR AUTOMÁTICO (Datos de BD)
-// ========================================
-function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
+		function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
     return `
         <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
             <strong style="color: #2e7d32;">✅ Datos encontrados en Consulta Suministro</strong>
@@ -4921,8 +5020,15 @@ function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
         </div>
         
         <div class="form-group">
-            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca y Tipo:</label>
+            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca:</label>
             <input type="text" id="ipr_marca" readonly value="${datosExtraidos.marca}"
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
+        </div>
+        
+        <!-- ✅ AGREGADO: Campo Tipo -->
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🔧 Tipo:</label>
+            <input type="text" id="ipr_tipo" readonly value="${datosExtraidos.tipo}"
                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
         </div>
         
@@ -4940,7 +5046,8 @@ function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
         
         <div class="form-group">
             <label style="font-weight: 600; color: #2d3748;">📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
-            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio" 
+            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio (solo números)" 
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="15"
                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
         </div>
         
@@ -4959,6 +5066,8 @@ function generarFormularioIPRAutomatico(unidad, nic, datosExtraidos) {
         </div>
     `;
 }
+
+
 
 
 	// ========================================
@@ -4993,8 +5102,14 @@ function generarFormularioIPRManual(unidad, medidor) {
         </div>
         
         <div class="form-group">
-            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca y Tipo: <span style="color: #d32f2f;">*</span></label>
-            <input type="text" id="ipr_marca" placeholder="Ej: LANDIS+GYR E650 S4X RXR" 
+            <label style="font-weight: 600; color: #2d3748;">🏷️ Marca: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_marca" placeholder="Ej: LANDIS+GYR" 
+                   style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        </div>
+        
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">🔧 Tipo: <span style="color: #d32f2f;">*</span></label>
+            <input type="text" id="ipr_tipo" placeholder="Ej: E650 S4X RXR" 
                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
         </div>
         
@@ -5008,7 +5123,8 @@ function generarFormularioIPRManual(unidad, medidor) {
         
         <div class="form-group">
             <label style="font-weight: 600; color: #2d3748;">📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
-            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio" 
+            <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio (solo números)" 
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="15"
                    style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
         </div>
         
@@ -5027,6 +5143,8 @@ function generarFormularioIPRManual(unidad, medidor) {
         </div>
     `;
 }
+
+
 
 // ========================================
 // ✅ VALIDAR NIC MANUAL (Solo números + Validar en BD)
@@ -5144,55 +5262,58 @@ function generarFormularioIPRConDatos(unidad, nic, datosExtraidos) {
 
 
 	// ========================================
-// 📋 GENERAR OPCIONES DE CAUSA DE RETIRO
+// 📋 GENERAR OPCIONES DE CAUSA DE RETIRO CON CÓDIGOS
 // ========================================
 function generarOpcionesCausaRetiro() {
-    const causas = [
-        'Medidor con humedad/agua interna',
-        'Cambio de CAB a CAT',
-        'Casos por solicitud/ Campaña (SIGET)',
-        'Codigo de error',
-        'Irregularidad en el medidor',
-        'Medidor con dificultades de lectura',
-        'Medidor quebrado',
-        'Medidor quemado',
-        'Medidor con partes oxidadas',
-        'Medidor destruido',
-        'Fuera de limites de exactitud',
-        'Medidor con insectos/animales/partes de animales',
-        'Retiro/levantamiento de medidor',
-        'Provisionales/Abandonados',
-        'Testigos/En serie',
-        'Retiro por cambio de tecnología',
-        'Retiro por proyecto Subterraneo',
-        'Retiro de medidor con desperfecto identificado',
-        'Retiro de medidor por disposicion de seguridad',
-        'Por solicitud del cliente',
-        'Medidor incompatible/inadecuado con el servicio',
-        'Cambio a sistema blindado',
-        'MD parado no registra consumo',
-        'MD con pantalla apagada',
-        'MD con digitos borrosos',
-        'MD Dañado',
-        'MD con agua interna',
-        'MEDIDOR FUERA DE ESTANDAR',
-        'MD con pintura en pantalla',
-        'MD con pantalla amarilla',
-        'MD con borneras sobadas',
-        'MD Desprogramado',
-        'MD con bornera derretida'
+    const causasConCodigo = [
+        { codigo: 'Z87', causa: 'Medidores provisionales o abandonados' },
+        { codigo: 'Z87', causa: 'Medidores testigos' },
+        { codigo: 'Z88', causa: 'Partes quebradas' },
+        { codigo: 'Z88', causa: 'Solo se entrega placa (destruido)' },
+        { codigo: 'Z89', causa: 'Pantalla dañada' },
+        { codigo: 'Z89', causa: 'Digitos cortados' },
+        { codigo: 'Z89', causa: 'Pantalla apagada/parpadea' },
+        { codigo: 'Z89', causa: 'Integrador dañado' },
+        { codigo: 'Z89', causa: 'Pantalla amarilla/empañado' },
+        { codigo: 'Z90', causa: 'Linea directa' },
+        { codigo: 'Z90', causa: 'Medidor sin sello' },
+        { codigo: 'Z90', causa: 'Manipulado' },
+        { codigo: 'Z91', causa: 'Partes oxidadas' },
+        { codigo: 'Z91', causa: 'Agua interna' },
+        { codigo: 'Z92', causa: 'Cambio de medidor analogo a digital' },
+        { codigo: 'Z92', causa: 'Cambio a medidor bidireccional' },
+        { codigo: 'Z92', causa: 'Cambio de medidor por proyectos de telemedición' },
+        { codigo: 'Z93', causa: 'El cliente solicita el cambio' },
+        { codigo: 'Z94', causa: 'Medidor inadecuado con servicio' },
+        { codigo: 'Z95', causa: 'Cambio a sistema blindado' },
+        { codigo: 'Z96', causa: 'Caso SIGET' },
+        { codigo: 'Z97', causa: 'Por incremento de carga/cambio de tarifa' },
+        { codigo: 'Z97', causa: 'Levantamiento de medidor/Retiro' },
+        { codigo: 'Z97', causa: 'CAB x CAT' },
+        { codigo: 'Z98', causa: 'Cambio de medidor por sistema subterraneo' },
+        { codigo: 'Z99', causa: 'Retiro de medidores de la marca NANSEN M1AT' },
+        { codigo: 'Z99', causa: 'Retiro de medidores de la marca LANDIS+GYR E23A' },
+        { codigo: 'Z100', causa: 'Retiro de medidores de la marca IMTECH HX13D' },
+        { codigo: 'Z100', causa: 'Retiro de medidores de la marca VOLTREX DD9557 (240V)' },
+        { codigo: 'Z101', causa: 'No encontrado en campo' },
+        { codigo: 'Z102', causa: 'Queda instalado en campo' },
+        { codigo: 'Z103', causa: 'Número distinto entre físico y sistema' },
+        { codigo: 'Z104', causa: 'Medidor completamente quemado y no se observa el numero' },
+        { codigo: 'Z105', causa: 'Parte del cuerpo del medidor esta quemado' },
+        { codigo: 'Z105', causa: 'Bornera del medidor se encuentra quemada' }
     ];
     
-    return causas.map(causa => `<option value="${causa}">${causa}</option>`).join('');
+    // Guardar globalmente para usar al guardar
+    window.causasIPR = causasConCodigo;
+    
+    return causasConCodigo.map((item, index) => 
+        `<option value="${index}">${item.codigo} - ${item.causa}</option>`
+    ).join('');
 }
-
 	
 
 
 	// ========================================
-// 📊 EXTRAER DATOS DEL COMENTARIO GENERAL
-// ========================================
-// ========================================
 // 📊 EXTRAER DATOS DEL COMENTARIO GENERAL
 // ========================================
 function extraerDatosComentario(comentario) {
@@ -5201,6 +5322,7 @@ function extraerDatosComentario(comentario) {
     const resultado = {
         forma: 'N/A',
         marca: 'N/A',
+        tipo: 'N/A',
         voltaje: 'N/A'
     };
     
@@ -5214,17 +5336,27 @@ function extraerDatosComentario(comentario) {
     if (matchForma) {
         resultado.forma = matchForma[1].trim();
         console.log('✅ Forma encontrada:', resultado.forma);
-    } else {
-        console.log('⚠️ Forma NO encontrada');
     }
     
     // 🔍 Buscar Marca y Tipo: "Medidor: 97208817 - LANDIS+GYR E650 S4X RXR ."
-    const matchMarca = comentario.match(/Medidor[:\s]+\d+\s*-\s*([^\n\r.]+)/i);
-    if (matchMarca) {
-        resultado.marca = matchMarca[1].trim();
-        console.log('✅ Marca encontrada:', resultado.marca);
+    const matchMarcaTipo = comentario.match(/Medidor[:\s]+\d+\s*-\s*([^\n\r.]+)/i);
+    if (matchMarcaTipo) {
+        const marcaTipoCompleto = matchMarcaTipo[1].trim();
+        
+        // Separar Marca (primera palabra) y Tipo (resto)
+        const partes = marcaTipoCompleto.split(/\s+/);
+        
+        if (partes.length > 0) {
+            resultado.marca = partes[0]; // Primera palabra = Marca
+            console.log('✅ Marca encontrada:', resultado.marca);
+        }
+        
+        if (partes.length > 1) {
+            resultado.tipo = partes.slice(1).join(' '); // Resto = Tipo
+            console.log('✅ Tipo encontrado:', resultado.tipo);
+        }
     } else {
-        console.log('⚠️ Marca NO encontrada');
+        console.log('⚠️ Marca/Tipo NO encontrados');
     }
     
     // 🔍 Buscar Voltaje: "Tension 120/480V ." o "Tension: 120/480V"
@@ -5232,93 +5364,11 @@ function extraerDatosComentario(comentario) {
     if (matchVoltaje) {
         resultado.voltaje = matchVoltaje[1].trim();
         console.log('✅ Voltaje encontrado:', resultado.voltaje);
-    } else {
-        console.log('⚠️ Voltaje NO encontrado');
     }
     
     console.log('📊 Resultado final:', resultado);
     return resultado;
 }
-	// ========================================
-// 💾 GUARDAR REGISTRO IPR
-// ========================================
-async function guardarRegistroIPR() {
-    // Validar campos obligatorios
-    const medidor = document.getElementById('ipr_medidor').value.trim();
-    const nic = document.getElementById('ipr_nic').value.trim();
-    const forma = document.getElementById('ipr_forma').value.trim();
-    const marca = document.getElementById('ipr_marca').value.trim();
-    const voltaje = document.getElementById('ipr_voltaje').value.trim();
-    const numOS = document.getElementById('ipr_numos').value.trim();
-    const causa = document.getElementById('ipr_causa').value;
-    
-    // 🆕 Validación completa (todos los campos obligatorios)
-    if (!medidor || !nic || !forma || !marca || !voltaje || !numOS || !causa) {
-        alert('⚠️ Por favor complete TODOS los campos obligatorios:\n\n• Medidor\n• NIC\n• Forma\n• Marca/Tipo\n• Voltaje\n• NUM. O/S\n• Causa de Retiro');
-        return;
-    }
-    
-    // 🆕 Validar que NIC sea solo números
-    if (!/^\d+$/.test(nic)) {
-        alert('⚠️ El NIC debe contener solo números');
-        return;
-    }
-    
-    // Obtener unidad
-    const unidad = document.getElementById('ipr_unidad').value;
-    
-    // Confirmación
-    const confirmar = confirm(
-        `¿Guardar registro de retiro?\n\n` +
-        `📦 Medidor: ${medidor}\n` +
-        `📄 NIC: ${nic}\n` +
-        `📋 Forma: ${forma}\n` +
-        `🏷️ Marca: ${marca}\n` +
-        `⚡ Voltaje: ${voltaje}\n` +
-        `📑 NUM. O/S: ${numOS}\n` +
-        `⚠️ Causa: ${causa}\n\n` +
-        `✅ SÍ - Guardar\n` +
-        `❌ NO - Cancelar`
-    );
-    
-    if (!confirmar) return;
-    
-    try {
-        // 💾 Guardar en Supabase
-        const { error } = await supabaseClient
-            .from('retiro_medidores')
-            .insert({
-                unidad: unidad,
-                nic: nic,
-                num_os: numOS,
-                medidor: medidor,
-                forma: forma,
-                marca: marca,
-                voltaje: voltaje,
-                causa_retiro: causa,
-                fecha: new Date().toISOString().split('T')[0],
-                usuario_registro: currentUser.usuario
-            });
-        
-        if (error) {
-            alert('❌ Error al guardar: ' + error.message);
-            return;
-        }
-        
-        // ✅ Éxito
-        alert('✅ Registro guardado correctamente');
-        
-        // Limpiar formulario y recargar
-        document.getElementById('ipr_medidor').value = '';
-        document.getElementById('datosAutocompletar').style.display = 'none';
-        cargarRegistrosIPR(); // Recargar lista
-        
-    } catch (err) {
-        console.error('Error guardando registro:', err);
-        alert('❌ Error de conexión. Intente nuevamente.');
-    }
-}
-
 
 	
 	// ========================================
@@ -5465,17 +5515,15 @@ function mostrarRegistrosIPR(registros) {
     resultsContainer.innerHTML = html;
 }
 
-	// ========================================
-// 📊 GENERAR TABLA DE REGISTROS IPR
-// ========================================
-function generarTablaRegistrosIPR(registros) {
+
+
+	function generarTablaRegistrosIPR(registros) {
     if (!registros || registros.length === 0) {
         return `<div class="result-card" style="background: #fff3cd;">
                     <p style="text-align: center; color: #666;">No hay registros que coincidan con los filtros</p>
                 </div>`;
     }
     
-    // Paginación: 20 registros por página
     const registrosPorPagina = 20;
     const paginaActual = window.paginaActualIPR || 1;
     const totalPaginas = Math.ceil(registros.length / registrosPorPagina);
@@ -5487,42 +5535,41 @@ function generarTablaRegistrosIPR(registros) {
     let html = `
         <div class="result-card" style="background: white;">
             <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead>
                         <tr style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white;">
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">#</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Fecha</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Unidad</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">NIC</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">NUM. O/S</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Medidor</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Forma</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Marca/Tipo</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Voltaje</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Causa de Retiro</th>
-                            <th style="padding: 12px; text-align: left; white-space: nowrap;">Usuario</th>
+                            <th style="padding: 10px; text-align: center;">ID</th>
+                            <th style="padding: 10px; text-align: center;">Fecha</th>
+                            <th style="padding: 10px; text-align: left;">Unidad</th>
+                            <th style="padding: 10px; text-align: left;">NIC</th>
+                            <th style="padding: 10px; text-align: left;">NUM. O/S</th>
+                            <th style="padding: 10px; text-align: left;">Medidor</th>
+                            <th style="padding: 10px; text-align: left;">Forma</th>
+                            <th style="padding: 10px; text-align: left;">Marca</th>
+                            <th style="padding: 10px; text-align: left;">Tipo</th> <!-- ✅ AGREGADO -->
+                            <th style="padding: 10px; text-align: left;">Voltaje</th>
+                            <th style="padding: 10px; text-align: left;">Causa</th>
                         </tr>
                     </thead>
                     <tbody>`;
     
     registrosPagina.forEach((registro, idx) => {
         const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
-        const numeroGlobal = inicio + idx + 1;
         const fechaFormateada = new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES');
         
         html += `
             <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 10px; font-weight: 600;">${numeroGlobal}</td>
-                <td style="padding: 10px;">${fechaFormateada}</td>
+                <td style="padding: 10px; text-align: center; font-weight: 600;">${registro.id}</td>
+                <td style="padding: 10px; text-align: center;">${fechaFormateada}</td>
                 <td style="padding: 10px;">${registro.unidad || 'N/A'}</td>
                 <td style="padding: 10px;">${registro.nic || 'N/A'}</td>
                 <td style="padding: 10px; font-weight: 600; color: #1976d2;">${registro.num_os}</td>
                 <td style="padding: 10px; font-weight: 600;">${registro.medidor}</td>
                 <td style="padding: 10px;">${registro.forma || 'N/A'}</td>
-                <td style="padding: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${registro.marca || 'N/A'}">${registro.marca || 'N/A'}</td>
+                <td style="padding: 10px;">${registro.marca || 'N/A'}</td>
+                <td style="padding: 10px;">${registro.tipo || 'N/A'}</td> <!-- ✅ AGREGADO -->
                 <td style="padding: 10px;">${registro.voltaje || 'N/A'}</td>
-                <td style="padding: 10px; max-width: 250px; overflow: hidden; text-overflow: ellipsis;" title="${registro.causa_retiro}">${registro.causa_retiro}</td>
-                <td style="padding: 10px;">${registro.usuario_registro}</td>
+                <td style="padding: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${registro.codigo} - ${registro.causa_retiro}">${registro.codigo} - ${registro.causa_retiro}</td>
             </tr>`;
     });
     
@@ -5531,7 +5578,6 @@ function generarTablaRegistrosIPR(registros) {
                 </table>
             </div>`;
     
-    // Controles de paginación
     if (totalPaginas > 1) {
         html += `
             <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px; border-top: 2px solid #e2e8f0;">
@@ -5540,7 +5586,7 @@ function generarTablaRegistrosIPR(registros) {
                     ← Anterior
                 </button>
                 <span style="font-weight: 600; color: #2d3748;">
-                    Página ${paginaActual} de ${totalPaginas}
+                    Página ${paginaActual} de ${totalPaginas} (${registros.length} registros)
                 </span>
                 <button class="btn btn-secondary" onclick="cambiarPaginaIPR(${paginaActual + 1})" 
                         ${paginaActual === totalPaginas ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
@@ -5553,6 +5599,7 @@ function generarTablaRegistrosIPR(registros) {
     
     return html;
 }
+
 
 
 	// ========================================
@@ -5659,6 +5706,8 @@ function cambiarPaginaIPR(nuevaPagina) {
         tablaExistente.outerHTML = tablaHTML;
     }
 }
+
+
 	// ========================================
 // 📥 EXPORTAR EXCEL IPR
 // ========================================
@@ -5668,12 +5717,12 @@ function exportarExcelIPR() {
         return;
     }
     
-    // Obtener registros filtrados actuales
     let registrosExportar = [...window.registrosIPR];
     
     // Aplicar filtros si existen
     const filtroUnidad = document.getElementById('filtro_unidad_ipr');
     const filtroFecha = document.getElementById('filtro_fecha_ipr');
+    const filtroMedidor = document.getElementById('filtro_medidor_ipr');
     
     if (filtroUnidad && filtroUnidad.value) {
         registrosExportar = registrosExportar.filter(r => r.unidad === filtroUnidad.value);
@@ -5683,12 +5732,18 @@ function exportarExcelIPR() {
         registrosExportar = registrosExportar.filter(r => r.fecha === filtroFecha.value);
     }
     
+    if (filtroMedidor && filtroMedidor.value.trim()) {
+        const busqueda = filtroMedidor.value.trim().toLowerCase();
+        registrosExportar = registrosExportar.filter(r => 
+            r.medidor && r.medidor.toLowerCase().includes(busqueda)
+        );
+    }
+    
     if (registrosExportar.length === 0) {
         alert('⚠️ No hay registros que coincidan con los filtros aplicados');
         return;
     }
     
-    // Confirmar exportación
     const confirmar = confirm(
         `📥 Exportar registros a Excel\n\n` +
         `Total de registros: ${registrosExportar.length}\n\n` +
@@ -5698,18 +5753,20 @@ function exportarExcelIPR() {
     if (!confirmar) return;
     
     try {
-        // Preparar datos para Excel
+        // Preparar datos para Excel (ORDEN ESPECÍFICO)
         const datosExcel = registrosExportar.map(registro => ({
-            'Fecha': new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES'),
+            'CODIGO': registro.codigo,
+            'ID': registro.id,
             'Unidad': registro.unidad || 'N/A',
             'NIC': registro.nic || 'N/A',
             'NUM. O/S': registro.num_os,
             'Medidor': registro.medidor,
             'Forma': registro.forma || 'N/A',
-            'Marca/Tipo': registro.marca || 'N/A',
+            'Marca': registro.marca || 'N/A',
+            'Tipo': registro.tipo || 'N/A',
             'Voltaje': registro.voltaje || 'N/A',
             'Causa de Retiro': registro.causa_retiro,
-            'Usuario Registro': registro.usuario_registro
+            'Fecha': new Date(registro.fecha + 'T00:00:00').toLocaleDateString('es-ES')
         }));
         
         // Crear libro de Excel
@@ -5718,16 +5775,18 @@ function exportarExcelIPR() {
         
         // Ajustar ancho de columnas
         const columnWidths = [
-            { wch: 12 },  // Fecha
+            { wch: 8 },   // CODIGO
+            { wch: 8 },   // ID
             { wch: 15 },  // Unidad
             { wch: 15 },  // NIC
             { wch: 12 },  // NUM. O/S
             { wch: 12 },  // Medidor
             { wch: 12 },  // Forma
-            { wch: 30 },  // Marca/Tipo
+            { wch: 20 },  // Marca
+            { wch: 20 },  // Tipo
             { wch: 12 },  // Voltaje
-            { wch: 40 },  // Causa de Retiro
-            { wch: 15 }   // Usuario Registro
+            { wch: 45 },  // Causa de Retiro
+            { wch: 12 }   // Fecha
         ];
         ws['!cols'] = columnWidths;
         
@@ -5735,11 +5794,7 @@ function exportarExcelIPR() {
         XLSX.utils.book_append_sheet(wb, ws, 'Retiro Medidores');
         
         // Generar nombre de archivo
-        const now = new Date();
-const year = now.getFullYear();
-const month = String(now.getMonth() + 1).padStart(2, '0');
-const day = String(now.getDate()).padStart(2, '0');
-const fechaHoy = `${year}-${month}-${day}`;
+        const fechaHoy = new Date().toISOString().split('T')[0];
         let nombreArchivo = `IPR_${fechaHoy}`;
         
         if (filtroUnidad && filtroUnidad.value) {
@@ -5762,7 +5817,6 @@ const fechaHoy = `${year}-${month}-${day}`;
         alert('❌ Error al generar Excel. Intente nuevamente.');
     }
 }
-
 	
 
 
