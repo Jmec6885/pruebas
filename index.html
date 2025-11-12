@@ -3722,23 +3722,36 @@ async function buscarCoincidencias(datos, tipo) {
     for (const fila of datos) {
         let campoBusqueda, valorBusqueda, datosActualizar;
         
+        // ✅ NORMALIZAR: Convertir notación científica a número completo
+        const normalizarValor = (val) => {
+            let str = String(val).trim();
+            
+            // Si contiene E+ o e+ (notación científica)
+            if (/[eE]\+/.test(str)) {
+                // Convertir a número y luego a string sin decimales
+                str = parseFloat(str).toFixed(0);
+            }
+            
+            return str;
+        };
+        
         if (tipo === 'medidor_comentario') {
             campoBusqueda = 'CuentaContrato';
-            valorBusqueda = String(fila[0]).trim();
+            valorBusqueda = normalizarValor(fila[0]);
             datosActualizar = {
-                Medidor: String(fila[1]).trim(),
+                Medidor: normalizarValor(fila[1]),
                 ComentarioGeneral: String(fila[2]).trim()
             };
         } else if (tipo === 'nombre_cuenta') {
             campoBusqueda = 'Medidor';
-            valorBusqueda = String(fila[1]).trim();
+            valorBusqueda = normalizarValor(fila[1]);
             datosActualizar = {
-                CuentaContrato: String(fila[0]).trim(),
+                CuentaContrato: normalizarValor(fila[0]),
                 NombreCliente: String(fila[2]).trim()
             };
         } else if (tipo === 'grafica') {
             campoBusqueda = 'CuentaContrato';
-            valorBusqueda = String(fila[0]).trim();
+            valorBusqueda = normalizarValor(fila[0]);
             datosActualizar = {
                 Grafica: String(fila[1]).trim()
             };
@@ -3767,7 +3780,6 @@ async function buscarCoincidencias(datos, tipo) {
     
     return { encontrados, noEncontrados, tipo };
 }
-
 
 	// ========================================
 // 👁️ MOSTRAR PREVIEW DE ACTUALIZACIÓN
@@ -3845,7 +3857,6 @@ function mostrarPreviewActualizacion(resultado, tipo) {
 async function ejecutarActualizacionMasiva(encontrados, tipo) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Mostrar progreso
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
             <div class="loading" style="display: block; margin: 20px auto;"></div>
@@ -3857,34 +3868,57 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
     const exitosos = [];
     const fallidos = [];
     
-    // Actualizar uno por uno
-    for (let i = 0; i < encontrados.length; i++) {
-        const item = encontrados[i];
+    // ✅ BATCH UPDATE: Grupos de 500 registros
+    const BATCH_SIZE = 500;
+    
+    for (let i = 0; i < encontrados.length; i += BATCH_SIZE) {
+        const batch = encontrados.slice(i, i + BATCH_SIZE);
+        
+        // Preparar datos del batch
+        const updates = batch.map(item => ({
+            id: item.id,
+            ...item.datos
+        }));
         
         try {
+            // Actualización masiva con upsert
             const { error } = await supabaseClient
                 .from('consultas_servicios')
-                .update(item.datos)
-                .eq('id', item.id);
+                .upsert(updates, { onConflict: 'id' });
             
             if (error) {
-                fallidos.push({ busqueda: item.busqueda, error: error.message });
+                // Si el batch falla, intentar uno por uno
+                for (const item of batch) {
+                    try {
+                        const { error: singleError } = await supabaseClient
+                            .from('consultas_servicios')
+                            .update(item.datos)
+                            .eq('id', item.id);
+                        
+                        if (singleError) {
+                            fallidos.push({ busqueda: item.busqueda, error: singleError.message });
+                        } else {
+                            exitosos.push(item.busqueda);
+                        }
+                    } catch (err) {
+                        fallidos.push({ busqueda: item.busqueda, error: err.message });
+                    }
+                }
             } else {
-                exitosos.push(item.busqueda);
+                // Batch completo exitoso
+                exitosos.push(...batch.map(b => b.busqueda));
             }
-            
         } catch (err) {
-            fallidos.push({ busqueda: item.busqueda, error: err.message });
+            fallidos.push(...batch.map(b => ({ busqueda: b.busqueda, error: err.message })));
         }
         
         // Actualizar progreso
-        document.getElementById('progresoActualizacion').textContent = `${i + 1} / ${encontrados.length}`;
+        document.getElementById('progresoActualizacion').textContent = 
+            `${Math.min(i + BATCH_SIZE, encontrados.length)} / ${encontrados.length}`;
     }
     
-    // Mostrar resultado final
     mostrarResultadoActualizacion(exitosos, fallidos, tipo);
 }
-
 // ========================================
 // 📊 MOSTRAR RESULTADO FINAL
 // ========================================
