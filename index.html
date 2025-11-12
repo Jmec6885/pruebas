@@ -3722,16 +3722,12 @@ async function buscarCoincidencias(datos, tipo) {
     for (const fila of datos) {
         let campoBusqueda, valorBusqueda, datosActualizar;
         
-        // ✅ NORMALIZAR: Convertir notación científica a número completo
+        // Normalizar valor
         const normalizarValor = (val) => {
             let str = String(val).trim();
-            
-            // Si contiene E+ o e+ (notación científica)
             if (/[eE]\+/.test(str)) {
-                // Convertir a número y luego a string sin decimales
                 str = parseFloat(str).toFixed(0);
             }
-            
             return str;
         };
         
@@ -3757,12 +3753,19 @@ async function buscarCoincidencias(datos, tipo) {
             };
         }
         
-        // Buscar en BD
-        const { data, error } = await supabaseClient
+        // ✅ CORRECCIÓN: Búsqueda flexible con tipos mixtos
+        let query = supabaseClient
             .from('consultas_servicios')
-            .select('id')
-            .eq(campoBusqueda, valorBusqueda)
-            .single();
+            .select('id');
+        
+        // Para campos numéricos, intentar como string Y como número
+        if (campoBusqueda === 'CuentaContrato' || campoBusqueda === 'Medidor') {
+            query = query.or(`${campoBusqueda}.eq."${valorBusqueda}",${campoBusqueda}.eq.${valorBusqueda}`);
+        } else {
+            query = query.eq(campoBusqueda, valorBusqueda);
+        }
+        
+        const { data, error } = await query.limit(1).maybeSingle();
         
         if (data && !error) {
             encontrados.push({
@@ -3780,6 +3783,7 @@ async function buscarCoincidencias(datos, tipo) {
     
     return { encontrados, noEncontrados, tipo };
 }
+
 
 	// ========================================
 // 👁️ MOSTRAR PREVIEW DE ACTUALIZACIÓN
