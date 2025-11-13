@@ -3726,10 +3726,11 @@ function validarEstructuraArchivo(datos, tipo) {
 // 🔍 BUSCAR COINCIDENCIAS EN BD
 // ========================================
 async function buscarCoincidencias(datos, tipo) {
-    console.log(`🔍 Buscando ${datos.length} registros...`);
+    console.log(`🔍 Procesando ${datos.length} filas del archivo...`);
     
     const encontrados = [];
     const noEncontrados = [];
+    const duplicadosEnArchivo = [];
     const BATCH_SIZE = 500;
     
     // Normalizar valor
@@ -3741,69 +3742,88 @@ async function buscarCoincidencias(datos, tipo) {
         return str;
     };
     
-    // Procesar por lotes
-    for (let i = 0; i < datos.length; i += BATCH_SIZE) {
-        const batch = datos.slice(i, i + BATCH_SIZE);
+    // ✅ PASO 1: Eliminar duplicados del archivo
+    const valoresUnicos = new Map(); // clave = valorBusqueda, valor = {primera vez que aparece}
+    const mapaTodasFilas = new Map(); // Guardar TODAS las filas (incluso duplicadas)
+    
+    datos.forEach((fila, index) => {
+        let campoBusqueda, valorBusqueda, datosActualizar;
         
-        // Preparar valores del batch
-        const valoresBatch = [];
-        const mapaFilas = new Map(); // Guardar datos originales
+        if (tipo === 'medidor_comentario') {
+            campoBusqueda = 'CuentaContrato';
+            valorBusqueda = normalizarValor(fila[0]);
+            datosActualizar = {
+                Medidor: normalizarValor(fila[1]),
+                ComentarioGeneral: String(fila[2] || '').trim()
+            };
+        } else if (tipo === 'nombre_cuenta') {
+            campoBusqueda = 'Medidor';
+            valorBusqueda = normalizarValor(fila[1]);
+            datosActualizar = {
+                CuentaContrato: normalizarValor(fila[0]),
+                NombreCliente: String(fila[2] || '').trim()
+            };
+        } else if (tipo === 'grafica') {
+            campoBusqueda = 'CuentaContrato';
+            valorBusqueda = normalizarValor(fila[0]);
+            datosActualizar = {
+                Grafica: String(fila[1] || '').trim()
+            };
+        }
         
-        batch.forEach(fila => {
-            let campoBusqueda, valorBusqueda, datosActualizar;
-            
-            if (tipo === 'medidor_comentario') {
-                campoBusqueda = 'CuentaContrato';
-                valorBusqueda = normalizarValor(fila[0]);
-                datosActualizar = {
-                    Medidor: normalizarValor(fila[1]),
-                    ComentarioGeneral: String(fila[2] || '').trim()
-                };
-            } else if (tipo === 'nombre_cuenta') {
-                campoBusqueda = 'Medidor';
-                valorBusqueda = normalizarValor(fila[1]);
-                datosActualizar = {
-                    CuentaContrato: normalizarValor(fila[0]),
-                    NombreCliente: String(fila[2] || '').trim()
-                };
-            } else if (tipo === 'grafica') {
-                campoBusqueda = 'CuentaContrato';
-                valorBusqueda = normalizarValor(fila[0]);
-                datosActualizar = {
-                    Grafica: String(fila[1] || '').trim()
-                };
-            }
-            
-            valoresBatch.push(valorBusqueda);
-            mapaFilas.set(valorBusqueda, { campoBusqueda, datosActualizar });
-        });
+        // Detectar duplicados
+        if (valoresUnicos.has(valorBusqueda)) {
+            duplicadosEnArchivo.push({
+                valor: valorBusqueda,
+                fila: index + 2, // +2 porque Excel empieza en 1 y tiene header
+                campo: campoBusqueda
+            });
+        } else {
+            valoresUnicos.set(valorBusqueda, { campoBusqueda, datosActualizar });
+        }
         
-        // ✅ UNA SOLA QUERY PARA 500 REGISTROS
-        const campoBusqueda = mapaFilas.values().next().value.campoBusqueda;
+        // Guardar todas las filas para update
+        if (!mapaTodasFilas.has(valorBusqueda)) {
+            mapaTodasFilas.set(valorBusqueda, []);
+        }
+        mapaTodasFilas.get(valorBusqueda).push({ index, datosActualizar });
+    });
+    
+    console.log(`📊 Valores únicos: ${valoresUnicos.size} (de ${datos.length} filas)`);
+    if (duplicadosEnArchivo.length > 0) {
+        console.log(`⚠️ Duplicados en archivo: ${duplicadosEnArchivo.length}`);
+    }
+    
+    // ✅ PASO 2: Buscar solo valores únicos
+    const valoresUnicosArray = Array.from(valoresUnicos.keys());
+    
+    for (let i = 0; i < valoresUnicosArray.length; i += BATCH_SIZE) {
+        const batch = valoresUnicosArray.slice(i, i + BATCH_SIZE);
+        const campoBusqueda = valoresUnicos.values().next().value.campoBusqueda;
         
         const { data, error } = await supabaseClient
             .from('consultas_servicios')
             .select(`id, ${campoBusqueda}`)
-            .in(campoBusqueda, valoresBatch);
+            .in(campoBusqueda, batch);
         
         if (error) {
             console.error(`Error en batch ${i}:`, error.message);
-            // Marcar todos como no encontrados
-            valoresBatch.forEach(val => {
+            batch.forEach(val => {
                 noEncontrados.push({ busqueda: val, campo: campoBusqueda });
             });
             continue;
         }
         
-        // Procesar resultados del batch
+        // Procesar resultados
         const encontradosSet = new Set();
         
         if (data && data.length > 0) {
             data.forEach(registro => {
                 const valorEncontrado = String(registro[campoBusqueda]).trim();
-                const datosFila = mapaFilas.get(valorEncontrado);
+                const datosFila = valoresUnicos.get(valorEncontrado);
                 
                 if (datosFila) {
+                    // ✅ Agregar UNA SOLA VEZ (aunque haya duplicados en el archivo)
                     encontrados.push({
                         id: registro.id,
                         busqueda: valorEncontrado,
@@ -3815,7 +3835,7 @@ async function buscarCoincidencias(datos, tipo) {
         }
         
         // Los que no se encontraron
-        valoresBatch.forEach(val => {
+        batch.forEach(val => {
             if (!encontradosSet.has(val)) {
                 noEncontrados.push({
                     busqueda: val,
@@ -3824,16 +3844,26 @@ async function buscarCoincidencias(datos, tipo) {
             }
         });
         
-        // Actualizar progreso cada 5,000 registros
+        // Progreso cada 5,000
         if ((i + BATCH_SIZE) % 5000 === 0) {
-            console.log(`✅ Procesados ${i + BATCH_SIZE} / ${datos.length}`);
+            console.log(`✅ Procesados ${i + BATCH_SIZE} / ${valoresUnicosArray.length} valores únicos`);
         }
     }
     
     console.log(`✅ Búsqueda completa: ${encontrados.length} encontrados, ${noEncontrados.length} no encontrados`);
     
-    return { encontrados, noEncontrados, tipo };
+    // ✅ Retornar info de duplicados
+    return { 
+        encontrados, 
+        noEncontrados, 
+        tipo,
+        duplicados: duplicadosEnArchivo.length,
+        totalFilas: datos.length,
+        valoresUnicos: valoresUnicosArray.length
+    };
 }
+
+
 
 	// ========================================
 // 👁️ MOSTRAR PREVIEW DE ACTUALIZACIÓN
@@ -3848,15 +3878,17 @@ function mostrarPreviewActualizacion(resultado, tipo) {
     else if (tipo === 'grafica') nombreTipo = 'Gráfica';
     
     let html = `
-        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
-            <div class="result-header">⚠️ Confirmación de Actualización</div>
-            
-            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <strong style="font-size: 18px; color: #2d3748;">📊 Resumen:</strong><br><br>
-                <div style="font-size: 16px; line-height: 2;">
-                    • Tipo: <strong>${nombreTipo}</strong><br>
-                    • Total de registros en archivo: <strong>${encontrados.length + noEncontrados.length}</strong><br>
-                    • ✅ Registros encontrados (se actualizarán): <strong style="color: #2e7d32;">${encontrados.length}</strong><br>
+    <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+        <div class="result-header">⚠️ Confirmación de Actualización</div>
+        
+        <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <strong style="font-size: 18px; color: #2d3748;">📊 Resumen:</strong><br><br>
+            <div style="font-size: 16px; line-height: 2;">
+                • Tipo: <strong>${nombreTipo}</strong><br>
+                • Total de filas en archivo: <strong>${resultado.totalFilas || (encontrados.length + noEncontrados.length)}</strong><br>
+                ${resultado.duplicados > 0 ? `• ⚠️ Duplicados en archivo: <strong style="color: #ff9800;">${resultado.duplicados}</strong><br>` : ''}
+                • Valores únicos: <strong>${resultado.valoresUnicos || (encontrados.length + noEncontrados.length)}</strong><br>
+                • ✅ Registros encontrados (se actualizarán): <strong style="color: #2e7d32;">${encontrados.length}</strong><br>
                     • ❌ Registros no encontrados (se ignorarán): <strong style="color: #d32f2f;">${noEncontrados.length}</strong>
                 </div>
             </div>
