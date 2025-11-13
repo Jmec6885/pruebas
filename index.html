@@ -3946,95 +3946,119 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
             <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <h3 style="color: #1565c0; margin: 20px 0;">⚡ Actualización Rápida (SQL directo)</h3>
-            <p style="color: #666; font-size: 18px;" id="progresoActualizacion">Preparando datos...</p>
+            <h3 style="color: #1565c0; margin: 20px 0;">Actualizando registros...</h3>
+            <p style="color: #666; font-size: 18px;" id="progresoActualizacion">0 / ${encontrados.length}</p>
+            <p style="color: #999; font-size: 14px;" id="velocidadActualizacion">Iniciando...</p>
         </div>
     `;
     
-    const BATCH_SIZE = 10000; // ✅ Ahora soporta 10k sin timeout
-    let exitosos = 0;
-    let fallidos = 0;
+    const exitosos = [];
+    const fallidos = [];
+    const BATCH_SIZE = 200; // ✅ Reducido a 200 (óptimo para evitar timeout)
+    const PARALLEL_BATCHES = 5; // ✅ 5 batches en paralelo = 1,000 updates simultáneos
     
     const tiempoInicio = Date.now();
     
-    // Determinar función RPC según tipo
-    let rpcFunction;
-    if (tipo === 'grafica') {
-        rpcFunction = 'update_graficas_batch';
-    } else if (tipo === 'medidor_comentario') {
-        rpcFunction = 'update_medidor_comentario_batch';
-    } else if (tipo === 'nombre_cuenta') {
-        rpcFunction = 'update_nombre_cuenta_batch';
-    }
-    
-    // Procesar en batches
-    for (let i = 0; i < encontrados.length; i += BATCH_SIZE) {
-        const batch = encontrados.slice(i, i + BATCH_SIZE);
+    // Procesar en grupos paralelos
+    for (let i = 0; i < encontrados.length; i += (BATCH_SIZE * PARALLEL_BATCHES)) {
+        const superBatch = [];
         
-        // Preparar payload para RPC
-        const updates = batch.map(item => {
-            if (tipo === 'grafica') {
-                return {
-                    cuenta: item.busqueda,
-                    grafica: item.datos.Grafica
-                };
-            } else if (tipo === 'medidor_comentario') {
-                return {
-                    cuenta: item.busqueda,
-                    medidor: item.datos.Medidor,
-                    comentario: item.datos.ComentarioGeneral
-                };
-            } else if (tipo === 'nombre_cuenta') {
-                return {
-                    medidor: item.busqueda,
-                    cuenta: item.datos.CuentaContrato,
-                    nombre: item.datos.NombreCliente
-                };
+        // Crear 5 batches de 200
+        for (let j = 0; j < PARALLEL_BATCHES; j++) {
+            const startIdx = i + (j * BATCH_SIZE);
+            if (startIdx < encontrados.length) {
+                superBatch.push(encontrados.slice(startIdx, startIdx + BATCH_SIZE));
             }
-        });
-        
-        try {
-            // ✅ LLAMADA RPC (actualiza 5,000 en ~10 segundos)
-            const { data, error } = await supabaseClient
-                .rpc(rpcFunction, { updates });
-            
-            if (error) {
-    console.error(`Error en batch ${i}:`, error);
-    fallidos += batch.length;
-} else {
-    exitosos += data.updated;
-    fallidos += data.total - data.updated;
-}        } catch (err) {
-            console.error(`Error crítico en batch ${i}:`, err);
-            fallidos += batch.length;
         }
         
+        // Ejecutar los 5 batches en paralelo
+        const batchPromises = superBatch.map(batch => 
+            procesarBatch(batch).catch(err => {
+                console.error('Error en batch:', err);
+                return { exitosos: [], fallidos: batch.map(b => ({ busqueda: b.busqueda, error: err.message })) };
+            })
+        );
+        
+        const resultados = await Promise.all(batchPromises);
+        
+        // Consolidar resultados
+        resultados.forEach(res => {
+            exitosos.push(...res.exitosos);
+            fallidos.push(...res.fallidos);
+        });
+        
         // Actualizar progreso
-        const progreso = Math.min(i + BATCH_SIZE, encontrados.length);
+        const progreso = Math.min(i + (BATCH_SIZE * PARALLEL_BATCHES), encontrados.length);
         const tiempoTranscurrido = (Date.now() - tiempoInicio) / 1000;
         const velocidad = Math.round(progreso / tiempoTranscurrido);
         const tiempoRestante = Math.round((encontrados.length - progreso) / velocidad);
         
         document.getElementById('progresoActualizacion').textContent = 
-            `${progreso} / ${encontrados.length} | ${velocidad} reg/seg | ~${tiempoRestante}s restantes`;
+            `${progreso} / ${encontrados.length}`;
+        document.getElementById('velocidadActualizacion').textContent = 
+            `Velocidad: ${velocidad} reg/seg | Tiempo restante: ~${Math.max(0, tiempoRestante)}s`;
     }
     
-    // Mostrar resultado
+    // Función auxiliar para procesar cada batch
+    async function procesarBatch(batch) {
+        const exitososBatch = [];
+        const fallidosBatch = [];
+        
+        const promises = batch.map(item => 
+            supabaseClient
+                .from('consultas_servicios')
+                .update(item.datos)
+                .eq('id', item.id)
+                .then(({ error }) => {
+                    if (error) {
+                        return { success: false, item, error: error.message };
+                    }
+                    return { success: true, item };
+                })
+                .catch(err => {
+                    return { success: false, item, error: err.message };
+                })
+        );
+        
+        const resultados = await Promise.all(promises);
+        
+        resultados.forEach(res => {
+            if (res.success) {
+                exitososBatch.push(res.item.busqueda);
+            } else {
+                fallidosBatch.push({ 
+                    busqueda: res.item.busqueda, 
+                    error: res.error 
+                });
+            }
+        });
+        
+        return { exitosos: exitososBatch, fallidos: fallidosBatch };
+    }
+    
+    // Mostrar resultado final
     const tiempoTotal = Math.round((Date.now() - tiempoInicio) / 1000);
     
     resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <div class="result-header">✅ Actualización Completada</div>
+        <div class="result-card" style="background: ${fallidos.length === 0 ? '#e8f5e9' : '#fff3cd'}; border: 2px solid ${fallidos.length === 0 ? '#4caf50' : '#ffc107'};">
+            <div class="result-header">${fallidos.length === 0 ? '✅' : '⚠️'} Actualización Completada</div>
             
             <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
                 <strong style="font-size: 18px; color: #2d3748;">📊 Resultado Final:</strong><br><br>
                 <div style="font-size: 16px; line-height: 2;">
-                    • ✅ Actualizados correctamente: <strong style="color: #2e7d32;">${exitosos}</strong><br>
-                    • ❌ Con errores: <strong style="color: #d32f2f;">${fallidos}</strong><br>
-                    • ⏱️ Tiempo total: <strong>${tiempoTotal} segundos (${Math.round(tiempoTotal/60)} min)</strong><br>
-                    • ⚡ Velocidad promedio: <strong>${Math.round(exitosos/tiempoTotal)} reg/seg</strong>
+                    • Tipo de actualización: <strong>${tipo}</strong><br>
+                    • ✅ Registros actualizados: <strong style="color: #2e7d32;">${exitosos.length}</strong><br>
+                    • ❌ Registros con errores: <strong style="color: #d32f2f;">${fallidos.length}</strong><br>
+                    • ⏱️ Tiempo total: <strong>${tiempoTotal}s (${Math.round(tiempoTotal/60)} min)</strong><br>
+                    • ⚡ Velocidad promedio: <strong>${Math.round(exitosos.length/tiempoTotal)} reg/seg</strong>
                 </div>
             </div>
+            
+            ${fallidos.length > 0 ? `
+            <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin: 20px 0; max-height: 200px; overflow-y: auto;">
+                <strong style="color: #c62828;">❌ Primeros errores (${Math.min(10, fallidos.length)} de ${fallidos.length}):</strong><br><br>
+                ${fallidos.slice(0, 10).map(f => `• ${f.busqueda}: ${f.error}`).join('<br>')}
+            </div>` : ''}
             
             <div style="text-align: center; margin-top: 25px;">
                 <button class="btn" onclick="mostrarActualizacionMasiva()">
@@ -4044,6 +4068,7 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
         </div>
     `;
 }
+
 
 // ========================================
 // 📊 MOSTRAR RESULTADO FINAL
