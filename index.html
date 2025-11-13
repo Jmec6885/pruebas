@@ -3954,8 +3954,8 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
     
     const exitosos = [];
     const fallidos = [];
-    const BATCH_SIZE = 200; // ✅ Reducido a 200 (óptimo para evitar timeout)
-    const PARALLEL_BATCHES = 5; // ✅ 5 batches en paralelo = 1,000 updates simultáneos
+    const BATCH_SIZE = 250; // ✅ Reducido a 250 (óptimo para evitar timeout)
+    const PARALLEL_BATCHES = 10; // ✅ 5 batches en paralelo = 2500 updates simultáneos
     
     const tiempoInicio = Date.now();
     
@@ -7543,24 +7543,37 @@ if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes'
 // 🔍 VERIFICAR COORDENADA REAL EXISTENTE
 // ========================================
 async function verificarCoordenadaReal(cuentaContrato, medidor, index) {
-    const { data } = await supabaseClient
-        .from('coordenadas_reales')
-        .select('CoordenadasReales')
-        .eq('CuentaContrato', cuentaContrato)
-        .eq('Medidor', medidor)
-        .single();
-    
-    if (data && data.CoordenadasReales) {
-        const displayDiv = document.getElementById(`coordRealDisplay_${index}`);
-        if (displayDiv) {
-            displayDiv.innerHTML = `
-                <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; border-left: 4px solid #2196f3; margin-top: 10px;">
-                    <strong style="color: #1565c0;">📍 Coordenada Real:</strong><br>
-                    <a href="https://www.google.com/maps?q=${data.CoordenadasReales}" target="_blank" style="color: #1976d2; text-decoration: underline;">${data.CoordenadasReales}</a>
-                </div>`;
+    try {
+        const { data, error } = await supabaseClient
+            .from('coordenadas_reales')
+            .select('CoordenadasReales')
+            .eq('CuentaContrato', cuentaContrato)
+            .eq('Medidor', medidor)
+            .maybeSingle(); // ✅ CAMBIO CLAVE: usar maybeSingle() en lugar de single()
+        
+        // Si hay error que NO sea "not found", loguearlo
+        if (error && error.code !== 'PGRST116') {
+            console.error('Error consultando coordenada real:', error);
+            return;
         }
+        
+        // Si hay datos, mostrarlos
+        if (data && data.CoordenadasReales) {
+            const displayDiv = document.getElementById(`coordRealDisplay_${index}`);
+            if (displayDiv) {
+                displayDiv.innerHTML = `
+                    <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; border-left: 4px solid #2196f3; margin-top: 10px;">
+                        <strong style="color: #1565c0;">📍 Coordenada Real:</strong><br>
+                        <a href="https://www.google.com/maps?q=${data.CoordenadasReales}" target="_blank" style="color: #1976d2; text-decoration: underline;">${data.CoordenadasReales}</a>
+                    </div>`;
+            }
+        }
+    } catch (err) {
+        // Capturar cualquier otro error silenciosamente
+        console.log('Coordenada real no disponible para este registro');
     }
 }
+
 
 // ===================================================================
 // 🎨 FUNCIÓN AUXILIAR: FORMATEAR COMENTARIOS
