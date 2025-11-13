@@ -3615,8 +3615,18 @@ async function procesarActualizacionMasiva() {
             return;
         }
         
-        // Buscar coincidencias en BD
-        const resultado = await buscarCoincidencias(datos, tipo);
+        
+        // Mostrar progreso de búsqueda
+resultsContainer.innerHTML = `
+    <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
+        <div class="loading" style="display: block; margin: 20px auto;"></div>
+        <h3 style="color: #1565c0; margin: 20px 0;">Buscando coincidencias en base de datos...</h3>
+        <p style="color: #666; font-size: 16px;">Esto puede tomar 5-10 minutos para 200k registros</p>
+        <p style="color: #666; font-size: 14px; margin-top: 10px;">Por favor no cierres esta ventana</p>
+    </div>
+`;
+
+const resultado = await buscarCoincidencias(datos, tipo);
         
         // Mostrar preview de actualización
         mostrarPreviewActualizacion(resultado, tipo);
@@ -3716,74 +3726,114 @@ function validarEstructuraArchivo(datos, tipo) {
 // 🔍 BUSCAR COINCIDENCIAS EN BD
 // ========================================
 async function buscarCoincidencias(datos, tipo) {
+    console.log(`🔍 Buscando ${datos.length} registros...`);
+    
     const encontrados = [];
     const noEncontrados = [];
+    const BATCH_SIZE = 500;
     
-    for (const fila of datos) {
-        let campoBusqueda, valorBusqueda, datosActualizar;
+    // Normalizar valor
+    const normalizarValor = (val) => {
+        let str = String(val).trim();
+        if (/[eE]\+/.test(str)) {
+            str = parseFloat(str).toFixed(0);
+        }
+        return str;
+    };
+    
+    // Procesar por lotes
+    for (let i = 0; i < datos.length; i += BATCH_SIZE) {
+        const batch = datos.slice(i, i + BATCH_SIZE);
         
-        // Normalizar valor
-        const normalizarValor = (val) => {
-            let str = String(val).trim();
-            if (/[eE]\+/.test(str)) {
-                str = parseFloat(str).toFixed(0);
+        // Preparar valores del batch
+        const valoresBatch = [];
+        const mapaFilas = new Map(); // Guardar datos originales
+        
+        batch.forEach(fila => {
+            let campoBusqueda, valorBusqueda, datosActualizar;
+            
+            if (tipo === 'medidor_comentario') {
+                campoBusqueda = 'CuentaContrato';
+                valorBusqueda = normalizarValor(fila[0]);
+                datosActualizar = {
+                    Medidor: normalizarValor(fila[1]),
+                    ComentarioGeneral: String(fila[2] || '').trim()
+                };
+            } else if (tipo === 'nombre_cuenta') {
+                campoBusqueda = 'Medidor';
+                valorBusqueda = normalizarValor(fila[1]);
+                datosActualizar = {
+                    CuentaContrato: normalizarValor(fila[0]),
+                    NombreCliente: String(fila[2] || '').trim()
+                };
+            } else if (tipo === 'grafica') {
+                campoBusqueda = 'CuentaContrato';
+                valorBusqueda = normalizarValor(fila[0]);
+                datosActualizar = {
+                    Grafica: String(fila[1] || '').trim()
+                };
             }
-            return str;
-        };
+            
+            valoresBatch.push(valorBusqueda);
+            mapaFilas.set(valorBusqueda, { campoBusqueda, datosActualizar });
+        });
         
-        if (tipo === 'medidor_comentario') {
-            campoBusqueda = 'CuentaContrato';
-            valorBusqueda = normalizarValor(fila[0]);
-            datosActualizar = {
-                Medidor: normalizarValor(fila[1]),
-                ComentarioGeneral: String(fila[2]).trim()
-            };
-        } else if (tipo === 'nombre_cuenta') {
-            campoBusqueda = 'Medidor';
-            valorBusqueda = normalizarValor(fila[1]);
-            datosActualizar = {
-                CuentaContrato: normalizarValor(fila[0]),
-                NombreCliente: String(fila[2]).trim()
-            };
-        } else if (tipo === 'grafica') {
-            campoBusqueda = 'CuentaContrato';
-            valorBusqueda = normalizarValor(fila[0]);
-            datosActualizar = {
-                Grafica: String(fila[1]).trim()
-            };
-        }
+        // ✅ UNA SOLA QUERY PARA 500 REGISTROS
+        const campoBusqueda = mapaFilas.values().next().value.campoBusqueda;
         
-        // ✅ CORRECCIÓN: Búsqueda flexible con tipos mixtos
-        let query = supabaseClient
+        const { data, error } = await supabaseClient
             .from('consultas_servicios')
-            .select('id');
+            .select(`id, ${campoBusqueda}`)
+            .in(campoBusqueda, valoresBatch);
         
-        // Para campos numéricos, intentar como string Y como número
-        if (campoBusqueda === 'CuentaContrato' || campoBusqueda === 'Medidor') {
-            query = query.or(`${campoBusqueda}.eq."${valorBusqueda}",${campoBusqueda}.eq.${valorBusqueda}`);
-        } else {
-            query = query.eq(campoBusqueda, valorBusqueda);
+        if (error) {
+            console.error(`Error en batch ${i}:`, error.message);
+            // Marcar todos como no encontrados
+            valoresBatch.forEach(val => {
+                noEncontrados.push({ busqueda: val, campo: campoBusqueda });
+            });
+            continue;
         }
         
-        const { data, error } = await query.limit(1).maybeSingle();
+        // Procesar resultados del batch
+        const encontradosSet = new Set();
         
-        if (data && !error) {
-            encontrados.push({
-                id: data.id,
-                busqueda: valorBusqueda,
-                datos: datosActualizar
+        if (data && data.length > 0) {
+            data.forEach(registro => {
+                const valorEncontrado = String(registro[campoBusqueda]).trim();
+                const datosFila = mapaFilas.get(valorEncontrado);
+                
+                if (datosFila) {
+                    encontrados.push({
+                        id: registro.id,
+                        busqueda: valorEncontrado,
+                        datos: datosFila.datosActualizar
+                    });
+                    encontradosSet.add(valorEncontrado);
+                }
             });
-        } else {
-            noEncontrados.push({
-                busqueda: valorBusqueda,
-                campo: campoBusqueda
-            });
+        }
+        
+        // Los que no se encontraron
+        valoresBatch.forEach(val => {
+            if (!encontradosSet.has(val)) {
+                noEncontrados.push({
+                    busqueda: val,
+                    campo: campoBusqueda
+                });
+            }
+        });
+        
+        // Actualizar progreso cada 5,000 registros
+        if ((i + BATCH_SIZE) % 5000 === 0) {
+            console.log(`✅ Procesados ${i + BATCH_SIZE} / ${datos.length}`);
         }
     }
     
+    console.log(`✅ Búsqueda completa: ${encontrados.length} encontrados, ${noEncontrados.length} no encontrados`);
+    
     return { encontrados, noEncontrados, tipo };
 }
-
 
 	// ========================================
 // 👁️ MOSTRAR PREVIEW DE ACTUALIZACIÓN
