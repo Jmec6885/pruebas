@@ -3951,7 +3951,7 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
         </div>
     `;
     
-    const BATCH_SIZE = 5000; // ✅ 5,000 registros por llamada
+    const BATCH_SIZE = 10000; // ✅ Ahora soporta 10k sin timeout
     let exitosos = 0;
     let fallidos = 0;
     
@@ -3999,13 +3999,12 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
                 .rpc(rpcFunction, { updates });
             
             if (error) {
-                console.error(`Error en batch ${i}:`, error);
-                fallidos += batch.length;
-            } else {
-                exitosos += data[0].updated_count;
-                fallidos += data[0].error_count;
-            }
-        } catch (err) {
+    console.error(`Error en batch ${i}:`, error);
+    fallidos += batch.length;
+} else {
+    exitosos += data.updated;
+    fallidos += data.total - data.updated;
+}        } catch (err) {
             console.error(`Error crítico en batch ${i}:`, err);
             fallidos += batch.length;
         }
