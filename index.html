@@ -3946,70 +3946,105 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; text-align: center;">
             <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <h3 style="color: #1565c0; margin: 20px 0;">Actualizando registros...</h3>
-            <p style="color: #666; font-size: 18px;" id="progresoActualizacion">0 / ${encontrados.length}</p>
-            <p style="color: #999; font-size: 14px;" id="velocidadActualizacion">Calculando velocidad...</p>
+            <h3 style="color: #1565c0; margin: 20px 0;">⚡ Actualización Rápida (SQL directo)</h3>
+            <p style="color: #666; font-size: 18px;" id="progresoActualizacion">Preparando datos...</p>
         </div>
     `;
     
-    const exitosos = [];
-    const fallidos = [];
-    const BATCH_SIZE = 100; // ✅ Reducido a 100 (antes 500)
+    const BATCH_SIZE = 5000; // ✅ 5,000 registros por llamada
+    let exitosos = 0;
+    let fallidos = 0;
     
     const tiempoInicio = Date.now();
     
+    // Determinar función RPC según tipo
+    let rpcFunction;
+    if (tipo === 'grafica') {
+        rpcFunction = 'update_graficas_batch';
+    } else if (tipo === 'medidor_comentario') {
+        rpcFunction = 'update_medidor_comentario_batch';
+    } else if (tipo === 'nombre_cuenta') {
+        rpcFunction = 'update_nombre_cuenta_batch';
+    }
+    
+    // Procesar en batches
     for (let i = 0; i < encontrados.length; i += BATCH_SIZE) {
         const batch = encontrados.slice(i, i + BATCH_SIZE);
         
-        // ✅ CAMBIO CRÍTICO: Update individual por cada registro del batch
-        const promises = batch.map(item => 
-            supabaseClient
-                .from('consultas_servicios')
-                .update(item.datos)  // ← Solo los datos, NO el id
-                .eq('id', item.id)
-                .then(({ error }) => {
-                    if (error) {
-                        return { success: false, item, error: error.message };
-                    }
-                    return { success: true, item };
-                })
-                .catch(err => {
-                    return { success: false, item, error: err.message };
-                })
-        );
-        
-        // Ejecutar batch en paralelo
-        const resultados = await Promise.all(promises);
-        
-        // Clasificar resultados
-        resultados.forEach(res => {
-            if (res.success) {
-                exitosos.push(res.item.busqueda);
-            } else {
-                fallidos.push({ 
-                    busqueda: res.item.busqueda, 
-                    error: res.error 
-                });
+        // Preparar payload para RPC
+        const updates = batch.map(item => {
+            if (tipo === 'grafica') {
+                return {
+                    cuenta: item.busqueda,
+                    grafica: item.datos.Grafica
+                };
+            } else if (tipo === 'medidor_comentario') {
+                return {
+                    cuenta: item.busqueda,
+                    medidor: item.datos.Medidor,
+                    comentario: item.datos.ComentarioGeneral
+                };
+            } else if (tipo === 'nombre_cuenta') {
+                return {
+                    medidor: item.busqueda,
+                    cuenta: item.datos.CuentaContrato,
+                    nombre: item.datos.NombreCliente
+                };
             }
         });
         
+        try {
+            // ✅ LLAMADA RPC (actualiza 5,000 en ~10 segundos)
+            const { data, error } = await supabaseClient
+                .rpc(rpcFunction, { updates });
+            
+            if (error) {
+                console.error(`Error en batch ${i}:`, error);
+                fallidos += batch.length;
+            } else {
+                exitosos += data[0].updated_count;
+                fallidos += data[0].error_count;
+            }
+        } catch (err) {
+            console.error(`Error crítico en batch ${i}:`, err);
+            fallidos += batch.length;
+        }
+        
         // Actualizar progreso
         const progreso = Math.min(i + BATCH_SIZE, encontrados.length);
-        document.getElementById('progresoActualizacion').textContent = 
-            `${progreso} / ${encontrados.length}`;
-        
-        // Calcular velocidad
         const tiempoTranscurrido = (Date.now() - tiempoInicio) / 1000;
         const velocidad = Math.round(progreso / tiempoTranscurrido);
         const tiempoRestante = Math.round((encontrados.length - progreso) / velocidad);
         
-        document.getElementById('velocidadActualizacion').textContent = 
-            `Velocidad: ${velocidad} reg/seg | Tiempo restante: ~${tiempoRestante}s`;
+        document.getElementById('progresoActualizacion').textContent = 
+            `${progreso} / ${encontrados.length} | ${velocidad} reg/seg | ~${tiempoRestante}s restantes`;
     }
     
-    mostrarResultadoActualizacion(exitosos, fallidos, tipo);
+    // Mostrar resultado
+    const tiempoTotal = Math.round((Date.now() - tiempoInicio) / 1000);
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">✅ Actualización Completada</div>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="font-size: 18px; color: #2d3748;">📊 Resultado Final:</strong><br><br>
+                <div style="font-size: 16px; line-height: 2;">
+                    • ✅ Actualizados correctamente: <strong style="color: #2e7d32;">${exitosos}</strong><br>
+                    • ❌ Con errores: <strong style="color: #d32f2f;">${fallidos}</strong><br>
+                    • ⏱️ Tiempo total: <strong>${tiempoTotal} segundos (${Math.round(tiempoTotal/60)} min)</strong><br>
+                    • ⚡ Velocidad promedio: <strong>${Math.round(exitosos/tiempoTotal)} reg/seg</strong>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 25px;">
+                <button class="btn" onclick="mostrarActualizacionMasiva()">
+                    🔄 Nueva Actualización
+                </button>
+            </div>
+        </div>
+    `;
 }
-
 
 // ========================================
 // 📊 MOSTRAR RESULTADO FINAL
