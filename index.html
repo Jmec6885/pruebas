@@ -3948,63 +3948,69 @@ async function ejecutarActualizacionMasiva(encontrados, tipo) {
             <div class="loading" style="display: block; margin: 20px auto;"></div>
             <h3 style="color: #1565c0; margin: 20px 0;">Actualizando registros...</h3>
             <p style="color: #666; font-size: 18px;" id="progresoActualizacion">0 / ${encontrados.length}</p>
+            <p style="color: #999; font-size: 14px;" id="velocidadActualizacion">Calculando velocidad...</p>
         </div>
     `;
     
     const exitosos = [];
     const fallidos = [];
+    const BATCH_SIZE = 100; // ✅ Reducido a 100 (antes 500)
     
-    // ✅ BATCH UPDATE: Grupos de 500 registros
-    const BATCH_SIZE = 500;
+    const tiempoInicio = Date.now();
     
     for (let i = 0; i < encontrados.length; i += BATCH_SIZE) {
         const batch = encontrados.slice(i, i + BATCH_SIZE);
         
-        // Preparar datos del batch
-        const updates = batch.map(item => ({
-            id: item.id,
-            ...item.datos
-        }));
-        
-        try {
-            // Actualización masiva con upsert
-            const { error } = await supabaseClient
+        // ✅ CAMBIO CRÍTICO: Update individual por cada registro del batch
+        const promises = batch.map(item => 
+            supabaseClient
                 .from('consultas_servicios')
-                .upsert(updates, { onConflict: 'id' });
-            
-            if (error) {
-                // Si el batch falla, intentar uno por uno
-                for (const item of batch) {
-                    try {
-                        const { error: singleError } = await supabaseClient
-                            .from('consultas_servicios')
-                            .update(item.datos)
-                            .eq('id', item.id);
-                        
-                        if (singleError) {
-                            fallidos.push({ busqueda: item.busqueda, error: singleError.message });
-                        } else {
-                            exitosos.push(item.busqueda);
-                        }
-                    } catch (err) {
-                        fallidos.push({ busqueda: item.busqueda, error: err.message });
+                .update(item.datos)  // ← Solo los datos, NO el id
+                .eq('id', item.id)
+                .then(({ error }) => {
+                    if (error) {
+                        return { success: false, item, error: error.message };
                     }
-                }
+                    return { success: true, item };
+                })
+                .catch(err => {
+                    return { success: false, item, error: err.message };
+                })
+        );
+        
+        // Ejecutar batch en paralelo
+        const resultados = await Promise.all(promises);
+        
+        // Clasificar resultados
+        resultados.forEach(res => {
+            if (res.success) {
+                exitosos.push(res.item.busqueda);
             } else {
-                // Batch completo exitoso
-                exitosos.push(...batch.map(b => b.busqueda));
+                fallidos.push({ 
+                    busqueda: res.item.busqueda, 
+                    error: res.error 
+                });
             }
-        } catch (err) {
-            fallidos.push(...batch.map(b => ({ busqueda: b.busqueda, error: err.message })));
-        }
+        });
         
         // Actualizar progreso
+        const progreso = Math.min(i + BATCH_SIZE, encontrados.length);
         document.getElementById('progresoActualizacion').textContent = 
-            `${Math.min(i + BATCH_SIZE, encontrados.length)} / ${encontrados.length}`;
+            `${progreso} / ${encontrados.length}`;
+        
+        // Calcular velocidad
+        const tiempoTranscurrido = (Date.now() - tiempoInicio) / 1000;
+        const velocidad = Math.round(progreso / tiempoTranscurrido);
+        const tiempoRestante = Math.round((encontrados.length - progreso) / velocidad);
+        
+        document.getElementById('velocidadActualizacion').textContent = 
+            `Velocidad: ${velocidad} reg/seg | Tiempo restante: ~${tiempoRestante}s`;
     }
     
     mostrarResultadoActualizacion(exitosos, fallidos, tipo);
 }
+
+
 // ========================================
 // 📊 MOSTRAR RESULTADO FINAL
 // ========================================
