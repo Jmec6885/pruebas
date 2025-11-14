@@ -707,26 +707,35 @@ async function cargarTipologias() {
         const batchSize = 5000; // Procesar de 5000 en 5000
         let hasMore = true;
         
-        while (hasMore && offset < 200000) { // Límite de seguridad
-            const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('Tipologia')
-                .not('Tipologia', 'is', null)
-                .range(offset, offset + batchSize - 1);
-            
-            if (error) throw error;
-            
-            // Agregar al Set (automáticamente elimina duplicados)
-            data.forEach(item => {
+        while (hasMore && offset < 200000) {
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('Tipologia')
+        .not('Tipologia', 'is', null)
+        .range(offset, offset + batchSize - 1);
+    
+    if (error) {
+        console.error('Error cargando batch:', error);
+        break; // ✅ Solo romper en error
+    }
+    
+    // Agregar al Set
+    if (data && data.length > 0) {
+        data.forEach(item => {
+            if (item.Tipologia) {
                 const tip = item.Tipologia.trim();
                 if (tip !== '') tipologiasSet.add(tip);
-            });
-            
-            hasMore = data.length === batchSize;
-            offset += batchSize;
-            
-            console.log(`📊 Procesados ${offset} registros - ${tipologiasSet.size} tipologías únicas`);
-        }
+            }
+        });
+    }
+    
+    // ✅ CORRECCIÓN CLAVE: Solo detener si no hay más datos
+    hasMore = (data && data.length === batchSize);
+    offset += batchSize;
+    
+    console.log(`📊 Procesados ${offset} registros - ${tipologiasSet.size} tipologías únicas`);
+}
+
         
         const tipologiasUnicas = Array.from(tipologiasSet).sort();
         tipologiasCache = tipologiasUnicas;
@@ -5559,12 +5568,12 @@ async function buscarYMostrarMapaUnidad() {
     try {
         // Buscar OS seleccionada
         const { data: osCentro, error: errorOS } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('OSATMO', osSeleccionada)
-            .eq('Unidad', unidadUsuario)
-            .eq('Estado_ATOMO', 'Registrada')
-            .single();
+    .from('OS Pendientes')
+    .select('*')
+    .eq('OSATMO', osIngresada)
+    .eq('Estado_ATOMO', 'Registrada') // ✅ Ya está bien, el error está en otro lado
+    .single();
+
         
         if (errorOS || !osCentro) {
             resultsContainer.innerHTML = `
@@ -5629,9 +5638,9 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         
         // 3. Buscar TODAS las OS Registradas
         const { data: todasOS, error } = await supabaseClient
-            .from('OS Pendientes')
-            .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordenadasgis, Comentario, Unidad')
-            .eq('Estado_ATOMO', 'Registrada');
+    .from('OS Pendientes')
+    .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordenadasgis, Comentario, Unidad')
+    .eq('Estado_ATOMO', 'Registrada');
         
         if (error) {
             resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar OS</div>';
@@ -5737,12 +5746,19 @@ function validarFiltrosOS(os, filtros) {
         cumpleRango = rangos.includes(rangoOS);
     }
     
-    // ✅ CORRECCIÓN: Validar tipología con normalización
-    if (tipologias.length > 0 && os.Tipologia) {
-        const tipologiaOS = os.Tipologia.trim();
-        cumpleTipologia = tipologias.includes(tipologiaOS);
-    }
+   
+    // ✅ CORRECCIÓN: Validar tipología con normalización y logging
+if (tipologias.length > 0 && os.Tipologia) {
+    const tipologiaOS = os.Tipologia.trim();
+    cumpleTipologia = tipologias.some(t => t.trim() === tipologiaOS);
     
+    // Debug temporal (eliminar después de verificar)
+    if (!cumpleTipologia) {
+        console.log(`⚠️ Tipología "${tipologiaOS}" no coincide con filtros`);
+    }
+}    
+
+
     return cumpleRango && cumpleTipologia;
 }
 
@@ -9097,5 +9113,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
-
