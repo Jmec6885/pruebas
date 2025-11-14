@@ -5011,7 +5011,7 @@ async function cargarInterfazMapaRutas() {
     try {
         // ✅ Paso 1: Cargar tipologías reales desde "OS Pendientes"
         const { data: osData, error: errorOS } = await supabaseClient
-            .from('"OS Pendientes"')
+            .from('os_pendientes')
             .select('Tipologia');
 
         if (errorOS) {
@@ -5042,7 +5042,7 @@ async function cargarInterfazMapaRutas() {
         if (currentUser.rol === 'Contratista' || currentUser.rol === 'Consulta') {
             const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
             const { data: os, error: errorOS } = await supabaseClient
-                .from('"OS Pendientes"')
+                .from('os_pendientes')
                 .select('OSATMO, Tipologia')
                 .eq('Unidad', unidadUsuario)
                 .eq('Estado_ATOMO', 'Registrada');
