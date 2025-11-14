@@ -675,6 +675,7 @@
     // --- 1. DEFINICIÓN DE VARIABLES GLOBALES (Usar solo 'let', una vez) ---
     let currentUser = null;
 let selectedTable = null;
+let tipologiasCache = null;
 let consultasData = [];
 
 // === CONFIGURACIÓN DE VISIBILIDAD ===
@@ -693,44 +694,56 @@ let tipologiasCache = null;
  * Solo hace la consulta una vez, luego usa el cache.
  */
 async function cargarTipologias() {
-    // Si ya está en cache, retornar directamente (no consulta BD)
+    // Si ya está en cache, retornar directamente
     if (tipologiasCache) {
         console.log('✅ Usando tipologías desde cache (' + tipologiasCache.length + ' items)');
         return tipologiasCache;
     }
     
-    console.log('🔄 Cargando tipologías desde BD por primera vez...');
+    console.log('🔄 Cargando tipologías únicas desde BD...');
     
     try {
-        // Consultar todas las tipologías únicas de OS Pendientes
-        const { data, error } = await supabaseClient
+        // Traer TODAS las tipologías (sin límite o con límite alto)
+        const { data, error, count } = await supabaseClient
             .from('OS Pendientes')
-            .select('Tipologia')
-            .not('Tipologia', 'is', null);
+            .select('Tipologia', { count: 'exact' })
+            .not('Tipologia', 'is', null)
+            .limit(50000); // Suficiente para cubrir tus 200k registros
         
         if (error) {
             console.error('❌ Error al cargar tipologías:', error);
             throw error;
         }
         
-        // Obtener valores únicos y ordenarlos alfabéticamente
-        const tipologiasUnicas = [...new Set(data.map(t => t.Tipologia.trim()))]
-            .filter(t => t !== '') // Eliminar vacíos
-            .sort();
+        console.log(`📊 Registros procesados: ${data.length} de ${count} totales`);
         
-        // Guardar en cache global
+        // ✅ DEDUPLICAR: Usar Set para obtener valores únicos
+        const tipologiasUnicas = [...new Set(
+            data
+                .map(item => item.Tipologia.trim()) // Limpiar espacios
+                .filter(t => t !== '') // Eliminar vacíos
+        )].sort(); // Ordenar alfabéticamente
+        
+        // Guardar en cache
         tipologiasCache = tipologiasUnicas;
         
-        console.log(`✅ ${tipologiasUnicas.length} tipologías cargadas y guardadas en cache`);
-        console.log('📋 Primeras 5 tipologías:', tipologiasUnicas.slice(0, 5));
+        console.log(`✅ ${tipologiasUnicas.length} tipologías ÚNICAS cargadas`);
+        console.log('📋 Lista completa:', tipologiasUnicas);
         
         return tipologiasUnicas;
         
     } catch (err) {
-        console.error('❌ Error crítico cargando tipologías:', err);
-        return []; // Retornar array vacío en caso de error
+        console.error('❌ Error crítico:', err);
+        return [];
     }
 }
+
+function limpiarCacheTipologias() {
+    console.log('🗑️ Limpiando cache de tipologías...');
+    tipologiasCache = null;
+}
+
+
 
 // ========================================
 // 🔄 FUNCIÓN PARA LIMPIAR CACHE (OPCIONAL)
