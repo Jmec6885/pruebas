@@ -5006,61 +5006,70 @@ async function cargarInterfazIPR() {
 async function cargarInterfazMapaRutas() {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
-    
     searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     resultsContainer.innerHTML = '';
-    
     try {
+        // ✅ Paso 1: Cargar tipologías reales desde "OS Pendientes"
+        const { data: osData, error: errorOS } = await supabaseClient
+            .from('"OS Pendientes"')
+            .select('Tipologia');
+
+        if (errorOS) {
+            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar tipologías</div>';
+            return;
+        }
+
+        const tipologiasDisponibles = [...new Set(
+            osData
+                .map(os => os.Tipologia)
+                .filter(t => t && typeof t === 'string')
+                .map(t => t.trim())
+                .filter(t => t !== '')
+        )].sort();
+
         // Cargar filtros actuales
         const { data: filtros, error: errorFiltros } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .single();
-        
         if (errorFiltros) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar filtros</div>';
             return;
         }
-        
+
         // Cargar OS asignadas si es Unidad
         let osAsignadas = [];
         if (currentUser.rol === 'Contratista' || currentUser.rol === 'Consulta') {
             const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
-            
             const { data: os, error: errorOS } = await supabaseClient
-                .from('OS Pendientes')
+                .from('"OS Pendientes"')
                 .select('OSATMO, Tipologia')
                 .eq('Unidad', unidadUsuario)
                 .eq('Estado_ATOMO', 'Registrada');
-            
             if (!errorOS && os) {
                 osAsignadas = os;
             }
         }
-        
+
         // Generar interfaz según rol
         if (currentUser.rol === 'Administrador') {
-            generarInterfazAdmin(filtros);
+            generarInterfazAdmin(filtros, tipologiasDisponibles);
         } else {
             generarInterfazUnidad(filtros, osAsignadas);
         }
-        
     } catch (err) {
         console.error('Error cargando Mapa de Rutas:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
 
+
 // ========================================
 // 👑 INTERFAZ PARA ADMINISTRADOR
 // ========================================
-function generarInterfazAdmin(filtros) {
+function generarInterfazAdmin(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
-    
     const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
-    
-    // Obtener tipologías únicas de la BD (lo haremos después)
-    const tipologiasDisponibles = ['Reconexión', 'Corte', 'Inspección', 'Lectura', 'Instalación'];
     
     const rangosSeleccionados = filtros.rangos || [];
     const tipologiasSeleccionadas = filtros.tipologias || [];
@@ -5143,6 +5152,9 @@ function generarInterfazAdmin(filtros) {
         </div>
     `;
 }
+
+
+
 
 // ========================================
 // 👷 INTERFAZ PARA UNIDADES
