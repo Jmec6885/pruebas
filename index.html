@@ -5527,7 +5527,7 @@ async function buscarYMostrarMapaAdmin() {
         }
         
         // Validar coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordenadasgis;
+        const coordenadas = osCentro.Coordenadasgis || osCentro.Coordenadasgis;
         if (!coordenadas || !coordenadas.includes(',')) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
@@ -5588,7 +5588,7 @@ async function buscarYMostrarMapaUnidad() {
         }
         
         // Validar coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordenadasgis;
+        const coordenadas = osCentro.Coordenadasgis || osCentro.Coordenadasgis;
         if (!coordenadas || !coordenadas.includes(',')) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
@@ -5633,7 +5633,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const radioKm = filtros.radio_km || 3;
         
         // 2. Extraer coordenadas del centro
-        const coordsCentro = osCentro.Coordenadas || osCentro.Coordenadasgis;
+        const coordsCentro = osCentro.Coordenadasgis || osCentro.Coordenadasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
         // 3. Buscar TODAS las OS Registradas
