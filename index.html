@@ -5713,10 +5713,11 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
         while (hasMore) {
             const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Unidad')
-                .eq('Estado_ATOMO', 'Registrada')
-                .range(offset, offset + batchSize - 1);
+    .from('OS Pendientes')
+    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad')
+    //                                      ↑ AGREGAR ESTE CAMPO
+    .eq('Estado_ATOMO', 'Registrada')
+    .range(offset, offset + batchSize - 1);
             
             if (error) {
                 console.error('Error cargando batch de OS:', error);
@@ -5880,6 +5881,29 @@ function validarFiltrosOS(os, filtros) {
         console.log('✅ Sin filtros - Aceptada');
         return true;
     }
+
+
+	// ✅ VALIDAR RANGO (si hay filtro)
+if (rangos.length > 0) {
+    // Verificar que tenga fecha
+    if (!os['Fecha Gen.']) {
+        console.log(`❌ OS ${os.OSATMO} - Sin campo "Fecha Gen."`);
+        return false;
+    }
+    
+    const dias = calcularDias(os['Fecha Gen.']);
+    const rangoOS = determinarRango(dias);
+    
+    console.log(`🔎 Rango OS: "${rangoOS}" (${dias} días) - Filtros:`, rangos);
+    
+    if (!rangos.includes(rangoOS)) {
+        console.log(`❌ OS ${os.OSATMO} - Rango "${rangoOS}" NO coincide`);
+        return false;
+    }
+    
+    console.log(`✅ OS ${os.OSATMO} - Rango "${rangoOS}" coincide`);
+}
+
     
     // ✅ VALIDAR TIPOLOGÍA (si hay filtro)
     if (tipologias.length > 0) {
@@ -9470,5 +9494,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
 
