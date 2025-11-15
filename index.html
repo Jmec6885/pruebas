@@ -5883,7 +5883,51 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                     <span>🔵 OS No Reguladas (filtradas)</span>
                 </div>
             </div>
+
+		// Contar por tipología
+const conteoPorTipologia = {};
+osEnRadio.forEach(os => {
+    const tip = os.Tipologia || 'Sin tipología';
+    conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
+});
+
+const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
+    .sort((a, b) => b[1] - a[1]);
+
+resultsContainer.innerHTML = `
+    <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+        <div class="result-header">
+            🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioKm} km)
+        </div>
+        
+        <!-- RESUMEN POR TIPOLOGÍA -->
+        <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <strong>📊 Totales por Tipología:</strong>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 10px;">
+                ${tipologiasOrdenadas.map(([tip, count]) => `
+                    <div style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3;">
+                        <strong style="color: #2196f3;">${count}</strong> - ${tip}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
             
+		<!-- BUSCADOR EN LISTADO -->
+<div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
+    <strong>🔍 Buscar OS en listado:</strong>
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
+               style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
+        <button onclick="buscarOSEnListado()" 
+                style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            🔍 Buscar
+        </button>
+    </div>
+</div>
+
+
+
             <!-- Mapa -->
             <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
             
@@ -9208,7 +9252,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+function buscarOSEnListado() {
+    const busqueda = document.getElementById('buscarEnListado').value.trim();
+    if (!busqueda) {
+        alert('Ingrese una OS');
+        return;
+    }
+    
+    const tabla = document.getElementById('tablaOSMapa');
+    const filas = tabla.querySelectorAll('tbody tr');
+    let encontrada = false;
+    
+    filas.forEach(fila => {
+        const textoOS = fila.cells[0].textContent;
+        if (textoOS.includes(busqueda)) {
+            fila.style.background = '#fff3cd';
+            fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            encontrada = true;
+            
+            setTimeout(() => { fila.style.background = ''; }, 3000);
+        }
+    });
+    
+    if (!encontrada) alert(`OS "${busqueda}" no encontrada en el listado`);
+}
+
 </script>
 </body>
 </html>
-
