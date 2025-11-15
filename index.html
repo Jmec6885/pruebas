@@ -704,50 +704,60 @@ async function cargarTipologias() {
     try {
         const tipologiasSet = new Set();
         let offset = 0;
-        const batchSize = 5000; // Procesar de 5000 en 5000
+        const batchSize = 1000; // ✅ Reducir tamaño de batch
         let hasMore = true;
+        let totalProcesados = 0;
         
-        while (hasMore && offset < 200000) {
-    const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('Tipologia')
-        .not('Tipologia', 'is', null)
-        .range(offset, offset + batchSize - 1);
-    
-    if (error) {
-        console.error('Error cargando batch:', error);
-        break; // ✅ Solo romper en error
-    }
-    
-    // Agregar al Set
-    if (data && data.length > 0) {
-        data.forEach(item => {
-            if (item.Tipologia) {
-                const tip = item.Tipologia.trim();
-                if (tip !== '') tipologiasSet.add(tip);
+        while (hasMore) { // ✅ QUITAR límite artificial
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('Tipologia')
+                .not('Tipologia', 'is', null)
+                .range(offset, offset + batchSize - 1);
+            
+            if (error) {
+                console.error('❌ Error en batch:', error);
+                break; // Solo romper en error
             }
-        });
-    }
-    
-    // ✅ CORRECCIÓN CLAVE: Solo detener si no hay más datos
-    hasMore = (data && data.length === batchSize);
-    offset += batchSize;
-    
-    console.log(`📊 Procesados ${offset} registros - ${tipologiasSet.size} tipologías únicas`);
-}
-
+            
+            // ✅ Validar que data existe
+            if (!data || data.length === 0) {
+                console.log('⚠️ No hay más datos');
+                break;
+            }
+            
+            // Agregar tipologías al Set
+            data.forEach(item => {
+                if (item.Tipologia) {
+                    const tip = item.Tipologia.trim();
+                    if (tip !== '') tipologiasSet.add(tip);
+                }
+            });
+            
+            totalProcesados += data.length;
+            
+            // ✅ CORRECCIÓN CLAVE: Continuar solo si se llenó el batch completo
+            hasMore = (data.length === batchSize);
+            offset += batchSize;
+            
+            console.log(`📊 Procesados ${totalProcesados} registros - ${tipologiasSet.size} tipologías únicas`);
+            
+            // ✅ Pequeña pausa para no saturar
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
         
         const tipologiasUnicas = Array.from(tipologiasSet).sort();
         tipologiasCache = tipologiasUnicas;
         
-        console.log(`✅ ${tipologiasUnicas.length} tipologías TOTALES`);
+        console.log(`✅ ${tipologiasUnicas.length} tipologías TOTALES de ${totalProcesados} registros`);
         return tipologiasUnicas;
         
     } catch (err) {
-        console.error('❌ Error:', err);
+        console.error('❌ Error cargando tipologías:', err);
         return [];
     }
 }
+
 
 
 function limpiarCacheTipologias() {
@@ -5506,28 +5516,51 @@ async function buscarYMostrarMapaAdmin() {
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // ✅ CORRECCIÓN: Query sin operador duplicado
+        // ✅ BUSCAR SIN FILTRO DE ESTADO PRIMERO
         const { data: osCentro, error: errorOS } = await supabaseClient
             .from('OS Pendientes')
             .select('*')
             .eq('OSATMO', osIngresada)
-            .eq('Estado_ATOMO', 'Registrada')
-            .single();
+            .maybeSingle(); // ✅ Usar maybeSingle en lugar de single
         
-        if (errorOS || !osCentro) {
+        if (errorOS) {
+            console.error('Error buscando OS:', errorOS);
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+                    <div class="result-header">❌ Error de Búsqueda</div>
+                    <p style="text-align: center; color: #666;">
+                        ${errorOS.message}
+                    </p>
+                </div>`;
+            return;
+        }
+        
+        if (!osCentro) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
                     <div class="result-header">❌ OS No Encontrada</div>
                     <p style="text-align: center; color: #666;">
-                        La OS "${osIngresada}" no existe o no está en estado "Registrada"
+                        La OS "${osIngresada}" no existe en la base de datos
                     </p>
-                </div>
-            `;
+                </div>`;
+            return;
+        }
+        
+        // ✅ VALIDAR ESTADO DESPUÉS DE ENCONTRARLA
+        if (osCentro.Estado_ATOMO !== 'Registrada') {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+                    <div class="result-header">⚠️ Estado Incorrecto</div>
+                    <p style="text-align: center; color: #666;">
+                        La OS "${osIngresada}" existe pero su estado es: <strong>${osCentro.Estado_ATOMO}</strong><br>
+                        Solo se pueden visualizar OS en estado "Registrada"
+                    </p>
+                </div>`;
             return;
         }
         
         // Validar coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordendasgis;
+        const coordenadas = osCentro.Coordenadas || osCentro.Coordenadasgis;
         if (!coordenadas || !coordenadas.includes(',')) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
@@ -5535,8 +5568,7 @@ async function buscarYMostrarMapaAdmin() {
                     <p style="text-align: center; color: #666;">
                         La OS "${osIngresada}" no tiene coordenadas válidas
                     </p>
-                </div>
-            `;
+                </div>`;
             return;
         }
         
@@ -5548,7 +5580,6 @@ async function buscarYMostrarMapaAdmin() {
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
-
 
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
@@ -5636,11 +5667,35 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 3. Buscar TODAS las OS Registradas
-        const { data: todasOS, error } = await supabaseClient
-    .from('OS Pendientes')
-    .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordenadasgis, Comentario, Unidad')
-    .eq('Estado_ATOMO', 'Registrada');
+        
+        // 3. Buscar TODAS las OS Registradas (por lotes de 1000)
+const todasOS = [];
+let offset = 0;
+const batchSize = 1000;
+let hasMore = true;
+
+while (hasMore) {
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordenadasgis, Comentario, Unidad')
+        .eq('Estado_ATOMO', 'Registrada')
+        .range(offset, offset + batchSize - 1);
+    
+    if (error) {
+        console.error('Error cargando batch de OS:', error);
+        break;
+    }
+    
+    if (!data || data.length === 0) break;
+    
+    todasOS.push(...data);
+    hasMore = (data.length === batchSize);
+    offset += batchSize;
+    
+    console.log(`📍 Cargadas ${todasOS.length} OS...`);
+}
+
+console.log(`✅ Total de OS cargadas: ${todasOS.length}`);
         
         if (error) {
             resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar OS</div>';
@@ -9113,4 +9168,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
