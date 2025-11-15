@@ -5423,12 +5423,12 @@ async function guardarFiltrosMapa() {
         alert('⚠️ Solo administradores pueden modificar filtros');
         return;
     }
-    
+
     // 1. Obtener rangos seleccionados
     const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
     const rangos = [];
     const tipologias = [];
-    
+
     rangosCheckboxes.forEach(cb => {
         if (cb.checked && cb.value) {
             const valor = cb.value;
@@ -5440,16 +5440,16 @@ async function guardarFiltrosMapa() {
             }
         }
     });
-    
+
     // 2. Obtener radio
     const radioKm = parseInt(document.getElementById('radioKm').value);
-    
+
     // 3. Validaciones
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
-    
+
     // 4. Confirmación
     const confirmar = confirm(
         `¿SUSTITUIR configuración de filtros?\n\n` +
@@ -5461,11 +5461,17 @@ async function guardarFiltrosMapa() {
         `✅ SÍ - Guardar nuevos filtros\n` +
         `❌ NO - Cancelar`
     );
-    
+
     if (!confirmar) return;
-    
+
     try {
-        // 5. 🎯 ACTUALIZAR (SUSTITUYE) los filtros en la BD
+        // ✅ DEBUG: Ver qué se va a guardar
+        console.log('💾 Guardando filtros:', {
+            rangos: rangos,
+            tipologias: tipologias,
+            radioKm: radioKm
+        });
+
         const { error } = await supabaseClient
             .from('filtros_mapa')
             .update({
@@ -5474,13 +5480,24 @@ async function guardarFiltrosMapa() {
                 radio_km: radioKm,
                 fecha_actualizacion: new Date().toISOString()
             })
-            .eq('id', 1); // Siempre actualiza el registro con id=1
-        
+            .eq('id', 1);
+
+        // ✅ VALIDAR ERROR PRIMERO
         if (error) {
+            console.error('❌ Error guardando:', error);
             alert('❌ Error al guardar: ' + error.message);
             return;
         }
-        
+
+        // ✅ DEBUG: Confirmar qué se guardó
+        const { data: verificar } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .eq('id', 1)
+            .single();
+
+        console.log('✅ Filtros guardados en BD:', verificar);
+
         // 6. Mensaje de éxito
         alert(
             `✅ Filtros actualizados correctamente\n\n` +
@@ -5490,15 +5507,14 @@ async function guardarFiltrosMapa() {
             `• Radio: ${radioKm} km\n\n` +
             `Las unidades verán los cambios de inmediato.`
         );
-        
+
         console.log('✅ Filtros guardados:', { rangos, tipologias, radioKm });
-        
+
     } catch (err) {
         console.error('Error guardando filtros:', err);
         alert('❌ Error de conexión');
     }
 }
-
 
 
 // ========================================
@@ -5848,36 +5864,58 @@ function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
-    // ✅ Si no hay filtros, MOSTRAR TODO (cambio de lógica)
+    // ✅ DEBUG: Ver qué se está validando
+    console.log('🔍 Validando OS:', {
+        osAtomo: os.OSATMO,
+        tipologiaOS: os.Tipologia,
+        filtrosTipologias: tipologias,
+        filtrosRangos: rangos
+    });
+    
+    // ✅ Si no hay filtros, MOSTRAR TODO
     if (rangos.length === 0 && tipologias.length === 0) {
-        return true; // ✅ Cambiar false por true
+        console.log('✅ Sin filtros - Mostrar todas');
+        return true;
     }
     
-    // ✅ Si solo hay rangos (sin tipologías), validar solo rango
-    if (rangos.length > 0 && tipologias.length === 0) {
+    // ✅ VALIDAR TIPOLOGÍA PRIMERO (más específico)
+    if (tipologias.length > 0) {
+        if (!os.Tipologia) {
+            console.log('❌ OS sin tipología');
+            return false;
+        }
+        
+        const tipologiaOS = os.Tipologia.trim();
+        const coincide = tipologias.some(t => {
+            const tipFiltro = String(t).trim();
+            return tipFiltro === tipologiaOS;
+        });
+        
+        if (!coincide) {
+            console.log(`❌ Tipología "${tipologiaOS}" NO coincide con filtros`);
+            return false;
+        }
+        
+        console.log(`✅ Tipología "${tipologiaOS}" coincide`);
+    }
+    
+    // ✅ VALIDAR RANGO (si hay filtro de rangos)
+    if (rangos.length > 0) {
         const dias = calcularDias(os['Fecha Gen.']);
         const rangoOS = determinarRango(dias);
-        return rangos.includes(rangoOS);
+        
+        if (!rangos.includes(rangoOS)) {
+            console.log(`❌ Rango "${rangoOS}" NO coincide con filtros`);
+            return false;
+        }
+        
+        console.log(`✅ Rango "${rangoOS}" coincide`);
     }
     
-    // ✅ Si solo hay tipologías (sin rangos), validar solo tipología
-    if (tipologias.length > 0 && rangos.length === 0) {
-        if (!os.Tipologia) return false;
-        const tipologiaOS = os.Tipologia.trim();
-        return tipologias.some(t => t.trim() === tipologiaOS);
-    }
-    
-    // ✅ Si hay AMBOS filtros, validar AMBOS (AND)
-    const dias = calcularDias(os['Fecha Gen.']);
-    const rangoOS = determinarRango(dias);
-    const cumpleRango = rangos.includes(rangoOS);
-    
-    if (!os.Tipologia) return false;
-    const tipologiaOS = os.Tipologia.trim();
-    const cumpleTipologia = tipologias.some(t => t.trim() === tipologiaOS);
-    
-    return cumpleRango && cumpleTipologia; // ✅ Deben cumplir AMBOS
+    // ✅ Si llegó aquí, cumple todos los filtros
+    return true;
 }
+
 
 
 	// ========================================
