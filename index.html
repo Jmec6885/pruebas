@@ -5655,11 +5655,33 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     `;
     
     try {
-        // 1. Cargar filtros actuales
-        const { data: filtros } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .single();
+        try {
+    
+// 1. ✅ Cargar filtros actuales (SIEMPRE DESDE BD)
+    const { data: filtros, error: errorFiltros } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .single();
+    
+    if (errorFiltros) {
+        console.error('Error cargando filtros:', errorFiltros);
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar filtros</div>';
+        return;
+    }
+
+	// ✅ Guardar filtros globalmente para mostrar en el mapa
+window.filtrosAplicados = filtros;
+
+// ✅ Guardar contexto para recarga
+window.osCentroActual = osCentro;
+window.unidadFiltroActual = unidadFiltro;
+    
+    // ✅ MOSTRAR FILTROS CARGADOS
+    console.log('🔍 Filtros aplicados:', {
+        rangos: filtros.rangos,
+        tipologias: filtros.tipologias?.length || 0,
+        radio: filtros.radio_km
+    });
         
         const radioKm = filtros.radio_km || 3;
         
@@ -5829,37 +5851,36 @@ function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
-    // Si no hay filtros, no mostrar (solo reguladas)
+    // ✅ Si no hay filtros, MOSTRAR TODO (cambio de lógica)
     if (rangos.length === 0 && tipologias.length === 0) {
-        return false;
+        return true; // ✅ Cambiar false por true
     }
     
-    let cumpleRango = rangos.length === 0;
-    let cumpleTipologia = tipologias.length === 0;
-    
-    // Validar rango
-    if (rangos.length > 0) {
+    // ✅ Si solo hay rangos (sin tipologías), validar solo rango
+    if (rangos.length > 0 && tipologias.length === 0) {
         const dias = calcularDias(os['Fecha Gen.']);
         const rangoOS = determinarRango(dias);
-        cumpleRango = rangos.includes(rangoOS);
+        return rangos.includes(rangoOS);
     }
     
-   
-    // ✅ CORRECCIÓN: Validar tipología con normalización y logging
-if (tipologias.length > 0 && os.Tipologia) {
+    // ✅ Si solo hay tipologías (sin rangos), validar solo tipología
+    if (tipologias.length > 0 && rangos.length === 0) {
+        if (!os.Tipologia) return false;
+        const tipologiaOS = os.Tipologia.trim();
+        return tipologias.some(t => t.trim() === tipologiaOS);
+    }
+    
+    // ✅ Si hay AMBOS filtros, validar AMBOS (AND)
+    const dias = calcularDias(os['Fecha Gen.']);
+    const rangoOS = determinarRango(dias);
+    const cumpleRango = rangos.includes(rangoOS);
+    
+    if (!os.Tipologia) return false;
     const tipologiaOS = os.Tipologia.trim();
-    cumpleTipologia = tipologias.some(t => t.trim() === tipologiaOS);
+    const cumpleTipologia = tipologias.some(t => t.trim() === tipologiaOS);
     
-    // Debug temporal (eliminar después de verificar)
-    if (!cumpleTipologia) {
-        console.log(`⚠️ Tipología "${tipologiaOS}" no coincide con filtros`);
-    }
-}    
-
-
-    return cumpleRango && cumpleTipologia;
+    return cumpleRango && cumpleTipologia; // ✅ Deben cumplir AMBOS
 }
-
 
 
 	// ========================================
@@ -5886,13 +5907,25 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             </div>
             
             <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-                <strong>Leyenda:</strong>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
-                    <span>🟢 Tu OS (centro)</span>
-                    <span>🔴 OS Reguladas</span>
-                    <span>🔵 OS No Reguladas (filtradas)</span>
-                </div>
-            </div>
+    <strong>Leyenda:</strong>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
+        <span>🟢 Tu OS (centro)</span>
+        <span>🔴 OS Reguladas</span>
+        <span>🔵 OS No Reguladas (filtradas)</span>
+    </div>
+</div>
+
+<!-- ✅ AGREGAR ESTO -->
+<div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
+    <strong>🔍 Filtros activos del Admin:</strong><br>
+    <span style="font-size: 14px; color: #666;">
+        • Radio: <strong>${radioKm} km</strong><br>
+        ${window.filtrosAplicados ? `
+            • Rangos: <strong>${window.filtrosAplicados.rangos?.length || 0}</strong><br>
+            • Tipologías: <strong>${window.filtrosAplicados.tipologias?.length || 0}</strong>
+        ` : 'Sin filtros específicos'}
+    </span>
+</div>
             
             <!-- RESUMEN POR TIPOLOGÍA -->
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
@@ -5910,12 +5943,18 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
                 <strong>🔍 Buscar OS en listado:</strong>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
-                           style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
-                    <button onclick="buscarOSEnListado()" 
-                            style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔍 Buscar
-                    </button>
+    <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
+           style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
+    <button onclick="buscarOSEnListado()" 
+            style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+        🔍 Buscar
+    </button>
+    <!-- ✅ NUEVO BOTÓN -->
+    <button onclick="recargarMapaConFiltrosActualizados()" 
+            style="background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+        🔄 Actualizar
+    </button>
+</div>
                 </div>
             </div>
 
@@ -5983,6 +6022,19 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     // Guardar datos para exportar
     window.datosMapaExportar = osEnRadio;
 }
+
+
+
+async function recargarMapaConFiltrosActualizados() {
+    if (!window.osCentroActual) {
+        alert('No hay mapa cargado');
+        return;
+    }
+    
+    await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
+}
+
+
 
 // ========================================
 // 🔍 BUSCAR OS EN LISTADO
@@ -9277,3 +9329,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
