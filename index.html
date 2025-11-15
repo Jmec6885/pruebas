@@ -5677,13 +5677,18 @@ let hasMore = true;
 while (hasMore) {
     const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordenadasgis, Comentario, Unidad')
+        .select('OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Unidad')
         .eq('Estado_ATOMO', 'Registrada')
         .range(offset, offset + batchSize - 1);
     
     if (error) {
         console.error('Error cargando batch de OS:', error);
-        break;
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #ffebee;">
+                <div class="result-header">❌ Error cargando OS</div>
+                <p style="color: #666;">Error: ${error.message}</p>
+            </div>`;
+        return; // ✅ AGREGAR RETURN para detener ejecución
     }
     
     if (!data || data.length === 0) break;
@@ -5696,23 +5701,33 @@ while (hasMore) {
 }
 
 console.log(`✅ Total de OS cargadas: ${todasOS.length}`);
-        
-        if (error) {
-            resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar OS</div>';
-            return;
-        }
+
+// ✅ VALIDAR que se cargaron OS
+if (todasOS.length === 0) {
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #fff3cd;">
+            <div class="result-header">⚠️ Sin datos</div>
+            <p style="text-align: center; color: #666;">
+                No hay OS en estado "Registrada" en la base de datos
+            </p>
+        </div>`;
+    return;
+}
         
         // 4. Filtrar OS dentro del radio
-        const osEnRadio = [];
-        
-        todasOS.forEach(os => {
-            const coords = os.Coordenadas || os.Coordenadasgis;
-            if (!coords || !coords.includes(',')) return;
-            
-            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-            
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+const osEnRadio = [];
+
+todasOS.forEach(os => {
+    const coords = os.Coordenadas || os.Coordendasgis;
+    
+    // ✅ VALIDAR FORMATO
+    if (!validarFormatoCoordenadas(coords)) return;
+    
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    
+    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+
                 // Determinar si es regulada
                 const esRegulada = os.Tipo_de_OS && 
                                   os.Tipo_de_OS.toLowerCase().includes('regulad') && 
@@ -5760,6 +5775,34 @@ console.log(`✅ Total de OS cargadas: ${todasOS.length}`);
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
+
+
+// ========================================
+// ✅ VALIDAR FORMATO DE COORDENADAS
+// ========================================
+function validarFormatoCoordenadas(coordenadas) {
+    if (!coordenadas || typeof coordenadas !== 'string') return false;
+    
+    // Formato esperado: "13.6488,-89.9183" o "13.6488, -89.9183"
+    const regex = /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/;
+    
+    if (!regex.test(coordenadas.trim())) {
+        console.warn('⚠️ Coordenadas con formato incorrecto:', coordenadas);
+        return false;
+    }
+    
+    // Validar que se puedan convertir a números
+    const partes = coordenadas.split(',').map(c => parseFloat(c.trim()));
+    
+    if (partes.length !== 2 || isNaN(partes[0]) || isNaN(partes[1])) {
+        console.warn('⚠️ Coordenadas no numéricas:', coordenadas);
+        return false;
+    }
+    
+    return true;
+}
+
+
 
 // ========================================
 // 📐 CALCULAR DISTANCIA ENTRE DOS PUNTOS (Haversine)
@@ -9168,3 +9211,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
