@@ -5424,7 +5424,7 @@ async function guardarFiltrosMapa() {
         return;
     }
 
-    // 1. Obtener rangos seleccionados
+    // 1️⃣ Obtener rangos seleccionados
     const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
     const rangos = [];
     const tipologias = [];
@@ -5441,16 +5441,16 @@ async function guardarFiltrosMapa() {
         }
     });
 
-    // 2. Obtener radio
+    // 2️⃣ Obtener radio
     const radioKm = parseInt(document.getElementById('radioKm').value);
 
-    // 3. Validaciones
+    // 3️⃣ Validaciones
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
 
-    // 4. Confirmación
+    // 4️⃣ Confirmación
     const confirmar = confirm(
         `¿SUSTITUIR configuración de filtros?\n\n` +
         `📊 NUEVOS VALORES:\n` +
@@ -5465,31 +5465,33 @@ async function guardarFiltrosMapa() {
     if (!confirmar) return;
 
     try {
-        // ✅ DEBUG: Ver qué se va a guardar
+        // ✅ CAMBIO CLAVE: Guardar arrays o NULL (no arrays vacíos)
+        const rangosAGuardar = rangos.length > 0 ? rangos : null;
+        const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
+        
         console.log('💾 Guardando filtros:', {
-            rangos: rangos,
-            tipologias: tipologias,
+            rangos: rangosAGuardar,
+            tipologias: tipologiasAGuardar,
             radioKm: radioKm
         });
 
         const { error } = await supabaseClient
             .from('filtros_mapa')
             .update({
-                rangos: rangos.length > 0 ? rangos : null,
-                tipologias: tipologias.length > 0 ? tipologias : null,
+                rangos: rangosAGuardar,
+                tipologias: tipologiasAGuardar,
                 radio_km: radioKm,
                 fecha_actualizacion: new Date().toISOString()
             })
             .eq('id', 1);
 
-        // ✅ VALIDAR ERROR PRIMERO
         if (error) {
             console.error('❌ Error guardando:', error);
             alert('❌ Error al guardar: ' + error.message);
             return;
         }
 
-        // ✅ DEBUG: Confirmar qué se guardó
+        // ✅ Verificar qué se guardó
         const { data: verificar } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
@@ -5498,7 +5500,7 @@ async function guardarFiltrosMapa() {
 
         console.log('✅ Filtros guardados en BD:', verificar);
 
-        // 6. Mensaje de éxito
+        // 6️⃣ Mensaje de éxito
         alert(
             `✅ Filtros actualizados correctamente\n\n` +
             `📊 NUEVA CONFIGURACIÓN:\n` +
@@ -9457,3 +9459,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
