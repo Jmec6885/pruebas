@@ -5868,7 +5868,6 @@ function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
-    // 🔍 LOG TEMPORAL para depurar
     console.log('🔍 Validando OS:', {
         osAtomo: os.OSATMO,
         tipologiaOS: os.Tipologia,
@@ -5881,28 +5880,32 @@ function validarFiltrosOS(os, filtros) {
         console.log('✅ Sin filtros - Aceptada');
         return true;
     }
-
-    
-    // ✅ Si no hay filtros, MOSTRAR TODO
-    if (rangos.length === 0 && tipologias.length === 0) {
-        return true;
-    }
     
     // ✅ VALIDAR TIPOLOGÍA (si hay filtro)
     if (tipologias.length > 0) {
         if (!os.Tipologia) {
-            return false; // Sin tipología = rechazar
+            console.log(`❌ OS ${os.OSATMO} - Sin tipología`);
+            return false;
         }
         
         const tipologiaOS = os.Tipologia.trim();
+        
+        // 🔍 MOSTRAR COMPARACIÓN
+        console.log(`🔎 Comparando tipología "${tipologiaOS}" con:`, tipologias);
+        
         const coincide = tipologias.some(t => {
             const tipFiltro = String(t).trim();
-            return tipFiltro === tipologiaOS;
+            const match = tipFiltro === tipologiaOS;
+            console.log(`   "${tipFiltro}" === "${tipologiaOS}" ? ${match}`);
+            return match;
         });
         
         if (!coincide) {
-            return false; // No coincide = rechazar
+            console.log(`❌ OS ${os.OSATMO} - Tipología NO coincide`);
+            return false;
         }
+        
+        console.log(`✅ OS ${os.OSATMO} - Tipología coincide`);
     }
     
     // ✅ VALIDAR RANGO (si hay filtro)
@@ -5910,16 +5913,20 @@ function validarFiltrosOS(os, filtros) {
         const dias = calcularDias(os['Fecha Gen.']);
         const rangoOS = determinarRango(dias);
         
+        console.log(`🔎 Rango OS: "${rangoOS}" - Filtros:`, rangos);
+        
         if (!rangos.includes(rangoOS)) {
-            return false; // No coincide = rechazar
+            console.log(`❌ OS ${os.OSATOMO} - Rango "${rangoOS}" NO coincide`);
+            return false;
         }
+        
+        console.log(`✅ OS ${os.OSATOMO} - Rango "${rangoOS}" coincide`);
     }
     
     // ✅ Si llegó aquí, cumple todos los filtros
+    console.log(`✅✅ OS ${os.OSATOMO} - CUMPLE TODOS LOS FILTROS`);
     return true;
 }
-
-
 
 
 	// ========================================
@@ -9463,4 +9470,5 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
 
