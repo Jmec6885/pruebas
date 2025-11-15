@@ -5864,37 +5864,15 @@ function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
-    // ✅ DEBUG TEMPORAL (comentar después de arreglar)
-    if (os.OSATMO === '5028103808' || os.OSATMO === '5028103809') { // Cambia por una OS que aparece
-        console.log('🔍 DEBUG OS:', {
-            osAtomo: os.OSATMO,
-            tipologiaOS: os.Tipologia,
-            filtrosTipologias: tipologias,
-            esArray: Array.isArray(tipologias),
-            longitudFiltro: tipologias.length
-        });
-    }
-
-    
-    // ✅ DEBUG: Ver qué se está validando
-    console.log('🔍 Validando OS:', {
-        osAtomo: os.OSATMO,
-        tipologiaOS: os.Tipologia,
-        filtrosTipologias: tipologias,
-        filtrosRangos: rangos
-    });
-    
     // ✅ Si no hay filtros, MOSTRAR TODO
     if (rangos.length === 0 && tipologias.length === 0) {
-        console.log('✅ Sin filtros - Mostrar todas');
         return true;
     }
     
-    // ✅ VALIDAR TIPOLOGÍA PRIMERO (más específico)
+    // ✅ VALIDAR TIPOLOGÍA (si hay filtro)
     if (tipologias.length > 0) {
         if (!os.Tipologia) {
-            console.log('❌ OS sin tipología');
-            return false;
+            return false; // Sin tipología = rechazar
         }
         
         const tipologiaOS = os.Tipologia.trim();
@@ -5904,29 +5882,24 @@ function validarFiltrosOS(os, filtros) {
         });
         
         if (!coincide) {
-            console.log(`❌ Tipología "${tipologiaOS}" NO coincide con filtros`);
-            return false;
+            return false; // No coincide = rechazar
         }
-        
-        console.log(`✅ Tipología "${tipologiaOS}" coincide`);
     }
     
-    // ✅ VALIDAR RANGO (si hay filtro de rangos)
+    // ✅ VALIDAR RANGO (si hay filtro)
     if (rangos.length > 0) {
         const dias = calcularDias(os['Fecha Gen.']);
         const rangoOS = determinarRango(dias);
         
         if (!rangos.includes(rangoOS)) {
-            console.log(`❌ Rango "${rangoOS}" NO coincide con filtros`);
-            return false;
+            return false; // No coincide = rechazar
         }
-        
-        console.log(`✅ Rango "${rangoOS}" coincide`);
     }
     
     // ✅ Si llegó aquí, cumple todos los filtros
     return true;
 }
+
 
 
 
@@ -5972,6 +5945,14 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             • Tipologías: <strong>${window.filtrosAplicados.tipologias?.length || 0}</strong>
         ` : 'Sin filtros específicos'}
     </span>
+</div>
+
+<!-- 🗑️ BOTÓN LIMPIAR FILTROS -->
+<div style="text-align: center; margin: 15px 0;">
+    <button class="btn btn-danger" onclick="limpiarFiltrosMapaYRecargar()" 
+            style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 12px 24px; font-size: 16px;">
+        🗑️ Limpiar Filtros y Recargar Mapa
+    </button>
 </div>
             
             <!-- RESUMEN POR TIPOLOGÍA -->
@@ -6081,7 +6062,58 @@ async function recargarMapaConFiltrosActualizados() {
     await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
 }
 
-
+// ========================================
+// 🗑️ LIMPIAR FILTROS Y RECARGAR MAPA
+// ========================================
+async function limpiarFiltrosMapaYRecargar() {
+    const confirmar = confirm(
+        '🗑️ ¿Limpiar TODOS los filtros?\n\n' +
+        'Esto eliminará:\n' +
+        '• Rangos de días seleccionados\n' +
+        '• Tipologías seleccionadas\n\n' +
+        'El mapa mostrará TODAS las OS en el radio.\n\n' +
+        '✅ SÍ - Limpiar y recargar\n' +
+        '❌ NO - Cancelar'
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        // Actualizar BD con filtros vacíos
+        const { error } = await supabaseClient
+            .from('filtros_mapa')
+            .update({
+                rangos: null,
+                tipologias: null,
+                fecha_actualizacion: new Date().toISOString()
+            })
+            .eq('id', 1);
+        
+        if (error) {
+            alert('❌ Error limpiando filtros: ' + error.message);
+            return;
+        }
+        
+        // Actualizar cache global
+        window.filtrosAplicados = {
+            rangos: [],
+            tipologias: [],
+            radio_km: window.filtrosAplicados.radio_km || 3
+        };
+        
+        // Recargar mapa
+        if (window.osCentroActual) {
+            await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
+            alert('✅ Filtros eliminados - Mostrando todas las OS');
+        } else {
+            alert('✅ Filtros eliminados. Realiza una nueva búsqueda.');
+        }
+        
+    } catch (err) {
+        console.error('Error limpiando filtros:', err);
+        alert('❌ Error de conexión');
+    }
+}
 
 // ========================================
 // 🔍 BUSCAR OS EN LISTADO
