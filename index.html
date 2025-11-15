@@ -5767,23 +5767,21 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
                                   os.Tipo_de_OS.toLowerCase().includes('regulad') && 
                                   !os.Tipo_de_OS.toLowerCase().includes('no');
                 
-                // Si es Unidad, aplicar filtros del Admin
-                let mostrar = false;
-                
-                if (unidadFiltro) {
-                    // Para unidades: Mostrar si es regulada O cumple filtros
-                    if (esRegulada) {
-                        mostrar = true; // Reguladas SIEMPRE se muestran
-                    } else {
-                        // No reguladas: validar filtros
-                        const cumpleFiltros = validarFiltrosOS(os, filtros);
-                        mostrar = cumpleFiltros;
-                    }
-                } else {
-                    // Para Admin: Mostrar todas
-                    mostrar = true;
-                }
-                
+                // ✅ APLICAR FILTROS PARA TODOS (Admin y Unidades)
+let mostrar = false;
+
+// 1️⃣ Reguladas SIEMPRE se muestran (prioridad legal)
+if (esRegulada) {
+    mostrar = true;
+} else {
+    // 2️⃣ No reguladas: validar filtros
+    mostrar = validarFiltrosOS(os, filtros);
+}
+
+// 3️⃣ Si es Unidad, filtrar TAMBIÉN por unidad
+if (unidadFiltro && mostrar) {
+    mostrar = (os.Unidad === unidadFiltro);
+}                
                 if (mostrar) {
                     osEnRadio.push({
                         ...os,
@@ -5863,6 +5861,21 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
+    
+    // 🔍 LOG TEMPORAL para depurar
+    console.log('🔍 Validando OS:', {
+        osAtomo: os.OSATMO,
+        tipologiaOS: os.Tipologia,
+        filtroTipologias: tipologias,
+        filtroRangos: rangos
+    });
+    
+    // ✅ Si no hay filtros, MOSTRAR TODO
+    if (rangos.length === 0 && tipologias.length === 0) {
+        console.log('✅ Sin filtros - Aceptada');
+        return true;
+    }
+
     
     // ✅ Si no hay filtros, MOSTRAR TODO
     if (rangos.length === 0 && tipologias.length === 0) {
@@ -6017,25 +6030,31 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                             </tr>
                         </thead>
                         <tbody>
-                            ${osEnRadio.map((os, idx) => {
-                                const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
-                                return `
-                                    <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
-                                        <td style="padding: 12px; font-weight: 600;">
-                                            ${os.esRegulada ? '🔴' : '🔵'} ${os.OSATMO}
-                                        </td>
-                                        <td style="padding: 12px;">${os.Tipologia || 'N/A'}</td>
-                                        <td style="padding: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;" 
-                                            title="${os.Comentario || 'Sin comentario'}">
-                                            ${os.Comentario || 'Sin comentario'}
-                                        </td>
-                                        <td style="padding: 12px; text-align: center; font-weight: 600; color: #1976d2;">
-                                            ${os.distancia} km
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
+    ${osEnRadio.map((os, idx) => {
+        const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
+        
+        // ✅ Formatear comentario
+        const comentarioFormateado = os.Comentario 
+            ? formatearComentario(os.Comentario) 
+            : '<em style="color: #999;">Sin comentario</em>';
+        
+        return `
+            <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 12px; font-weight: 600;">
+                    ${os.esRegulada ? '🔴' : '🔵'} ${os.OSATMO}
+                </td>
+                <td style="padding: 12px;">${os.Tipologia || 'N/A'}</td>
+                <td style="padding: 12px; max-width: 400px; line-height: 1.6;">
+                    ${comentarioFormateado}
+                </td>
+                <td style="padding: 12px; text-align: center; font-weight: 600; color: #1976d2;">
+                    ${os.distancia} km
+                </td>
+            </tr>
+        `;
+    }).join('')}
+</tbody>
+
                     </table>
                 </div>
             </div>
@@ -6062,6 +6081,10 @@ async function recargarMapaConFiltrosActualizados() {
     await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
 }
 
+
+
+
+
 // ========================================
 // 🗑️ LIMPIAR FILTROS Y RECARGAR MAPA
 // ========================================
@@ -6079,7 +6102,7 @@ async function limpiarFiltrosMapaYRecargar() {
     if (!confirmar) return;
     
     try {
-        // Actualizar BD con filtros vacíos
+        // 1️⃣ Actualizar BD con filtros vacíos
         const { error } = await supabaseClient
             .from('filtros_mapa')
             .update({
@@ -6094,19 +6117,42 @@ async function limpiarFiltrosMapaYRecargar() {
             return;
         }
         
-        // Actualizar cache global
+        // 2️⃣ Limpiar checkboxes de rangos
+        document.querySelectorAll('input[type="checkbox"][value]').forEach(cb => {
+            const valor = cb.value;
+            if (valor && (valor.includes('-') || valor.startsWith('>'))) {
+                cb.checked = false;
+            }
+        });
+        
+        // 3️⃣ Limpiar checkboxes de tipologías
+        document.querySelectorAll('input[type="checkbox"][value]').forEach(cb => {
+            const valor = cb.value;
+            if (valor && !valor.includes('-') && !valor.startsWith('>') && 
+                !['todosRangos', 'todasTipologias'].includes(cb.id)) {
+                cb.checked = false;
+            }
+        });
+        
+        // 4️⃣ Desmarcar "Seleccionar todos"
+        const todosRangos = document.getElementById('todosRangos');
+        const todasTipologias = document.getElementById('todasTipologias');
+        if (todosRangos) todosRangos.checked = false;
+        if (todasTipologias) todasTipologias.checked = false;
+        
+        // 5️⃣ Actualizar cache global
         window.filtrosAplicados = {
             rangos: [],
             tipologias: [],
             radio_km: window.filtrosAplicados.radio_km || 3
         };
         
-        // Recargar mapa
+        // 6️⃣ Recargar mapa si existe
         if (window.osCentroActual) {
             await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
             alert('✅ Filtros eliminados - Mostrando todas las OS');
         } else {
-            alert('✅ Filtros eliminados. Realiza una nueva búsqueda.');
+            alert('✅ Filtros eliminados. Realiza una nueva búsqueda para ver los cambios.');
         }
         
     } catch (err) {
@@ -6114,6 +6160,9 @@ async function limpiarFiltrosMapaYRecargar() {
         alert('❌ Error de conexión');
     }
 }
+
+
+
 
 // ========================================
 // 🔍 BUSCAR OS EN LISTADO
