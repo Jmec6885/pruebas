@@ -5693,7 +5693,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         // ✅ MOSTRAR FILTROS CARGADOS
         console.log('🔍 Filtros aplicados:', {
             rangos: filtros.rangos,
-            tipologias: filtros.tipologias?.length || 0,
+            tipologias: filtros.tipologias,
             radio: filtros.radio_km
         });
             
@@ -5863,6 +5863,18 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
+    
+    // ✅ DEBUG TEMPORAL (comentar después de arreglar)
+    if (os.OSATMO === '5028103808' || os.OSATMO === '5028103809') { // Cambia por una OS que aparece
+        console.log('🔍 DEBUG OS:', {
+            osAtomo: os.OSATMO,
+            tipologiaOS: os.Tipologia,
+            filtrosTipologias: tipologias,
+            esArray: Array.isArray(tipologias),
+            longitudFiltro: tipologias.length
+        });
+    }
+
     
     // ✅ DEBUG: Ver qué se está validando
     console.log('🔍 Validando OS:', {
