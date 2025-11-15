@@ -5755,46 +5755,50 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const osEnRadio = [];
 
         todasOS.forEach(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            
-            // ✅ VALIDAR FORMATO
-            if (!validarFormatoCoordenadas(coords)) return;
-            
-            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-            
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                // Determinar si es regulada
-                const esRegulada = os.Tipo_de_OS && 
-                                  os.Tipo_de_OS.toLowerCase().includes('regulad') && 
-                                  !os.Tipo_de_OS.toLowerCase().includes('no');
-                
-                // ✅ APLICAR FILTROS PARA TODOS (Admin y Unidades)
-let mostrar = false;
+    const coords = os.Coordenadas || os.Coordendasgis;
+    
+    // Validar formato de coordenadas
+    if (!validarFormatoCoordenadas(coords)) return;
+    
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    
+    // Validar que esté dentro del radio y no sea la OS del centro
+    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+        
+        // ✅ SOLO UNA DEFINICIÓN de esRegulada
+        const esRegulada = os.Tipo_de_OS && 
+                          os.Tipo_de_OS.toLowerCase().includes('regulad') && 
+                          !os.Tipo_de_OS.toLowerCase().includes('no');
+        
+        let mostrar = false;
 
-// 1️⃣ Reguladas SIEMPRE se muestran (prioridad legal)
-if (esRegulada) {
-    mostrar = true;
-} else {
-    // 2️⃣ No reguladas: validar filtros
-    mostrar = validarFiltrosOS(os, filtros);
-}
+        // Reguladas SIEMPRE se muestran (sin filtros)
+        if (esRegulada) {
+            mostrar = true;
+        } else {
+            // No reguladas: aplicar filtros
+            mostrar = validarFiltrosOS(os, filtros);
+        }
 
-// 3️⃣ Si es Unidad, filtrar TAMBIÉN por unidad
-if (unidadFiltro && mostrar) {
-    mostrar = (os.Unidad === unidadFiltro);
-}                
-                if (mostrar) {
-                    osEnRadio.push({
-                        ...os,
-                        distancia: distancia,
-                        esRegulada: esRegulada,
-                        lat: lat,
-                        lng: lng
-                    });
-                }
-            }
-        });
+        // Si es Unidad (no Admin), filtrar por unidad
+        if (unidadFiltro && mostrar) {
+            mostrar = (os.Unidad === unidadFiltro);
+        }
+        
+        // Si cumple todas las validaciones, agregar
+        if (mostrar) {
+            osEnRadio.push({
+                ...os,
+                distancia: distancia,
+                esRegulada: esRegulada,
+                lat: lat,
+                lng: lng
+            });
+        }
+    }
+});
+
         
         // 5. Ordenar por distancia
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
