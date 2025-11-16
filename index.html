@@ -6260,6 +6260,9 @@ function buscarOSEnListado() {
 // ========================================
 // 🎨 INICIALIZAR MAPA LEAFLET
 // ========================================
+// ========================================
+// 🎨 INICIALIZAR MAPA LEAFLET
+// ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     // Destruir mapa anterior si existe
     if (window.mapaLeafletInstance) {
@@ -6320,31 +6323,12 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         color: '#2196f3',
         fillColor: '#2196f3',
         fillOpacity: 0.1,
-        radius: radioKm * 1000 // Convertir km a metros
+        radius: radioKm * 1000
     }).addTo(mapa);
 
-// 🆕 Guardar referencias de markers por tipología
-window.markersPorTipologia = {};
+    // 🆕 Guardar referencias de markers por tipología
+    window.markersPorTipologia = {};
 
-// Markers de OS cercanas
-osEnRadio.forEach(os => {
-    // ... código existente ...
-    
-    const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-    
-    // 🆕 Guardar referencia
-    const tipologia = os.Tipologia || 'Sin tipología';
-    if (!window.markersPorTipologia[tipologia]) {
-        window.markersPorTipologia[tipologia] = [];
-    }
-    window.markersPorTipologia[tipologia].push(marker);
-    
-
-
-// Markers de OS cercanas
-osEnRadio.forEach(os => {
-// ... el resto del código sigue igual
-    
     // Markers de OS cercanas
     osEnRadio.forEach(os => {
         // Determinar icono según estado y tipo
@@ -6365,6 +6349,13 @@ osEnRadio.forEach(os => {
         }
         
         const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+        
+        // 🆕 Guardar referencia
+        const tipologia = os.Tipologia || 'Sin tipología';
+        if (!window.markersPorTipologia[tipologia]) {
+            window.markersPorTipologia[tipologia] = [];
+        }
+        window.markersPorTipologia[tipologia].push(marker);
         
         // Formatear comentario si existe
         const comentarioFormateado = os.Comentario 
@@ -6414,8 +6405,7 @@ osEnRadio.forEach(os => {
     mapa.fitBounds(bounds, { padding: [50, 50] });
     
     console.log('✅ Mapa Leaflet inicializado correctamente');
-});
-
+}
 
 	// ========================================
 // 🎨 RESALTAR TIPOLOGÍA EN MAPA
