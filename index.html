@@ -6328,17 +6328,18 @@ window.markersPorTipologia = {};
 
 // Markers de OS cercanas
 osEnRadio.forEach(os => {
-    // ... código existente ...
-    
-    const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-    
-    // 🆕 Guardar referencia
-    const tipologia = os.Tipologia || 'Sin tipología';
-    if (!window.markersPorTipologia[tipologia]) {
-        window.markersPorTipologia[tipologia] = [];
-    }
-    window.markersPorTipologia[tipologia].push(marker);
-}); // <--- ¡EL PARÉNTESIS FALTANTE VA AQUÍ!
+    // ... código existente ...
+    
+    const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+    
+    // 🆕 Guardar referencia
+    const tipologia = os.Tipologia || 'Sin tipología';
+    if (!window.markersPorTipologia[tipologia]) {
+        window.markersPorTipologia[tipologia] = [];
+    }
+    window.markersPorTipologia[tipologia].push(marker);
+    
+
 
 // Markers de OS cercanas
 osEnRadio.forEach(os => {
