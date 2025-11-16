@@ -5127,22 +5127,30 @@ async function cargarInterfazMapaRutas() {
             return;
         }
         
-        // 3. Cargar OS asignadas si NO es Admin
-        let osAsignadas = [];
-        if (currentUser.rol !== 'Administrador') {
-            const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
-            
-            const { data: os, error: errorOS } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Tipologia')
-                .eq('Unidad', unidadUsuario)
-                .eq('Estado_ATOMO', 'Registrada');
-            
-            if (!errorOS && os) {
-                osAsignadas = os;
-            }
-        }
-        
+       // 3. Cargar OS asignadas si NO es Admin
+let osAsignadas = [];
+if (currentUser.rol !== 'Administrador') {
+    const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
+    
+    console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
+    
+    const { data: os, error: errorOS } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Tipologia')
+        .eq('Unidad', unidadUsuario)
+        .eq('Estado_ATOMO', 'Asignada');  // ✅ SOLO ASIGNADAS para el dropdown
+    
+    if (errorOS) {
+        console.error('Error buscando OS:', errorOS);
+    }
+    
+    if (!errorOS && os) {
+        osAsignadas = os;
+        console.log(`✅ ${os.length} OS Asignadas encontradas para ${unidadUsuario}`);
+    } else {
+        console.log(`⚠️ No se encontraron OS Asignadas para ${unidadUsuario}`);
+    }
+}        
         // 4. Generar interfaz según rol
         if (currentUser.rol === 'Administrador') {
             generarInterfazAdmin(filtros, tipologiasUnicas);
@@ -5615,14 +5623,14 @@ async function buscarYMostrarMapaUnidad() {
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // Buscar OS seleccionada
-        const { data: osCentro, error: errorOS } = await supabaseClient
+
+        // Buscar OS seleccionada (puede estar Asignada o Registrada)
+const { data: osCentro, error: errorOS } = await supabaseClient
     .from('OS Pendientes')
     .select('*')
-    .eq('OSATMO', osIngresada)
-    .eq('Estado_ATOMO', 'Registrada') // ✅ Ya está bien, el error está en otro lado
-    .single();
-
+    .eq('OSATMO', osSeleccionada)
+    .in('Estado_ATOMO', ['Registrada', 'Asignada'])  // ✅ Puede ser cualquiera de las dos
+    .maybeSingle();  // ✅ Usar maybeSingle para evitar error si no existe
         
         if (errorOS || !osCentro) {
             resultsContainer.innerHTML = `
@@ -5715,9 +5723,9 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             const { data, error } = await supabaseClient
     .from('OS Pendientes')
     .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad')
-    //                                      ↑ AGREGAR ESTE CAMPO
-    .eq('Estado_ATOMO', 'Registrada')
+    .in('Estado_ATOMO', ['Registrada', 'Asignada'])  // ✅ AMBOS ESTADOS en el mapa
     .range(offset, offset + batchSize - 1);
+
             
             if (error) {
                 console.error('Error cargando batch de OS:', error);
@@ -5788,16 +5796,17 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         }
         
         // Si cumple todas las validaciones, agregar
-        if (mostrar) {
-            osEnRadio.push({
-                ...os,
-                distancia: distancia,
-                esRegulada: esRegulada,
-                lat: lat,
-                lng: lng
-            });
-        }
-    }
+if (mostrar) {
+    osEnRadio.push({
+        ...os,
+        distancia: distancia,
+        esRegulada: esRegulada,
+        lat: lat,
+        lng: lng,
+        Estado_ATOMO: os.Estado_ATOMO  // ✅ AGREGAR para identificar en el mapa
+    });
+}
+   }
 });
 
         
@@ -5980,10 +5989,12 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     <strong>Leyenda:</strong>
     <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
         <span>🟢 Tu OS (centro)</span>
+        <span>🟠 OS Asignadas</span>
         <span>🔴 OS Reguladas</span>
         <span>🔵 OS No Reguladas (filtradas)</span>
     </div>
 </div>
+
 
 <!-- ✅ AGREGAR ESTO -->
 <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
@@ -6249,6 +6260,14 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(mapa);
+
+
+	const iconoAsignada = L.divIcon({
+    className: 'custom-icon',
+    html: '<div style="background: #ff9800; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+});
     
     // Iconos personalizados
     const iconoCentro = L.divIcon({
@@ -6291,21 +6310,90 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     }).addTo(mapa);
     
     // Markers de OS cercanas
-    osEnRadio.forEach(os => {
-        const icono = os.esRegulada ? iconoRegulada : iconoNoRegulada;
-        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-        
-        marker.bindPopup(`
-            <div style="text-align: center; padding: 5px;">
-                <strong style="color: ${os.esRegulada ? '#f44336' : '#2196f3'};">
-                    ${os.esRegulada ? '🔴 REGULADA' : '🔵 NO REGULADA'}
-                </strong><br>
-                <strong>OS:</strong> ${os.OSATMO}<br>
-                <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                <strong>Distancia:</strong> ${os.distancia} km
+osEnRadio.forEach(os => {
+    // Determinar icono según estado y tipo
+    let icono, colorTexto, labelEstado;
+    
+    if (os.Estado_ATOMO === 'Asignada') {
+        icono = iconoAsignada;
+        colorTexto = '#ff9800';
+        labelEstado = '🟠 ASIGNADA';
+    } else if (os.esRegulada) {
+        icono = iconoRegulada;
+        colorTexto = '#f44336';
+        labelEstado = '🔴 REGULADA';
+    } else {
+        icono = iconoNoRegulada;
+        colorTexto = '#2196f3';
+        labelEstado = '🔵 NO REGULADA';
+    }
+    
+    const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+    
+    // Formatear comentario si existe
+    const comentarioFormateado = os.Comentario 
+        ? formatearComentario(os.Comentario) 
+        : '<em style="color: #999;">Sin comentario</em>';
+    
+    marker.bindPopup(`
+        <div style="padding: 10px; max-width: 350px;">
+            <div style="text-align: center; padding: 8px; background: ${os.Estado_ATOMO === 'Asignada' ? '#fff3e0' : (os.esRegulada ? '#ffebee' : '#e3f2fd')}; border-radius: 6px; margin-bottom: 10px;">
+                <strong style="color: ${colorTexto}; font-size: 16px;">
+                    ${labelEstado}
+                </strong>
             </div>
-        `);
+            <div style="text-align: left; line-height: 1.8;">
+                <strong>📋 OS:</strong> ${os.OSATMO}<br>
+                <strong>🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                <strong>📏 Distancia:</strong> ${os.distancia} km<br>
+                <strong>📍 Unidad:</strong> ${os.Unidad || 'N/A'}
+            </div>
+            <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${colorTexto}; max-height: 200px; overflow-y: auto;">
+                <strong style="color: #2d3748;">💬 Comentario:</strong>
+                <div style="margin-top: 5px; font-size: 13px; color: #555;">
+                    ${comentarioFormateado}
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat},${os.lng}" 
+                   target="_blank"
+                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); 
+                          color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; 
+                          font-weight: 600; box-shadow: 0 2px 8px rgba(66,133,244,0.3);">
+                    🗺️ Navegar en Google Maps
+                </a>
+            </div>
+        </div>
+    `, {
+        maxWidth: 400,
+        maxHeight: 450
     });
+});
+
+            <div style="text-align: center; padding: 8px; background: ${os.Estado_ATOMO === 'Asignada' ? '#fff3e0' : (os.esRegulada ? '#ffebee' : '#e3f2fd')}; border-radius: 6px; margin-bottom: 10px;">
+                <strong style="color: ${colorTexto}; font-size: 16px;">
+                    ${labelEstado}
+                </strong>
+            </div>
+            <div style="text-align: left; line-height: 1.8;">
+                <strong>📋 OS:</strong> ${os.OSATMO}<br>
+                <strong>🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                <strong>📏 Distancia:</strong> ${os.distancia} km<br>
+                <strong>📍 Unidad:</strong> ${os.Unidad || 'N/A'}
+            </div>
+            <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${colorTexto}; max-height: 200px; overflow-y: auto;">
+                <strong style="color: #2d3748;">💬 Comentario:</strong>
+                <div style="margin-top: 5px; font-size: 13px; color: #555;">
+                    ${comentarioFormateado}
+                </div>
+            </div>
+        </div>
+    `, {
+        maxWidth: 400,
+        maxHeight: 350
+    });
+});
+
     
     // Ajustar vista para mostrar todos los markers
     const bounds = L.latLngBounds([[latCentro, lngCentro]]);
@@ -9494,4 +9582,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
