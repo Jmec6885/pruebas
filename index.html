@@ -6033,12 +6033,13 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     <strong>📊 Totales por Tipología (Click para resaltar):</strong>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 10px;">
         ${tipologiasOrdenadas.map(([tip, count]) => `
-            <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')" 
-                 style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
-                 onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(5px)'"
-                 onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)'">
-                <strong style="color: #2196f3;">${count}</strong> - ${tip}
-            </div>
+    <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')" 
+         id="tipologia_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
+         style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
+         onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(5px)'"
+         onmouseout="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
+        <strong style="color: #2196f3;">${count}</strong> - ${tip}
+    </div>
         `).join('')}
     </div>
 </div>
@@ -6408,7 +6409,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 }
 
 	// ========================================
-// 🎨 RESALTAR TIPOLOGÍA EN MAPA
+// 🎨 RESALTAR TIPOLOGÍA EN MAPA (CON TOGGLE)
 // ========================================
 function resaltarTipologiaEnMapa(tipologia) {
     if (!window.markersPorTipologia || !window.markersPorTipologia[tipologia]) {
@@ -6416,47 +6417,103 @@ function resaltarTipologiaEnMapa(tipologia) {
         return;
     }
     
-    const markers = window.markersPorTipologia[tipologia];
     const mapa = window.mapaLeafletInstance;
-    
     if (!mapa) {
         alert('Mapa no inicializado');
         return;
     }
     
-    // 1️⃣ Crear bounds para centrar en los markers
-    const bounds = L.latLngBounds();
+    // 🆕 Verificar si esta tipología ya está filtrada
+    const yaFiltrado = window.tipologiaFiltrada === tipologia;
     
-    markers.forEach(marker => {
-        bounds.extend(marker.getLatLng());
+    if (yaFiltrado) {
+        // 🔄 DESACTIVAR FILTRO: Mostrar TODOS los markers
+        console.log('🔄 Mostrando TODOS los markers');
         
-        // 2️⃣ Animación de rebote
-        const icon = marker.getElement();
-        if (icon) {
-            // Agregar animación CSS
-            icon.style.animation = 'bounce 1s ease-in-out 3';
+        Object.values(window.markersPorTipologia).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (!mapa.hasLayer(marker)) {
+                    mapa.addLayer(marker);
+                }
+                // Quitar animación
+                const icon = marker.getElement();
+                if (icon) {
+                    icon.style.animation = '';
+                    icon.style.transform = '';
+                }
+            });
+        });
+        
+        // Limpiar filtro activo
+        window.tipologiaFiltrada = null;
+        
+        // Reajustar vista a todos los markers
+        const allBounds = L.latLngBounds();
+        Object.values(window.markersPorTipologia).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                allBounds.extend(marker.getLatLng());
+            });
+        });
+        mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
+        
+        console.log('✅ Filtro desactivado - Mostrando todo');
+        
+    } else {
+        // ✅ ACTIVAR FILTRO: Ocultar otros y resaltar seleccionados
+        console.log(`🔍 Filtrando por tipología: ${tipologia}`);
+        
+        const markersSeleccionados = window.markersPorTipologia[tipologia];
+        
+        // 1️⃣ Ocultar TODOS los markers
+        Object.entries(window.markersPorTipologia).forEach(([tip, markersArray]) => {
+            markersArray.forEach(marker => {
+                if (tip !== tipologia) {
+                    mapa.removeLayer(marker);
+                }
+            });
+        });
+        
+        // 2️⃣ Mostrar y resaltar SOLO los seleccionados
+        const bounds = L.latLngBounds();
+        
+        markersSeleccionados.forEach(marker => {
+            // Asegurar que esté visible
+            if (!mapa.hasLayer(marker)) {
+                mapa.addLayer(marker);
+            }
             
-            // Remover animación después
+            bounds.extend(marker.getLatLng());
+            
+            // Animación de rebote
+            const icon = marker.getElement();
+            if (icon) {
+                icon.style.animation = 'bounce 1s ease-in-out 3';
+                setTimeout(() => {
+                    icon.style.animation = '';
+                }, 3000);
+            }
+            
+            // Abrir popup temporalmente
+            marker.openPopup();
             setTimeout(() => {
-                icon.style.animation = '';
-            }, 3000);
-        }
+                marker.closePopup();
+            }, 2000);
+        });
         
-        // 3️⃣ Abrir popup temporalmente
-        marker.openPopup();
-        setTimeout(() => {
-            marker.closePopup();
-        }, 2000);
-    });
-    
-    // 4️⃣ Centrar mapa en los markers seleccionados
-    mapa.fitBounds(bounds, { 
-        padding: [50, 50],
-        maxZoom: 16
-    });
-    
-    console.log(`✅ Resaltando ${markers.length} markers de tipología: ${tipologia}`);
+        // 3️⃣ Centrar mapa en los markers filtrados
+        mapa.fitBounds(bounds, { 
+            padding: [50, 50],
+            maxZoom: 16
+        });
+        
+        // Guardar filtro activo
+        window.tipologiaFiltrada = tipologia;
+        
+        console.log(`✅ Mostrando ${markersSeleccionados.length} markers de: ${tipologia}`);
+    }
 }
+
+
 
 
 
