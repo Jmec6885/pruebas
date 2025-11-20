@@ -4479,18 +4479,22 @@ function generarInterfazUnidadKMLRuta(unidad, osAsignadas) {
 
 
 	// ========================================
-// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR
+// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CORREGIDA)
 // ========================================
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Limpiar contenedor de resultados
+    resultsContainer.innerHTML = '';
     
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
             <div class="result-header">⚙️ Generar Ruta KML por Unidad</div>
             
             <div class="form-group">
-                <label>📍 Seleccionar Unidad:</label>
-                <select id="selectUnidadKML" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
+                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione una unidad --</option>
                     ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
                 </select>
@@ -4499,14 +4503,21 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
                 </small>
             </div>
             
+            <!-- RESUMEN DINÁMICO -->
+            <div id="resumenUnidadKML" style="display: none; background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resumen:</strong><br>
+                <div id="contenidoResumenKML"></div>
+            </div>
+            
+            <!-- BOTONES -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                    📥 KML Lector
+                    📥 Descargar KML Lector
                 </button>
                 <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                    📥 KML GIS
+                    📥 Descargar KML GIS
                 </button>
-                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px;">
+                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
                     🗺️ Generar Mapa
                 </button>
             </div>
@@ -4516,6 +4527,42 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     // Guardar datos globalmente
     window.osAsignadasKML = osAsignadas;
 }
+
+	
+	// ========================================
+// 📊 ACTUALIZAR RESUMEN UNIDAD KML
+// ========================================
+function actualizarResumenUnidadKML() {
+    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
+    const resumenDiv = document.getElementById('resumenUnidadKML');
+    const contenidoDiv = document.getElementById('contenidoResumenKML');
+    
+    if (!unidadSeleccionada) {
+        resumenDiv.style.display = 'none';
+        return;
+    }
+    
+    // Filtrar OS de la unidad seleccionada
+    const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+    
+    const conCoordenadasLector = osUnidad.filter(os => 
+        os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
+    );
+    
+    const conCoordenadasGIS = osUnidad.filter(os => 
+        os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
+    );
+    
+    contenidoDiv.innerHTML = `
+        • Total de OS Asignadas: <strong>${osUnidad.length}</strong><br>
+        • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
+        • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
+    `;
+    
+    resumenDiv.style.display = 'block';
+}
+
+
 
 
 	// ========================================
