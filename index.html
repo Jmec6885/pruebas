@@ -4424,59 +4424,54 @@ async function cargarInterfazKMLRuta() {
 
 
 // ========================================
-// 👷 INTERFAZ KML RUTA - UNIDAD (CON MAPA AUTOMÁTICO)
+// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CORREGIDA)
 // ========================================
-function generarInterfazUnidadKMLRuta(unidad, osAsignadas) {
+function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
     
-    // Filtrar por coordenadas
-    const conCoordenadasLector = osAsignadas.filter(os => 
-        os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
-    );
+    // Limpiar contenedor de resultados
+    resultsContainer.innerHTML = '';
     
-    const conCoordenadasGIS = osAsignadas.filter(os => 
-        os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
-    );
-    
-    // Guardar globalmente
-    window.kmlDataLector = conCoordenadasLector;
-    window.kmlDataGIS = conCoordenadasGIS;
-    
-    // Interfaz con botones KML
     searchGrid.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header">✅ Tu Unidad: ${unidad}</div>
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">⚙️ Generar Ruta KML por Unidad</div>
             
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Resumen:</strong><br>
-                • Total de OS Asignadas: <strong>${osAsignadas.length}</strong><br>
-                • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
-                • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
+            <div class="form-group">
+                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
+                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una unidad --</option>
+                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                </select>
+                <small style="color: #666; display: block; margin-top: 8px;">
+                    ${unidades.length} unidad(es) con OS Asignadas
+                </small>
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" 
-                        onclick="descargarKMLLector()" 
-                        ${conCoordenadasLector.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                    📥 Descargar KML Lector<br>
-                    <small>(${conCoordenadasLector.length} puntos)</small>
+            <!-- RESUMEN DINÁMICO -->
+            <div id="resumenUnidadKML" style="display: none; background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resumen:</strong><br>
+                <div id="contenidoResumenKML"></div>
+            </div>
+            
+            <!-- BOTONES -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    📥 Descargar KML Lector
                 </button>
-                
-                <button class="btn btn-secondary" 
-                        onclick="descargarKMLGIS()" 
-                        ${conCoordenadasGIS.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                    📥 Descargar KML GIS<br>
-                    <small>(${conCoordenadasGIS.length} puntos)</small>
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    📥 Descargar KML GIS
+                </button>
+                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
+                    🗺️ Generar Mapa
                 </button>
             </div>
         </div>
     `;
     
-    // 🆕 GENERAR MAPA AUTOMÁTICAMENTE
-    generarMapaKMLRuta(osAsignadas, unidad);
+    // Guardar datos globalmente
+    window.osAsignadasKML = osAsignadas;
 }
-
 
 	// ========================================
 // 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CORREGIDA)
