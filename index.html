@@ -4367,70 +4367,544 @@ function transformarUsuarioAUnidad(usuario) {
 
 
 	// ========================================
-// 📍 CARGAR INTERFAZ KML RUTA
+// 📍 CARGAR INTERFAZ KML RUTA (CON MAPA)
 // ========================================
 async function cargarInterfazKMLRuta() {
     const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
     
     searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    resultsContainer.innerHTML = '';
     
     try {
-        // ✅ CORRECCIÓN
-        const { data: unidades, error } = await fetchAllFromTable('OS Pendientes', 'Unidad');
+        // ✅ Cargar OS Asignadas
+        const { data: unidades, error } = await fetchAllFromTable('OS Pendientes', 'Unidad, OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Estado_ATOMO');
         
         if (error) {
             searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar unidades</div>';
             return;
         }
         
-        // Obtener unidades únicas y ordenadas
-        const unidadesUnicas = [...new Set(unidades.map(u => u.Unidad))].sort();
+        // Filtrar solo OS Asignadas
+        const osAsignadas = unidades.filter(os => os.Estado_ATOMO === 'Asignada');
+        
+        // Obtener unidades únicas
+        const unidadesUnicas = [...new Set(osAsignadas.map(u => u.Unidad))].filter(u => u).sort();
         
         // Filtrar según rol
         let unidadesFiltradas = [];
+        let osParaMapa = [];
         
         if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor') {
             // Ver todas las unidades
             unidadesFiltradas = unidadesUnicas;
+            generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
         } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
             // Solo su unidad
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
             unidadesFiltradas = unidadesUnicas.filter(u => u === miUnidad);
+            osParaMapa = osAsignadas.filter(os => os.Unidad === miUnidad);
+            
+            if (unidadesFiltradas.length === 0) {
+                searchGrid.innerHTML = '<div class="result-card"⚠️ No se encontraron OS asignadas para tu unidad</div>';
+                return;
+            }
+            
+            generarInterfazUnidadKMLRuta(unidadesFiltradas[0], osParaMapa);
         } else {
             searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
             return;
         }
-        
-        if (unidadesFiltradas.length === 0) {
-            searchGrid.innerHTML = '<div class="result-card">⚠️ No se encontraron unidades disponibles</div>';
-            return;
-        }
-        
-        // Generar interfaz
-        searchGrid.innerHTML = `
-            <div class="form-group">
-                <label>📍 Seleccionar Unidad:</label>
-                <select id="selectUnidad" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione una unidad --</option>
-                    ${unidadesFiltradas.map(u => `<option value="${u}">${u}</option>`).join('')}
-                </select>
-                <small style="color: #666; display: block; margin-top: 8px;">
-                    ${unidadesFiltradas.length} unidad(es) disponible(s)
-                </small>
-            </div>
-            
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarKMLPorUnidad()" style="font-size: 16px; padding: 15px 30px;">
-                    🗺️ Generar KML
-                </button>
-            </div>
-        `;
         
     } catch (err) {
         console.error('Error cargando KML Ruta:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
+
+
+// ========================================
+// 👷 INTERFAZ KML RUTA - UNIDAD (CON MAPA AUTOMÁTICO)
+// ========================================
+function generarInterfazUnidadKMLRuta(unidad, osAsignadas) {
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Filtrar por coordenadas
+    const conCoordenadasLector = osAsignadas.filter(os => 
+        os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
+    );
+    
+    const conCoordenadasGIS = osAsignadas.filter(os => 
+        os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
+    );
+    
+    // Guardar globalmente
+    window.kmlDataLector = conCoordenadasLector;
+    window.kmlDataGIS = conCoordenadasGIS;
+    
+    // Interfaz con botones KML
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header">✅ Tu Unidad: ${unidad}</div>
+            
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resumen:</strong><br>
+                • Total de OS Asignadas: <strong>${osAsignadas.length}</strong><br>
+                • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
+                • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" 
+                        onclick="descargarKMLLector()" 
+                        ${conCoordenadasLector.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                    📥 Descargar KML Lector<br>
+                    <small>(${conCoordenadasLector.length} puntos)</small>
+                </button>
+                
+                <button class="btn btn-secondary" 
+                        onclick="descargarKMLGIS()" 
+                        ${conCoordenadasGIS.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                    📥 Descargar KML GIS<br>
+                    <small>(${conCoordenadasGIS.length} puntos)</small>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 🆕 GENERAR MAPA AUTOMÁTICAMENTE
+    generarMapaKMLRuta(osAsignadas, unidad);
+}
+
+
+	// ========================================
+// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR
+// ========================================
+function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
+    const searchGrid = document.getElementById('searchGrid');
+    
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">⚙️ Generar Ruta KML por Unidad</div>
+            
+            <div class="form-group">
+                <label>📍 Seleccionar Unidad:</label>
+                <select id="selectUnidadKML" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una unidad --</option>
+                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                </select>
+                <small style="color: #666; display: block; margin-top: 8px;">
+                    ${unidades.length} unidad(es) con OS Asignadas
+                </small>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    📥 KML Lector
+                </button>
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    📥 KML GIS
+                </button>
+                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px;">
+                    🗺️ Generar Mapa
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Guardar datos globalmente
+    window.osAsignadasKML = osAsignadas;
+}
+
+
+	// ========================================
+// 📥 GENERAR KML ADMIN POR UNIDAD
+// ========================================
+async function generarKMLAdminPorUnidad(tipo) {
+    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
+    
+    if (!unidadSeleccionada) {
+        alert(⚠️ Por favor seleccione una unidad');
+        return;
+    }
+    
+    const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+    
+    if (osUnidad.length === 0) {
+        alert('❌ No hay OS Asignadas para esta unidad');
+        return;
+    }
+    
+    // Filtrar por tipo de coordenadas
+    let osFiltradas;
+    if (tipo === 'lector') {
+        osFiltradas = osUnidad.filter(os => os.Coordenadas && os.Coordenadas.includes(','));
+    } else {
+        osFiltradas = osUnidad.filter(os => os.Coordendasgis && os.Coordendasgis.includes(','));
+    }
+    
+    if (osFiltradas.length === 0) {
+        alert(`❌ No hay coordenadas ${tipo === 'lector' ? 'Lector' : 'GIS'} para esta unidad`);
+        return;
+    }
+    
+    // Generar KML
+    const ubicaciones = osFiltradas.map(os => ({
+        etiqueta: os.OSATMO || 'Sin OS',
+        coordenadas: tipo === 'lector' ? os.Coordenadas : os.Coordendasgis
+    }));
+    
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KML_${tipo === 'lector' ? 'Lector' : 'GIS'}_${unidadSeleccionada}_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    console.log(`✅ KML ${tipo} descargado para ${unidadSeleccionada}`);
+}
+
+	
+	// ========================================
+// 🗺️ GENERAR MAPA ADMIN KML RUTA
+// ========================================
+function generarMapaAdminKMLRuta() {
+    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
+    
+    if (!unidadSeleccionada) {
+        alert('⚠️ Por favor seleccione una unidad primero');
+        return;
+    }
+    
+    const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+    
+    if (osUnidad.length === 0) {
+        alert('❌ No hay OS Asignadas para esta unidad');
+        return;
+    }
+    
+    generarMapaKMLRuta(osUnidad, unidadSeleccionada);
+}
+
+
+	// ========================================
+// 🗺️ GENERAR MAPA KML RUTA
+// ========================================
+function generarMapaKMLRuta(osAsignadas, unidad) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Filtrar solo OS con coordenadas válidas
+    const osConCoordenadas = osAsignadas.filter(os => {
+        const coords = os.Coordenadas || os.Coordendasgis;
+        return coords && coords.includes(',');
+    });
+    
+    if (osConCoordenadas.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+                <div class="result-header">⚠️ Sin coordenadas</div>
+                <p style="text-align: center; color: #666;">No hay OS con coordenadas válidas para esta unidad</p>
+            </div>`;
+        return;
+    }
+    
+    // Procesar OS: clasificar por tipo
+    const osConDatos = osConCoordenadas.map(os => {
+        const coords = os.Coordenadas || os.Coordendasgis;
+        const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+        
+        // Determinar si es regulada
+        const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+        const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
+        
+        return {
+            ...os,
+            lat: lat,
+            lng: lng,
+            esRegulada: esRegulada
+        };
+    });
+    
+    // Contar por tipología
+    const conteoPorTipologia = {};
+    osConDatos.forEach(os => {
+        const tip = os.Tipologia || 'Sin tipología';
+        conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
+    });
+    
+    const tipologiasOrdenadas = Object.entries(conteoPorTipologia).sort((a, b) => b[1] - a[1]);
+    
+    // Generar HTML
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header">
+                🗺️ Mapa de OS Asignadas - ${unidad} (${osConDatos.length} OS)
+            </div>
+            
+            <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
+                <strong>Leyenda:</strong>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
+                    <span>🔴 OS Reguladas</span>
+                    <span>🔵 OS No Reguladas</span>
+                </div>
+            </div>
+            
+            <!-- RESUMEN POR TIPOLOGÍA -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Totales por Tipología (Click para filtrar):</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 10px;">
+                    ${tipologiasOrdenadas.map(([tip, count]) => `
+                        <div onclick="resaltarTipologiaEnMapaKML('${tip.replace(/'/g, "\\'")}')" 
+                             id="tipologia_kml_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
+                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
+                             onmouseover="if(window.tipologiaFiltradaKML !== '${tip}') { this.style.background='#e3f2fd'; this.style.transform='translateX(5px)' }"
+                             onmouseout="if(window.tipologiaFiltradaKML !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
+                            <strong style="color: #2196f3;">${count}</strong> - ${tip}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <!-- MAPA -->
+            <div id="mapaKMLRuta" style="width: 100%; height: 600px; border-radius: 12px; margin: 15px 0;"></div>
+            
+        </div>
+    `;
+    
+    // Inicializar mapa Leaflet
+    setTimeout(() => {
+        inicializarMapaKMLRuta(osConDatos, unidad);
+    }, 100);
+}
+
+	
+// ========================================
+// 🎨 INICIALIZAR MAPA LEAFLET KML RUTA
+// ========================================
+function inicializarMapaKMLRuta(osConDatos, unidad) {
+    // Destruir mapa anterior si existe
+    if (window.mapaKMLRutaInstance) {
+        window.mapaKMLRutaInstance.remove();
+    }
+    
+    // Calcular centro geográfico
+    const latSum = osConDatos.reduce((sum, os) => sum + os.lat, 0);
+    const lngSum = osConDatos.reduce((sum, os) => sum + os.lng, 0);
+    const latCenter = latSum / osConDatos.length;
+    const lngCenter = lngSum / osConDatos.length;
+    
+    // Crear mapa
+    const mapa = L.map('mapaKMLRuta').setView([latCenter, lngCenter], 13);
+    window.mapaKMLRutaInstance = mapa;
+    
+    // Agregar capa de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(mapa);
+    
+    // Iconos personalizados
+    const iconoRegulada = L.divIcon({
+        className: 'custom-icon',
+        html: '<div style="background: #f44336; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+    
+    const iconoNoRegulada = L.divIcon({
+        className: 'custom-icon',
+        html: '<div style="background: #2196f3; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+    
+    // 🆕 Guardar referencias de markers por tipología
+    window.markersPorTipologiaKML = {};
+    
+    // Agregar markers
+    osConDatos.forEach(os => {
+        const icono = os.esRegulada ? iconoRegulada : iconoNoRegulada;
+        const colorTexto = os.esRegulada ? '#f44336' : '#2196f3';
+        const labelEstado = os.esRegulada ? '🔴 REGULADA' : '🔵 NO REGULADA';
+        
+        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+        
+        // 🆕 Guardar referencia por tipología
+        const tipologia = os.Tipologia || 'Sin tipología';
+        if (!window.markersPorTipologiaKML[tipologia]) {
+            window.markersPorTipologiaKML[tipologia] = [];
+        }
+        window.markersPorTipologiaKML[tipologia].push(marker);
+        
+        // Formatear comentario
+        const comentarioFormateado = os.Comentario 
+            ? formatearComentario(os.Comentario) 
+            : '<em style="color: #999;">Sin comentario</em>';
+        
+        marker.bindPopup(`
+            <div style="padding: 10px; max-width: 350px;">
+                <div style="text-align: center; padding: 8px; background: ${os.esRegulada ? '#ffebee' : '#e3f2fd'}; border-radius: 6px; margin-bottom: 10px;">
+                    <strong style="color: ${colorTexto}; font-size: 16px;">
+                        ${labelEstado}
+                    </strong>
+                </div>
+                <div style="text-align: left; line-height: 1.8;">
+                    <strong>📋 OS:</strong> ${os.OSATMO}<br>
+                    <strong>🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                    <strong>📍 Unidad:</strong> ${os.Unidad || 'N/A'}
+                </div>
+                <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${colorTexto}; max-height: 200px; overflow-y: auto;">
+                    <strong style="color: #2d3748;">💬 Comentario:</strong>
+                    <div style="margin-top: 5px; font-size: 13px; color: #555;">
+                        ${comentarioFormateado}
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat},${os.lng}" 
+                       target="_blank"
+                       style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); 
+                              color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; 
+                              font-weight: 600; box-shadow: 0 2px 8px rgba(66,133,244,0.3);">
+                        🗺️ Navegar en Google Maps
+                    </a>
+                </div>
+            </div>
+        `, {
+            maxWidth: 400,
+            maxHeight: 450
+        });
+    });
+    
+    // Ajustar vista para mostrar todos los markers
+    const bounds = L.latLngBounds();
+    osConDatos.forEach(os => {
+        bounds.extend([os.lat, os.lng]);
+    });
+    mapa.fitBounds(bounds, { padding: [50, 50] });
+    
+    console.log(`✅ Mapa KML Ruta inicializado: ${osConDatos.length} OS de ${unidad}`);
+}
+
+
+// ========================================
+// 🎨 RESALTAR TIPOLOGÍA EN MAPA KML (CON TOGGLE)
+// ========================================
+function resaltarTipologiaEnMapaKML(tipologia) {
+    if (!window.markersPorTipologiaKML || !window.markersPorTipologiaKML[tipologia]) {
+        alert('No se encontraron markers para esta tipología');
+        return;
+    }
+    
+    const mapa = window.mapaKMLRutaInstance;
+    if (!mapa) {
+        alert('Mapa no inicializado');
+        return;
+    }
+    
+    // Verificar si esta tipología ya está filtrada
+    const yaFiltrado = window.tipologiaFiltradaKML === tipologia;
+    
+    if (yaFiltrado) {
+        // DESACTIVAR FILTRO: Mostrar TODOS
+        console.log('🔄 Mostrando TODOS los markers');
+        
+        Object.values(window.markersPorTipologiaKML).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (!mapa.hasLayer(marker)) {
+                    mapa.addLayer(marker);
+                }
+                const icon = marker.getElement();
+                if (icon) {
+                    icon.style.animation = '';
+                    icon.style.transform = '';
+                }
+            });
+        });
+        
+        window.tipologiaFiltradaKML = null;
+        
+        // Reajustar vista
+        const allBounds = L.latLngBounds();
+        Object.values(window.markersPorTipologiaKML).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                allBounds.extend(marker.getLatLng());
+            });
+        });
+        mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
+        
+        // Quitar resaltado visual
+        document.querySelectorAll('[id^="tipologia_kml_"]').forEach(div => {
+            div.style.background = '#f8f9fa';
+            div.style.transform = 'translateX(0)';
+        });
+        
+        console.log('✅ Filtro desactivado');
+        
+    } else {
+        // ACTIVAR FILTRO: Ocultar otros
+        console.log(`🔍 Filtrando por tipología: ${tipologia}`);
+        
+        const markersSeleccionados = window.markersPorTipologiaKML[tipologia];
+        
+        // Ocultar TODOS los markers
+        Object.entries(window.markersPorTipologiaKML).forEach(([tip, markersArray]) => {
+            markersArray.forEach(marker => {
+                if (tip !== tipologia) {
+                    mapa.removeLayer(marker);
+                }
+            });
+        });
+        
+        // Mostrar y resaltar SOLO los seleccionados
+        const bounds = L.latLngBounds();
+        
+        markersSeleccionados.forEach(marker => {
+            if (!mapa.hasLayer(marker)) {
+                mapa.addLayer(marker);
+            }
+            
+            bounds.extend(marker.getLatLng());
+            
+            const icon = marker.getElement();
+            if (icon) {
+                icon.style.animation = 'bounce 1s ease-in-out 3';
+                setTimeout(() => {
+                    icon.style.animation = '';
+                }, 3000);
+            }
+            
+            marker.openPopup();
+            setTimeout(() => {
+                marker.closePopup();
+            }, 2000);
+        });
+        
+        mapa.fitBounds(bounds, { 
+            padding: [50, 50],
+            maxZoom: 16
+        });
+        
+        window.tipologiaFiltradaKML = tipologia;
+        
+        // Resaltar visualmente el div seleccionado
+        document.querySelectorAll('[id^="tipologia_kml_"]').forEach(div => {
+            div.style.background = '#f8f9fa';
+            div.style.transform = 'translateX(0)';
+        });
+        
+        const divSeleccionado = document.getElementById(`tipologia_kml_${tipologia.replace(/[^a-zA-Z0-9]/g, '_')}`);
+        if (divSeleccionado) {
+            divSeleccionado.style.background = '#e3f2fd';
+            divSeleccionado.style.transform = 'translateX(5px)';
+        }
+        
+        console.log(`✅ Mostrando ${markersSeleccionados.length} markers de: ${tipologia}`);
+    }
+}
+
 
 
 	// ========================================
