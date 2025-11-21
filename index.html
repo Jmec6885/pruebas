@@ -859,8 +859,8 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: true };
     }
     
-    // 🆕 VALIDAR EXCEPCIONES DE HORARIO (para Lectura/Consulta/Contratista)
-    if (userData && (rol === 'Lectura' || rol === 'Consulta' || rol === 'Contratista')) {
+    // 🆕 VALIDAR EXCEPCIONES DE HORARIO
+    if (userData && (rol === 'Lectura' || rol === 'Consulta' || rol === 'Contratista' || rol === 'Despacho')) {
         // Verificar horario excepcional para día específico
         if (userData.fecha_excepcional === fechaHoy && 
             userData.horario_excepcional_inicio && 
@@ -922,8 +922,18 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
     }
 
+    // 🆕 DESPACHO: Lunes-Sábado, 6 AM - 6 PM
+    if (rol === 'Despacho') {
+        if (diaActual === 0) { // Domingo bloqueado
+            return { permitido: false, mensaje: 'El rol Despacho no tiene acceso los domingos.' };
+        }
+        if (horaActual >= 6 && horaActual < 18) {
+            return { permitido: true };
+        }
+        return { permitido: false, mensaje: 'Su acceso está limitado de 6:00 AM a 6:00 PM.' };
+    }
 
-	// 🎯 CAMBIO: Bodega - 24/7 (Lunes-Sábado, domingo bloqueado)
+    // 🎯 CAMBIO: Bodega - 24/7 (Lunes-Sábado, domingo bloqueado)
     if (rol === 'Bodega') {
         if (diaActual === 0) { // Domingo bloqueado
             return { permitido: false, mensaje: 'El rol Bodega no tiene acceso los domingos.' };
@@ -947,6 +957,7 @@ function verificarHorarioPermitido(rol, userData = null) {
     // Rol no reconocido
     return { permitido: true };
 }
+
 
 
 
@@ -2192,6 +2203,20 @@ function mostrarTablasSegunRol() {
         return;
     }
     
+    // 🆕 DESPACHO: TODO excepto usuarios e IPR, CON ACCESO A NOMBRE CLIENTE
+    if (currentUser.rol === 'Despacho') {
+        tableOptions.forEach(option => {
+            const onclick = option.getAttribute('onclick');
+            if (onclick && !onclick.includes('usuarios') && !onclick.includes('retiro_medidores')) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        console.log('✅ Despacho: Todo excepto usuarios e IPR');
+        return;
+    }
+    
     // 🆕 BODEGA: Solo IPR + OS Cerradas
     if (currentUser.rol === 'Bodega') {
         tableOptions.forEach(option => {
@@ -2250,20 +2275,21 @@ function mostrarTablasSegunRol() {
         return;
     }
 
-	// 🗺️ MAPA DE RUTAS: Solo Contratista, Administrador, Consulta
-if (currentUser.rol === 'Contratista' || 
-    currentUser.rol === 'Administrador' || 
-    currentUser.rol === 'Consulta') {
-    
-    tableOptions.forEach(option => {
-        const onclick = option.getAttribute('onclick');
-        if (onclick && onclick.includes('mapa_rutas')) {
-            option.style.display = 'block';
-        }
-    });
-    
-    console.log('✅ Mapa de Rutas habilitado para:', currentUser.rol);
-}
+    // 🗺️ MAPA DE RUTAS: Solo Contratista, Administrador, Consulta, Despacho
+    if (currentUser.rol === 'Contratista' || 
+        currentUser.rol === 'Administrador' || 
+        currentUser.rol === 'Consulta' ||
+        currentUser.rol === 'Despacho') {
+        
+        tableOptions.forEach(option => {
+            const onclick = option.getAttribute('onclick');
+            if (onclick && onclick.includes('mapa_rutas')) {
+                option.style.display = 'block';
+            }
+        });
+        
+        console.log('✅ Mapa de Rutas habilitado para:', currentUser.rol);
+    }
     
     // 🎯 DEFAULT: Todo excepto usuarios
     tableOptions.forEach(option => {
@@ -2275,6 +2301,9 @@ if (currentUser.rol === 'Contratista' ||
         }
     });
 }
+
+
+
 
 async function desbloquearUsuario(username) {
     if (!currentUser || currentUser.rol !== 'Supervisor') {
@@ -3488,6 +3517,7 @@ function mostrarFormularioNuevoUsuario() {
         <option value="">-- Seleccione un rol --</option>
         <option value="Administrador">Administrador</option>
         <option value="Supervisor">Supervisor</option>
+	<option value="Despacho">Despacho</option> <!-- 🆕 AGREGAR -->
         <option value="Bodega">Bodega</option>
         <option value="Consulta">Consulta</option>
         <option value="Lectura">Lectura</option>
@@ -4395,7 +4425,7 @@ async function cargarInterfazKMLRuta() {
         let unidadesFiltradas = [];
         let osParaMapa = [];
         
-        if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor') {
+        if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
             // Ver todas las unidades
             unidadesFiltradas = unidadesUnicas;
             generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
@@ -4424,104 +4454,511 @@ async function cargarInterfazKMLRuta() {
 
 
 // ========================================
-// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CORREGIDA)
+// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CON FILTROS POR UNIDAD)
 // ========================================
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
     
-    // Limpiar contenedor de resultados
     resultsContainer.innerHTML = '';
     
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <div class="result-header">⚙️ Generar Ruta KML por Unidad</div>
+            <div class="result-header">⚙️ Configuración de Filtros por Unidad</div>
             
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
-                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione una unidad --</option>
-                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
-                </select>
-                <small style="color: #666; display: block; margin-top: 8px;">
-                    ${unidades.length} unidad(es) con OS Asignadas
-                </small>
+            <!-- SELECTOR MÚLTIPLE DE UNIDADES -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                <strong style="color: #e65100;">🔧 Paso 1: Seleccionar Unidades para Configurar Filtros</strong>
+                <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+                    Selecciona una o varias unidades para aplicarles los mismos filtros
+                </p>
             </div>
             
-            <!-- RESUMEN DINÁMICO -->
-            <div id="resumenUnidadKML" style="display: none; background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Resumen:</strong><br>
-                <div id="contenidoResumenKML"></div>
+            <div style="background: white; padding: 15px; border-radius: 10px; margin: 15px 0; max-height: 300px; overflow-y: auto; border: 2px solid #e1e5e9;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+                    ${unidades.map(unidad => `
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px; transition: all 0.3s;"
+                               onmouseover="this.style.background='#e3f2fd'"
+                               onmouseout="this.style.background='#f8f9fa'">
+                            <input type="checkbox" 
+                                   class="checkbox-unidad-filtro" 
+                                   value="${unidad}"
+                                   onchange="actualizarContadorUnidadesSeleccionadas()"
+                                   style="width: 18px; height: 18px;">
+                            <span style="font-size: 14px; font-weight: 500;">${unidad}</span>
+                        </label>
+                    `).join('')}
+                </div>
             </div>
             
-            <!-- BOTONES -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                    📥 Descargar KML Lector
+            <div style="text-align: center; padding: 10px; background: #e3f2fd; border-radius: 8px; margin: 10px 0;">
+                <strong style="color: #1565c0;">📊 Unidades seleccionadas: <span id="contadorUnidadesSeleccionadas">0</span></strong>
+            </div>
+            
+            <!-- CONFIGURACIÓN DE FILTROS -->
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #2196f3;">
+                <strong style="color: #1565c0;">🎯 Paso 2: Configurar Filtros</strong>
+            </div>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 15px 0;">
+                
+                <!-- RANGOS -->
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="font-weight: 600; color: #2d3748; margin-bottom: 10px; display: block;">📊 Rangos de Días:</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px;">
+                        ${['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'].map(rango => `
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px;">
+                                <input type="checkbox" class="checkbox-rango-unidad" value="${rango}" style="width: 18px; height: 18px;">
+                                <span>${rango} días</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <!-- TIPOLOGÍAS -->
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="font-weight: 600; color: #2d3748; margin-bottom: 10px; display: block;">🏷️ Tipologías:</label>
+                    <button onclick="toggleSeccionTipologiasUnidad()" class="btn btn-secondary" style="margin-bottom: 10px; width: 100%;">
+                        📋 Seleccionar Tipologías
+                    </button>
+                    <div id="seccionTipologiasUnidad" style="display: none; max-height: 250px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 15px; background: #f8f9fa;">
+                        <!-- Se carga dinámicamente -->
+                    </div>
+                </div>
+                
+                <!-- RADIO -->
+                <div class="form-group">
+                    <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km):</label>
+                    <input type="number" id="radioKmUnidad" min="1" max="20" value="3" 
+                           style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <small style="color: #666; display: block; margin-top: 5px;">Mínimo: 1 km | Máximo: 20 km</small>
+                </div>
+                
+            </div>
+            
+            <!-- BOTONES DE ACCIÓN -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn" onclick="guardarFiltrosPorUnidad()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
+                    💾 Guardar Filtros para Unidades Seleccionadas
                 </button>
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                    📥 Descargar KML GIS
+                <button class="btn btn-danger" onclick="borrarTodosFiltrosUnidades()" style="background: linear-gradient(135deg, #f44336 0%, #c62828 100%); font-size: 16px; font-weight: 600;">
+                    🗑️ Borrar TODOS los Filtros
                 </button>
-                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
-                    🗺️ Generar Mapa
-                </button>
+            </div>
+            
+            <hr style="margin: 30px 0; border: 2px solid #e2e8f0;">
+            
+            <!-- GENERAR MAPA POR UNIDAD -->
+            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; margin-top: 20px;">
+                <div class="result-header">🗺️ Ver Mapa de Unidad</div>
+                
+                <div class="form-group">
+                    <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar UNA Unidad para ver mapa:</label>
+                    <select id="selectUnidadParaMapa" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                        <option value="">-- Seleccione una unidad --</option>
+                        ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div style="text-align: center; margin-top: 15px;">
+                    <button class="btn" onclick="generarMapaUnidadConFiltros()" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); font-size: 18px; padding: 18px 40px; font-weight: 600;">
+                        🗺️ Generar Mapa
+                    </button>
+                </div>
             </div>
         </div>
     `;
     
     // Guardar datos globalmente
     window.osAsignadasKML = osAsignadas;
+    
+    // Cargar tipologías
+    cargarTipologiasParaFiltrosUnidad();
 }
 
-	// ========================================
-// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CORREGIDA)
 // ========================================
-function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
-    
-    // Limpiar contenedor de resultados
-    resultsContainer.innerHTML = '';
-    
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <div class="result-header">⚙️ Generar Ruta KML por Unidad</div>
-            
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
-                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione una unidad --</option>
-                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
-                </select>
-                <small style="color: #666; display: block; margin-top: 8px;">
-                    ${unidades.length} unidad(es) con OS Asignadas
-                </small>
-            </div>
-            
-            <!-- RESUMEN DINÁMICO -->
-            <div id="resumenUnidadKML" style="display: none; background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Resumen:</strong><br>
-                <div id="contenidoResumenKML"></div>
-            </div>
-            
-            <!-- BOTONES -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                    📥 Descargar KML Lector
-                </button>
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                    📥 Descargar KML GIS
-                </button>
-                <button class="btn" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
-                    🗺️ Generar Mapa
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Guardar datos globalmente
-    window.osAsignadasKML = osAsignadas;
+// 📊 ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
+// ========================================
+function actualizarContadorUnidadesSeleccionadas() {
+    const checkboxes = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    document.getElementById('contadorUnidadesSeleccionadas').textContent = checkboxes.length;
 }
+
+// ========================================
+// 🏷️ TOGGLE SECCIÓN TIPOLOGÍAS
+// ========================================
+function toggleSeccionTipologiasUnidad() {
+    const seccion = document.getElementById('seccionTipologiasUnidad');
+    seccion.style.display = seccion.style.display === 'none' ? 'block' : 'none';
+}
+
+// ========================================
+// 📋 CARGAR TIPOLOGÍAS PARA FILTROS
+// ========================================
+async function cargarTipologiasParaFiltrosUnidad() {
+    const tipologiasUnicas = await cargarTipologias();
+    
+    const seccion = document.getElementById('seccionTipologiasUnidad');
+    
+    if (tipologiasUnicas.length === 0) {
+        seccion.innerHTML = '<p style="color: #666; text-align: center;">No hay tipologías disponibles</p>';
+        return;
+    }
+    
+    seccion.innerHTML = `
+        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; padding: 10px; background: white; border-radius: 6px; font-weight: 600;">
+            <input type="checkbox" id="todasTipologiasUnidad" onchange="toggleTodasTipologiasUnidad()" style="width: 18px; height: 18px;">
+            <strong>Seleccionar todas las tipologías</strong>
+        </label>
+        <hr style="margin: 10px 0;">
+        ${tipologiasUnicas.map(tip => `
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; margin-bottom: 8px; background: white; border-radius: 6px; border: 1px solid #e1e5e9;">
+                <input type="checkbox" class="checkbox-tipologia-unidad" value="${tip}" onchange="actualizarSeleccionTipologiasUnidad()" style="width: 18px; height: 18px; flex-shrink: 0;">
+                <span style="font-size: 14px;">${tip}</span>
+            </label>
+        `).join('')}
+    `;
+}
+
+// ========================================
+// ✅ TOGGLE TODAS LAS TIPOLOGÍAS
+// ========================================
+function toggleTodasTipologiasUnidad() {
+    const todasCheckbox = document.getElementById('todasTipologiasUnidad');
+    const checkboxes = document.querySelectorAll('.checkbox-tipologia-unidad');
+    
+    checkboxes.forEach(cb => {
+        cb.checked = todasCheckbox.checked;
+    });
+}
+
+// ========================================
+// 🔄 ACTUALIZAR SELECCIÓN DE TIPOLOGÍAS
+// ========================================
+function actualizarSeleccionTipologiasUnidad() {
+    const todasCheckbox = document.getElementById('todasTipologiasUnidad');
+    const checkboxes = document.querySelectorAll('.checkbox-tipologia-unidad');
+    
+    let todosMarcados = true;
+    checkboxes.forEach(cb => {
+        if (!cb.checked) todosMarcados = false;
+    });
+    
+    todasCheckbox.checked = todosMarcados;
+}
+
+
+
+// ========================================
+// 💾 GUARDAR FILTROS POR UNIDAD
+// ========================================
+async function guardarFiltrosPorUnidad() {
+    // 1️⃣ Obtener unidades seleccionadas
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    const unidadesSeleccionadas = Array.from(checkboxesUnidades).map(cb => cb.value);
+    
+    if (unidadesSeleccionadas.length === 0) {
+        alert('⚠️ Por favor seleccione al menos una unidad');
+        return;
+    }
+    
+    // 2️⃣ Obtener rangos seleccionados
+    const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
+    const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
+    
+    // 3️⃣ Obtener tipologías seleccionadas
+    const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
+    const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
+    
+    // 4️⃣ Obtener radio
+    const radioKm = parseInt(document.getElementById('radioKmUnidad').value);
+    
+    if (radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
+    
+    // 5️⃣ Verificar si alguna unidad ya tiene filtros
+    const { data: filtrosExistentes, error: errorVerificar } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('unidad, rangos, tipologias, radio_km')
+        .in('unidad', unidadesSeleccionadas);
+    
+    if (errorVerificar) {
+        console.error('Error verificando filtros:', errorVerificar);
+        alert('❌ Error al verificar filtros existentes');
+        return;
+    }
+    
+    // 6️⃣ Si hay unidades con filtros, pedir confirmación
+    if (filtrosExistentes && filtrosExistentes.length > 0) {
+        const unidadesConFiltros = filtrosExistentes.map(f => f.unidad);
+        
+        let mensaje = `⚠️ Las siguientes unidades YA tienen filtros guardados:\n\n`;
+        
+        filtrosExistentes.forEach(f => {
+            mensaje += `📍 ${f.unidad}:\n`;
+            mensaje += `   • Rangos: ${f.rangos && f.rangos.length > 0 ? f.rangos.join(', ') : 'Ninguno'}\n`;
+            mensaje += `   • Tipologías: ${f.tipologias && f.tipologias.length > 0 ? f.tipologias.length + ' seleccionadas' : 'Ninguna'}\n`;
+            mensaje += `   • Radio: ${f.radio_km} km\n\n`;
+        });
+        
+        mensaje += `¿Deseas SOBRESCRIBIR con los nuevos filtros?\n\n`;
+        mensaje += `Nuevos valores:\n`;
+        mensaje += `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n`;
+        mensaje += `• Tipologías: ${tipologias.length} seleccionadas\n`;
+        mensaje += `• Radio: ${radioKm} km`;
+        
+        const confirmar = confirm(mensaje);
+        
+        if (!confirmar) return;
+    }
+    
+    // 7️⃣ Guardar/actualizar filtros para cada unidad
+    const registrosAGuardar = unidadesSeleccionadas.map(unidad => ({
+        unidad: unidad,
+        rangos: rangos.length > 0 ? rangos : null,
+        tipologias: tipologias.length > 0 ? tipologias : null,
+        radio_km: radioKm,
+        fecha_actualizacion: new Date().toISOString(),
+        configurado_por: currentUser.usuario
+    }));
+    
+    const { error: errorGuardar } = await supabaseClient
+        .from('filtros_por_unidad')
+        .upsert(registrosAGuardar, {
+            onConflict: 'unidad'
+        });
+    
+    if (errorGuardar) {
+        console.error('Error guardando filtros:', errorGuardar);
+        alert('❌ Error al guardar filtros: ' + errorGuardar.message);
+        return;
+    }
+    
+    // 8️⃣ Éxito
+    alert(
+        `✅ Filtros guardados exitosamente\n\n` +
+        `📊 Unidades configuradas: ${unidadesSeleccionadas.length}\n` +
+        `• ${unidadesSeleccionadas.join('\n• ')}\n\n` +
+        `Ahora estas unidades verán:\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
+        `• Tipologías: ${tipologias.length} seleccionadas\n` +
+        `• Radio: ${radioKm} km`
+    );
+    
+    // Limpiar selección
+    document.querySelectorAll('.checkbox-unidad-filtro:checked').forEach(cb => cb.checked = false);
+    actualizarContadorUnidadesSeleccionadas();
+    
+    console.log('✅ Filtros guardados para:', unidadesSeleccionadas);
+}
+
+
+// ========================================
+// 🗑️ BORRAR TODOS LOS FILTROS DE UNIDADES
+// ========================================
+async function borrarTodosFiltrosUnidades() {
+    // 1️⃣ Confirmar acción
+    const confirmar = confirm(
+        `⚠️ ¿ELIMINAR FILTROS DE TODAS LAS UNIDADES?\n\n` +
+        `Esta acción:\n` +
+        `• Eliminará todos los filtros personalizados\n` +
+        `• Las unidades volverán a usar filtros globales\n` +
+        `• NO se puede deshacer\n\n` +
+        `¿Estás seguro de continuar?`
+    );
+    
+    if (!confirmar) return;
+    
+    // 2️⃣ Confirmar nuevamente
+    const confirmar2 = confirm(
+        `⚠️ ÚLTIMA CONFIRMACIÓN\n\n` +
+        `Esto eliminará TODOS los filtros guardados.\n\n` +
+        `¿Proceder?`
+    );
+    
+    if (!confirmar2) return;
+    
+    try {
+        // 3️⃣ Eliminar todos los registros
+        const { error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .neq('id', 0); // Eliminar todos (condición que siempre es verdadera)
+        
+        if (error) {
+            console.error('Error eliminando filtros:', error);
+            alert('❌ Error al eliminar filtros: ' + error.message);
+            return;
+        }
+        
+        // 4️⃣ Éxito
+        alert(
+            `✅ TODOS LOS FILTROS ELIMINADOS\n\n` +
+            `Todas las unidades ahora usarán los filtros globales por defecto.`
+        );
+        
+        console.log('🗑️ Todos los filtros de unidades eliminados');
+        
+    } catch (err) {
+        console.error('Error borrando filtros:', err);
+        alert('❌ Error de conexión');
+    }
+}
+
+
+// ========================================
+// 🗺️ GENERAR MAPA DE UNIDAD CON FILTROS
+// ========================================
+async function generarMapaUnidadConFiltros() {
+    const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
+    
+    if (!unidadSeleccionada) {
+        alert('⚠️ Por favor seleccione una unidad');
+        return;
+    }
+    
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    
+    try {
+        // 1️⃣ Obtener filtros de esta unidad
+        const { data: filtrosUnidad, error: errorFiltros } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('unidad', unidadSeleccionada)
+            .maybeSingle();
+        
+        if (errorFiltros) {
+            console.error('Error cargando filtros:', errorFiltros);
+            resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar filtros</div>';
+            return;
+        }
+        
+        // 2️⃣ Si no tiene filtros, usar globales
+        let filtrosAplicar;
+        if (filtrosUnidad) {
+            filtrosAplicar = filtrosUnidad;
+            console.log('✅ Usando filtros personalizados de la unidad');
+        } else {
+            // Cargar filtros globales
+            const { data: filtrosGlobales } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .single();
+            
+            filtrosAplicar = filtrosGlobales || {
+                rangos: null,
+                tipologias: null,
+                radio_km: 3
+            };
+            console.log('⚠️ Unidad sin filtros personalizados, usando globales');
+        }
+        
+        // 3️⃣ Guardar filtros globalmente
+        window.filtrosAplicados = filtrosAplicar;
+        
+        // 4️⃣ Obtener OS Asignadas de la unidad
+        const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+        
+        if (osAsignadasUnidad.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd;">
+                    <div class="result-header">⚠️ Sin OS Asignadas</div>
+                    <p style="text-align: center; color: #666;">La unidad ${unidadSeleccionada} no tiene OS Asignadas</p>
+                </div>`;
+            return;
+        }
+        
+        // 5️⃣ Obtener coordenada centro (primera OS con coordenadas)
+        const osCentro = osAsignadasUnidad.find(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            return coords && coords.includes(',');
+        });
+        
+        if (!osCentro) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd;">
+                    <div class="result-header">⚠️ Sin coordenadas</div>
+                    <p style="text-align: center; color: #666;">Las OS de esta unidad no tienen coordenadas válidas</p>
+                </div>`;
+            return;
+        }
+        
+        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+        const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+        
+        // 6️⃣ Cargar TODAS las OS Registradas para buscar cercanas
+        const { data: osRegistradas, error: errorRegistradas } = await fetchAllFromTable(
+            'OS Pendientes',
+            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO'
+        );
+        
+        if (errorRegistradas) {
+            console.error('Error cargando OS Registradas:', errorRegistradas);
+            resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar OS cercanas</div>';
+            return;
+        }
+        
+        // 7️⃣ Filtrar solo OS Registradas
+        const soloRegistradas = osRegistradas.filter(os => os.Estado_ATOMO === 'Registrada');
+        
+        // 8️⃣ Buscar OS cercanas dentro del radio
+        const radioKm = filtrosAplicar.radio_km || 3;
+        const osEnRadio = [];
+        
+        soloRegistradas.forEach(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            
+            if (!validarFormatoCoordenadas(coords)) return;
+            
+            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+            
+            if (distancia <= radioKm) {
+                const esRegulada = os.Tipo_de_OS && 
+                                  os.Tipo_de_OS.toLowerCase().includes('regulad') && 
+                                  !os.Tipo_de_OS.toLowerCase().includes('no');
+                
+                let mostrar = false;
+                
+                if (esRegulada) {
+                    mostrar = true; // Reguladas SIEMPRE se muestran
+                } else {
+                    mostrar = validarFiltrosOS(os, filtrosAplicar);
+                }
+                
+                if (mostrar) {
+                    osEnRadio.push({
+                        ...os,
+                        distancia: distancia,
+                        esRegulada: esRegulada,
+                        lat: lat,
+                        lng: lng
+                    });
+                }
+            }
+        });
+        
+        // 9️⃣ Ordenar por distancia
+        osEnRadio.sort((a, b) => a.distancia - b.distancia);
+        
+        console.log(`✅ ${osEnRadio.length} OS Registradas encontradas en radio de ${radioKm} km`);
+        
+        // 🔟 Combinar: OS Asignadas + OS cercanas filtradas
+        const osParaMapa = [...osAsignadasUnidad, ...osEnRadio];
+        
+        // Generar mapa (usando la función existente de Mapa de Rutas)
+        generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
+        
+    } catch (err) {
+        console.error('Error generando mapa:', err);
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+    }
+}
+
+
 
 	
 	// ========================================
@@ -10163,7 +10600,7 @@ function seleccionarTabla(tableName) {
 
 	// 🗺️ Validar acceso a Mapa de Rutas
 if (tableName === 'mapa_rutas') {
-    const rolesPermitidos = ['Administrador', 'Contratista', 'Consulta'];
+    const rolesPermitidos = ['Administrador', 'Contratista', 'Consulta', 'Despacho'];
     if (!rolesPermitidos.includes(currentUser.rol)) {
         alert('⚠️ Su rol no tiene acceso al Mapa de Rutas');
         return;
