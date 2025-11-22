@@ -6689,7 +6689,8 @@ if (unidadesUnicas.length === 0) {
     return;
 }
     
-      
+   
+    
     const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     const rangosSeleccionados = filtros.rangos || [];
     const tipologiasSeleccionadas = filtros.tipologias || [];
@@ -7477,12 +7478,12 @@ while (true) {
     if (!data || data.length === 0) break;
     
     // ✅ FILTRAR: Solo agregar si están en OS_ASIGNADAS
-    // ✅ Comparar usando el nombre real de la columna: 'osatomo' (minúsculas)
-const { data: asignacion } = await supabaseClient
-    .from('OS_ASIGNADAS')
-    .select('osatomo')  // o solo '*' si no usas el valor
-    .eq('osatomo', os.OSATMO)  // ← aquí usas el valor de OS Pendientes
-    .maybeSingle();
+    for (const os of data) {
+        const { data: asignacion } = await supabaseClient
+            .from('OS_ASIGNADAS')
+            .select('osatomo')
+            .eq('osatomo', os.OSATMO)  // ← Comparar con nombre real en minúsculas
+            .maybeSingle();
         
         if (asignacion) {
             todasOS.push(os);
