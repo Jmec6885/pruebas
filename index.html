@@ -4475,8 +4475,8 @@ async function cargarInterfazKMLRuta() {
     resultsContainer.innerHTML = '';
     
     try {
-        // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS
-console.log('🔍 Intentando cargar desde OS_ASIGNADAS...');
+        // ✅ CARGAR UNIDADES DESDE os_asignadas
+console.log('🔍 Intentando cargar desde os_asignadas...');
 
 const { data: asignaciones, error: errorAsignadas } = await supabaseClient
     .from('os_asignadas')
@@ -4484,7 +4484,7 @@ const { data: asignaciones, error: errorAsignadas } = await supabaseClient
 
 // 🆕 DEBUG: Ver el error exacto
 if (errorAsignadas) {
-    console.error('❌ Error cargando OS_ASIGNADAS:', errorAsignadas);
+    console.error('❌ Error cargando os_asignadas:', errorAsignadas);
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
             <div class="result-header">❌ Error al cargar asignaciones</div>
@@ -4494,7 +4494,7 @@ if (errorAsignadas) {
             </div>
             <p style="text-align: center; color: #666;">
                 Posibles causas:<br>
-                • La tabla OS_ASIGNADAS no existe<br>
+                • La tabla os_asignadas no existe<br>
                 • RLS está bloqueando el acceso<br>
                 • Permisos insuficientes
             </p>
@@ -4509,7 +4509,7 @@ if (!asignaciones || asignaciones.length === 0) {
         <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
             <div class="result-header">⚠️ Sin asignaciones</div>
             <p style="text-align: center; color: #666;">
-                No hay OS asignadas en la tabla OS_ASIGNADAS.<br>
+                No hay OS asignadas en la tabla os_asignadas.<br>
                 Cargue el archivo de asignaciones primero.
             </p>
         </div>`;
@@ -6392,7 +6392,7 @@ async function cargarInterfazIPR() {
         </div>`;
     
     try {
-        // 1️⃣ ELIMINAR TODO DE OS_ASIGNADAS
+        // 1️⃣ ELIMINAR TODO DE os_asignadas
         const { error: errorDelete } = await supabaseClient
             .from('os_asignadas')
             .delete()
@@ -6403,7 +6403,7 @@ async function cargarInterfazIPR() {
             return;
         }
         
-        console.log('✅ Tabla OS_ASIGNADAS limpiada');
+        console.log('✅ Tabla os_asignadas limpiada');
         
         // 2️⃣ INSERTAR NUEVAS ASIGNACIONES (por lotes)
         resultsContainer.innerHTML = `
@@ -6461,7 +6461,7 @@ async function cargarInterfazIPR() {
                 </div>
             </div>`;
         
-        console.log(`✅ ${insertados} asignaciones insertadas en OS_ASIGNADAS`);
+        console.log(`✅ ${insertados} asignaciones insertadas en os_asignadas`);
         
     } catch (err) {
         console.error('Error en carga:', err);
@@ -6503,8 +6503,8 @@ async function cargarInterfazMapaRutas() {
         }
 
         
-        // 🆕 CARGAR UNIDADES DESDE OS_ASIGNADAS (CORREGIDO)
-console.log('🔍 Cargando unidades desde OS_ASIGNADAS...');
+        // 🆕 CARGAR UNIDADES DESDE os_asignadas (CORREGIDO)
+console.log('🔍 Cargando unidades desde os_asignadas...');
 
 const unidadesUnicas = [];
 let offset = 0;
@@ -6555,7 +6555,7 @@ if (unidadesUnicas.length === 0) {
         <div class="result-card" style="background: #fff3cd;">
             <div class="result-header">⚠️ Sin unidades</div>
             <p style="text-align: center;">
-                No hay unidades en OS_ASIGNADAS.<br>
+                No hay unidades en os_asignadas.<br>
                 <strong>Acción:</strong> Carga el archivo de asignaciones primero.
             </p>
         </div>`;
@@ -6569,7 +6569,7 @@ if (unidadesUnicas.length === 0) {
             
             console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
             
-            // Obtener OSATOMO de OS_ASIGNADAS
+            // Obtener OSATOMO de os_asignadas
             const { data: asignaciones, error: errorAsig } = await supabaseClient
                 .from('os_asignadas')
                 .select('osatomo, Unidad')
@@ -6617,8 +6617,8 @@ if (unidadesUnicas.length === 0) {
 async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
     
-    // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS (con debug mejorado)
-console.log('🔍 Cargando unidades desde OS_ASIGNADAS...');
+    // ✅ CARGAR UNIDADES DESDE os_asignadas (con debug mejorado)
+console.log('🔍 Cargando unidades desde os_asignadas...');
 
 const unidadesUnicas = [];
 let offset = 0;
@@ -6639,14 +6639,14 @@ while (true) {
             <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
                 <div class="result-header">❌ Error cargando unidades</div>
                 <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                    <strong>Error al acceder a OS_ASIGNADAS:</strong><br>
+                    <strong>Error al acceder a os_asignadas:</strong><br>
                     <code style="color: #d32f2f; font-size: 13px;">${error.message}</code><br><br>
                     <strong>Código:</strong> ${error.code || 'N/A'}<br>
                     <strong>Detalles:</strong> ${error.details || 'N/A'}
                 </div>
                 <p style="text-align: center; color: #666;">
                     Verifica que:<br>
-                    • La tabla OS_ASIGNADAS exista<br>
+                    • La tabla os_asignadas exista<br>
                     • RLS esté deshabilitado o configurado correctamente<br>
                     • Tengas permisos de lectura
                 </p>
@@ -6682,7 +6682,7 @@ if (unidadesUnicas.length === 0) {
         <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
             <div class="result-header">⚠️ Sin unidades asignadas</div>
             <p style="text-align: center; color: #666;">
-                No se encontraron unidades en OS_ASIGNADAS.<br>
+                No se encontraron unidades en os_asignadas.<br>
                 Cargue el archivo de asignaciones primero (opción "Cargar Asignaciones").
             </p>
         </div>`;
@@ -6980,7 +6980,7 @@ function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
 }
 
 // ========================================
-// 🔍 VERIFICAR TABLA OS_ASIGNADAS
+// 🔍 VERIFICAR TABLA os_asignadas
 // ========================================
 async function verificarTablaOSAsignadas() {
     const resultsContainer = document.getElementById('searchResults');
@@ -6988,7 +6988,7 @@ async function verificarTablaOSAsignadas() {
     resultsContainer.innerHTML = `
         <div class="result-card" style="text-align: center;">
             <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <h3 style="color: #1565c0;">Verificando tabla OS_ASIGNADAS...</h3>
+            <h3 style="color: #1565c0;">Verificando tabla os_asignadas...</h3>
         </div>`;
     
     try {
@@ -7011,11 +7011,11 @@ async function verificarTablaOSAsignadas() {
                         <strong>💡 Soluciones:</strong><br><br>
                         1. Ejecuta en Supabase SQL Editor:<br>
                         <code style="display: block; background: #f5f5f5; padding: 10px; border-radius: 6px; margin: 10px 0;">
-                            ALTER TABLE OS_ASIGNADAS DISABLE ROW LEVEL SECURITY;
+                            ALTER TABLE os_asignadas DISABLE ROW LEVEL SECURITY;
                         </code><br>
                         2. Verifica que la tabla existe:<br>
                         <code style="display: block; background: #f5f5f5; padding: 10px; border-radius: 6px; margin: 10px 0;">
-                            SELECT * FROM OS_ASIGNADAS LIMIT 5;
+                            SELECT * FROM os_asignadas LIMIT 5;
                         </code>
                     </div>
                 </div>`;
@@ -7335,7 +7335,7 @@ async function buscarYMostrarMapaUnidad() {
     try {
 
         
-// 1️⃣ VERIFICAR QUE ESTÉ EN OS_ASIGNADAS PARA SU UNIDAD
+// 1️⃣ VERIFICAR QUE ESTÉ EN os_asignadas PARA SU UNIDAD
 const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
 
 const { data: asignacion, error: errorAsignacion } = await supabaseClient
@@ -7457,7 +7457,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 3. ✅ BUSCAR OS REGISTRADAS + VALIDAR EN OS_ASIGNADAS
+        // 3. ✅ BUSCAR OS REGISTRADAS + VALIDAR EN os_asignadas
 const todasOS = [];
 let offset = 0;
 const batchSize = 1000;
@@ -7477,7 +7477,7 @@ while (true) {
     
     if (!data || data.length === 0) break;
     
-    // ✅ FILTRAR: Solo agregar si están en OS_ASIGNADAS
+    // ✅ FILTRAR: Solo agregar si están en os_asignadas
     for (const os of data) {
         const { data: asignacion } = await supabaseClient
             .from('os_asignadas')
