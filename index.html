@@ -2877,39 +2877,38 @@ function descargarKML() {
     URL.revokeObjectURL(url);
 }
 
+
 function generarKMLString(ubicaciones) {
-    if (!Array.isArray(ubicaciones) || ubicaciones.length === 0) {
-        throw new Error("No se enviaron ubicaciones válidas para el KML.");
+    if (!ubicaciones || ubicaciones.length === 0) {
+        throw new Error("No hay ubicaciones para KML");
     }
     
     let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
-    kml += '<name>Coordenadas de búsqueda CLESA</name>\n';
-
-    ubicaciones.forEach(({ etiqueta, coordenadas }) => {
-        const parts = coordenadas.split(',').map(s => s.trim());
-        let coordsForKML;
-        if (parts.length >= 2) {
-            coordsForKML = `${parts[1]},${parts[0]}`;
-            if (parts.length === 3) {
-                coordsForKML += `,${parts[2]}`;
-            }
-        } else {
-            coordsForKML = coordenadas.replace(/\s+/g, '');
-        }
-
+    kml += '<name>Rutas CLESA - Ordenadas por Cercanía</name>\n';
+    
+    // 🆕 AGREGAR ESTILOS NUMERADOS
+    const colores = ['ff0000ff', 'ff00ff00', 'ff00ffff', 'ffffff00']; // Rojo, Verde, Azul, Amarillo
+    
+    ubicaciones.forEach(({ etiqueta, coordenadas, numeroOrden }, index) => {
+        const partes = coordenadas.split(',').map(s => s.trim());
+        let coordsKML = partes.length >= 2 
+            ? `${partes[1]},${partes[0]}${partes[2] ? ',' + partes[2] : ''}` 
+            : coordenadas;
+        
+        const color = colores[index % colores.length];
+        
         kml += '<Placemark>\n';
-        kml += `<name>${etiqueta}</name>\n`;
-        kml += `<Point><coordinates>${coordsForKML}</coordinates></Point>\n`;
+        kml += `<name>${numeroOrden || index + 1}. ${etiqueta}</name>\n`;  // ← NÚMERO PRIMERO
+        kml += `<description>OS: ${etiqueta} | Orden: ${numeroOrden || index + 1}</description>\n`;
+        kml += `<Style><IconStyle><color>${color}</color><scale>1.2</scale></IconStyle></Style>\n`;
+        kml += `<Point><coordinates>${coordsKML}</coordinates></Point>\n`;
         kml += '</Placemark>\n';
     });
-
+    
     kml += '</Document>\n</kml>';
     return kml;
 }
-
-
-    
 
 
 
@@ -4477,21 +4476,41 @@ async function cargarInterfazKMLRuta() {
     
     try {
         // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS
+console.log('🔍 Intentando cargar desde OS_ASIGNADAS...');
+
 const { data: asignaciones, error: errorAsignadas } = await supabaseClient
     .from('OS_ASIGNADAS')
-    .select('OSATOMO, Unidad, Estado');
+    .select('osatomo, Unidad, Estado');
 
+// 🆕 DEBUG: Ver el error exacto
 if (errorAsignadas) {
-    searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar asignaciones</div>';
+    console.error('❌ Error cargando OS_ASIGNADAS:', errorAsignadas);
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+            <div class="result-header">❌ Error al cargar asignaciones</div>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>Detalles del error:</strong><br>
+                <code style="color: #d32f2f; font-size: 13px;">${errorAsignadas.message}</code>
+            </div>
+            <p style="text-align: center; color: #666;">
+                Posibles causas:<br>
+                • La tabla OS_ASIGNADAS no existe<br>
+                • RLS está bloqueando el acceso<br>
+                • Permisos insuficientes
+            </p>
+        </div>`;
     return;
 }
 
+console.log(`✅ ${asignaciones?.length || 0} asignaciones cargadas`);
+
 if (!asignaciones || asignaciones.length === 0) {
     searchGrid.innerHTML = `
-        <div class="result-card" style="background: #fff3cd;">
+        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
             <div class="result-header">⚠️ Sin asignaciones</div>
             <p style="text-align: center; color: #666;">
-                No hay OS asignadas. Cargue el archivo de asignaciones primero.
+                No hay OS asignadas en la tabla OS_ASIGNADAS.<br>
+                Cargue el archivo de asignaciones primero.
             </p>
         </div>`;
     return;
@@ -6454,7 +6473,7 @@ async function cargarInterfazIPR() {
 
 
 	// ========================================
-// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CORREGIDA CON FILTROS POR UNIDAD Y DEUDA)
+// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CORREGIDA)
 // ========================================
 async function cargarInterfazMapaRutas() {
     const searchGrid = document.getElementById('searchGrid');
@@ -6464,7 +6483,7 @@ async function cargarInterfazMapaRutas() {
     resultsContainer.innerHTML = '';
     
     try {
-        // 1. Cargar filtros actuales
+        // 1️⃣ CARGAR FILTROS ACTUALES
         const { data: filtros, error: errorFiltros } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
@@ -6475,40 +6494,110 @@ async function cargarInterfazMapaRutas() {
             return;
         }
         
-        // 2. Cargar tipologías usando cache
+        // 2️⃣ CARGAR TIPOLOGÍAS (usando cache)
         const tipologiasUnicas = await cargarTipologias();
         
         if (tipologiasUnicas.length === 0) {
             searchGrid.innerHTML = '<div class="result-card">❌ No se pudieron cargar tipologías</div>';
             return;
         }
+
         
-        // 3. Cargar OS asignadas si NO es Admin
+        // 🆕 CARGAR UNIDADES DESDE OS_ASIGNADAS (CORREGIDO)
+console.log('🔍 Cargando unidades desde OS_ASIGNADAS...');
+
+const unidadesUnicas = [];
+let offset = 0;
+const BATCH_SIZE = 1000;
+
+while (true) {
+    // ✅ CORRECCIÓN: Usar el nombre correcto de la columna
+    const { data, error } = await supabaseClient
+        .from('OS_ASIGNADAS')
+        .select('Unidad')  // Solo traer la columna Unidad
+        .range(offset, offset + BATCH_SIZE - 1);
+    
+    if (error) {
+        console.error('❌ Error cargando unidades:', error);
+        
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #ffebee;">
+                <div class="result-header">❌ Error</div>
+                <p style="text-align: center; color: #666;">
+                    Error: ${error.message}<br>
+                    <strong>Código:</strong> ${error.code || 'N/A'}
+                </p>
+                <button class="btn" onclick="cargarInterfazMapaRutas()">
+                    🔄 Reintentar
+                </button>
+            </div>`;
+        return;
+    }
+    
+    if (!data || data.length === 0) break;
+    
+    // Agregar unidades únicas
+    data.forEach(row => {
+        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+            unidadesUnicas.push(row.Unidad);
+        }
+    });
+    
+    if (data.length < BATCH_SIZE) break;
+    offset += BATCH_SIZE;
+}
+
+unidadesUnicas.sort();
+console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
+
+if (unidadesUnicas.length === 0) {
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #fff3cd;">
+            <div class="result-header">⚠️ Sin unidades</div>
+            <p style="text-align: center;">
+                No hay unidades en OS_ASIGNADAS.<br>
+                <strong>Acción:</strong> Carga el archivo de asignaciones primero.
+            </p>
+        </div>`;
+    return;
+}
+        
+        // 4️⃣ CARGAR OS ASIGNADAS (si NO es Admin)
         let osAsignadas = [];
         if (currentUser.rol !== 'Administrador') {
             const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
             
             console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
             
-            const { data: os, error: errorOS } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Tipologia')
-                .eq('Unidad', unidadUsuario)
-                .eq('Estado_ATOMO', 'Asignada');
+            // Obtener OSATOMO de OS_ASIGNADAS
+            const { data: asignaciones, error: errorAsig } = await supabaseClient
+                .from('OS_ASIGNADAS')
+                .select('osatomo, Unidad')
+                .eq('Unidad', unidadUsuario);
             
-            if (errorOS) {
-                console.error('Error buscando OS:', errorOS);
+            if (errorAsig) {
+                console.error('Error buscando OS:', errorAsig);
             }
             
-            if (!errorOS && os) {
-                osAsignadas = os;
-                console.log(`✅ ${os.length} OS Asignadas encontradas para ${unidadUsuario}`);
+            if (asignaciones && asignaciones.length > 0) {
+                const osNumeros = asignaciones.map(a => a.OSATOMO);
+                
+                // Buscar datos completos en OS Pendientes
+                const { data: osCompletas, error: errorOS } = await supabaseClient
+                    .from('OS Pendientes')
+                    .select('OSATMO, Tipologia')
+                    .in('OSATOMO', osNumeros);
+                
+                if (!errorOS && osCompletas) {
+                    osAsignadas = osCompletas;
+                    console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
+                }
             }
         }
         
-        // 4. Generar interfaz según rol
+        // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
         if (currentUser.rol === 'Administrador') {
-            generarInterfazAdminMapaRutas(filtros, tipologiasUnicas);
+            generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
         } else {
             generarInterfazUnidadMapaRutas(filtros, osAsignadas);
         }
@@ -6522,24 +6611,83 @@ async function cargarInterfazMapaRutas() {
 
 
 
-
-
 // ========================================
 // 👨‍💼 INTERFAZ ADMINISTRADOR CON FILTROS POR UNIDAD Y DEUDA
 // ========================================
 async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
     
-    // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS (por lotes)
+    // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS (con debug mejorado)
+console.log('🔍 Cargando unidades desde OS_ASIGNADAS...');
+
 const unidadesUnicas = [];
 let offset = 0;
 const BATCH_SIZE = 1000;
+let totalCargado = 0;
 
 while (true) {
     const { data, error } = await supabaseClient
         .from('OS_ASIGNADAS')
         .select('Unidad')
         .range(offset, offset + BATCH_SIZE - 1);
+    
+    // 🆕 DEBUG: Ver errores
+    if (error) {
+        console.error('❌ Error en batch:', error);
+        
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+                <div class="result-header">❌ Error cargando unidades</div>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <strong>Error al acceder a OS_ASIGNADAS:</strong><br>
+                    <code style="color: #d32f2f; font-size: 13px;">${error.message}</code><br><br>
+                    <strong>Código:</strong> ${error.code || 'N/A'}<br>
+                    <strong>Detalles:</strong> ${error.details || 'N/A'}
+                </div>
+                <p style="text-align: center; color: #666;">
+                    Verifica que:<br>
+                    • La tabla OS_ASIGNADAS exista<br>
+                    • RLS esté deshabilitado o configurado correctamente<br>
+                    • Tengas permisos de lectura
+                </p>
+            </div>`;
+        return;
+    }
+    
+    if (!data || data.length === 0) {
+        console.log(`⚠️ No hay más datos en offset ${offset}`);
+        break;
+    }
+    
+    // Agregar unidades únicas
+    data.forEach(row => {
+        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+            unidadesUnicas.push(row.Unidad);
+        }
+    });
+    
+    totalCargado += data.length;
+    console.log(`📊 Batch ${offset/BATCH_SIZE + 1}: ${data.length} registros | Total unidades únicas: ${unidadesUnicas.length}`);
+    
+    if (data.length < BATCH_SIZE) break;
+    offset += BATCH_SIZE;
+}
+
+unidadesUnicas.sort();
+console.log(`✅ ${unidadesUnicas.length} unidades únicas cargadas de ${totalCargado} registros totales`);
+
+// 🆕 Si no hay unidades, mostrar error
+if (unidadesUnicas.length === 0) {
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+            <div class="result-header">⚠️ Sin unidades asignadas</div>
+            <p style="text-align: center; color: #666;">
+                No se encontraron unidades en OS_ASIGNADAS.<br>
+                Cargue el archivo de asignaciones primero (opción "Cargar Asignaciones").
+            </p>
+        </div>`;
+    return;
+}
     
     if (error || !data || data.length === 0) break;
     
@@ -6844,9 +6992,81 @@ function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
     `;
 }
 
-	// ========================================
-// 🔄 FUNCIONES DE FILTROS (ADMIN)
 // ========================================
+// 🔍 VERIFICAR TABLA OS_ASIGNADAS
+// ========================================
+async function verificarTablaOSAsignadas() {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="text-align: center;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0;">Verificando tabla OS_ASIGNADAS...</h3>
+        </div>`;
+    
+    try {
+        // Test 1: Ver si existe y tiene datos
+        const { data, error, count } = await supabaseClient
+            .from('OS_ASIGNADAS')
+            .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+                    <div class="result-header">❌ Error de Acceso</div>
+                    <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                        <strong style="color: #d32f2f;">Error detectado:</strong><br><br>
+                        <code style="font-size: 13px;">${error.message}</code><br><br>
+                        <strong>Código:</strong> ${error.code}<br>
+                        <strong>Detalles:</strong> ${error.details || 'N/A'}
+                    </div>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <strong>💡 Soluciones:</strong><br><br>
+                        1. Ejecuta en Supabase SQL Editor:<br>
+                        <code style="display: block; background: #f5f5f5; padding: 10px; border-radius: 6px; margin: 10px 0;">
+                            ALTER TABLE OS_ASIGNADAS DISABLE ROW LEVEL SECURITY;
+                        </code><br>
+                        2. Verifica que la tabla existe:<br>
+                        <code style="display: block; background: #f5f5f5; padding: 10px; border-radius: 6px; margin: 10px 0;">
+                            SELECT * FROM OS_ASIGNADAS LIMIT 5;
+                        </code>
+                    </div>
+                </div>`;
+            return;
+        }
+        
+        // Test 2: Mostrar primeros registros
+        const { data: registros } = await supabaseClient
+            .from('OS_ASIGNADAS')
+            .select('*')
+            .limit(5);
+        
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+                <div class="result-header">✅ Tabla Accesible</div>
+                <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <strong>📊 Información:</strong><br><br>
+                    • Total de registros: <strong>${count || 0}</strong><br>
+                    • Estado: <strong>Accesible</strong><br>
+                    • Primeros 5 registros:<br><br>
+                    <pre style="background: #f5f5f5; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 12px;">${JSON.stringify(registros, null, 2)}</pre>
+                </div>
+                <div style="text-align: center;">
+                    <button class="btn" onclick="cargarInterfazMapaRutas()">
+                        🔄 Reintentar Cargar Mapa
+                    </button>
+                </div>
+            </div>`;
+        
+    } catch (err) {
+        console.error('Error en verificación:', err);
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #ffebee;">
+                <div class="result-header">❌ Error Inesperado</div>
+                <pre style="background: #f5f5f5; padding: 15px; border-radius: 8px; overflow-x: auto;">${err.message}</pre>
+            </div>`;
+    }
+}
 
 // ========================================
 // 🔄 ACTUALIZAR SELECCIÓN DE RANGOS
@@ -7133,8 +7353,8 @@ const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
 
 const { data: asignacion, error: errorAsignacion } = await supabaseClient
     .from('OS_ASIGNADAS')
-    .select('OSATOMO, Unidad')
-    .eq('OSATOMO', osSeleccionada)
+    .select('osatomo, Unidad')
+    .eq('osatomo', osSeleccionada)
     .eq('Unidad', unidadUsuario)
     .maybeSingle();
 
@@ -7250,52 +7470,47 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 3. Buscar TODAS las OS Registradas (por lotes de 1000)
-        const todasOS = [];
-        let offset = 0;
-        const batchSize = 1000;
-        let hasMore = true;
+        // 3. ✅ BUSCAR OS REGISTRADAS + VALIDAR EN OS_ASIGNADAS
+const todasOS = [];
+let offset = 0;
+const batchSize = 1000;
 
-        while (hasMore) {
-            const { data, error } = await supabaseClient
-    .from('OS Pendientes')
-    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad')
-    .in('Estado_ATOMO', ['Registrada', 'Asignada'])  // ✅ AMBOS ESTADOS en el mapa
-    .range(offset, offset + batchSize - 1);
-
-            
-            if (error) {
-                console.error('Error cargando batch de OS:', error);
-                resultsContainer.innerHTML = `
-                    <div class="result-card" style="background: #ffebee;">
-                        <div class="result-header">❌ Error cargando OS</div>
-                        <p style="color: #666;">Error: ${error.message}</p>
-                    </div>`;
-                return;
-            }
-            
-            if (!data || data.length === 0) break;
-            
-            todasOS.push(...data);
-            hasMore = (data.length === batchSize);
-            offset += batchSize;
-            
-            console.log(`📍 Cargadas ${todasOS.length} OS...`);
+while (true) {
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda')
+        .in('Estado_ATOMO', ['Registrada', 'Asignada'])
+        .range(offset, offset + batchSize - 1);
+    
+    if (error) {
+        console.error('❌ Error:', error);
+        resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${error.message}</div>`;
+        return;
+    }
+    
+    if (!data || data.length === 0) break;
+    
+    // ✅ FILTRAR: Solo agregar si están en OS_ASIGNADAS
+    // ✅ Comparar usando el nombre real de la columna: 'osatomo' (minúsculas)
+const { data: asignacion } = await supabaseClient
+    .from('OS_ASIGNADAS')
+    .select('osatomo')  // o solo '*' si no usas el valor
+    .eq('osatomo', os.OSATMO)  // ← aquí usas el valor de OS Pendientes
+    .maybeSingle();
+        
+        if (asignacion) {
+            todasOS.push(os);
         }
+    }
+    
+    console.log(`📍 Cargadas ${todasOS.length} OS asignadas...`);
+    
+    if (data.length < batchSize) break;
+    offset += batchSize;
+}
 
-        console.log(`✅ Total de OS cargadas: ${todasOS.length}`);
+console.log(`✅ Total: ${todasOS.length} OS asignadas y registradas`);
 
-        // ✅ VALIDAR que se cargaron OS
-        if (todasOS.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd;">
-                    <div class="result-header">⚠️ Sin datos</div>
-                    <p style="text-align: center; color: #666;">
-                        No hay OS en estado "Registrada" en la base de datos
-                    </p>
-                </div>`;
-            return;
-        }
         
         // 4. Filtrar OS dentro del radio
         const osEnRadio = [];
@@ -7351,6 +7566,13 @@ if (mostrar) {
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
         console.log(`✅ ${osEnRadio.length} OS encontradas en radio de ${radioKm} km`);
+
+	// 🆕 7. ENUMERAR OS POR CERCANÍA
+osEnRadio.forEach((os, index) => {
+    os.numeroOrden = index + 1;  // 1, 2, 3, 4...
+});
+
+console.log(`✅ ${osEnRadio.length} OS numeradas por cercanía`);
         
         // 6. Generar mapa
         generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
@@ -7991,57 +8213,81 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     window.markersPorTipologia = {};
 
     // Markers de OS cercanas
-    osEnRadio.forEach(os => {
-        // 🆕 Determinar icono según DEUDA primero
-        let icono, colorTexto, labelEstado;
-        const deuda = parseFloat(os.Deuda) || 0;
-        
-        if (deuda > 500) {
-            icono = iconoDeudaAmarillo;
-            colorTexto = '#f57f17';
-            labelEstado = '🟡 DEUDA ALTA (>$500)';
-        } else if (deuda >= 100 && deuda <= 500) {
-            icono = iconoDeudaNaranja;
-            colorTexto = '#e65100';
-            labelEstado = '🟠 DEUDA MEDIA ($100-$500)';
-        } else if (deuda >= 50 && deuda < 100) {
-            icono = iconoDeudaRosado;
-            colorTexto = '#c2185b';
-            labelEstado = '🌸 DEUDA BAJA ($50-$100)';
-        } else if (os.Estado_ATOMO === 'Asignada') {
-            icono = iconoAsignada;
-            colorTexto = '#ff9800';
-            labelEstado = '🟠 ASIGNADA';
-        } else if (os.esRegulada) {
-            icono = iconoRegulada;
-            colorTexto = '#f44336';
-            labelEstado = '🔴 REGULADA';
-        } else {
-            icono = iconoNoRegulada;
-            colorTexto = '#2196f3';
-            labelEstado = '🔵 NO REGULADA';
-        }
-        
-        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-        
-        // 🆕 Guardar referencia
-        const tipologia = os.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologia[tipologia]) {
-            window.markersPorTipologia[tipologia] = [];
-        }
-        window.markersPorTipologia[tipologia].push(marker);
-        
-        // 🆕 AL HACER CLICK: Mostrar detalle abajo (en lugar de popup)
-        marker.on('click', function() {
-            mostrarDetalleOSEnPanel(os, labelEstado);
-            
-            // Opcional: Centrar mapa en el marker seleccionado
-            mapa.setView([os.lat, os.lng], mapa.getZoom(), {
-                animate: true,
-                duration: 0.5
-            });
+osEnRadio.forEach(os => {
+    // 🆕 Determinar color y etiqueta según lógica existente
+    let color, colorTexto, labelEstado;
+    const deuda = parseFloat(os.Deuda) || 0;
+    
+    if (deuda > 500) {
+        color = '#fdd835'; // Amarillo
+        colorTexto = '#f57f17';
+        labelEstado = '🟡 DEUDA ALTA (>$500)';
+    } else if (deuda >= 100 && deuda <= 500) {
+        color = '#ff9800'; // Naranja
+        colorTexto = '#e65100';
+        labelEstado = '🟠 DEUDA MEDIA ($100-$500)';
+    } else if (deuda >= 50 && deuda < 100) {
+        color = '#f48fb1'; // Rosado
+        colorTexto = '#c2185b';
+        labelEstado = '🌸 DEUDA BAJA ($50-$100)';
+    } else if (os.Estado_ATOMO === 'Asignada') {
+        color = '#ff9800';
+        colorTexto = '#ff9800';
+        labelEstado = '🟠 ASIGNADA';
+    } else if (os.esRegulada) {
+        color = '#f44336'; // Rojo
+        colorTexto = '#f44336';
+        labelEstado = '🔴 REGULADA';
+    } else {
+        color = '#2196f3'; // Azul
+        colorTexto = '#2196f3';
+        labelEstado = '🔵 NO REGULADA';
+    }
+
+    // 🆕 CREAR ICONO CON NÚMERO (inline, sin función aparte)
+    const icono = L.divIcon({
+        className: 'custom-icon',
+        html: `
+            <div style="
+                background: ${color}; 
+                width: 28px; 
+                height: 28px; 
+                border-radius: 50%; 
+                border: 3px solid white; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 13px;
+                color: white;
+                font-family: Arial, sans-serif;
+            ">
+                ${os.numeroOrden || '?'}
+            </div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+
+    const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+
+    // 🆕 Guardar referencia por tipología (sin cambios)
+    const tipologia = os.Tipologia || 'Sin tipología';
+    if (!window.markersPorTipologia[tipologia]) {
+        window.markersPorTipologia[tipologia] = [];
+    }
+    window.markersPorTipologia[tipologia].push(marker);
+
+    // 🆕 AL HACER CLICK: Mostrar detalle abajo (igual que antes)
+    marker.on('click', function() {
+        mostrarDetalleOSEnPanel(os, labelEstado);
+        mapa.setView([os.lat, os.lng], mapa.getZoom(), {
+            animate: true,
+            duration: 0.5
         });
     });
+});
+
     
     // Ajustar vista para mostrar todos los markers
     const bounds = L.latLngBounds([[latCentro, lngCentro]]);
