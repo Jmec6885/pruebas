@@ -6689,21 +6689,7 @@ if (unidadesUnicas.length === 0) {
     return;
 }
     
-    if (error || !data || data.length === 0) break;
-    
-    data.forEach(row => {
-        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
-            unidadesUnicas.push(row.Unidad);
-        }
-    });
-    
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-}
-
-unidadesUnicas.sort();
-console.log(`✅ ${unidadesUnicas.length} unidades cargadas desde OS_ASIGNADAS`);
-    
+      
     const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     const rangosSeleccionados = filtros.rangos || [];
     const tipologiasSeleccionadas = filtros.tipologias || [];
