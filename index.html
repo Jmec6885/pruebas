@@ -661,6 +661,12 @@
     			<div class="table-description">Análisis por unidad y estado</div>
 		    </div>
 
+			<div class="table-option" onclick="seleccionarTabla('cargar_asignaciones')">
+   			 <span class="table-icon">📤</span>
+   			 <div class="table-title">Cargar Asignaciones</div>
+   			 <div class="table-description">Asignar OS a unidades (Admin)</div>
+		     </div>
+
 		    <div class="table-option" onclick="seleccionarTabla('retiro_medidores')">
     			<span class="table-icon">📦</span>
     			<div class="table-title">IPR - Retiro de Medidores</div>
@@ -2550,6 +2556,14 @@ async function incrementarContadorBusquedas() {
     actions: [],
     esMapaRutas: true,
     rolesPermitidos: ['Administrador', 'Contratista', 'Consulta']
+},
+'cargar_asignaciones': {
+    title: 'Cargar Asignaciones (Admin)',
+    icon: '📤',
+    fields: [],
+    resultFields: [],
+    actions: [],
+    esAdmin: true
 }
 };
 
@@ -4462,19 +4476,50 @@ async function cargarInterfazKMLRuta() {
     resultsContainer.innerHTML = '';
     
     try {
-        // ✅ Cargar OS Asignadas
-        const { data: unidades, error } = await fetchAllFromTable('OS Pendientes', 'Unidad, OSATMO, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Estado_ATOMO');
-        
-        if (error) {
-            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar unidades</div>';
-            return;
-        }
-        
-        // Filtrar solo OS Asignadas
-        const osAsignadas = unidades.filter(os => os.Estado_ATOMO === 'Asignada');
-        
-        // Obtener unidades únicas
-        const unidadesUnicas = [...new Set(osAsignadas.map(u => u.Unidad))].filter(u => u).sort();
+        // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS
+const { data: asignaciones, error: errorAsignadas } = await supabaseClient
+    .from('OS_ASIGNADAS')
+    .select('OSATOMO, Unidad, Estado');
+
+if (errorAsignadas) {
+    searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar asignaciones</div>';
+    return;
+}
+
+if (!asignaciones || asignaciones.length === 0) {
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #fff3cd;">
+            <div class="result-header">⚠️ Sin asignaciones</div>
+            <p style="text-align: center; color: #666;">
+                No hay OS asignadas. Cargue el archivo de asignaciones primero.
+            </p>
+        </div>`;
+    return;
+}
+
+// Obtener OSATOMO únicos
+const osNumeros = asignaciones.map(a => a.OSATOMO);
+
+// Buscar datos completos en OS Pendientes (por lotes)
+const osCompletas = [];
+const BATCH_SIZE = 500;
+
+for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
+    const batch = osNumeros.slice(i, i + BATCH_SIZE);
+    
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
+        .in('OSATOMO', batch);
+    
+    if (!error && data) {
+        osCompletas.push(...data);
+    }
+}
+
+const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u => u).sort();
+
+console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS asignadas`);
         
         // Filtrar según rol
         let unidadesFiltradas = [];
@@ -4508,128 +4553,51 @@ async function cargarInterfazKMLRuta() {
 }
 
 
-// ========================================
-// 👨‍💼 INTERFAZ KML RUTA - ADMIN/SUPERVISOR (CON FILTROS POR UNIDAD)
-// ========================================
-function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
-    const searchGrid = document.getElementById('searchGrid');
+async function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
+    const loginSection = document.getElementById('loginSection');
     const resultsContainer = document.getElementById('searchResults');
     
     resultsContainer.innerHTML = '';
     
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <div class="result-header">⚙️ Configuración de Filtros por Unidad</div>
-            
-            <!-- SELECTOR MÚLTIPLE DE UNIDADES -->
-            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #ffc107;">
-                <strong style="color: #e65100;">🔧 Paso 1: Seleccionar Unidades para Configurar Filtros</strong>
-                <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
-                    Selecciona una o varias unidades para aplicarles los mismos filtros
-                </p>
-            </div>
-            
-            <div style="background: white; padding: 15px; border-radius: 10px; margin: 15px 0; max-height: 300px; overflow-y: auto; border: 2px solid #e1e5e9;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
-                    ${unidades.map(unidad => `
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px; transition: all 0.3s;"
-                               onmouseover="this.style.background='#e3f2fd'"
-                               onmouseout="this.style.background='#f8f9fa'">
-                            <input type="checkbox" 
-                                   class="checkbox-unidad-filtro" 
-                                   value="${unidad}"
-                                   onchange="actualizarContadorUnidadesSeleccionadas()"
-                                   style="width: 18px; height: 18px;">
-                            <span style="font-size: 14px; font-weight: 500;">${unidad}</span>
-                        </label>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <div style="text-align: center; padding: 10px; background: #e3f2fd; border-radius: 8px; margin: 10px 0;">
-                <strong style="color: #1565c0;">📊 Unidades seleccionadas: <span id="contadorUnidadesSeleccionadas">0</span></strong>
-            </div>
-            
-            <!-- CONFIGURACIÓN DE FILTROS -->
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #2196f3;">
-                <strong style="color: #1565c0;">🎯 Paso 2: Configurar Filtros</strong>
-            </div>
-            
-            <div style="background: white; padding: 20px; border-radius: 10px; margin: 15px 0;">
-                
-                <!-- RANGOS -->
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-weight: 600; color: #2d3748; margin-bottom: 10px; display: block;">📊 Rangos de Días:</label>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px;">
-                        ${['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'].map(rango => `
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px;">
-                                <input type="checkbox" class="checkbox-rango-unidad" value="${rango}" style="width: 18px; height: 18px;">
-                                <span>${rango} días</span>
-                            </label>
-                        `).join('')}
-                    </div>
-                </div>
-                
-                <!-- TIPOLOGÍAS -->
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-weight: 600; color: #2d3748; margin-bottom: 10px; display: block;">🏷️ Tipologías:</label>
-                    <button onclick="toggleSeccionTipologiasUnidad()" class="btn btn-secondary" style="margin-bottom: 10px; width: 100%;">
-                        📋 Seleccionar Tipologías
-                    </button>
-                    <div id="seccionTipologiasUnidad" style="display: none; max-height: 250px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 15px; background: #f8f9fa;">
-                        <!-- Se carga dinámicamente -->
-                    </div>
-                </div>
-                
-                <!-- RADIO -->
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km):</label>
-                    <input type="number" id="radioKmUnidad" min="1" max="20" value="3" 
-                           style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <small style="color: #666; display: block; margin-top: 5px;">Mínimo: 1 km | Máximo: 20 km</small>
-                </div>
-                
-            </div>
-            
-            <!-- BOTONES DE ACCIÓN -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn" onclick="guardarFiltrosPorUnidad()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 16px; font-weight: 600;">
-                    💾 Guardar Filtros para Unidades Seleccionadas
-                </button>
-                <button class="btn btn-danger" onclick="borrarTodosFiltrosUnidades()" style="background: linear-gradient(135deg, #f44336 0%, #c62828 100%); font-size: 16px; font-weight: 600;">
-                    🗑️ Borrar TODOS los Filtros
-                </button>
-            </div>
-            
-            <hr style="margin: 30px 0; border: 2px solid #e2e8f0;">
-            
-            <!-- GENERAR MAPA POR UNIDAD -->
-            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; margin-top: 20px;">
-                <div class="result-header">🗺️ Ver Mapa de Unidad</div>
-                
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar UNA Unidad para ver mapa:</label>
-                    <select id="selectUnidadParaMapa" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                        <option value="">-- Seleccione una unidad --</option>
-                        ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
-                    </select>
-                </div>
-                
-                <div style="text-align: center; margin-top: 15px;">
-                    <button class="btn" onclick="generarMapaUnidadConFiltros()" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); font-size: 18px; padding: 18px 40px; font-weight: 600;">
-                        🗺️ Generar Mapa
-                    </button>
-                </div>
-            </div>
+    loginSection.innerHTML = `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+        <h1 class="titulo-degradado">CLESA</h1>
+        <p class="subtitulo">📍 Generación de KML por Unidad</p>
+        
+        <!-- SELECCIÓN DIRECTA DE UNIDAD -->
+        <div class="form-group">
+            <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
+            <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <option value="">-- Seleccione una unidad --</option>
+                ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+            </select>
+        </div>
+        
+        <!-- RESUMEN DE OS ASIGNADAS -->
+        <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
+            <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
+            <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+        </div>
+        
+        <!-- BOTONES DE ACCIÓN -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                📥 KML Lector
+            </button>
+            <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
+                📥 KML GIS
+            </button>
+            <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                🗺️ Ver Mapa
+            </button>
         </div>
     `;
     
     // Guardar datos globalmente
     window.osAsignadasKML = osAsignadas;
-    
-    // Cargar tipologías
-    cargarTipologiasParaFiltrosUnidad();
 }
+
+
 
 // ========================================
 // 📊 ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
@@ -6035,6 +6003,456 @@ async function cargarInterfazIPR() {
 }
 
 
+	async function cargarInterfazAsignaciones() {
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (currentUser.rol !== 'Administrador') {
+        searchGrid.innerHTML = '<div class="result-card">⚠️ Solo Administradores</div>';
+        return;
+    }
+    
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
+            <div class="result-header">📤 Cargar Asignaciones de OS</div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <strong>📋 Formato del archivo Excel/CSV:</strong><br>
+                <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                    • <strong>Columna A:</strong> OSATOMO (texto)<br>
+                    • <strong>Columna B:</strong> Unidad (ej: CL-OPC-001)<br>
+                    • <strong>Columna C:</strong> Estado (ej: Asignada)<br><br>
+                    ⚠️ <strong>IMPORTANTE:</strong> La nueva carga REEMPLAZA la anterior
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label style="font-weight: 600;">📁 Seleccionar archivo:</label>
+                <input type="file" id="archivoAsignaciones" accept=".xlsx,.xls,.csv" 
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="procesarArchivoAsignaciones()" 
+                        style="font-size: 18px; padding: 18px 40px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                    ⚡ Procesar y Reemplazar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    resultsContainer.innerHTML = '';
+}
+
+	async function procesarArchivoAsignaciones() {
+    const archivoInput = document.getElementById('archivoAsignaciones');
+    
+    if (!archivoInput.files || archivoInput.files.length === 0) {
+        alert('⚠️ Por favor seleccione un archivo');
+        return;
+    }
+    
+    const archivo = archivoInput.files[0];
+    const extension = archivo.name.split('.').pop().toLowerCase();
+    
+    if (!['xlsx', 'xls', 'csv'].includes(extension)) {
+        alert('⚠️ Formato no válido. Use Excel o CSV');
+        return;
+    }
+    
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="text-align: center;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0;">Leyendo archivo...</h3>
+        </div>`;
+    
+    try {
+        // 1️⃣ LEER ARCHIVO
+        const datos = await leerArchivoAsignaciones(archivo, extension);
+        
+        if (!datos || datos.length === 0) {
+            alert('❌ El archivo está vacío');
+            return;
+        }
+        
+        // 2️⃣ VALIDAR ESTRUCTURA
+        const validacion = validarEstructuraAsignaciones(datos);
+        
+        if (!validacion.valido) {
+            alert(`❌ Error en estructura:\n\n${validacion.mensaje}`);
+            return;
+        }
+        
+        // 3️⃣ DETECTAR DUPLICADOS
+        const duplicados = detectarDuplicadosAsignaciones(datos);
+        
+        if (duplicados.length > 0) {
+            const confirmar = await resolverDuplicados(duplicados);
+            if (!confirmar) return;
+        }
+        
+        // 4️⃣ VALIDAR CONTRA OS PENDIENTES
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="text-align: center;">
+                <div class="loading" style="display: block; margin: 20px auto;"></div>
+                <h3 style="color: #1565c0;">Validando OS en base de datos...</h3>
+                <p style="color: #666;">Esto puede tardar 2-3 minutos</p>
+            </div>`;
+        
+        const validacionBD = await validarOSEnBD(datos);
+        
+        // 5️⃣ MOSTRAR PREVIEW
+        mostrarPreviewAsignaciones(datos, validacionBD, duplicados);
+        
+    } catch (err) {
+        console.error('Error procesando archivo:', err);
+        alert('❌ Error al procesar el archivo');
+    }
+}
+
+	async function leerArchivoAsignaciones(archivo, extension) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                let datos = [];
+                
+                if (extension === 'csv') {
+                    const texto = e.target.result;
+                    const lineas = texto.split('\n').filter(l => l.trim());
+                    
+                    // Saltar header
+                    for (let i = 1; i < lineas.length; i++) {
+                        const valores = lineas[i].split(',').map(v => v.trim());
+                        if (valores.length >= 3 && valores[0]) {
+                            datos.push(valores);
+                        }
+                    }
+                } else {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    
+                    // Saltar header
+                    datos = jsonData.slice(1).filter(row => 
+                        row.length >= 3 && row[0] && row[0].toString().trim() !== ''
+                    );
+                }
+                
+                console.log(`✅ ${datos.length} filas leídas del archivo`);
+                resolve(datos);
+                
+            } catch (error) {
+                reject(error);
+            }
+        };
+        
+        reader.onerror = () => reject(new Error('Error al leer archivo'));
+        
+        if (extension === 'csv') {
+            reader.readAsText(archivo);
+        } else {
+            reader.readAsArrayBuffer(archivo);
+        }
+    });
+}
+
+	function validarEstructuraAsignaciones(datos) {
+    // Validar que todas las filas tengan 3 columnas
+    for (let i = 0; i < datos.length; i++) {
+        const fila = datos[i];
+        
+        if (fila.length < 3) {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: Se esperan 3 columnas (OSATOMO, Unidad, Estado), solo se encontraron ${fila.length}`
+            };
+        }
+        
+        // Validar que OSATOMO no esté vacío
+        if (!fila[0] || fila[0].toString().trim() === '') {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: OSATOMO está vacío`
+            };
+        }
+        
+        // Validar que Unidad no esté vacía
+        if (!fila[1] || fila[1].toString().trim() === '') {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: Unidad está vacía`
+            };
+        }
+        
+        // Validar formato de Unidad (CL-XXX-XXX o CL-XXX-PAC-XXX)
+        const unidad = fila[1].toString().trim();
+        const formatoValido = /^CL-[A-Z]{3}-(?:PAC-)?[0-9]{3}$/i.test(unidad);
+        
+        if (!formatoValido) {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: Unidad "${unidad}" no tiene formato válido (ej: CL-OPC-001 o CL-OPC-PAC-001)`
+            };
+        }
+    }
+    
+    return { valido: true };
+}
+
+
+	function detectarDuplicadosAsignaciones(datos) {
+    const mapa = new Map();
+    const duplicados = [];
+    
+    datos.forEach((fila, idx) => {
+        const osatomo = fila[0].toString().trim();
+        
+        if (mapa.has(osatomo)) {
+            // OS ya existe en el archivo
+            const primeraAparicion = mapa.get(osatomo);
+            duplicados.push({
+                osatomo: osatomo,
+                fila1: primeraAparicion.fila,
+                unidad1: primeraAparicion.unidad,
+                fila2: idx + 2, // +2 por header y índice base 0
+                unidad2: fila[1].toString().trim()
+            });
+        } else {
+            mapa.set(osatomo, {
+                fila: idx + 2,
+                unidad: fila[1].toString().trim()
+            });
+        }
+    });
+    
+    return duplicados;
+}
+
+
+	async function resolverDuplicados(duplicados) {
+    let mensaje = `⚠️ SE ENCONTRARON ${duplicados.length} OS DUPLICADAS\n\n`;
+    mensaje += 'Estas OS están asignadas a 2 unidades diferentes:\n\n';
+    
+    duplicados.slice(0, 5).forEach(dup => {
+        mensaje += `📋 OS: ${dup.osatomo}\n`;
+        mensaje += `   Fila ${dup.fila1}: ${dup.unidad1}\n`;
+        mensaje += `   Fila ${dup.fila2}: ${dup.unidad2}\n\n`;
+    });
+    
+    if (duplicados.length > 5) {
+        mensaje += `... y ${duplicados.length - 5} más\n\n`;
+    }
+    
+    mensaje += '❌ SOLUCIÓN: Corrija el archivo antes de continuar\n';
+    mensaje += 'Cada OS debe estar asignada a UNA sola unidad';
+    
+    alert(mensaje);
+    return false;
+}
+
+
+	async function validarOSEnBD(datos) {
+    const osNumeros = datos.map(fila => fila[0].toString().trim());
+    const BATCH_SIZE = 500;
+    
+    const osExistentes = [];
+    const osNoExistentes = [];
+    
+    console.log(`🔍 Validando ${osNumeros.length} OS contra OS Pendientes...`);
+    
+    for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
+        const batch = osNumeros.slice(i, i + BATCH_SIZE);
+        
+        const { data, error } = await supabaseClient
+            .from('OS Pendientes')
+            .select('OSATMO')
+            .in('OSATMO', batch);
+        
+        if (error) {
+            console.error('Error en batch:', error);
+            continue;
+        }
+        
+        const encontrados = new Set(data.map(os => os.OSATMO));
+        
+        batch.forEach(os => {
+            if (encontrados.has(os)) {
+                osExistentes.push(os);
+            } else {
+                osNoExistentes.push(os);
+            }
+        });
+        
+        console.log(`✅ Validados ${Math.min(i + BATCH_SIZE, osNumeros.length)} / ${osNumeros.length}`);
+    }
+    
+    return {
+        existentes: osExistentes,
+        noExistentes: osNoExistentes
+    };
+}
+
+
+	function mostrarPreviewAsignaciones(datos, validacionBD, duplicados) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    const registrosValidos = datos.filter(fila => {
+        const os = fila[0].toString().trim();
+        return validacionBD.existentes.includes(os) && 
+               !duplicados.some(dup => dup.osatomo === os);
+    });
+    
+    let html = `
+        <div class="result-card" style="background: ${duplicados.length > 0 ? '#fff3cd' : '#e8f5e9'}; border: 2px solid ${duplicados.length > 0 ? '#ffc107' : '#4caf50'};">
+            <div class="result-header">${duplicados.length > 0 ? '⚠️' : '✅'} Validación Completada</div>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="font-size: 18px; color: #2d3748;">📊 Resumen:</strong><br><br>
+                <div style="font-size: 16px; line-height: 2;">
+                    • Total de filas: <strong>${datos.length}</strong><br>
+                    • ✅ OS válidas para asignar: <strong style="color: #2e7d32;">${registrosValidos.length}</strong><br>
+                    • ❌ OS no existen en BD: <strong style="color: #d32f2f;">${validacionBD.noExistentes.length}</strong><br>
+                    • ⚠️ OS duplicadas en archivo: <strong style="color: #ff9800;">${duplicados.length}</strong>
+                </div>
+            </div>`;
+    
+    // Mostrar OS no existentes
+    if (validacionBD.noExistentes.length > 0) {
+        html += `
+            <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin: 20px 0; max-height: 200px; overflow-y: auto;">
+                <strong style="color: #c62828;">❌ OS que NO existen en OS Pendientes (${validacionBD.noExistentes.length}):</strong><br><br>
+                ${validacionBD.noExistentes.slice(0, 20).join(', ')}
+                ${validacionBD.noExistentes.length > 20 ? `<br><em>... y ${validacionBD.noExistentes.length - 20} más</em>` : ''}
+            </div>`;
+    }
+    
+    // Botones de acción
+    if (duplicados.length === 0 && registrosValidos.length > 0) {
+        html += `
+            <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <strong style="color: #1565c0; font-size: 16px;">⚠️ CONFIRMACIÓN REQUERIDA</strong><br>
+                <p style="margin: 10px 0 0 0; color: #666;">
+                    Al confirmar, se ELIMINARÁN todas las asignaciones actuales y se cargarán las ${registrosValidos.length} nuevas.
+                </p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn" onclick="confirmarCargaAsignaciones(${JSON.stringify(registrosValidos).replace(/"/g, '&quot;')})" 
+                        style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 18px; padding: 18px;">
+                    ✅ Confirmar y Reemplazar
+                </button>
+                <button class="btn btn-danger" onclick="cargarInterfazAsignaciones()" style="font-size: 16px; padding: 15px;">
+                    ✕ Cancelar
+                </button>
+            </div>`;
+    } else {
+        html += `
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="cargarInterfazAsignaciones()">
+                    ← Corregir archivo y reintentar
+                </button>
+            </div>`;
+    }
+    
+    html += `</div>`;
+    
+    resultsContainer.innerHTML = html;
+}
+
+	async function confirmarCargaAsignaciones(registrosValidos) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="text-align: center;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0;">Eliminando asignaciones anteriores...</h3>
+        </div>`;
+    
+    try {
+        // 1️⃣ ELIMINAR TODO DE OS_ASIGNADAS
+        const { error: errorDelete } = await supabaseClient
+            .from('OS_ASIGNADAS')
+            .delete()
+            .neq('id', 0); // Eliminar todos los registros
+        
+        if (errorDelete) {
+            alert('❌ Error al limpiar tabla: ' + errorDelete.message);
+            return;
+        }
+        
+        console.log('✅ Tabla OS_ASIGNADAS limpiada');
+        
+        // 2️⃣ INSERTAR NUEVAS ASIGNACIONES (por lotes)
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="text-align: center;">
+                <div class="loading" style="display: block; margin: 20px auto;"></div>
+                <h3 style="color: #1565c0;">Insertando ${registrosValidos.length} asignaciones...</h3>
+                <p id="progresoInsert">0 / ${registrosValidos.length}</p>
+            </div>`;
+        
+        const BATCH_SIZE = 500;
+        let insertados = 0;
+        
+        for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
+            const batch = registrosValidos.slice(i, i + BATCH_SIZE);
+            
+            const registros = batch.map(fila => ({
+                OSATOMO: fila[0].toString().trim(),
+                Unidad: fila[1].toString().trim(),
+                Estado: fila[2] ? fila[2].toString().trim() : 'Asignada',
+                fecha_asignacion: new Date().toISOString(),
+                usuario_asigno: currentUser.usuario
+            }));
+            
+            const { error } = await supabaseClient
+                .from('OS_ASIGNADAS')
+                .insert(registros);
+            
+            if (error) {
+                console.error('Error en batch:', error);
+                continue;
+            }
+            
+            insertados += registros.length;
+            document.getElementById('progresoInsert').textContent = 
+                `${insertados} / ${registrosValidos.length}`;
+        }
+        
+        // 3️⃣ ÉXITO
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+                <div class="result-header">✅ Asignaciones Cargadas</div>
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 72px; margin-bottom: 20px;">✅</div>
+                    <h3 style="color: #2e7d32; margin: 0 0 10px 0;">
+                        ${insertados} asignaciones cargadas correctamente
+                    </h3>
+                    <p style="color: #666; font-size: 16px;">
+                        Las asignaciones anteriores fueron reemplazadas
+                    </p>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn" onclick="cargarInterfazAsignaciones()">
+                        🔄 Cargar nuevo archivo
+                    </button>
+                </div>
+            </div>`;
+        
+        console.log(`✅ ${insertados} asignaciones insertadas en OS_ASIGNADAS`);
+        
+    } catch (err) {
+        console.error('Error en carga:', err);
+        alert('❌ Error al cargar asignaciones: ' + err.message);
+    }
+}
+
+	
+
+
 	// ========================================
 // 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CORREGIDA CON FILTROS POR UNIDAD Y DEUDA)
 // ========================================
@@ -6112,13 +6530,31 @@ async function cargarInterfazMapaRutas() {
 async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
     
-    // Cargar unidades únicas
-    const { data: osData } = await supabaseClient
-        .from('OS Pendientes')
+    // ✅ CARGAR UNIDADES DESDE OS_ASIGNADAS (por lotes)
+const unidadesUnicas = [];
+let offset = 0;
+const BATCH_SIZE = 1000;
+
+while (true) {
+    const { data, error } = await supabaseClient
+        .from('OS_ASIGNADAS')
         .select('Unidad')
-        .eq('Estado_ATOMO', 'Registrada');
+        .range(offset, offset + BATCH_SIZE - 1);
     
-    const unidadesUnicas = [...new Set(osData.map(os => os.Unidad))].filter(u => u).sort();
+    if (error || !data || data.length === 0) break;
+    
+    data.forEach(row => {
+        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+            unidadesUnicas.push(row.Unidad);
+        }
+    });
+    
+    if (data.length < BATCH_SIZE) break;
+    offset += BATCH_SIZE;
+}
+
+unidadesUnicas.sort();
+console.log(`✅ ${unidadesUnicas.length} unidades cargadas desde OS_ASIGNADAS`);
     
     const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     const rangosSeleccionados = filtros.rangos || [];
@@ -6648,18 +7084,10 @@ async function buscarYMostrarMapaAdmin() {
         }
         
         // ✅ VALIDAR ESTADO DESPUÉS DE ENCONTRARLA
-        if (osCentro.Estado_ATOMO !== 'Registrada') {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
-                    <div class="result-header">⚠️ Estado Incorrecto</div>
-                    <p style="text-align: center; color: #666;">
-                        La OS "${osIngresada}" existe pero su estado es: <strong>${osCentro.Estado_ATOMO}</strong><br>
-                        Solo se pueden visualizar OS en estado "Registrada"
-                    </p>
-                </div>`;
-            return;
-        }
-        
+        if (!osCentro) {
+    resultsContainer.innerHTML = `...OS no existe...`;
+    return;
+}        
         // Validar coordenadas
         const coordenadas = osCentro.Coordenadas || osCentro.Coordenadasgis;
         if (!coordenadas || !coordenadas.includes(',')) {
@@ -6699,13 +7127,47 @@ async function buscarYMostrarMapaUnidad() {
     
     try {
 
-        // Buscar OS seleccionada (puede estar Asignada o Registrada)
+        
+// 1️⃣ VERIFICAR QUE ESTÉ EN OS_ASIGNADAS PARA SU UNIDAD
+const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
+
+const { data: asignacion, error: errorAsignacion } = await supabaseClient
+    .from('OS_ASIGNADAS')
+    .select('OSATOMO, Unidad')
+    .eq('OSATOMO', osSeleccionada)
+    .eq('Unidad', unidadUsuario)
+    .maybeSingle();
+
+if (errorAsignacion || !asignacion) {
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+            <div class="result-header">❌ OS No Asignada</div>
+            <p style="text-align: center; color: #666;">
+                Esta OS no está asignada a tu unidad (${unidadUsuario})
+            </p>
+        </div>`;
+    return;
+}
+
+// 2️⃣ BUSCAR DATOS COMPLETOS EN OS PENDIENTES
 const { data: osCentro, error: errorOS } = await supabaseClient
     .from('OS Pendientes')
     .select('*')
-    .eq('OSATMO', osSeleccionada)
-    .in('Estado_ATOMO', ['Registrada', 'Asignada'])  // ✅ Puede ser cualquiera de las dos
-    .maybeSingle();  // ✅ Usar maybeSingle para evitar error si no existe
+    .eq('OSATOMO', osSeleccionada)
+    .maybeSingle();
+
+if (errorOS || !osCentro) {
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
+            <div class="result-header">❌ Error</div>
+            <p style="text-align: center; color: #666;">
+                Esta OS no se encontró en OS Pendientes
+            </p>
+        </div>`;
+    return;
+}
+
+ // ✅ Usar maybeSingle para evitar error si no existe
         
         if (errorOS || !osCentro) {
             resultsContainer.innerHTML = `
@@ -6977,44 +7439,44 @@ function validarFiltrosOS(os, filtros) {
         return true;
     }
     
-    // 🆕 VALIDACIÓN DE DEUDA (PRIORIDAD MÁXIMA)
-    if (tieneFiltroDeudaseleccionado) {
-        const deuda = parseFloat(os.Deuda) || 0;
-        let cumpleDeuda = false;
-        
+    // 🆕 VALIDACIÓN DE DEUDA (SOLO PARA SUSPENSIÓN)
+if (tieneFiltroDeudaseleccionado) {
+    const deuda = parseFloat(os.Deuda) || 0;
+    let cumpleDeuda = false;
+    
+    // ✅ VALIDAR QUE SEA SUSPENSIÓN PRIMERO
+    const esSuspension = os.Tipologia && (
+        os.Tipologia.includes('SUSPENSION B.T.') ||
+        os.Tipologia.includes('SUSPENSION M.T.') ||
+        os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
+    );
+    
+    if (!esSuspension) {
+        console.log(`❌ OS ${os.OSATMO} - NO es suspensión, deuda ignorada`);
+        // Continuar con validaciones normales de tipología/rango
+    } else {
+        // Es suspensión, validar deuda
         if (deudaAmarillo && deuda > 500) {
             cumpleDeuda = true;
-            console.log(`✅ Cumple filtro AMARILLO: Deuda ${deuda} > 500`);
+            console.log(`✅ Suspensión con deuda AMARILLA: ${deuda}`);
         }
         if (deudaNaranja && deuda >= 100 && deuda <= 500) {
             cumpleDeuda = true;
-            console.log(`✅ Cumple filtro NARANJA: Deuda ${deuda} entre 100-500`);
+            console.log(`✅ Suspensión con deuda NARANJA: ${deuda}`);
         }
         if (deudaRosado && deuda >= 50 && deuda < 100) {
             cumpleDeuda = true;
-            console.log(`✅ Cumple filtro ROSADO: Deuda ${deuda} entre 50-100`);
+            console.log(`✅ Suspensión con deuda ROSADA: ${deuda}`);
         }
         
-        // Si tiene deuda seleccionada pero no cumple ningún rango
-        if (!cumpleDeuda) {
-            console.log(`❌ NO cumple ningún filtro de deuda (Deuda: ${deuda})`);
-            
-            // 🆕 EXCEPCIÓN: Si es suspensión, permitir pasar a validaciones de tipología
-            const esSuspension = os.Tipologia && (
-                os.Tipologia.includes('SUSPENSION B.T.') ||
-                os.Tipologia.includes('SUSPENSION M.T.') ||
-                os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
-            );
-            
-            if (!esSuspension) {
-                return false; // Si no es suspensión y no cumple deuda, rechazar
-            }
-            // Si es suspensión, continuar con validaciones de tipología
+        if (cumpleDeuda) {
+            return true; // Mostrar esta suspensión con deuda
         } else {
-            // Cumple deuda, retornar true (sin importar tipología)
-            return true;
+            console.log(`❌ Suspensión sin deuda en rangos seleccionados: ${deuda}`);
+            return false;
         }
     }
+}
     
     // ✅ VALIDAR RANGO (si hay filtro)
     if (rangos.length > 0) {
@@ -10976,6 +11438,18 @@ if (tableName === 'mapa_rutas') {
     }
 }
 
+	// 📤 Validar acceso a Cargar Asignaciones
+if (tableName === 'cargar_asignaciones') {
+    if (currentUser.rol !== 'Administrador') {
+        alert('⚠️ Solo Administradores pueden cargar asignaciones');
+        return;
+    }
+    cargarInterfazAsignaciones();
+    return;
+}
+
+
+
     // Seleccionar tabla y mostrar interfaz
     selectedTable = tableName; 
     const config = tableConfigs[tableName];
@@ -11013,4 +11487,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
