@@ -4479,7 +4479,7 @@ async function cargarInterfazKMLRuta() {
 console.log('🔍 Intentando cargar desde OS_ASIGNADAS...');
 
 const { data: asignaciones, error: errorAsignadas } = await supabaseClient
-    .from('OS_ASIGNADAS')
+    .from('os_asignadas')
     .select('osatomo, Unidad, Estado');
 
 // 🆕 DEBUG: Ver el error exacto
@@ -6394,7 +6394,7 @@ async function cargarInterfazIPR() {
     try {
         // 1️⃣ ELIMINAR TODO DE OS_ASIGNADAS
         const { error: errorDelete } = await supabaseClient
-            .from('OS_ASIGNADAS')
+            .from('os_asignadas')
             .delete()
             .neq('id', 0); // Eliminar todos los registros
         
@@ -6428,7 +6428,7 @@ async function cargarInterfazIPR() {
             }));
             
             const { error } = await supabaseClient
-                .from('OS_ASIGNADAS')
+                .from('os_asignadas')
                 .insert(registros);
             
             if (error) {
@@ -6513,7 +6513,7 @@ const BATCH_SIZE = 1000;
 while (true) {
     // ✅ CORRECCIÓN: Usar el nombre correcto de la columna
     const { data, error } = await supabaseClient
-        .from('OS_ASIGNADAS')
+        .from('os_asignadas')
         .select('Unidad')  // Solo traer la columna Unidad
         .range(offset, offset + BATCH_SIZE - 1);
     
@@ -6571,7 +6571,7 @@ if (unidadesUnicas.length === 0) {
             
             // Obtener OSATOMO de OS_ASIGNADAS
             const { data: asignaciones, error: errorAsig } = await supabaseClient
-                .from('OS_ASIGNADAS')
+                .from('os_asignadas')
                 .select('osatomo, Unidad')
                 .eq('Unidad', unidadUsuario);
             
@@ -6627,7 +6627,7 @@ let totalCargado = 0;
 
 while (true) {
     const { data, error } = await supabaseClient
-        .from('OS_ASIGNADAS')
+        .from('os_asignadas')
         .select('Unidad')
         .range(offset, offset + BATCH_SIZE - 1);
     
@@ -6994,7 +6994,7 @@ async function verificarTablaOSAsignadas() {
     try {
         // Test 1: Ver si existe y tiene datos
         const { data, error, count } = await supabaseClient
-            .from('OS_ASIGNADAS')
+            .from('os_asignadas')
             .select('*', { count: 'exact', head: true });
         
         if (error) {
@@ -7024,7 +7024,7 @@ async function verificarTablaOSAsignadas() {
         
         // Test 2: Mostrar primeros registros
         const { data: registros } = await supabaseClient
-            .from('OS_ASIGNADAS')
+            .from('os_asignadas')
             .select('*')
             .limit(5);
         
@@ -7339,7 +7339,7 @@ async function buscarYMostrarMapaUnidad() {
 const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
 
 const { data: asignacion, error: errorAsignacion } = await supabaseClient
-    .from('OS_ASIGNADAS')
+    .from('os_asignadas')
     .select('osatomo, Unidad')
     .eq('osatomo', osSeleccionada)
     .eq('Unidad', unidadUsuario)
@@ -7480,7 +7480,7 @@ while (true) {
     // ✅ FILTRAR: Solo agregar si están en OS_ASIGNADAS
     for (const os of data) {
         const { data: asignacion } = await supabaseClient
-            .from('OS_ASIGNADAS')
+            .from('os_asignadas')
             .select('osatomo')
             .eq('osatomo', os.OSATMO)  // ← Comparar con nombre real en minúsculas
             .maybeSingle();
