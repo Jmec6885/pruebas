@@ -206,6 +206,61 @@
             box-shadow: 0 8px 25px rgba(59, 84, 211, 0.3);
         }
 
+	/* 🆕 Estilos para filtros de deuda */
+.filtro-deuda-checkbox:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.filtro-deuda-checkbox input[type="checkbox"]:checked + div {
+    transform: scale(1.1);
+}
+
+/* Animación para checkboxes de unidad */
+.checkbox-unidad-filtro:checked {
+    accent-color: #4caf50;
+}
+
+.checkbox-rango-unidad:checked {
+    accent-color: #2196f3;
+}
+
+.checkbox-tipologia-unidad:checked {
+    accent-color: #9c27b0;
+}
+
+/* 🆕 Panel de detalle responsive */
+#panelDetalleOS {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mejorar scroll en comentarios */
+#panelDetalleOS div[style*="overflow-y: auto"] {
+    scrollbar-width: thin;
+    scrollbar-color: #2196f3 #f0f0f0;
+}
+
+#panelDetalleOS div[style*="overflow-y: auto"]::-webkit-scrollbar {
+    width: 6px;
+}
+
+#panelDetalleOS div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
+    background: #2196f3;
+    border-radius: 3px;
+}
+
+
         .btn:active {
             transform: translateY(0);
         }
@@ -4581,24 +4636,32 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
 // ========================================
 function actualizarContadorUnidadesSeleccionadas() {
     const checkboxes = document.querySelectorAll('.checkbox-unidad-filtro:checked');
-    document.getElementById('contadorUnidadesSeleccionadas').textContent = checkboxes.length;
+    const contador = document.getElementById('contadorUnidadesSeleccionadas');
+    if (contador) {
+        contador.textContent = checkboxes.length;
+    }
 }
 
+
 // ========================================
-// 🏷️ TOGGLE SECCIÓN TIPOLOGÍAS
+// 🏷️ TOGGLE SECCIÓN TIPOLOGÍAS UNIDAD
 // ========================================
 function toggleSeccionTipologiasUnidad() {
     const seccion = document.getElementById('seccionTipologiasUnidad');
-    seccion.style.display = seccion.style.display === 'none' ? 'block' : 'none';
+    if (seccion) {
+        seccion.style.display = seccion.style.display === 'none' ? 'block' : 'none';
+    }
 }
 
+
 // ========================================
-// 📋 CARGAR TIPOLOGÍAS PARA FILTROS
+// 📋 CARGAR TIPOLOGÍAS PARA FILTROS UNIDAD
 // ========================================
 async function cargarTipologiasParaFiltrosUnidad() {
     const tipologiasUnicas = await cargarTipologias();
     
     const seccion = document.getElementById('seccionTipologiasUnidad');
+    if (!seccion) return;
     
     if (tipologiasUnicas.length === 0) {
         seccion.innerHTML = '<p style="color: #666; text-align: center;">No hay tipologías disponibles</p>';
@@ -4620,24 +4683,32 @@ async function cargarTipologiasParaFiltrosUnidad() {
     `;
 }
 
+
+
 // ========================================
-// ✅ TOGGLE TODAS LAS TIPOLOGÍAS
+// ✅ TOGGLE TODAS LAS TIPOLOGÍAS UNIDAD
 // ========================================
 function toggleTodasTipologiasUnidad() {
     const todasCheckbox = document.getElementById('todasTipologiasUnidad');
     const checkboxes = document.querySelectorAll('.checkbox-tipologia-unidad');
     
-    checkboxes.forEach(cb => {
-        cb.checked = todasCheckbox.checked;
-    });
+    if (todasCheckbox && checkboxes) {
+        checkboxes.forEach(cb => {
+            cb.checked = todasCheckbox.checked;
+        });
+    }
 }
 
+
+
 // ========================================
-// 🔄 ACTUALIZAR SELECCIÓN DE TIPOLOGÍAS
+// 🔄 ACTUALIZAR SELECCIÓN TIPOLOGÍAS UNIDAD
 // ========================================
 function actualizarSeleccionTipologiasUnidad() {
     const todasCheckbox = document.getElementById('todasTipologiasUnidad');
     const checkboxes = document.querySelectorAll('.checkbox-tipologia-unidad');
+    
+    if (!todasCheckbox || !checkboxes) return;
     
     let todosMarcados = true;
     checkboxes.forEach(cb => {
@@ -4648,12 +4719,10 @@ function actualizarSeleccionTipologiasUnidad() {
 }
 
 
-
 // ========================================
 // 💾 GUARDAR FILTROS POR UNIDAD
 // ========================================
 async function guardarFiltrosPorUnidad() {
-    // 1️⃣ Obtener unidades seleccionadas
     const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
     const unidadesSeleccionadas = Array.from(checkboxesUnidades).map(cb => cb.value);
     
@@ -4662,15 +4731,12 @@ async function guardarFiltrosPorUnidad() {
         return;
     }
     
-    // 2️⃣ Obtener rangos seleccionados
     const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
     const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
     
-    // 3️⃣ Obtener tipologías seleccionadas
     const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
     const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
     
-    // 4️⃣ Obtener radio
     const radioKm = parseInt(document.getElementById('radioKmUnidad').value);
     
     if (radioKm < 1 || radioKm > 20) {
@@ -4678,138 +4744,84 @@ async function guardarFiltrosPorUnidad() {
         return;
     }
     
-    // 5️⃣ Verificar si alguna unidad ya tiene filtros
-    const { data: filtrosExistentes, error: errorVerificar } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('unidad, rangos, tipologias, radio_km')
-        .in('unidad', unidadesSeleccionadas);
-    
-    if (errorVerificar) {
-        console.error('Error verificando filtros:', errorVerificar);
-        alert('❌ Error al verificar filtros existentes');
-        return;
-    }
-    
-    // 6️⃣ Si hay unidades con filtros, pedir confirmación
-    if (filtrosExistentes && filtrosExistentes.length > 0) {
-        const unidadesConFiltros = filtrosExistentes.map(f => f.unidad);
-        
-        let mensaje = `⚠️ Las siguientes unidades YA tienen filtros guardados:\n\n`;
-        
-        filtrosExistentes.forEach(f => {
-            mensaje += `📍 ${f.unidad}:\n`;
-            mensaje += `   • Rangos: ${f.rangos && f.rangos.length > 0 ? f.rangos.join(', ') : 'Ninguno'}\n`;
-            mensaje += `   • Tipologías: ${f.tipologias && f.tipologias.length > 0 ? f.tipologias.length + ' seleccionadas' : 'Ninguna'}\n`;
-            mensaje += `   • Radio: ${f.radio_km} km\n\n`;
-        });
-        
-        mensaje += `¿Deseas SOBRESCRIBIR con los nuevos filtros?\n\n`;
-        mensaje += `Nuevos valores:\n`;
-        mensaje += `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n`;
-        mensaje += `• Tipologías: ${tipologias.length} seleccionadas\n`;
-        mensaje += `• Radio: ${radioKm} km`;
-        
-        const confirmar = confirm(mensaje);
-        
-        if (!confirmar) return;
-    }
-    
-    // 7️⃣ Guardar/actualizar filtros para cada unidad
-    const registrosAGuardar = unidadesSeleccionadas.map(unidad => ({
-        unidad: unidad,
-        rangos: rangos.length > 0 ? rangos : null,
-        tipologias: tipologias.length > 0 ? tipologias : null,
-        radio_km: radioKm,
-        fecha_actualizacion: new Date().toISOString(),
-        configurado_por: currentUser.usuario
-    }));
-    
-    const { error: errorGuardar } = await supabaseClient
-        .from('filtros_por_unidad')
-        .upsert(registrosAGuardar, {
-            onConflict: 'unidad'
-        });
-    
-    if (errorGuardar) {
-        console.error('Error guardando filtros:', errorGuardar);
-        alert('❌ Error al guardar filtros: ' + errorGuardar.message);
-        return;
-    }
-    
-    // 8️⃣ Éxito
-    alert(
-        `✅ Filtros guardados exitosamente\n\n` +
-        `📊 Unidades configuradas: ${unidadesSeleccionadas.length}\n` +
-        `• ${unidadesSeleccionadas.join('\n• ')}\n\n` +
-        `Ahora estas unidades verán:\n` +
-        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
-        `• Tipologías: ${tipologias.length} seleccionadas\n` +
-        `• Radio: ${radioKm} km`
+    const confirmar = confirm(
+        `¿Guardar filtros para ${unidadesSeleccionadas.length} unidad(es)?\n\n` +
+        `Unidades: ${unidadesSeleccionadas.join(', ')}\n` +
+        `Rangos: ${rangos.length}\n` +
+        `Tipologías: ${tipologias.length}\n` +
+        `Radio: ${radioKm} km`
     );
     
-    // Limpiar selección
-    document.querySelectorAll('.checkbox-unidad-filtro:checked').forEach(cb => cb.checked = false);
-    actualizarContadorUnidadesSeleccionadas();
+    if (!confirmar) return;
     
-    console.log('✅ Filtros guardados para:', unidadesSeleccionadas);
+    try {
+        const registrosAGuardar = unidadesSeleccionadas.map(unidad => ({
+            unidad: unidad,
+            rangos: rangos.length > 0 ? rangos : null,
+            tipologias: tipologias.length > 0 ? tipologias : null,
+            radio_km: radioKm,
+            fecha_actualizacion: new Date().toISOString(),
+            configurado_por: currentUser.usuario
+        }));
+        
+        const { error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .upsert(registrosAGuardar, { onConflict: 'unidad' });
+        
+        if (error) {
+            alert('❌ Error: ' + error.message);
+            return;
+        }
+        
+        alert(`✅ Filtros guardados para ${unidadesSeleccionadas.length} unidad(es)`);
+        
+        document.querySelectorAll('.checkbox-unidad-filtro:checked').forEach(cb => cb.checked = false);
+        actualizarContadorUnidadesSeleccionadas();
+        
+    } catch (err) {
+        console.error('Error:', err);
+        alert('❌ Error de conexión');
+    }
 }
+
 
 
 // ========================================
 // 🗑️ BORRAR TODOS LOS FILTROS DE UNIDADES
 // ========================================
 async function borrarTodosFiltrosUnidades() {
-    // 1️⃣ Confirmar acción
     const confirmar = confirm(
         `⚠️ ¿ELIMINAR FILTROS DE TODAS LAS UNIDADES?\n\n` +
-        `Esta acción:\n` +
-        `• Eliminará todos los filtros personalizados\n` +
-        `• Las unidades volverán a usar filtros globales\n` +
-        `• NO se puede deshacer\n\n` +
-        `¿Estás seguro de continuar?`
+        `Esta acción NO se puede deshacer.\n\n` +
+        `¿Continuar?`
     );
     
     if (!confirmar) return;
     
-    // 2️⃣ Confirmar nuevamente
-    const confirmar2 = confirm(
-        `⚠️ ÚLTIMA CONFIRMACIÓN\n\n` +
-        `Esto eliminará TODOS los filtros guardados.\n\n` +
-        `¿Proceder?`
-    );
-    
-    if (!confirmar2) return;
-    
     try {
-        // 3️⃣ Eliminar todos los registros
         const { error } = await supabaseClient
             .from('filtros_por_unidad')
             .delete()
-            .neq('id', 0); // Eliminar todos (condición que siempre es verdadera)
+            .neq('id', 0);
         
         if (error) {
-            console.error('Error eliminando filtros:', error);
-            alert('❌ Error al eliminar filtros: ' + error.message);
+            alert('❌ Error: ' + error.message);
             return;
         }
         
-        // 4️⃣ Éxito
-        alert(
-            `✅ TODOS LOS FILTROS ELIMINADOS\n\n` +
-            `Todas las unidades ahora usarán los filtros globales por defecto.`
-        );
-        
-        console.log('🗑️ Todos los filtros de unidades eliminados');
+        alert('✅ Todos los filtros de unidades eliminados');
         
     } catch (err) {
-        console.error('Error borrando filtros:', err);
+        console.error('Error:', err);
         alert('❌ Error de conexión');
     }
 }
 
 
+
+
 // ========================================
-// 🗺️ GENERAR MAPA DE UNIDAD CON FILTROS
+// 🗺️ GENERAR MAPA UNIDAD CON FILTROS
 // ========================================
 async function generarMapaUnidadConFiltros() {
     const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
@@ -4823,43 +4835,26 @@ async function generarMapaUnidadConFiltros() {
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // 1️⃣ Obtener filtros de esta unidad
-        const { data: filtrosUnidad, error: errorFiltros } = await supabaseClient
+        const { data: filtrosUnidad } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
             .eq('unidad', unidadSeleccionada)
             .maybeSingle();
         
-        if (errorFiltros) {
-            console.error('Error cargando filtros:', errorFiltros);
-            resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar filtros</div>';
-            return;
-        }
-        
-        // 2️⃣ Si no tiene filtros, usar globales
         let filtrosAplicar;
         if (filtrosUnidad) {
             filtrosAplicar = filtrosUnidad;
-            console.log('✅ Usando filtros personalizados de la unidad');
         } else {
-            // Cargar filtros globales
             const { data: filtrosGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .single();
             
-            filtrosAplicar = filtrosGlobales || {
-                rangos: null,
-                tipologias: null,
-                radio_km: 3
-            };
-            console.log('⚠️ Unidad sin filtros personalizados, usando globales');
+            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
         }
         
-        // 3️⃣ Guardar filtros globalmente
         window.filtrosAplicados = filtrosAplicar;
         
-        // 4️⃣ Obtener OS Asignadas de la unidad
         const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
         
         if (osAsignadasUnidad.length === 0) {
@@ -4871,7 +4866,6 @@ async function generarMapaUnidadConFiltros() {
             return;
         }
         
-        // 5️⃣ Obtener coordenada centro (primera OS con coordenadas)
         const osCentro = osAsignadasUnidad.find(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             return coords && coords.includes(',');
@@ -4881,7 +4875,7 @@ async function generarMapaUnidadConFiltros() {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd;">
                     <div class="result-header">⚠️ Sin coordenadas</div>
-                    <p style="text-align: center; color: #666;">Las OS de esta unidad no tienen coordenadas válidas</p>
+                    <p style="text-align: center; color: #666;">Las OS no tienen coordenadas válidas</p>
                 </div>`;
             return;
         }
@@ -4889,22 +4883,13 @@ async function generarMapaUnidadConFiltros() {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 6️⃣ Cargar TODAS las OS Registradas para buscar cercanas
-        const { data: osRegistradas, error: errorRegistradas } = await fetchAllFromTable(
+        const { data: osRegistradas } = await fetchAllFromTable(
             'OS Pendientes',
-            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO'
+            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda'
         );
         
-        if (errorRegistradas) {
-            console.error('Error cargando OS Registradas:', errorRegistradas);
-            resultsContainer.innerHTML = '<div class="result-card">❌ Error al cargar OS cercanas</div>';
-            return;
-        }
-        
-        // 7️⃣ Filtrar solo OS Registradas
         const soloRegistradas = osRegistradas.filter(os => os.Estado_ATOMO === 'Registrada');
         
-        // 8️⃣ Buscar OS cercanas dentro del radio
         const radioKm = filtrosAplicar.radio_km || 3;
         const osEnRadio = [];
         
@@ -4916,18 +4901,12 @@ async function generarMapaUnidadConFiltros() {
             const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
             
-            if (distancia <= radioKm) {
+            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
                 const esRegulada = os.Tipo_de_OS && 
                                   os.Tipo_de_OS.toLowerCase().includes('regulad') && 
                                   !os.Tipo_de_OS.toLowerCase().includes('no');
                 
-                let mostrar = false;
-                
-                if (esRegulada) {
-                    mostrar = true; // Reguladas SIEMPRE se muestran
-                } else {
-                    mostrar = validarFiltrosOS(os, filtrosAplicar);
-                }
+                let mostrar = esRegulada || validarFiltrosOS(os, filtrosAplicar);
                 
                 if (mostrar) {
                     osEnRadio.push({
@@ -4941,23 +4920,17 @@ async function generarMapaUnidadConFiltros() {
             }
         });
         
-        // 9️⃣ Ordenar por distancia
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
-        console.log(`✅ ${osEnRadio.length} OS Registradas encontradas en radio de ${radioKm} km`);
-        
-        // 🔟 Combinar: OS Asignadas + OS cercanas filtradas
         const osParaMapa = [...osAsignadasUnidad, ...osEnRadio];
         
-        // Generar mapa (usando la función existente de Mapa de Rutas)
         generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
         
     } catch (err) {
-        console.error('Error generando mapa:', err);
+        console.error('Error:', err);
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
-
 
 
 	
@@ -6063,7 +6036,7 @@ async function cargarInterfazIPR() {
 
 
 	// ========================================
-// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CON CACHE)
+// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CORREGIDA CON FILTROS POR UNIDAD Y DEUDA)
 // ========================================
 async function cargarInterfazMapaRutas() {
     const searchGrid = document.getElementById('searchGrid');
@@ -6084,7 +6057,7 @@ async function cargarInterfazMapaRutas() {
             return;
         }
         
-        // 2. 🆕 USAR CACHE PARA TIPOLOGÍAS
+        // 2. Cargar tipologías usando cache
         const tipologiasUnicas = await cargarTipologias();
         
         if (tipologiasUnicas.length === 0) {
@@ -6092,35 +6065,34 @@ async function cargarInterfazMapaRutas() {
             return;
         }
         
-       // 3. Cargar OS asignadas si NO es Admin
-let osAsignadas = [];
-if (currentUser.rol !== 'Administrador') {
-    const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
-    
-    console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
-    
-    const { data: os, error: errorOS } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Tipologia')
-        .eq('Unidad', unidadUsuario)
-        .eq('Estado_ATOMO', 'Asignada');  // ✅ SOLO ASIGNADAS para el dropdown
-    
-    if (errorOS) {
-        console.error('Error buscando OS:', errorOS);
-    }
-    
-    if (!errorOS && os) {
-        osAsignadas = os;
-        console.log(`✅ ${os.length} OS Asignadas encontradas para ${unidadUsuario}`);
-    } else {
-        console.log(`⚠️ No se encontraron OS Asignadas para ${unidadUsuario}`);
-    }
-}        
+        // 3. Cargar OS asignadas si NO es Admin
+        let osAsignadas = [];
+        if (currentUser.rol !== 'Administrador') {
+            const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
+            
+            console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
+            
+            const { data: os, error: errorOS } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia')
+                .eq('Unidad', unidadUsuario)
+                .eq('Estado_ATOMO', 'Asignada');
+            
+            if (errorOS) {
+                console.error('Error buscando OS:', errorOS);
+            }
+            
+            if (!errorOS && os) {
+                osAsignadas = os;
+                console.log(`✅ ${os.length} OS Asignadas encontradas para ${unidadUsuario}`);
+            }
+        }
+        
         // 4. Generar interfaz según rol
         if (currentUser.rol === 'Administrador') {
-            generarInterfazAdmin(filtros, tipologiasUnicas);
+            generarInterfazAdminMapaRutas(filtros, tipologiasUnicas);
         } else {
-            generarInterfazUnidad(filtros, osAsignadas);
+            generarInterfazUnidadMapaRutas(filtros, osAsignadas);
         }
         
     } catch (err) {
@@ -6135,13 +6107,20 @@ if (currentUser.rol !== 'Administrador') {
 
 
 // ========================================
-// 👨‍💼 INTERFAZ ADMINISTRADOR (CORREGIDA)
+// 👨‍💼 INTERFAZ ADMINISTRADOR CON FILTROS POR UNIDAD Y DEUDA
 // ========================================
-function generarInterfazAdmin(filtros, tipologiasDisponibles) {
+async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
     
-    const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
+    // Cargar unidades únicas
+    const { data: osData } = await supabaseClient
+        .from('OS Pendientes')
+        .select('Unidad')
+        .eq('Estado_ATOMO', 'Registrada');
     
+    const unidadesUnicas = [...new Set(osData.map(os => os.Unidad))].filter(u => u).sort();
+    
+    const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
     const rangosSeleccionados = filtros.rangos || [];
     const tipologiasSeleccionadas = filtros.tipologias || [];
     
@@ -6149,9 +6128,9 @@ function generarInterfazAdmin(filtros, tipologiasDisponibles) {
         <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
             <div class="result-header">⚙️ Configuración de Filtros (Administrador)</div>
             
-            <!-- 🆕 SECCIÓN: FILTROS ACTUALES -->
+            <!-- 🆕 FILTROS ACTUALES -->
             <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #2196f3;">
-                <strong style="color: #1565c0;">📊 Filtros Actuales:</strong><br>
+                <strong style="color: #1565c0;">📊 Filtros Globales Actuales:</strong><br>
                 <div style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.8;">
                     • <strong>Rangos:</strong> ${filtros.rangos && filtros.rangos.length > 0 ? filtros.rangos.join(', ') : '<em style="color: #999;">Ninguno</em>'}<br>
                     • <strong>Tipologías:</strong> ${filtros.tipologias && filtros.tipologias.length > 0 ? filtros.tipologias.length + ' seleccionada(s)' : '<em style="color: #999;">Ninguna</em>'}<br>
@@ -6171,9 +6150,117 @@ function generarInterfazAdmin(filtros, tipologiasDisponibles) {
                 <strong>ℹ️ Nota:</strong> Las OS Reguladas siempre se mostrarán (prioridad legal)
             </div>
             
-            <!-- SECCIÓN: RANGOS DE DÍAS -->
+            <!-- 🆕 FILTROS POR UNIDAD -->
+            <div style="background: #f3e5f5; padding: 20px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #9c27b0;">
+                <strong style="color: #6a1b9a; font-size: 18px;">📍 Filtros Personalizados por Unidad</strong>
+                <p style="color: #666; margin: 10px 0;">Configura filtros específicos que solo aplicarán a las unidades seleccionadas</p>
+                
+                <!-- Selector de unidades -->
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <label style="font-weight: 600; color: #2d3748; margin-bottom: 10px; display: block;">
+                        Seleccionar Unidades:
+                    </label>
+                    <div style="max-height: 200px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 10px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                            ${unidadesUnicas.map(unidad => `
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px; background: #f8f9fa; border-radius: 6px;">
+                                    <input type="checkbox" class="checkbox-unidad-filtro" value="${unidad}" style="width: 18px; height: 18px;">
+                                    <span style="font-size: 13px;">${unidad}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: #e3f2fd; border-radius: 8px; margin-top: 10px;">
+                        <strong style="color: #1565c0;">📊 Unidades seleccionadas: <span id="contadorUnidadesSeleccionadas">0</span></strong>
+                    </div>
+                </div>
+                
+                <!-- Filtros para unidades -->
+                <div class="form-group">
+                    <label style="font-weight: 600; color: #2d3748;">📊 Rangos de Días:</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 10px;">
+                        ${rangosDisponibles.map(rango => `
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px;">
+                                <input type="checkbox" class="checkbox-rango-unidad" value="${rango}" style="width: 18px; height: 18px;">
+                                <span>${rango} días</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                    <label style="font-weight: 600; color: #2d3748;">🏷️ Tipologías:</label>
+                    <button onclick="toggleSeccionTipologiasUnidad()" class="btn btn-secondary" style="margin: 10px 0; width: 100%;">
+                        📋 Seleccionar Tipologías
+                    </button>
+                    <div id="seccionTipologiasUnidad" style="display: none; max-height: 250px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 15px; background: #f8f9fa;">
+                        <!-- Se carga dinámicamente -->
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 15px;">
+                    <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km):</label>
+                    <input type="number" id="radioKmUnidad" min="1" max="20" value="3" 
+                           style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                    <button class="btn" onclick="guardarFiltrosPorUnidad()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                        💾 Guardar Filtros para Unidades
+                    </button>
+                    <button class="btn btn-danger" onclick="borrarTodosFiltrosUnidades()">
+                        🗑️ Borrar TODOS los Filtros de Unidades
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 🆕 FILTRO DE DEUDA CON COLORES -->
+            <div style="background: #fffde7; padding: 20px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #fbc02d;">
+                <strong style="color: #f57f17; font-size: 18px;">💰 Filtro de Deuda (Suspensión)</strong>
+                <p style="color: #666; margin: 10px 0;">Selecciona rangos de deuda. Se aplicará a TODAS las OS con ese monto (prioridad sobre tipologías)</p>
+                
+                <div style="display: grid; gap: 12px; margin-top: 15px;">
+                    <label class="filtro-deuda-checkbox" data-color="amarillo" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 15px; background: white; border-radius: 8px; border: 3px solid #fdd835; transition: all 0.3s;">
+                        <input type="checkbox" id="deuda_amarillo" value="500" style="width: 20px; height: 20px; cursor: pointer;">
+                        <div style="width: 30px; height: 30px; background: linear-gradient(135deg, #fff176 0%, #fdd835 100%); border-radius: 50%; box-shadow: 0 2px 8px rgba(253,216,53,0.4);"></div>
+                        <div style="flex: 1;">
+                            <strong style="color: #f57f17; font-size: 16px;">🟡 Deuda Alta</strong>
+                            <div style="color: #666; font-size: 14px; margin-top: 4px;">Más de <strong>$500</strong></div>
+                        </div>
+                    </label>
+                    
+                    <label class="filtro-deuda-checkbox" data-color="naranja" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 15px; background: white; border-radius: 8px; border: 3px solid #ff9800; transition: all 0.3s;">
+                        <input type="checkbox" id="deuda_naranja" value="100-500" style="width: 20px; height: 20px; cursor: pointer;">
+                        <div style="width: 30px; height: 30px; background: linear-gradient(135deg, #ffb74d 0%, #ff9800 100%); border-radius: 50%; box-shadow: 0 2px 8px rgba(255,152,0,0.4);"></div>
+                        <div style="flex: 1;">
+                            <strong style="color: #e65100; font-size: 16px;">🟠 Deuda Media</strong>
+                            <div style="color: #666; font-size: 14px; margin-top: 4px;">Entre <strong>$100 - $500</strong></div>
+                        </div>
+                    </label>
+                    
+                    <label class="filtro-deuda-checkbox" data-color="rosado" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 15px; background: white; border-radius: 8px; border: 3px solid #f48fb1; transition: all 0.3s;">
+                        <input type="checkbox" id="deuda_rosado" value="50-100" style="width: 20px; height: 20px; cursor: pointer;">
+                        <div style="width: 30px; height: 30px; background: linear-gradient(135deg, #f8bbd0 0%, #f48fb1 100%); border-radius: 50%; box-shadow: 0 2px 8px rgba(244,143,177,0.4);"></div>
+                        <div style="flex: 1;">
+                            <strong style="color: #c2185b; font-size: 16px;">🌸 Deuda Baja</strong>
+                            <div style="color: #666; font-size: 14px; margin-top: 4px;">Entre <strong>$50 - $100</strong></div>
+                        </div>
+                    </label>
+                </div>
+                
+                <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #ff6f00;">
+                    <strong style="color: #e65100;">⚠️ Importante:</strong><br>
+                    <span style="color: #666; font-size: 14px;">
+                        • Si NO seleccionas deuda ($0) → No se aplicará filtro de deuda<br>
+                        • Si seleccionas deuda SIN tipologías → Mostrará TODAS las OS con esa deuda<br>
+                        • Si seleccionas deuda + tipologías → Mostrará ambos criterios combinados
+                    </span>
+                </div>
+            </div>
+            
+            <!-- SECCIÓN: RANGOS DE DÍAS (FILTROS GLOBALES) -->
             <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📊 Rangos de Días:</label>
+                <label style="font-weight: 600; color: #2d3748;">📊 Rangos de Días (Global):</label>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 10px;">
                     ${rangosDisponibles.map(rango => `
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px;">
@@ -6192,9 +6279,9 @@ function generarInterfazAdmin(filtros, tipologiasDisponibles) {
                 </label>
             </div>
             
-            <!-- SECCIÓN: TIPOLOGÍAS -->
+            <!-- SECCIÓN: TIPOLOGÍAS (FILTROS GLOBALES) -->
             <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">🏷️ Tipologías:</label>
+                <label style="font-weight: 600; color: #2d3748;">🏷️ Tipologías (Global):</label>
                 <div style="max-height: 300px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 15px; background: #f8f9fa;">
                     ${tipologiasDisponibles.length > 0 
                         ? tipologiasDisponibles.map(tipo => `
@@ -6214,23 +6301,20 @@ function generarInterfazAdmin(filtros, tipologiasDisponibles) {
                            style="width: 18px; height: 18px;">
                     <strong>Seleccionar todas las tipologías</strong>
                 </label>
-                <small style="color: #666; display: block; margin-top: 5px;">
-                    ${tipologiasDisponibles.length} tipología${tipologiasDisponibles.length !== 1 ? 's' : ''} disponible${tipologiasDisponibles.length !== 1 ? 's' : ''}
-                </small>
             </div>
             
-            <!-- SECCIÓN: RADIO DE BÚSQUEDA -->
+            <!-- SECCIÓN: RADIO DE BÚSQUEDA (GLOBAL) -->
             <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km):</label>
+                <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km) - Global:</label>
                 <input type="number" id="radioKm" min="1" max="20" value="${filtros.radio_km || 3}" 
                        style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                 <small style="color: #666; display: block; margin-top: 5px;">Mínimo: 1 km | Máximo: 20 km</small>
             </div>
             
-            <!-- BOTÓN: GUARDAR FILTROS -->
+            <!-- BOTÓN: GUARDAR FILTROS GLOBALES -->
             <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="guardarFiltrosMapa()" style="font-size: 16px; padding: 15px 30px;">
-                    💾 Guardar y Aplicar Filtros
+                <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
+                    💾 Guardar Filtros Globales
                 </button>
             </div>
         </div>
@@ -6251,14 +6335,41 @@ function generarInterfazAdmin(filtros, tipologiasDisponibles) {
             </div>
         </div>
     `;
+    
+    // Cargar tipologías para filtros por unidad
+    cargarTipologiasParaFiltrosUnidad();
+    
+    // Agregar event listeners para checkboxes de unidad
+    document.querySelectorAll('.checkbox-unidad-filtro').forEach(cb => {
+        cb.addEventListener('change', actualizarContadorUnidadesSeleccionadas);
+    });
+    
+    // Event listeners para filtros de deuda (efectos visuales)
+    document.querySelectorAll('.filtro-deuda-checkbox').forEach(label => {
+        const checkbox = label.querySelector('input[type="checkbox"]');
+        const color = label.getAttribute('data-color');
+        
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                if (color === 'amarillo') label.style.background = 'linear-gradient(135deg, #fff9c4 0%, #fff59d 100%)';
+                else if (color === 'naranja') label.style.background = 'linear-gradient(135deg, #ffe0b2 0%, #ffcc80 100%)';
+                else if (color === 'rosado') label.style.background = 'linear-gradient(135deg, #f8bbd0 0%, #f48fb1 100%)';
+                label.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                label.style.transform = 'translateY(-2px)';
+            } else {
+                label.style.background = 'white';
+                label.style.boxShadow = 'none';
+                label.style.transform = 'translateY(0)';
+            }
+        });
+    });
 }
 
 
-
 // ========================================
-// 👷 INTERFAZ UNIDADES (CORREGIDA)
+// 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA
 // ========================================
-function generarInterfazUnidad(filtros, osAsignadas) {
+function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
     const searchGrid = document.getElementById('searchGrid');
     
     if (osAsignadas.length === 0) {
@@ -6296,7 +6407,6 @@ function generarInterfazUnidad(filtros, osAsignadas) {
         </div>
     `;
 }
-
 
 	// ========================================
 // 🔄 FUNCIONES DE FILTROS (ADMIN)
@@ -6836,48 +6946,95 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
     return parseFloat(distancia.toFixed(2));
 }
 
+
+
 // ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS
+// ✅ VALIDAR SI OS CUMPLE FILTROS (CON DEUDA)
 // ========================================
 function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
+    // 🆕 Obtener filtros de deuda seleccionados
+    const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
+    const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
+    const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
+    
+    const tieneFiltroDeudaseleccionado = deudaAmarillo || deudaNaranja || deudaRosado;
+    
     console.log('🔍 Validando OS:', {
         osAtomo: os.OSATMO,
         tipologiaOS: os.Tipologia,
+        deudaOS: os.Deuda,
         filtroTipologias: tipologias,
-        filtroRangos: rangos
+        filtroRangos: rangos,
+        filtrosDeuda: { amarillo: deudaAmarillo, naranja: deudaNaranja, rosado: deudaRosado }
     });
     
-    // ✅ Si no hay filtros, MOSTRAR TODO
-    if (rangos.length === 0 && tipologias.length === 0) {
+    // ✅ Si NO hay filtros, MOSTRAR TODO
+    if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeudaseleccionado) {
         console.log('✅ Sin filtros - Aceptada');
         return true;
     }
-
-
-	// ✅ VALIDAR RANGO (si hay filtro)
-if (rangos.length > 0) {
-    // Verificar que tenga fecha
-    if (!os['Fecha Gen.']) {
-        console.log(`❌ OS ${os.OSATMO} - Sin campo "Fecha Gen."`);
-        return false;
+    
+    // 🆕 VALIDACIÓN DE DEUDA (PRIORIDAD MÁXIMA)
+    if (tieneFiltroDeudaseleccionado) {
+        const deuda = parseFloat(os.Deuda) || 0;
+        let cumpleDeuda = false;
+        
+        if (deudaAmarillo && deuda > 500) {
+            cumpleDeuda = true;
+            console.log(`✅ Cumple filtro AMARILLO: Deuda ${deuda} > 500`);
+        }
+        if (deudaNaranja && deuda >= 100 && deuda <= 500) {
+            cumpleDeuda = true;
+            console.log(`✅ Cumple filtro NARANJA: Deuda ${deuda} entre 100-500`);
+        }
+        if (deudaRosado && deuda >= 50 && deuda < 100) {
+            cumpleDeuda = true;
+            console.log(`✅ Cumple filtro ROSADO: Deuda ${deuda} entre 50-100`);
+        }
+        
+        // Si tiene deuda seleccionada pero no cumple ningún rango
+        if (!cumpleDeuda) {
+            console.log(`❌ NO cumple ningún filtro de deuda (Deuda: ${deuda})`);
+            
+            // 🆕 EXCEPCIÓN: Si es suspensión, permitir pasar a validaciones de tipología
+            const esSuspension = os.Tipologia && (
+                os.Tipologia.includes('SUSPENSION B.T.') ||
+                os.Tipologia.includes('SUSPENSION M.T.') ||
+                os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
+            );
+            
+            if (!esSuspension) {
+                return false; // Si no es suspensión y no cumple deuda, rechazar
+            }
+            // Si es suspensión, continuar con validaciones de tipología
+        } else {
+            // Cumple deuda, retornar true (sin importar tipología)
+            return true;
+        }
     }
     
-    const dias = calcularDias(os['Fecha Gen.']);
-    const rangoOS = determinarRango(dias);
-    
-    console.log(`🔎 Rango OS: "${rangoOS}" (${dias} días) - Filtros:`, rangos);
-    
-    if (!rangos.includes(rangoOS)) {
-        console.log(`❌ OS ${os.OSATMO} - Rango "${rangoOS}" NO coincide`);
-        return false;
+    // ✅ VALIDAR RANGO (si hay filtro)
+    if (rangos.length > 0) {
+        if (!os['Fecha Gen.']) {
+            console.log(`❌ OS ${os.OSATMO} - Sin campo "Fecha Gen."`);
+            return false;
+        }
+        
+        const dias = calcularDias(os['Fecha Gen.']);
+        const rangoOS = determinarRango(dias);
+        
+        console.log(`🔎 Rango OS: "${rangoOS}" (${dias} días) - Filtros:`, rangos);
+        
+        if (!rangos.includes(rangoOS)) {
+            console.log(`❌ OS ${os.OSATMO} - Rango "${rangoOS}" NO coincide`);
+            return false;
+        }
+        
+        console.log(`✅ OS ${os.OSATMO} - Rango "${rangoOS}" coincide`);
     }
-    
-    console.log(`✅ OS ${os.OSATMO} - Rango "${rangoOS}" coincide`);
-}
-
     
     // ✅ VALIDAR TIPOLOGÍA (si hay filtro)
     if (tipologias.length > 0) {
@@ -6888,7 +7045,6 @@ if (rangos.length > 0) {
         
         const tipologiaOS = os.Tipologia.trim();
         
-        // 🔍 MOSTRAR COMPARACIÓN
         console.log(`🔎 Comparando tipología "${tipologiaOS}" con:`, tipologias);
         
         const coincide = tipologias.some(t => {
@@ -6906,34 +7062,94 @@ if (rangos.length > 0) {
         console.log(`✅ OS ${os.OSATMO} - Tipología coincide`);
     }
     
-    // ✅ VALIDAR RANGO (si hay filtro)
-    if (rangos.length > 0) {
-        const dias = calcularDias(os['Fecha Gen.']);
-        const rangoOS = determinarRango(dias);
-        
-        console.log(`🔎 Rango OS: "${rangoOS}" - Filtros:`, rangos);
-        
-        if (!rangos.includes(rangoOS)) {
-            console.log(`❌ OS ${os.OSATOMO} - Rango "${rangoOS}" NO coincide`);
-            return false;
-        }
-        
-        console.log(`✅ OS ${os.OSATOMO} - Rango "${rangoOS}" coincide`);
-    }
-    
     // ✅ Si llegó aquí, cumple todos los filtros
-    console.log(`✅✅ OS ${os.OSATOMO} - CUMPLE TODOS LOS FILTROS`);
+    console.log(`✅✅ OS ${os.OSATMO} - CUMPLE TODOS LOS FILTROS`);
     return true;
 }
 
 
+// ========================================
+// 💾 GUARDAR FILTROS GLOBALES (NUEVO NOMBRE)
+// ========================================
+async function guardarFiltrosMapaGlobales() {
+    if (currentUser.rol !== 'Administrador') {
+        alert('⚠️ Solo administradores pueden modificar filtros');
+        return;
+    }
+
+    // 1️⃣ Obtener rangos seleccionados
+    const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
+    const rangos = [];
+    const tipologias = [];
+
+    rangosCheckboxes.forEach(cb => {
+        if (cb.checked && cb.value) {
+            const valor = cb.value;
+            if (valor.includes('-') || valor.startsWith('>')) {
+                rangos.push(valor);
+            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
+                tipologias.push(valor);
+            }
+        }
+    });
+
+    // 2️⃣ Obtener radio
+    const radioKm = parseInt(document.getElementById('radioKm').value);
+
+    if (radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
+
+    // 3️⃣ Confirmación
+    const confirmar = confirm(
+        `¿SUSTITUIR configuración de filtros globales?\n\n` +
+        `📊 NUEVOS VALORES:\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
+        `• Tipologías: ${tipologias.length} seleccionada(s)\n` +
+        `• Radio: ${radioKm} km\n\n` +
+        `⚠️ Esto REEMPLAZARÁ los filtros globales.\n\n` +
+        `✅ SÍ - Guardar\n❌ NO - Cancelar`
+    );
+
+    if (!confirmar) return;
+
+    try {
+        const rangosAGuardar = rangos.length > 0 ? rangos : null;
+        const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
+        
+        const { error } = await supabaseClient
+            .from('filtros_mapa')
+            .update({
+                rangos: rangosAGuardar,
+                tipologias: tipologiasAGuardar,
+                radio_km: radioKm,
+                fecha_actualizacion: new Date().toISOString()
+            })
+            .eq('id', 1);
+
+        if (error) {
+            alert('❌ Error al guardar: ' + error.message);
+            return;
+        }
+
+        alert(`✅ Filtros globales actualizados correctamente`);
+        console.log('✅ Filtros guardados:', { rangos, tipologias, radioKm });
+
+    } catch (err) {
+        console.error('Error guardando filtros:', err);
+        alert('❌ Error de conexión');
+    }
+}
+
+
 	// ========================================
-// 🗺️ GENERAR MAPA CON LEAFLET
+// 🗺️ GENERAR MAPA CON LEAFLET (CON PANEL DE DETALLE)
 // ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // ✅ CONTAR POR TIPOLOGÍA (ANTES del innerHTML)
+    // Contar por tipología
     const conteoPorTipologia = {};
     osEnRadio.forEach(os => {
         const tip = os.Tipologia || 'Sin tipología';
@@ -6943,7 +7159,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
         .sort((a, b) => b[1] - a[1]);
     
-    // ✅ GENERAR HTML (TODO JUNTO)
+    // 🆕 NUEVO HTML SIN TABLA, SOLO CON PANEL DE DETALLE
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header">
@@ -6951,130 +7167,79 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             </div>
             
             <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-    <strong>Leyenda:</strong>
-    <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
-        <span>🟢 Tu OS (centro)</span>
-        <span>🟠 OS Asignadas</span>
-        <span>🔴 OS Reguladas</span>
-        <span>🔵 OS No Reguladas (filtradas)</span>
-    </div>
-</div>
-
-
-<!-- ✅ AGREGAR ESTO -->
-<div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
-    <strong>🔍 Filtros activos del Admin:</strong><br>
-    <span style="font-size: 14px; color: #666;">
-        • Radio: <strong>${radioKm} km</strong><br>
-        ${window.filtrosAplicados ? `
-            • Rangos: <strong>${window.filtrosAplicados.rangos?.length || 0}</strong><br>
-            • Tipologías: <strong>${window.filtrosAplicados.tipologias?.length || 0}</strong>
-        ` : 'Sin filtros específicos'}
-    </span>
-</div>
-
-<!-- 🗑️ BOTÓN LIMPIAR FILTROS -->
-<div style="text-align: center; margin: 15px 0;">
-    <button class="btn btn-danger" onclick="limpiarFiltrosMapaYRecargar()" 
-            style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 12px 24px; font-size: 16px;">
-        🗑️ Limpiar Filtros y Recargar Mapa
-    </button>
-</div>
-            
-            <!-- RESUMEN POR TIPOLOGÍA -->
-<div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-    <strong>📊 Totales por Tipología (Click para resaltar):</strong>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 10px;">
-        ${tipologiasOrdenadas.map(([tip, count]) => `
-    <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')" 
-         id="tipologia_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
-         style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
-         onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(5px)'"
-         onmouseout="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
-        <strong style="color: #2196f3;">${count}</strong> - ${tip}
-    </div>
-        `).join('')}
-    </div>
-</div>
-            
-            <!-- BUSCADOR EN LISTADO -->
-            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>🔍 Buscar OS en listado:</strong>
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-    <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
-           style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
-    <button onclick="buscarOSEnListado()" 
-            style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-        🔍 Buscar
-    </button>
-    <!-- ✅ NUEVO BOTÓN -->
-    <button onclick="recargarMapaConFiltrosActualizados()" 
-            style="background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-        🔄 Actualizar
-    </button>
-</div>
+                <strong>Leyenda:</strong>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
+                    <span>🟢 Tu OS (centro)</span>
+                    <span>🟠 OS Asignadas</span>
+                    <span>🔴 OS Reguladas</span>
+                    <span>🔵 OS No Reguladas</span>
+                    <span>🟡 Deuda Alta (>$500)</span>
+                    <span>🟠 Deuda Media ($100-$500)</span>
+                    <span>🌸 Deuda Baja ($50-$100)</span>
                 </div>
             </div>
-
-            <!-- Mapa -->
-            <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
             
-            <!-- Tabla de resultados -->
-            <div style="margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <strong style="font-size: 18px; color: #2d3748;">📋 Listado de OS (${osEnRadio.length})</strong>
-                    <button class="btn btn-secondary" onclick="exportarExcelMapa()" style="padding: 10px 20px;">
-                        📥 Exportar Excel
+            ${window.filtrosAplicados ? `
+            <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
+                <strong>🔍 Filtros activos:</strong><br>
+                <span style="font-size: 14px; color: #666;">
+                    • Radio: <strong>${radioKm} km</strong><br>
+                    ${window.filtrosAplicados.rangos ? `• Rangos: <strong>${window.filtrosAplicados.rangos.length}</strong><br>` : ''}
+                    ${window.filtrosAplicados.tipologias ? `• Tipologías: <strong>${window.filtrosAplicados.tipologias.length}</strong>` : ''}
+                </span>
+            </div>` : ''}
+            
+            <div style="text-align: center; margin: 15px 0;">
+                <button class="btn btn-danger" onclick="limpiarFiltrosMapaYRecargar()" 
+                        style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 12px 24px; font-size: 16px;">
+                    🗑️ Limpiar Filtros y Recargar
+                </button>
+            </div>
+            
+            <!-- Resumen por tipología (clickeable) -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Totales por Tipología (Click para resaltar):</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 10px;">
+                    ${tipologiasOrdenadas.map(([tip, count]) => `
+                        <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')" 
+                             id="tipologia_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
+                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
+                             onmouseover="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#e3f2fd'; this.style.transform='translateX(5px)' }"
+                             onmouseout="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
+                            <strong style="color: #2196f3;">${count}</strong> - ${tip}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <!-- Buscador -->
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>🔍 Buscar OS:</strong>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
+                           style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
+                    <button onclick="buscarOSEnMapa()" 
+                            style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔍 Buscar
+                    </button>
+                    <button onclick="recargarMapaConFiltrosActualizados()" 
+                            style="background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔄 Actualizar
                     </button>
                 </div>
-                
-                <div style="overflow-x: auto;">
-                    <table id="tablaOSMapa" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px;">
-                        <thead>
-                            <tr style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                                <th style="padding: 12px; text-align: left; cursor: pointer;" onclick="ordenarTabla(0)">
-                                    OS ATOMO ▼
-                                </th>
-                                <th style="padding: 12px; text-align: left; cursor: pointer;" onclick="ordenarTabla(1)">
-                                    Tipología ▼
-                                </th>
-                                <th style="padding: 12px; text-align: left; cursor: pointer;" onclick="ordenarTabla(2)">
-                                    Comentario ▼
-                                </th>
-                                <th style="padding: 12px; text-align: center; cursor: pointer;" onclick="ordenarTabla(3)">
-                                    Distancia (km) ▼
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-    ${osEnRadio.map((os, idx) => {
-        const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
-        
-        // ✅ Formatear comentario
-        const comentarioFormateado = os.Comentario 
-            ? formatearComentario(os.Comentario) 
-            : '<em style="color: #999;">Sin comentario</em>';
-        
-        return `
-            <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 12px; font-weight: 600;">
-                    ${os.esRegulada ? '🔴' : '🔵'} ${os.OSATMO}
-                </td>
-                <td style="padding: 12px;">${os.Tipologia || 'N/A'}</td>
-                <td style="padding: 12px; max-width: 400px; line-height: 1.6;">
-                    ${comentarioFormateado}
-                </td>
-                <td style="padding: 12px; text-align: center; font-weight: 600; color: #1976d2;">
-                    ${os.distancia} km
-                </td>
-            </tr>
-        `;
-    }).join('')}
-</tbody>
-
-                    </table>
+            </div>
+            
+            <!-- MAPA -->
+            <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
+            
+            <!-- 🆕 PANEL DE DETALLE (Reemplaza la tabla) -->
+            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
+                <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
+                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
                 </div>
             </div>
+            
         </div>
     `;
     
@@ -7083,9 +7248,72 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
     }, 100);
     
-    // Guardar datos para exportar
+    // Guardar datos para exportar (si lo necesitas después)
     window.datosMapaExportar = osEnRadio;
 }
+
+
+
+	// ========================================
+// 🔍 BUSCAR OS EN MAPA (Y MOSTRAR DETALLE)
+// ========================================
+function buscarOSEnMapa() {
+    const busqueda = document.getElementById('buscarEnListado').value.trim();
+    if (!busqueda) {
+        alert('Ingrese una OS');
+        return;
+    }
+    
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa || !window.markersPorTipologia) {
+        alert('Mapa no inicializado');
+        return;
+    }
+    
+    let encontrado = false;
+    
+    // Buscar en todos los markers
+    Object.values(window.markersPorTipologia).forEach(markersArray => {
+        markersArray.forEach(marker => {
+            // Buscar en los datos guardados
+            if (window.datosMapaExportar) {
+                const os = window.datosMapaExportar.find(o => o.OSATMO && o.OSATMO.includes(busqueda));
+                
+                if (os) {
+                    encontrado = true;
+                    
+                    // Centrar mapa en el marker
+                    mapa.setView([os.lat, os.lng], 16, {
+                        animate: true,
+                        duration: 1
+                    });
+                    
+                    // Animar el marker
+                    const icon = marker.getElement();
+                    if (icon) {
+                        icon.style.animation = 'bounce 1s ease-in-out 5';
+                        setTimeout(() => {
+                            icon.style.animation = '';
+                        }, 5000);
+                    }
+                    
+                    // Mostrar detalle en el panel
+                    const labelEstado = os.esRegulada ? '🔴 REGULADA' : 
+                                       (os.Estado_ATOMO === 'Asignada' ? '🟠 ASIGNADA' : '🔵 NO REGULADA');
+                    mostrarDetalleOSEnPanel(os, labelEstado);
+                }
+            }
+        });
+    });
+    
+    if (!encontrado) {
+        alert(`OS "${busqueda}" no encontrada en el mapa`);
+    }
+}
+
+
+
+
 
 
 
@@ -7212,10 +7440,7 @@ function buscarOSEnListado() {
 
 
 // ========================================
-// 🎨 INICIALIZAR MAPA LEAFLET
-// ========================================
-// ========================================
-// 🎨 INICIALIZAR MAPA LEAFLET
+// 🎨 INICIALIZAR MAPA LEAFLET (CON DETALLE DINÁMICO)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     // Destruir mapa anterior si existe
@@ -7233,6 +7458,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         maxZoom: 19
     }).addTo(mapa);
 
+    // Iconos personalizados
     const iconoAsignada = L.divIcon({
         className: 'custom-icon',
         html: '<div style="background: #ff9800; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
@@ -7240,7 +7466,6 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         iconAnchor: [10, 10]
     });
     
-    // Iconos personalizados
     const iconoCentro = L.divIcon({
         className: 'custom-icon',
         html: '<div style="background: #4caf50; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
@@ -7262,15 +7487,35 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         iconAnchor: [10, 10]
     });
     
+    // 🆕 Iconos de DEUDA (Amarillo, Naranja, Rosado)
+    const iconoDeudaAmarillo = L.divIcon({
+        className: 'custom-icon',
+        html: '<div style="background: linear-gradient(135deg, #fff176 0%, #fdd835 100%); width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(253,216,53,0.5);"></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+    
+    const iconoDeudaNaranja = L.divIcon({
+        className: 'custom-icon',
+        html: '<div style="background: linear-gradient(135deg, #ffb74d 0%, #ff9800 100%); width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(255,152,0,0.5);"></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+    
+    const iconoDeudaRosado = L.divIcon({
+        className: 'custom-icon',
+        html: '<div style="background: linear-gradient(135deg, #f8bbd0 0%, #f48fb1 100%); width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(244,143,177,0.5);"></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+    
     // Marker del centro (OS seleccionada)
     const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoCentro }).addTo(mapa);
-    markerCentro.bindPopup(`
-        <div style="text-align: center; padding: 5px;">
-            <strong style="color: #4caf50;">🟢 TU OS</strong><br>
-            <strong>OS:</strong> ${osCentro.OSATMO}<br>
-            <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
-        </div>
-    `);
+    
+    // 🆕 Al hacer click en el marker centro, mostrar detalle
+    markerCentro.on('click', function() {
+        mostrarDetalleOSEnPanel(osCentro, '🟢 TU OS (Centro)');
+    });
     
     // Círculo del radio
     L.circle([latCentro, lngCentro], {
@@ -7285,10 +7530,23 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 
     // Markers de OS cercanas
     osEnRadio.forEach(os => {
-        // Determinar icono según estado y tipo
+        // 🆕 Determinar icono según DEUDA primero
         let icono, colorTexto, labelEstado;
+        const deuda = parseFloat(os.Deuda) || 0;
         
-        if (os.Estado_ATOMO === 'Asignada') {
+        if (deuda > 500) {
+            icono = iconoDeudaAmarillo;
+            colorTexto = '#f57f17';
+            labelEstado = '🟡 DEUDA ALTA (>$500)';
+        } else if (deuda >= 100 && deuda <= 500) {
+            icono = iconoDeudaNaranja;
+            colorTexto = '#e65100';
+            labelEstado = '🟠 DEUDA MEDIA ($100-$500)';
+        } else if (deuda >= 50 && deuda < 100) {
+            icono = iconoDeudaRosado;
+            colorTexto = '#c2185b';
+            labelEstado = '🌸 DEUDA BAJA ($50-$100)';
+        } else if (os.Estado_ATOMO === 'Asignada') {
             icono = iconoAsignada;
             colorTexto = '#ff9800';
             labelEstado = '🟠 ASIGNADA';
@@ -7311,43 +7569,15 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         }
         window.markersPorTipologia[tipologia].push(marker);
         
-        // Formatear comentario si existe
-        const comentarioFormateado = os.Comentario 
-            ? formatearComentario(os.Comentario) 
-            : '<em style="color: #999;">Sin comentario</em>';
-        
-        marker.bindPopup(`
-            <div style="padding: 10px; max-width: 350px;">
-                <div style="text-align: center; padding: 8px; background: ${os.Estado_ATOMO === 'Asignada' ? '#fff3e0' : (os.esRegulada ? '#ffebee' : '#e3f2fd')}; border-radius: 6px; margin-bottom: 10px;">
-                    <strong style="color: ${colorTexto}; font-size: 16px;">
-                        ${labelEstado}
-                    </strong>
-                </div>
-                <div style="text-align: left; line-height: 1.8;">
-                    <strong>📋 OS:</strong> ${os.OSATMO}<br>
-                    <strong>🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    <strong>📏 Distancia:</strong> ${os.distancia} km<br>
-                    <strong>📍 Unidad:</strong> ${os.Unidad || 'N/A'}
-                </div>
-                <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${colorTexto}; max-height: 200px; overflow-y: auto;">
-                    <strong style="color: #2d3748;">💬 Comentario:</strong>
-                    <div style="margin-top: 5px; font-size: 13px; color: #555;">
-                        ${comentarioFormateado}
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat},${os.lng}" 
-                       target="_blank"
-                       style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); 
-                              color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; 
-                              font-weight: 600; box-shadow: 0 2px 8px rgba(66,133,244,0.3);">
-                        🗺️ Navegar en Google Maps
-                    </a>
-                </div>
-            </div>
-        `, {
-            maxWidth: 400,
-            maxHeight: 450
+        // 🆕 AL HACER CLICK: Mostrar detalle abajo (en lugar de popup)
+        marker.on('click', function() {
+            mostrarDetalleOSEnPanel(os, labelEstado);
+            
+            // Opcional: Centrar mapa en el marker seleccionado
+            mapa.setView([os.lat, os.lng], mapa.getZoom(), {
+                animate: true,
+                duration: 0.5
+            });
         });
     });
     
@@ -7361,8 +7591,122 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('✅ Mapa Leaflet inicializado correctamente');
 }
 
+
 	// ========================================
-// 🎨 RESALTAR TIPOLOGÍA EN MAPA (CON TOGGLE)
+// 📋 MOSTRAR DETALLE DE OS EN PANEL INFERIOR
+// ========================================
+function mostrarDetalleOSEnPanel(os, labelEstado) {
+    const panelDetalle = document.getElementById('panelDetalleOS');
+    
+    if (!panelDetalle) {
+        console.error('❌ Panel de detalle no encontrado');
+        return;
+    }
+    
+    // Formatear comentario
+    const comentarioFormateado = os.Comentario 
+        ? formatearComentario(os.Comentario) 
+        : '<em style="color: #999;">Sin comentario</em>';
+    
+    // Determinar color según estado
+    let colorFondo, colorBorde;
+    const deuda = parseFloat(os.Deuda) || 0;
+    
+    if (deuda > 500) {
+        colorFondo = '#fffde7';
+        colorBorde = '#fdd835';
+    } else if (deuda >= 100 && deuda <= 500) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (deuda >= 50 && deuda < 100) {
+        colorFondo = '#fce4ec';
+        colorBorde = '#f48fb1';
+    } else if (labelEstado.includes('ASIGNADA')) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (labelEstado.includes('REGULADA')) {
+        colorFondo = '#ffebee';
+        colorBorde = '#f44336';
+    } else if (labelEstado.includes('TU OS')) {
+        colorFondo = '#e8f5e9';
+        colorBorde = '#4caf50';
+    } else {
+        colorFondo = '#e3f2fd';
+        colorBorde = '#2196f3';
+    }
+    
+    panelDetalle.innerHTML = `
+        <div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
+            
+            <!-- Encabezado con botón cerrar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
+                <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
+                    ${labelEstado}
+                </strong>
+                <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
+                    ✕ Cerrar
+                </button>
+            </div>
+            
+            <!-- Información principal -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">
+                    <div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${os.OSATMO || 'N/A'}</span></div>
+                    <div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}</div>
+                    ${os.Deuda && parseFloat(os.Deuda) > 0 ? `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">$${parseFloat(os.Deuda).toFixed(2)}</span></div>` : ''}
+                    ${os.distancia ? `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${os.distancia} km</span></div>` : ''}
+                    <div><strong style="color: #2d3748;">📍 Unidad:</strong> ${os.Unidad || 'N/A'}</div>
+                    ${os.Medidor ? `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
+                </div>
+            </div>
+            
+            <!-- Comentario (colapsable en móviles) -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">
+                <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
+                <div style="max-height: 150px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6;">
+                    ${comentarioFormateado}
+                </div>
+            </div>
+            
+            <!-- Botón Google Maps -->
+            <div style="text-align: center;">
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat},${os.lng}" 
+                   target="_blank"
+                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); 
+                          color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; 
+                          font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">
+                    🗺️ Navegar en Google Maps
+                </a>
+            </div>
+            
+        </div>
+    `;
+    
+    // Hacer scroll suave hacia el panel
+    panelDetalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    
+    console.log('✅ Detalle de OS mostrado:', os.OSATMO);
+}
+
+// ========================================
+// ✕ CERRAR PANEL DE DETALLE
+// ========================================
+function cerrarDetalleOS() {
+    const panelDetalle = document.getElementById('panelDetalleOS');
+    if (panelDetalle) {
+        panelDetalle.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #999;">
+                <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
+                <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
+            </div>
+        `;
+    }
+}
+
+
+	
+	// ========================================
+// 🎨 RESALTAR TIPOLOGÍA EN MAPA (CON TOGGLE CORREGIDO)
 // ========================================
 function resaltarTipologiaEnMapa(tipologia) {
     if (!window.markersPorTipologia || !window.markersPorTipologia[tipologia]) {
@@ -7379,14 +7723,22 @@ function resaltarTipologiaEnMapa(tipologia) {
     // 🆕 Verificar si esta tipología ya está filtrada
     const yaFiltrado = window.tipologiaFiltrada === tipologia;
     
+    // 🆕 RESETEAR ESTILOS DE TODOS LOS DIVS
+    document.querySelectorAll('[id^="tipologia_"]').forEach(div => {
+        div.style.background = '#f8f9fa';
+        div.style.transform = 'translateX(0)';
+        div.style.boxShadow = 'none';
+    });
+    
     if (yaFiltrado) {
         // 🔄 DESACTIVAR FILTRO: Mostrar TODOS los markers
-        console.log('🔄 Mostrando TODOS los markers');
+        console.log('🔄 DESELECCIONANDO - Mostrando TODOS los markers');
         
+        // ✅ MOSTRAR TODOS (sin importar tipología)
         Object.values(window.markersPorTipologia).forEach(markersArray => {
             markersArray.forEach(marker => {
                 if (!mapa.hasLayer(marker)) {
-                    mapa.addLayer(marker);
+                    mapa.addLayer(marker); // ✅ AGREGAR de vuelta al mapa
                 }
                 // Quitar animación
                 const icon = marker.getElement();
@@ -7407,6 +7759,16 @@ function resaltarTipologiaEnMapa(tipologia) {
                 allBounds.extend(marker.getLatLng());
             });
         });
+        
+        // ✅ Incluir marker central
+        if (window.osCentroActual) {
+            const coordsCentro = window.osCentroActual.Coordenadas || window.osCentroActual.Coordendasgis;
+            if (coordsCentro && coordsCentro.includes(',')) {
+                const [lat, lng] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+                allBounds.extend([lat, lng]);
+            }
+        }
+        
         mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
         
         console.log('✅ Filtro desactivado - Mostrando todo');
@@ -7417,11 +7779,11 @@ function resaltarTipologiaEnMapa(tipologia) {
         
         const markersSeleccionados = window.markersPorTipologia[tipologia];
         
-        // 1️⃣ Ocultar TODOS los markers
+        // 1️⃣ Ocultar TODOS los markers (excepto los seleccionados)
         Object.entries(window.markersPorTipologia).forEach(([tip, markersArray]) => {
             markersArray.forEach(marker => {
                 if (tip !== tipologia) {
-                    mapa.removeLayer(marker);
+                    mapa.removeLayer(marker); // ✅ REMOVER del mapa
                 }
             });
         });
@@ -7430,9 +7792,8 @@ function resaltarTipologiaEnMapa(tipologia) {
         const bounds = L.latLngBounds();
         
         markersSeleccionados.forEach(marker => {
-            // Asegurar que esté visible
             if (!mapa.hasLayer(marker)) {
-                mapa.addLayer(marker);
+                mapa.addLayer(marker); // ✅ AGREGAR de vuelta
             }
             
             bounds.extend(marker.getLatLng());
@@ -7461,6 +7822,14 @@ function resaltarTipologiaEnMapa(tipologia) {
         
         // Guardar filtro activo
         window.tipologiaFiltrada = tipologia;
+        
+        // ✅ Resaltar el div seleccionado
+        const divSeleccionado = document.getElementById(`tipologia_${tipologia.replace(/[^a-zA-Z0-9]/g, '_')}`);
+        if (divSeleccionado) {
+            divSeleccionado.style.background = 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)';
+            divSeleccionado.style.transform = 'translateX(5px)';
+            divSeleccionado.style.boxShadow = '0 4px 12px rgba(33,150,243,0.3)';
+        }
         
         console.log(`✅ Mostrando ${markersSeleccionados.length} markers de: ${tipologia}`);
     }
@@ -10644,3 +11013,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
