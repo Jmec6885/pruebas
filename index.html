@@ -4517,7 +4517,7 @@ if (!asignaciones || asignaciones.length === 0) {
 }
 
 // Obtener OSATOMO únicos
-const osNumeros = asignaciones.map(a => a.OSATOMO);
+const osNumeros = asignaciones.map(a => a.osatomo);
 
 // Buscar datos completos en OS Pendientes (por lotes)
 const osCompletas = [];
@@ -4527,10 +4527,20 @@ for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
     const batch = osNumeros.slice(i, i + BATCH_SIZE);
     
     const { data, error } = await supabaseClient
+    .from('OS Pendientes')
+    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
+    .in('OSATMO', batch.slice(0, 100)); // ✅ Máximo 100 por consulta
+
+// Si hay más de 100, procesar en sub-lotes
+for (let j = 100; j < batch.length; j += 100) {
+    const subBatch = batch.slice(j, j + 100);
+    const { data: subData } = await supabaseClient
         .from('OS Pendientes')
         .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-        .in('OSATOMO', batch);
+        .in('OSATOMO', subBatch);
     
+    if (subData) osCompletas.push(...subData);
+}    
     if (!error && data) {
         osCompletas.push(...data);
     }
@@ -4547,7 +4557,7 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
         if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
             // Ver todas las unidades
             unidadesFiltradas = unidadesUnicas;
-            generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
+            generarInterfazAdminKMLRuta(unidadesFiltradas, osCompletas);
         } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
             // Solo su unidad
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
@@ -7462,12 +7472,21 @@ const todasOS = [];
 let offset = 0;
 const batchSize = 1000;
 
-while (true) {
+const MAX_REGISTROS = 50000; // ✅ Límite de seguridad
+let totalCargado = 0;
+
+while (true && totalCargado < MAX_REGISTROS) {
     const { data, error } = await supabaseClient
         .from('OS Pendientes')
         .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda')
         .in('Estado_ATOMO', ['Registrada', 'Asignada'])
-        .range(offset, offset + batchSize - 1);
+        .range(offset, offset + batchSize - 1)
+        .limit(batchSize); // ✅ CRÍTICO: Forzar límite por batch
+    
+    if (error || !data || data.length === 0) break;
+    
+    totalCargado += data.length;
+    // ... resto del código
     
     if (error) {
         console.error('❌ Error:', error);
