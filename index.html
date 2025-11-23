@@ -4537,7 +4537,7 @@ for (let j = 100; j < batch.length; j += 100) {
     const { data: subData } = await supabaseClient
         .from('OS Pendientes')
         .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-        .in('OSATOMO', subBatch);
+        .in('OSATMO', subBatch);
     
     if (subData) osCompletas.push(...subData);
 }    
@@ -6596,7 +6596,7 @@ if (unidadesUnicas.length === 0) {
                 const { data: osCompletas, error: errorOS } = await supabaseClient
                     .from('OS Pendientes')
                     .select('OSATMO, Tipologia')
-                    .in('OSATOMO', osNumeros);
+                    .in('OSATMO', osNumeros)
                 
                 if (!errorOS && osCompletas) {
                     osAsignadas = osCompletas;
@@ -6839,50 +6839,7 @@ if (unidadesUnicas.length === 0) {
                 </div>
             </div>
             
-            <!-- SECCIÓN: RANGOS DE DÍAS (FILTROS GLOBALES) -->
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📊 Rangos de Días (Global):</label>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 10px;">
-                    ${rangosDisponibles.map(rango => `
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: #f8f9fa; border-radius: 6px;">
-                            <input type="checkbox" value="${rango}" 
-                                   ${rangosSeleccionados.includes(rango) ? 'checked' : ''}
-                                   onchange="actualizarSeleccionRangos()"
-                                   style="width: 18px; height: 18px;">
-                            <span>${rango} días</span>
-                        </label>
-                    `).join('')}
-                </div>
-                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                    <input type="checkbox" id="todosRangos" onchange="toggleTodosRangos()" 
-                           style="width: 18px; height: 18px;">
-                    <strong>Seleccionar todos los rangos</strong>
-                </label>
-            </div>
             
-            <!-- SECCIÓN: TIPOLOGÍAS (FILTROS GLOBALES) -->
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">🏷️ Tipologías (Global):</label>
-                <div style="max-height: 300px; overflow-y: auto; border: 2px solid #e1e5e9; border-radius: 8px; padding: 15px; background: #f8f9fa;">
-                    ${tipologiasDisponibles.length > 0 
-                        ? tipologiasDisponibles.map(tipo => `
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; margin-bottom: 8px; background: white; border-radius: 6px; border: 1px solid #e1e5e9;">
-                                <input type="checkbox" value="${tipo}" 
-                                       ${tipologiasSeleccionadas.includes(tipo) ? 'checked' : ''}
-                                       onchange="actualizarSeleccionTipologias()"
-                                       style="width: 18px; height: 18px; flex-shrink: 0;">
-                                <span style="font-size: 14px;">${tipo}</span>
-                            </label>
-                        `).join('')
-                        : '<p style="text-align: center; color: #999; padding: 20px;">No hay tipologías disponibles</p>'
-                    }
-                </div>
-                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                    <input type="checkbox" id="todasTipologias" onchange="toggleTodasTipologias()" 
-                           style="width: 18px; height: 18px;">
-                    <strong>Seleccionar todas las tipologías</strong>
-                </label>
-            </div>
             
             <!-- SECCIÓN: RADIO DE BÚSQUEDA (GLOBAL) -->
             <div class="form-group">
