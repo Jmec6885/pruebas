@@ -4557,8 +4557,13 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
         if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
             // Ver todas las unidades
             unidadesFiltradas = unidadesUnicas;
-            generarInterfazAdminKMLRuta(unidadesFiltradas, osCompletas);
-        } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
+            generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
+        } 
+
+console.log('✅ Llamando a generarInterfazAdminKMLRuta con:', unidadesFiltradas.length, 'unidades y', osAsignadas.length, 'OS');
+generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
+
+	else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
             // Solo su unidad
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
             unidadesFiltradas = unidadesUnicas.filter(u => u === miUnidad);
@@ -4583,6 +4588,7 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
 
 
 async function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
+    console.log('🎨 Generando interfaz KML con unidades:', unidades);
     const loginSection = document.getElementById('loginSection');
     const resultsContainer = document.getElementById('searchResults');
     
@@ -6592,12 +6598,22 @@ if (unidadesUnicas.length === 0) {
             if (asignaciones && asignaciones.length > 0) {
                 const osNumeros = asignaciones.map(a => a.OSATOMO);
                 
-                // Buscar datos completos en OS Pendientes
-                const { data: osCompletas, error: errorOS } = await supabaseClient
-                    .from('OS Pendientes')
-                    .select('OSATMO, Tipologia')
-                    .in('OSATMO', osNumeros)
-                
+                // ✅ Buscar OS Pendientes en lotes de 100 (máximo permitido por Supabase)
+const osCompletas = [];
+const BATCH_SIZE = 1000;
+for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
+    const batch = osNumeros.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
+        .in('OSATMO', batch); // ← ✅ OSATMO, NO OSATOMO
+
+    if (error) {
+        console.error('Error en batch de OS Pendientes:', error);
+        continue;
+    }
+    if (data) osCompletas.push(...data);
+}                
                 if (!errorOS && osCompletas) {
                     osAsignadas = osCompletas;
                     console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
@@ -6840,15 +6856,7 @@ if (unidadesUnicas.length === 0) {
             </div>
             
             
-            
-            <!-- SECCIÓN: RADIO DE BÚSQUEDA (GLOBAL) -->
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Radio de búsqueda (km) - Global:</label>
-                <input type="number" id="radioKm" min="1" max="20" value="${filtros.radio_km || 3}" 
-                       style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                <small style="color: #666; display: block; margin-top: 5px;">Mínimo: 1 km | Máximo: 20 km</small>
-            </div>
-            
+                        
             <!-- BOTÓN: GUARDAR FILTROS GLOBALES -->
             <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
