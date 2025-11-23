@@ -7480,59 +7480,56 @@ console.log(`✅ Total: ${todasOS.length} OS asignadas y registradas`);
 
         
         // 4. Filtrar OS dentro del radio
-        const osEnRadio = [];
+const osEnRadio = [];
 
-        todasOS.forEach(os => {
+todasOS.forEach(os => {
     const coords = os.Coordenadas || os.Coordendasgis;
-    
-    // Validar formato de coordenadas
     if (!validarFormatoCoordenadas(coords)) return;
-    
-    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-    
-    // Validar que esté dentro del radio y no sea la OS del centro
-    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-        
-        // ✅ SOLO UNA DEFINICIÓN de esRegulada
-        const esRegulada = os.Tipo_de_OS && 
-                          os.Tipo_de_OS.toLowerCase().includes('regulad') && 
-                          !os.Tipo_de_OS.toLowerCase().includes('no');
-        
-        let mostrar = false;
 
-        // Reguladas SIEMPRE se muestran (sin filtros)
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+
+    // No incluir la OS del centro
+    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+        const esRegulada = os.Tipo_de_OS &&
+                           os.Tipo_de_OS.toLowerCase().includes('regulad') &&
+                           !os.Tipo_de_OS.toLowerCase().includes('no');
+
+        let mostrar = false;
         if (esRegulada) {
             mostrar = true;
         } else {
-            // No reguladas: aplicar filtros
             mostrar = validarFiltrosOS(os, filtros);
         }
 
-        // Si es Unidad (no Admin), filtrar por unidad
+        // Si es usuario por unidad, filtrar
         if (unidadFiltro && mostrar) {
             mostrar = (os.Unidad === unidadFiltro);
         }
-        
-        // Si cumple todas las validaciones, agregar
-if (mostrar) {
-    osEnRadio.push({
-        ...os,
-        distancia: distancia,
-        esRegulada: esRegulada,
-        lat: lat,
-        lng: lng,
-        Estado_ATOMO: os.Estado_ATOMO  // ✅ AGREGAR para identificar en el mapa
-    });
-}
-   }
+
+        if (mostrar) {
+            osEnRadio.push({
+                ...os,
+                lat,
+                lng,
+                distancia,
+                esRegulada,
+                Estado_ATOMO: os.Estado_ATOMO
+            });
+        }
+    }
 });
 
-        
-        // 5. Ordenar por distancia
-        osEnRadio.sort((a, b) => a.distancia - b.distancia);
-        
-        console.log(`✅ ${osEnRadio.length} OS encontradas en radio de ${radioKm} km`);
+// 5. Ordenar por distancia y numerar
+osEnRadio.sort((a, b) => a.distancia - b.distancia);
+osEnRadio.forEach((os, index) => {
+    os.numeroOrden = index + 1; // 1, 2, 3...
+});
+console.log(`✅ ${osEnRadio.length} OS numeradas por cercanía`);
+
+
 
 	// 🆕 7. ENUMERAR OS POR CERCANÍA
 osEnRadio.forEach((os, index) => {
