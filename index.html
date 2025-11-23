@@ -5197,39 +5197,14 @@ function inicializarMapaKMLRuta(osConDatos, unidad) {
             ? formatearComentario(os.Comentario) 
             : '<em style="color: #999;">Sin comentario</em>';
         
-        marker.bindPopup(`
-            <div style="padding: 10px; max-width: 350px;">
-                <div style="text-align: center; padding: 8px; background: ${os.esRegulada ? '#ffebee' : '#e3f2fd'}; border-radius: 6px; margin-bottom: 10px;">
-                    <strong style="color: ${colorTexto}; font-size: 16px;">
-                        ${labelEstado}
-                    </strong>
-                </div>
-                <div style="text-align: left; line-height: 1.8;">
-                    <strong>📋 OS:</strong> ${os.OSATMO}<br>
-                    <strong>🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    <strong>📍 Unidad:</strong> ${os.Unidad || 'N/A'}
-                </div>
-                <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid ${colorTexto}; max-height: 200px; overflow-y: auto;">
-                    <strong style="color: #2d3748;">💬 Comentario:</strong>
-                    <div style="margin-top: 5px; font-size: 13px; color: #555;">
-                        ${comentarioFormateado}
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 15px; padding-top: 10px; border-top: 2px solid #e2e8f0;">
-                    <a href="https://www.google.com/maps/dir/?api=1&amp;destination=${os.lat},${os.lng}" 
-   target="_blank"
-   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); 
-          color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; 
-          font-weight: 600; box-shadow: 0 2px 8px rgba(66,133,244,0.3);">
-    🗺️ Navegar en Google Maps
-</a>
-                </div>
-            </div>
-        `, {
-            maxWidth: 400,
-            maxHeight: 450
-        });
+        // 🆕 AL HACER CLICK: Mostrar detalle abajo
+marker.on('click', function() {
+    mostrarDetalleOSEnPanel(os, labelEstado);
+    mapa.setView([os.lat, os.lng], mapa.getZoom(), {
+        animate: true,
+        duration: 0.5
     });
+});
     
     // Ajustar vista para mostrar todos los markers
     const bounds = L.latLngBounds();
@@ -7421,62 +7396,65 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             tipologias: filtros.tipologias,
             radio: filtros.radio_km
         });
-            
+
+	
+        console.log('🔍 Filtros cargados desde BD:', filtros);
+console.log('📏 Radio aplicado:', filtros.radio_km);    
         const radioKm = filtros.radio_km || 3;
         
         // 2. Extraer coordenadas del centro
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 3. ✅ BUSCAR OS REGISTRADAS + VALIDAR EN os_asignadas
+        // 3. Buscar OS según usuario
 const todasOS = [];
-let offset = 0;
-const batchSize = 1000;
 
-const MAX_REGISTROS = 50000; // ✅ Límite de seguridad
-let totalCargado = 0;
-
-while (true && totalCargado < MAX_REGISTROS) {
-    const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda')
-        .in('Estado_ATOMO', ['Registrada', 'Asignada'])
-        .range(offset, offset + batchSize - 1)
-        .limit(batchSize); // ✅ CRÍTICO: Forzar límite por batch
+if (unidadFiltro) {
+    // Usuario normal: solo su unidad desde os_asignadas
+    const { data: asignaciones } = await supabaseClient
+        .from('os_asignadas')
+        .select('osatomo')
+        .eq('Unidad', unidadFiltro);
     
-    if (error || !data || data.length === 0) break;
-    
-    totalCargado += data.length;
-    // ... resto del código
-    
-    if (error) {
-        console.error('❌ Error:', error);
-        resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${error.message}</div>`;
-        return;
-    }
-    
-    if (!data || data.length === 0) break;
-    
-    // ✅ FILTRAR: Solo agregar si están en os_asignadas
-    for (const os of data) {
-        const { data: asignacion } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo')
-            .eq('osatomo', os.OSATMO)  // ← Comparar con nombre real en minúsculas
-            .maybeSingle();
+    if (asignaciones && asignaciones.length > 0) {
+        const osNumeros = asignaciones.map(a => a.osatomo);
         
-        if (asignacion) {
-            todasOS.push(os);
+        // Buscar datos completos en lotes de 100
+        for (let i = 0; i < osNumeros.length; i += 100) {
+            const batch = osNumeros.slice(i, i + 100);
+            const { data } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+                .in('OSATMO', batch);
+            
+            if (data) todasOS.push(...data);
         }
     }
+} else {
+    // Admin: cargar solo primeras 5000 registradas/asignadas
+    const { data } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+        .in('Estado_ATOMO', ['Registrada', 'Asignada'])
+        .limit(5000);
     
-    console.log(`📍 Cargadas ${todasOS.length} OS asignadas...`);
-    
-    if (data.length < batchSize) break;
-    offset += batchSize;
+    if (data) {
+        // Validar rápido contra os_asignadas
+        const { data: asignadas } = await supabaseClient
+            .from('os_asignadas')
+            .select('osatomo');
+        
+        const setAsignadas = new Set(asignadas?.map(a => a.osatomo) || []);
+        
+        data.forEach(os => {
+            if (setAsignadas.has(os.OSATMO)) {
+                todasOS.push(os);
+            }
+        });
+    }
 }
 
-console.log(`✅ Total: ${todasOS.length} OS asignadas y registradas`);
+console.log(`✅ Total: ${todasOS.length} OS asignadas`);
 
         
         // 4. Filtrar OS dentro del radio
@@ -7730,6 +7708,7 @@ async function guardarFiltrosMapaGlobales() {
     // 2️⃣ Obtener radio
     const radioKmElement = document.getElementById('radioKm') || document.getElementById('radioKmGlobal');
     const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3; // ✅ Con validación
+console.log('💾 Guardando radio:', radioKm, 'desde input:', radioKmElement?.value);
 
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
@@ -8197,28 +8176,35 @@ osEnRadio.forEach(os => {
 
     // 🆕 CREAR ICONO CON NÚMERO (inline, sin función aparte)
     const icono = L.divIcon({
-        className: 'custom-icon',
-        html: `
-            <div style="
-                background: ${color}; 
-                width: 28px; 
-                height: 28px; 
-                border-radius: 50%; 
-                border: 3px solid white; 
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                font-size: 13px;
-                color: white;
-                font-family: Arial, sans-serif;
-            ">
-                ${os.numeroOrden || '?'}
-            </div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
-    });
+    className: 'custom-icon',
+    html: `
+        <div style="
+            background: ${color}; 
+            width: 28px; 
+            height: 28px; 
+            border-radius: 50%; 
+            border: 3px solid white; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 13px;
+            color: white;
+        ">
+            ${os.numeroOrden}
+        </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+});
+
+	osConDatos.forEach((os, index) => {
+    // 🆕 AGREGAR NÚMERO DE ORDEN
+    os.numeroOrden = index + 1; // 1, 2, 3, 4...
+    
+    // Determinar color
+    let color, colorTexto, labelEstado;
+    // ... resto del código ...
 
     const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
 
