@@ -4585,51 +4585,51 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
 
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     console.log('🎨 Generando interfaz KML con unidades:', unidades);
-    const searchGrid = document.getElementById('searchGrid'); // ✅ CORRECTO
+    const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
     
     resultsContainer.innerHTML = '';
     
+    // ✅ SOLO UNA ASIGNACIÓN CON UN TEMPLATE LITERAL
     searchGrid.innerHTML = `
-    
-    loginSection.innerHTML = `
-        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-        <h1 class="titulo-degradado">CLESA</h1>
-        <p class="subtitulo">📍 Generación de KML por Unidad</p>
-        
-        <!-- SELECCIÓN DIRECTA DE UNIDAD -->
-        <div class="form-group">
-            <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
-            <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                <option value="">-- Seleccione una unidad --</option>
-                ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
-            </select>
-        </div>
-        
-        <!-- RESUMEN DE OS ASIGNADAS -->
-        <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
-            <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
-            <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
-        </div>
-        
-        <!-- BOTONES DE ACCIÓN -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-            <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
-                📥 KML Lector
-            </button>
-            <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
-                📥 KML GIS
-            </button>
-            <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
-                🗺️ Ver Mapa
-            </button>
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+            <h1 class="titulo-degradado">CLESA</h1>
+            <p class="subtitulo">📍 Generación de KML por Unidad</p>
+            
+            <!-- SELECCIÓN DIRECTA DE UNIDAD -->
+            <div class="form-group">
+                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
+                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una unidad --</option>
+                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                </select>
+            </div>
+            
+            <!-- RESUMEN DE OS ASIGNADAS -->
+            <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
+                <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
+                <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+            </div>
+            
+            <!-- BOTONES DE ACCIÓN -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                    📥 KML Lector
+                </button>
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
+                    📥 KML GIS
+                </button>
+                <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                    🗺️ Ver Mapa
+                </button>
+            </div>
         </div>
     `;
     
     // Guardar datos globalmente
     window.osAsignadasKML = osAsignadas;
 }
-
 
 
 // ========================================
