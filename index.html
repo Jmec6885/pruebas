@@ -5154,7 +5154,7 @@ function inicializarMapaKMLRuta(osConDatos, unidad) {
     window.mapaKMLRutaInstance = mapa;
     
     // Agregar capa de OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}..png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(mapa);
@@ -5179,11 +5179,9 @@ function inicializarMapaKMLRuta(osConDatos, unidad) {
     
     // Agregar markers
     osConDatos.forEach(os => {
-        const esRegulada = os.Tipo_de_OS &&
-                           os.Tipo_de_OS.toLowerCase().includes('regulad') &&
-                           !os.Tipo_de_OS.toLowerCase().includes('no');
-        const icono = esRegulada ? iconoRegulada : iconoNoRegulada;
-        const labelEstado = esRegulada ? '🔴 REGULADA' : '🔵 NO REGULADA';
+        const icono = os.esRegulada ? iconoRegulada : iconoNoRegulada;
+        const colorTexto = os.esRegulada ? '#f44336' : '#2196f3';
+        const labelEstado = os.esRegulada ? '🔴 REGULADA' : '🔵 NO REGULADA';
         
         const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
         
@@ -5199,36 +5197,24 @@ function inicializarMapaKMLRuta(osConDatos, unidad) {
             ? formatearComentario(os.Comentario) 
             : '<em style="color: #999;">Sin comentario</em>';
         
-        // Popup
-        marker.bindPopup(`
-            <div>
-                <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
-                <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                <strong>Tipo:</strong> ${os.Tipo_de_OS || 'N/A'}<br>
-                <strong>Unidad:</strong> ${os.Unidad || 'N/A'}<br>
-                <strong>Comentario:</strong> ${comentarioFormateado}
-            </div>
-        `);
-
         // 🆕 AL HACER CLICK: Mostrar detalle abajo
-        marker.on('click', function() {
-            mostrarDetalleOSEnPanel(os, labelEstado);
-            mapa.setView([os.lat, os.lng], mapa.getZoom(), {
-                animate: true,
-                duration: 0.5
-            });
-        });
+marker.on('click', function() {
+    mostrarDetalleOSEnPanel(os, labelEstado);
+    mapa.setView([os.lat, os.lng], mapa.getZoom(), {
+        animate: true,
+        duration: 0.5
     });
+});
     
-    // ✅ AJUSTAR VISTA: fuera del forEach
+    // Ajustar vista para mostrar todos los markers
     const bounds = L.latLngBounds();
     osConDatos.forEach(os => {
         bounds.extend([os.lat, os.lng]);
     });
     mapa.fitBounds(bounds, { padding: [50, 50] });
-	console.log(`✅ Mapa KML Ruta inicializado: ${osConDatos.length} OS de ${unidad}`);
+    
+    console.log(`✅ Mapa KML Ruta inicializado: ${osConDatos.length} OS de ${unidad}`);
 }
-
 
 
 // ========================================
@@ -7479,19 +7465,24 @@ todasOS.forEach(os => {
     if (!validarFormatoCoordenadas(coords)) return;
 
     const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng); // ✅ DEBE EXISTIR
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
     if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+        // ✅ CALCULAR esRegulada AQUÍ
+        const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+        const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
+        
         osEnRadio.push({
             ...os,
             lat,
             lng,
-            distancia, // ✅ CRÍTICO: Debe guardarse
-            esRegulada,
+            distancia,
+            esRegulada, // ✅ AHORA SÍ EXISTE
             Estado_ATOMO: os.Estado_ATOMO
         });
     }
 });
+
 
 // ✅ DESPUÉS agregar ordenamiento
 osEnRadio.sort((a, b) => a.distancia - b.distancia);
@@ -7719,15 +7710,22 @@ async function guardarFiltrosMapaGlobales() {
         }
     });
 
-    // 2️⃣ Obtener radio
-    const radioKmElement = document.getElementById('radioKm') || document.getElementById('radioKmGlobal');
-    const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3; // ✅ Con validación
-console.log('💾 Guardando radio:', radioKm, 'desde input:', radioKmElement?.value);
-
-    if (radioKm < 1 || radioKm > 20) {
-        alert('⚠️ El radio debe estar entre 1 y 20 km');
-        return;
+    // 2️⃣ ✅ BUSCAR EL INPUT CON MÚLTIPLES SELECTORES
+    let radioKmElement = document.getElementById('radioKm');
+    
+    if (!radioKmElement) {
+        radioKmElement = document.getElementById('radioKmGlobal');
     }
+    
+    if (!radioKmElement) {
+        // Buscar cualquier input de tipo number en la página
+        radioKmElement = document.querySelector('input[type="number"][id*="radio"]');
+    }
+    
+    const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
+    
+    console.log('💾 Radio detectado:', radioKm, 'desde input:', radioKmElement?.id || 'DEFAULT');
+
 
     // 3️⃣ Confirmación
     const confirmar = confirm(
@@ -7860,8 +7858,8 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             <!-- MAPA -->
             <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
             
-            <!-- 🆕 PANEL DE DETALLE (Reemplaza la tabla) -->
-            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
+            <!-- 🆕 PANEL DE DETALLE -->
+<div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
                 <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
                     <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
                     <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
@@ -7870,6 +7868,18 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             
         </div>
     `;
+    
+    // ✅ VERIFICAR QUE EL PANEL EXISTE ANTES DE INICIALIZAR MAPA
+    setTimeout(() => {
+        const panel = document.getElementById('panelDetalleOS');
+        if (panel) {
+            console.log('✅ Panel de detalle encontrado');
+            inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+        } else {
+            console.error('❌ Panel de detalle NO encontrado');
+        }
+    }, 100);
+}
     
     // Inicializar mapa Leaflet
     setTimeout(() => {
@@ -8156,7 +8166,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // 🆕 Guardar referencias de markers por tipología
     window.markersPorTipologia = {};
 
-    // Markers de OS cercanas
+    // // Markers de OS cercanas
 osEnRadio.forEach(os => {
     // 🆕 Determinar color y etiqueta según lógica existente
     let color, colorTexto, labelEstado;
