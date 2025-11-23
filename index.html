@@ -5205,6 +5205,7 @@ marker.on('click', function() {
         duration: 0.5
     });
 });
+});
     
     // Ajustar vista para mostrar todos los markers
     const bounds = L.latLngBounds();
@@ -8166,7 +8167,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // 🆕 Guardar referencias de markers por tipología
     window.markersPorTipologia = {};
 
-    // // Markers de OS cercanas
+    // Markers de OS cercanas
 osEnRadio.forEach(os => {
     // 🆕 Determinar color y etiqueta según lógica existente
     let color, colorTexto, labelEstado;
