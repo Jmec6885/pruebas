@@ -4555,30 +4555,26 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
         let osParaMapa = [];
         
         if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
-            // Ver todas las unidades
-            unidadesFiltradas = unidadesUnicas;
-            generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
-        } 
-
-console.log('✅ Llamando a generarInterfazAdminKMLRuta con:', unidadesFiltradas.length, 'unidades y', osAsignadas.length, 'OS');
-generarInterfazAdminKMLRuta(unidadesFiltradas, osAsignadas);
-
-	else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
-            // Solo su unidad
-            const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-            unidadesFiltradas = unidadesUnicas.filter(u => u === miUnidad);
-            osParaMapa = osAsignadas.filter(os => os.Unidad === miUnidad);
-            
-            if (unidadesFiltradas.length === 0) {
-                searchGrid.innerHTML = '<div class="result-card"⚠️ No se encontraron OS asignadas para tu unidad</div>';
-                return;
-            }
-            
-            generarInterfazUnidadKMLRuta(unidadesFiltradas[0], osParaMapa);
-        } else {
-            searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
-            return;
-        }
+    // Ver todas las unidades
+    unidadesFiltradas = unidadesUnicas;
+    console.log('✅ Llamando a generarInterfazAdminKMLRuta con:', unidadesFiltradas.length, 'unidades y', osCompletas.length, 'OS');
+    generarInterfazAdminKMLRuta(unidadesFiltradas, osCompletas);
+} else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
+    // Solo su unidad
+    const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
+    unidadesFiltradas = unidadesUnicas.filter(u => u === miUnidad);
+    osParaMapa = osCompletas.filter(os => os.Unidad === miUnidad);
+    
+    if (unidadesFiltradas.length === 0) {
+        searchGrid.innerHTML = '<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad</div>';
+        return;
+    }
+    
+    generarInterfazUnidadKMLRuta(unidadesFiltradas[0], osParaMapa);
+} else {
+    searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
+    return;
+}
         
     } catch (err) {
         console.error('Error cargando KML Ruta:', err);
