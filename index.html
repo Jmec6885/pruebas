@@ -8188,48 +8188,41 @@ osEnRadio.forEach(os => {
         labelEstado = '🔵 NO REGULADA';
     }
 
-    // 🆕 CREAR ICONO CON NÚMERO (inline, sin función aparte)
+    // 🆕 CREAR ICONO CON NÚMERO (ya tienes os.numeroOrden desde cargarYMostrarMapa)
     const icono = L.divIcon({
-    className: 'custom-icon',
-    html: `
-        <div style="
-            background: ${color}; 
-            width: 28px; 
-            height: 28px; 
-            border-radius: 50%; 
-            border: 3px solid white; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 13px;
-            color: white;
-        ">
-            ${os.numeroOrden}
-        </div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14]
-});
-
-	osConDatos.forEach((os, index) => {
-    // 🆕 AGREGAR NÚMERO DE ORDEN
-    os.numeroOrden = index + 1; // 1, 2, 3, 4...
-    
-    // Determinar color
-    let color, colorTexto, labelEstado;
-    // ... resto del código ...
+        className: 'custom-icon',
+        html: `
+            <div style="
+                background: ${color}; 
+                width: 28px; 
+                height: 28px; 
+                border-radius: 50%; 
+                border: 3px solid white; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 13px;
+                color: white;
+                font-family: Arial, sans-serif;
+            ">
+                ${os.numeroOrden || '?'}
+            </div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
 
     const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
 
-    // 🆕 Guardar referencia por tipología (sin cambios)
+    // 🆕 Guardar referencia por tipología
     const tipologia = os.Tipologia || 'Sin tipología';
     if (!window.markersPorTipologia[tipologia]) {
         window.markersPorTipologia[tipologia] = [];
     }
     window.markersPorTipologia[tipologia].push(marker);
 
-    // 🆕 AL HACER CLICK: Mostrar detalle abajo (igual que antes)
+    // 🆕 AL HACER CLICK: Mostrar detalle
     marker.on('click', function() {
         mostrarDetalleOSEnPanel(os, labelEstado);
         mapa.setView([os.lat, os.lng], mapa.getZoom(), {
@@ -8239,15 +8232,14 @@ osEnRadio.forEach(os => {
     });
 });
 
-    
-    // Ajustar vista para mostrar todos los markers
-    const bounds = L.latLngBounds([[latCentro, lngCentro]]);
-    osEnRadio.forEach(os => {
-        bounds.extend([os.lat, os.lng]);
-    });
-    mapa.fitBounds(bounds, { padding: [50, 50] });
-    
-    console.log('✅ Mapa Leaflet inicializado correctamente');
+// Ajustar vista para mostrar todos los markers
+const bounds = L.latLngBounds([[latCentro, lngCentro]]);
+osEnRadio.forEach(os => {
+    bounds.extend([os.lat, os.lng]);
+});
+mapa.fitBounds(bounds, { padding: [50, 50] });
+
+console.log('✅ Mapa Leaflet inicializado correctamente');
 }
 
 
