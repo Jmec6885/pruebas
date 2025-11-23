@@ -4583,12 +4583,14 @@ console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS 
 }
 
 
-async function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
+function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     console.log('🎨 Generando interfaz KML con unidades:', unidades);
-    const loginSection = document.getElementById('loginSection');
+    const searchGrid = document.getElementById('searchGrid'); // ✅ CORRECTO
     const resultsContainer = document.getElementById('searchResults');
     
     resultsContainer.innerHTML = '';
+    
+    searchGrid.innerHTML = `
     
     loginSection.innerHTML = `
         <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
@@ -7232,24 +7234,37 @@ async function buscarYMostrarMapaAdmin() {
     
     try {
         // ✅ BUSCAR SIN FILTRO DE ESTADO PRIMERO
-        const { data: osCentro, error: errorOS } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('OSATMO', osIngresada)
-            .maybeSingle(); // ✅ Usar maybeSingle en lugar de single
-        
-        if (errorOS) {
-            console.error('Error buscando OS:', errorOS);
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
-                    <div class="result-header">❌ Error de Búsqueda</div>
-                    <p style="text-align: center; color: #666;">
-                        ${errorOS.message}
-                    </p>
-                </div>`;
-            return;
-        }
-        
+        // BUSCAR esta línea (~7700):
+const { data: osCentro, error: errorOS } = await supabaseClient
+    .from('OS Pendientes')
+    .select('*')
+    .eq('OSATMO', osIngresada)
+    .maybeSingle();
+
+// AGREGAR ANTES:
+// 1️⃣ Verificar si existe en os_asignadas
+const { data: asignacion } = await supabaseClient
+    .from('os_asignadas')
+    .select('osatomo')
+    .eq('osatomo', osIngresada)
+    .maybeSingle();
+
+if (!asignacion) {
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #ffebee;">
+            <div class="result-header">⚠️ OS No Asignada</div>
+            <p style="text-align: center;">Esta OS no está en la tabla de asignaciones</p>
+        </div>`;
+    return;
+}
+
+// 2️⃣ AHORA SÍ buscar en OS Pendientes
+const { data: osCentro, error: errorOS } = await supabaseClient
+    .from('OS Pendientes')
+    .select('*')
+    .eq('OSATMO', osIngresada)
+    .maybeSingle();
+
         if (!osCentro) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
@@ -7487,40 +7502,26 @@ todasOS.forEach(os => {
     if (!validarFormatoCoordenadas(coords)) return;
 
     const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    if (isNaN(lat) || isNaN(lng)) return;
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng); // ✅ DEBE EXISTIR
 
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-
-    // No incluir la OS del centro
     if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-        const esRegulada = os.Tipo_de_OS &&
-                           os.Tipo_de_OS.toLowerCase().includes('regulad') &&
-                           !os.Tipo_de_OS.toLowerCase().includes('no');
-
-        let mostrar = false;
-        if (esRegulada) {
-            mostrar = true;
-        } else {
-            mostrar = validarFiltrosOS(os, filtros);
-        }
-
-        // Si es usuario por unidad, filtrar
-        if (unidadFiltro && mostrar) {
-            mostrar = (os.Unidad === unidadFiltro);
-        }
-
-        if (mostrar) {
-            osEnRadio.push({
-                ...os,
-                lat,
-                lng,
-                distancia,
-                esRegulada,
-                Estado_ATOMO: os.Estado_ATOMO
-            });
-        }
+        osEnRadio.push({
+            ...os,
+            lat,
+            lng,
+            distancia, // ✅ CRÍTICO: Debe guardarse
+            esRegulada,
+            Estado_ATOMO: os.Estado_ATOMO
+        });
     }
 });
+
+// ✅ DESPUÉS agregar ordenamiento
+osEnRadio.sort((a, b) => a.distancia - b.distancia);
+osEnRadio.forEach((os, index) => {
+    os.numeroOrden = index + 1;
+});
+
 
 // 5. Ordenar por distancia y numerar
 osEnRadio.sort((a, b) => a.distancia - b.distancia);
@@ -7742,7 +7743,8 @@ async function guardarFiltrosMapaGlobales() {
     });
 
     // 2️⃣ Obtener radio
-    const radioKm = parseInt(document.getElementById('radioKm').value);
+    const radioKmElement = document.getElementById('radioKm') || document.getElementById('radioKmGlobal');
+    const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3; // ✅ Con validación
 
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
