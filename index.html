@@ -11133,9 +11133,7 @@ async function busquedaMultipleKML(campo, valores) {
     
     mostrarIndicadorBusqueda();
     
-    // Array para acumular todos los resultados
-    let todosLosResultados = [];
-    
+        
     // Buscar cada valor individualmente
     const { data: todosLosResultados, error } = await supabaseClient
     .from(selectedTable)
