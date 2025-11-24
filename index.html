@@ -5049,7 +5049,7 @@ function generarMapaAdminKMLRuta() {
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Filtrar solo OS con coordenadas válidas
+    // 🆕 SOLICITAR PUNTO DE PARTIDA
     const osConCoordenadas = osAsignadas.filter(os => {
         const coords = os.Coordenadas || os.Coordendasgis;
         return coords && coords.includes(',');
@@ -5057,64 +5057,152 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
     
     if (osConCoordenadas.length === 0) {
         resultsContainer.innerHTML = `
-            <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+            <div class="result-card" style="background: #fff3cd;">
                 <div class="result-header">⚠️ Sin coordenadas</div>
-                <p style="text-align: center; color: #666;">No hay OS con coordenadas válidas para esta unidad</p>
+                <p style="text-align: center;">No hay OS con coordenadas válidas</p>
             </div>`;
         return;
     }
     
-    // Procesar OS: clasificar por tipo
-    const osConDatos = osConCoordenadas.map(os => {
-        const coords = os.Coordenadas || os.Coordendasgis;
-        const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-        
-        // Determinar si es regulada
-        const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
-        const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
-        
-        return {
-            ...os,
-            lat: lat,
-            lng: lng,
-            esRegulada: esRegulada
-        };
+    // 🆕 SELECCIONAR PUNTO DE PARTIDA
+    let htmlSelector = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
+            <div class="result-header">📍 Seleccionar Punto de Partida</div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                <strong>ℹ️ Información:</strong><br>
+                Selecciona la OS desde donde comenzará la ruta. Esta será el punto 1, y las demás se numerarán por cercanía.
+            </div>
+            
+            <div class="form-group">
+                <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
+                <select id="selectPuntoPartidaKML" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una OS --</option>
+                    ${osConCoordenadas.map(os => 
+                        `<option value="${os.OSATMO}">${os.OSATMO} - ${os.Tipologia || 'Sin tipología'}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="generarMapaKMLConPuntoPartida('${unidad}')">
+                    🗺️ Generar Mapa con Numeración
+                </button>
+            </div>
+        </div>`;
+    
+    resultsContainer.innerHTML = htmlSelector;
+    
+    // Guardar datos globalmente
+    window.osKMLData = osConCoordenadas;
+}
+
+function generarMapaKMLConPuntoPartida(unidad) {
+    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
+    
+    if (!osPartida) {
+        alert('⚠️ Por favor seleccione un punto de partida');
+        return;
+    }
+    
+    const osData = window.osKMLData;
+    if (!osData) {
+        alert('❌ Error: Datos no disponibles');
+        return;
+    }
+    
+    // 1️⃣ Encontrar OS de partida
+    const osCentro = osData.find(os => os.OSATMO === osPartida);
+    if (!osCentro) {
+        alert('❌ Error: OS de partida no encontrada');
+        return;
+    }
+    
+    // 2️⃣ Extraer coordenadas del centro
+    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+    const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+    
+    // 3️⃣ Procesar otras OS con distancias
+    const osConDatos = osData
+        .filter(os => os.OSATMO !== osPartida) // Excluir centro
+        .map(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+            
+            const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+            const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
+            
+            return {
+                ...os,
+                lat: lat,
+                lng: lng,
+                distancia: calcularDistanciaKm(latCentro, lngCentro, lat, lng),
+                esRegulada: esRegulada
+            };
+        });
+    
+    // 4️⃣ Ordenar por distancia
+    osConDatos.sort((a, b) => a.distancia - b.distancia);
+    
+    // 5️⃣ Numerar consecutivamente (desde 2)
+    osConDatos.forEach((os, index) => {
+        os.numeroOrden = index + 2; // Empieza en 2 (centro es 1)
     });
+    
+    // 6️⃣ Agregar centro como punto 1
+    const osCentroConDatos = {
+        ...osCentro,
+        lat: latCentro,
+        lng: lngCentro,
+        distancia: 0,
+        numeroOrden: 1,
+        esRegulada: false
+    };
+    
+    // Combinar (centro primero)
+    const todosLosPuntos = [osCentroConDatos, ...osConDatos];
+    
+    console.log(`✅ Ruta generada: ${todosLosPuntos.length} puntos numerados`);
+    
+    // 7️⃣ Generar HTML del mapa
+    mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro);
+}
+
+function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
+    const resultsContainer = document.getElementById('searchResults');
     
     // Contar por tipología
     const conteoPorTipologia = {};
-    osConDatos.forEach(os => {
+    todosLosPuntos.forEach(os => {
         const tip = os.Tipologia || 'Sin tipología';
         conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
     });
     
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia).sort((a, b) => b[1] - a[1]);
     
-    // Generar HTML
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header">
-                🗺️ Mapa de OS Asignadas - ${unidad} (${osConDatos.length} OS)
+                🗺️ Ruta Optimizada - ${unidad} (${todosLosPuntos.length} puntos)
             </div>
             
             <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
                 <strong>Leyenda:</strong>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
+                    <span>🟢 Punto de Partida (1)</span>
                     <span>🔴 OS Reguladas</span>
                     <span>🔵 OS No Reguladas</span>
                 </div>
             </div>
             
-            <!-- RESUMEN POR TIPOLOGÍA -->
+            <!-- Resumen por tipología -->
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Totales por Tipología (Click para filtrar):</strong>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 10px;">
+                <strong>📊 Totales por Tipología:</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 10px;">
                     ${tipologiasOrdenadas.map(([tip, count]) => `
                         <div onclick="resaltarTipologiaEnMapaKML('${tip.replace(/'/g, "\\'")}')" 
                              id="tipologia_kml_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
-                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
-                             onmouseover="if(window.tipologiaFiltradaKML !== '${tip}') { this.style.background='#e3f2fd'; this.style.transform='translateX(5px)' }"
-                             onmouseout="if(window.tipologiaFiltradaKML !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
+                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer;">
                             <strong style="color: #2196f3;">${count}</strong> - ${tip}
                         </div>
                     `).join('')}
@@ -5124,21 +5212,138 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
             <!-- MAPA -->
             <div id="mapaKMLRuta" style="width: 100%; height: 600px; border-radius: 12px; margin: 15px 0;"></div>
             
-        </div>
-    
-
-	 <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
-                <div style="text-align: center; padding: 40px; color: #999;">
-                    <div style="font-size: 48px;">📍</div>
-                    <p style="font-size: 16px;">Haz clic en un punto para ver detalles</p>
+            <!-- 🆕 PANEL DE DETALLE -->
+            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
+                <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
+                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
                 </div>
             </div>
-        </div>`;
+            
+            <!-- Botón Descargar KML -->
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="descargarKMLRutaNumerada()">
+                    📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
+                </button>
+            </div>
+        </div>
+    `;
     
-    // Inicializar mapa Leaflet
+    // Guardar datos globalmente
+    window.datosRutaKML = todosLosPuntos;
+    
+    // Inicializar mapa
     setTimeout(() => {
-        inicializarMapaKMLRuta(osConDatos, unidad);
+        inicializarMapaKMLConNumeracion(todosLosPuntos, latCentro, lngCentro);
     }, 100);
+}
+
+function inicializarMapaKMLConNumeracion(todosLosPuntos, latCentro, lngCentro) {
+    if (window.mapaKMLRutaInstance) {
+        window.mapaKMLRutaInstance.remove();
+    }
+    
+    const mapa = L.map('mapaKMLRuta').setView([latCentro, lngCentro], 13);
+    window.mapaKMLRutaInstance = mapa;
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(mapa);
+    
+    window.markersPorTipologiaKML = {};
+    
+    todosLosPuntos.forEach(os => {
+        let color, labelEstado;
+        
+        if (os.numeroOrden === 1) {
+            // Punto de partida
+            color = '#4caf50';
+            labelEstado = '🟢 PUNTO DE PARTIDA';
+        } else if (os.esRegulada) {
+            color = '#f44336';
+            labelEstado = '🔴 REGULADA';
+        } else {
+            color = '#2196f3';
+            labelEstado = '🔵 NO REGULADA';
+        }
+        
+        // ✅ ICONO CON NÚMERO
+        const icono = L.divIcon({
+            className: 'custom-icon',
+            html: `
+                <div style="
+                    background: ${color}; 
+                    width: ${os.numeroOrden === 1 ? '32px' : '28px'}; 
+                    height: ${os.numeroOrden === 1 ? '32px' : '28px'}; 
+                    border-radius: 50%; 
+                    border: 3px solid white; 
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: ${os.numeroOrden === 1 ? '15px' : '13px'};
+                    color: white;
+                    font-family: Arial, sans-serif;
+                ">
+                    ${os.numeroOrden}
+                </div>`,
+            iconSize: os.numeroOrden === 1 ? [32, 32] : [28, 28],
+            iconAnchor: os.numeroOrden === 1 ? [16, 16] : [14, 14]
+        });
+        
+        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
+        
+        // Guardar referencia
+        const tipologia = os.Tipologia || 'Sin tipología';
+        if (!window.markersPorTipologiaKML[tipologia]) {
+            window.markersPorTipologiaKML[tipologia] = [];
+        }
+        window.markersPorTipologiaKML[tipologia].push(marker);
+        
+        // Click para mostrar detalle
+        marker.on('click', function() {
+            mostrarDetalleOSEnPanel(os, labelEstado);
+            mapa.setView([os.lat, os.lng], mapa.getZoom(), {
+                animate: true,
+                duration: 0.5
+            });
+        });
+    });
+    
+    // Ajustar vista
+    const bounds = L.latLngBounds();
+    todosLosPuntos.forEach(os => {
+        bounds.extend([os.lat, os.lng]);
+    });
+    mapa.fitBounds(bounds, { padding: [50, 50] });
+    
+    console.log('✅ Mapa KML Ruta inicializado con numeración');
+}
+
+function descargarKMLRutaNumerada() {
+    if (!window.datosRutaKML || window.datosRutaKML.length === 0) {
+        alert('No hay datos para descargar');
+        return;
+    }
+    
+    const ubicaciones = window.datosRutaKML.map(os => ({
+        etiqueta: os.OSATMO || 'Sin OS',
+        coordenadas: os.Coordenadas || os.Coordendasgis,
+        numeroOrden: os.numeroOrden
+    }));
+    
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Ruta_Numerada_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ KML numerado descargado');
 }
 
 	
@@ -7360,54 +7565,53 @@ async function buscarYMostrarMapaUnidad() {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 2️⃣ BUSCAR OS SEGÚN ROL (CORREGIDO)
-        const todasOS = [];
+        // 2️⃣ 🎯 DETERMINAR UNIDAD A BUSCAR
+        let unidadABuscar;
         
         if (unidadFiltro) {
-            // ✅ Usuario normal: SOLO su unidad
-            const { data: asignaciones } = await supabaseClient
-                .from('os_asignadas')
-                .select('osatomo')
-                .eq('Unidad', unidadFiltro); // ← FILTRO CRÍTICO
-            
-            if (asignaciones && asignaciones.length > 0) {
-                const osNumeros = asignaciones.map(a => a.osatomo);
-                
-                // Buscar en OS Pendientes en lotes de 100
-                for (let i = 0; i < osNumeros.length; i += 100) {
-                    const batch = osNumeros.slice(i, i + 100);
-                    const { data } = await supabaseClient
-                        .from('OS Pendientes')
-                        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                        .in('OSATMO', batch);
-                    
-                    if (data) todasOS.push(...data);
-                }
-            }
+            // Usuario normal: usar su unidad
+            unidadABuscar = unidadFiltro;
         } else {
-            // ✅ Admin: Buscar TODAS las OS asignadas
-            const { data: asignadas } = await supabaseClient
-                .from('os_asignadas')
-                .select('osatomo');
-            
-            if (asignadas && asignadas.length > 0) {
-                const osNumeros = asignadas.map(a => a.osatomo);
-                
-                for (let i = 0; i < Math.min(osNumeros.length, 1000); i += 100) {
-                    const batch = osNumeros.slice(i, i + 100);
-                    const { data } = await supabaseClient
-                        .from('OS Pendientes')
-                        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                        .in('OSATMO', batch);
-                    
-                    if (data) todasOS.push(...data);
-                }
-            }
+            // 🆕 Admin: usar la unidad de la OS seleccionada
+            unidadABuscar = osCentro.Unidad;
         }
         
-        console.log(`✅ Total: ${todasOS.length} OS cargadas`);
+        console.log(`🔍 Buscando OS SOLO de la unidad: ${unidadABuscar}`);
         
-        // 3️⃣ FILTRAR POR RADIO Y APLICAR FILTROS
+        // 3️⃣ BUSCAR OS ASIGNADAS DE ESA UNIDAD ESPECÍFICA
+        const { data: asignaciones } = await supabaseClient
+            .from('os_asignadas')
+            .select('osatomo')
+            .eq('Unidad', unidadABuscar); // ← FILTRO CRÍTICO
+        
+        if (!asignaciones || asignaciones.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd;">
+                    <div class="result-header">⚠️ Sin Asignaciones</div>
+                    <p style="text-align: center;">La unidad ${unidadABuscar} no tiene OS asignadas</p>
+                </div>`;
+            return;
+        }
+        
+        console.log(`✅ ${asignaciones.length} OS asignadas a ${unidadABuscar}`);
+        
+        // 4️⃣ BUSCAR DATOS COMPLETOS EN OS PENDIENTES
+        const osNumeros = asignaciones.map(a => a.osatomo);
+        const todasOS = [];
+        
+        for (let i = 0; i < osNumeros.length; i += 100) {
+            const batch = osNumeros.slice(i, i + 100);
+            const { data } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+                .in('OSATMO', batch);
+            
+            if (data) todasOS.push(...data);
+        }
+        
+        console.log(`✅ ${todasOS.length} OS cargadas de OS Pendientes`);
+        
+        // 5️⃣ FILTRAR POR RADIO Y APLICAR FILTROS
         const osEnRadio = [];
         
         todasOS.forEach(os => {
@@ -7449,16 +7653,17 @@ async function buscarYMostrarMapaUnidad() {
         
         console.log(`✅ ${osEnRadio.length} OS dentro del radio (${radioKm} km)`);
         
-        // 4️⃣ 🆕 ORDENAR POR DISTANCIA Y NUMERAR
+        // 6️⃣ 🆕 ORDENAR POR DISTANCIA Y NUMERAR CONSECUTIVAMENTE
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
+        // ✅ Numerar desde 1 (sin gaps)
         osEnRadio.forEach((os, index) => {
-            os.numeroOrden = index + 1; // ← Número en el mapa (1, 2, 3...)
+            os.numeroOrden = index + 1;
         });
         
-        console.log(`✅ ${osEnRadio.length} OS numeradas por cercanía`);
+        console.log(`✅ ${osEnRadio.length} OS numeradas consecutivamente (1-${osEnRadio.length})`);
         
-        // 5️⃣ Generar mapa
+        // 7️⃣ Generar mapa
         generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
         
     } catch (err) {
