@@ -5073,8 +5073,8 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                 <select id="selectPuntoPartidaKML" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione una OS --</option>
                     ${osConCoordenadas.map(os => 
-                        `<option value="${os.OSATMO}">${os.OSATMO} - ${os.Tipologia || 'Sin tipología'}</option>`
-                    ).join('')}
+                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`
+			).join('')}
                 </select>
             </div>
             
@@ -5098,21 +5098,36 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
  * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
  */
 function optimizarRutaVecinoCercano(osData, osPartida) {
+    // 1. Consistencia del campo ID y encontrar el centro
     const osCentro = osData.find(os => os.osatomo === osPartida);
-    if (!osCentro) return [];
+    if (!osCentro) {
+        console.error("Error optimizando: OS de partida no encontrada en los datos.");
+        return [];
+    }
 
     const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
-
+    
+    // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
+    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
+    
+    // 🛑 VERIFICACIÓN CRÍTICA: Si el punto de partida NO tiene coordenadas válidas, retornamos array vacío.
+    if (isNaN(latCentro) || isNaN(lngCentro)) {
+        console.error(`Error optimizando: La OS de partida (${osPartida}) tiene coordenadas no válidas: ${coordsCentro}`);
+        return [];
+    }
+    
+    // Inicializar el punto de partida
     let osCentroConDatos = {
         ...osCentro,
         lat: latCentro,
         lng: lngCentro,
         distancia: 0,
         numeroOrden: 1,
+        distanciaAlPuntoInicial: 0, // El punto inicial está a 0km de sí mismo.
         esRegulada: osCentro.Tipo_de_OS && (osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && !osCentro.Tipo_de_OS.toLowerCase().includes('no'))
     };
 
+    // 3. Inicializar puntos no visitados
     let puntosNoVisitados = osData
         .filter(os => os.osatomo !== osPartida)
         .map(os => {
@@ -5121,14 +5136,27 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
             const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
             const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
 
-            return { ...os, lat, lng, esRegulada };
+            // Calcular y almacenar la distancia al punto inicial
+            const distanciaAlInicial = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) 
+                ? calcularDistanciaKm(latCentro, lngCentro, lat, lng) 
+                : Infinity;
+
+            return { 
+                ...os, 
+                lat, 
+                lng, 
+                esRegulada,
+                distanciaAlPuntoInicial: distanciaAlInicial // Distancia que querías mostrar en el mapa
+            };
         })
-        .filter(os => os.lat !== null && os.lng !== null);
+        // Solo incluimos puntos con coordenadas válidas para la optimización.
+        .filter(os => os.distanciaAlPuntoInicial !== Infinity);
         
     let rutaFinal = [osCentroConDatos];
     let puntoActual = osCentroConDatos;
     let orden = 2;
 
+    // Bucle del Vecino Más Cercano (Nearest Neighbor)
     while (puntosNoVisitados.length > 0) {
         let vecinoMasCercano = null;
         let minDistancia = Infinity;
@@ -5143,7 +5171,7 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
             }
         });
 
-        if (vecinoMasCercano) {
+        if (vecinoMasCercano && minDistancia !== Infinity) {
             vecinoMasCercano.numeroOrden = orden++;
             vecinoMasCercano.distancia = minDistancia;
             rutaFinal.push(vecinoMasCercano);
@@ -5155,6 +5183,7 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
     }
     return rutaFinal;
 }
+
 
 
 // REEMPLAZAR función generarMapaKMLConPuntoPartida
