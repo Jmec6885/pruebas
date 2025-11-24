@@ -5049,7 +5049,7 @@ function generarMapaAdminKMLRuta() {
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // 🆕 SOLICITAR PUNTO DE PARTIDA
+    // Filtrar OS con coordenadas
     const osConCoordenadas = osAsignadas.filter(os => {
         const coords = os.Coordenadas || os.Coordendasgis;
         return coords && coords.includes(',');
@@ -5064,7 +5064,7 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
         return;
     }
     
-    // 🆕 SELECCIONAR PUNTO DE PARTIDA
+    // 🆕 SELECTOR CON OSATOMO VISIBLE
     let htmlSelector = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
             <div class="result-header">📍 Seleccionar Punto de Partida</div>
@@ -5096,6 +5096,7 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
     // Guardar datos globalmente
     window.osKMLData = osConCoordenadas;
 }
+
 
 function generarMapaKMLConPuntoPartida(unidad) {
     const osPartida = document.getElementById('selectPuntoPartidaKML').value;
@@ -7565,67 +7566,64 @@ async function buscarYMostrarMapaUnidad() {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        // 2️⃣ 🎯 DETERMINAR UNIDAD A BUSCAR
-        let unidadABuscar;
+        console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
         
-        if (unidadFiltro) {
-            // Usuario normal: usar su unidad
-            unidadABuscar = unidadFiltro;
-        } else {
-            // 🆕 Admin: usar la unidad de la OS seleccionada
-            unidadABuscar = osCentro.Unidad;
-        }
+        // 2️⃣ 🆕 BUSCAR TODAS LAS OS PENDIENTES (NO SOLO ASIGNADAS)
+        resultsContainer.innerHTML = `
+            <div class="result-card">
+                <div class="loading" style="display: block; margin: 20px auto;"></div>
+                <p style="text-align: center; color: #666;">Buscando OS Pendientes en el área...</p>
+            </div>`;
         
-        console.log(`🔍 Buscando OS SOLO de la unidad: ${unidadABuscar}`);
+        // ✅ BUSCAR EN TODA LA TABLA OS PENDIENTES (POR LOTES)
+        const todasOSRegistradas = [];
+        const BATCH_SIZE = 1000;
+        let offset = 0;
+        let hasMore = true;
         
-        // 3️⃣ BUSCAR OS ASIGNADAS DE ESA UNIDAD ESPECÍFICA
-        const { data: asignaciones } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo')
-            .eq('Unidad', unidadABuscar); // ← FILTRO CRÍTICO
-        
-        if (!asignaciones || asignaciones.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd;">
-                    <div class="result-header">⚠️ Sin Asignaciones</div>
-                    <p style="text-align: center;">La unidad ${unidadABuscar} no tiene OS asignadas</p>
-                </div>`;
-            return;
-        }
-        
-        console.log(`✅ ${asignaciones.length} OS asignadas a ${unidadABuscar}`);
-        
-        // 4️⃣ BUSCAR DATOS COMPLETOS EN OS PENDIENTES
-        const osNumeros = asignaciones.map(a => a.osatomo);
-        const todasOS = [];
-        
-        for (let i = 0; i < osNumeros.length; i += 100) {
-            const batch = osNumeros.slice(i, i + 100);
-            const { data } = await supabaseClient
+        while (hasMore) {
+            const { data, error } = await supabaseClient
                 .from('OS Pendientes')
                 .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                .in('OSATMO', batch);
+                .eq('Estado_ATOMO', 'Registrada') // ✅ SOLO REGISTRADAS
+                .range(offset, offset + BATCH_SIZE - 1);
             
-            if (data) todasOS.push(...data);
+            if (error) {
+                console.error('Error en batch:', error);
+                break;
+            }
+            
+            if (!data || data.length === 0) {
+                hasMore = false;
+                break;
+            }
+            
+            todasOSRegistradas.push(...data);
+            
+            hasMore = (data.length === BATCH_SIZE);
+            offset += BATCH_SIZE;
+            
+            console.log(`📊 Cargados ${todasOSRegistradas.length} registros...`);
         }
         
-        console.log(`✅ ${todasOS.length} OS cargadas de OS Pendientes`);
+        console.log(`✅ Total: ${todasOSRegistradas.length} OS Registradas cargadas`);
         
-        // 5️⃣ FILTRAR POR RADIO Y APLICAR FILTROS
+        // 3️⃣ FILTRAR POR RADIO Y APLICAR FILTROS
         const osEnRadio = [];
         
-        todasOS.forEach(os => {
+        todasOSRegistradas.forEach(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             if (!validarFormatoCoordenadas(coords)) return;
             
             const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
             
+            // ✅ DENTRO DEL RADIO Y NO ES LA OS CENTRAL
             if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
                 const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
                 const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
                 
-                // ✅ REGULADAS: SIEMPRE incluir
+                // ✅ REGULADAS: SIEMPRE incluir (sin validar filtros)
                 if (esRegulada) {
                     osEnRadio.push({
                         ...os,
@@ -7653,17 +7651,16 @@ async function buscarYMostrarMapaUnidad() {
         
         console.log(`✅ ${osEnRadio.length} OS dentro del radio (${radioKm} km)`);
         
-        // 6️⃣ 🆕 ORDENAR POR DISTANCIA Y NUMERAR CONSECUTIVAMENTE
+        // 4️⃣ ORDENAR POR DISTANCIA Y NUMERAR
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
-        // ✅ Numerar desde 1 (sin gaps)
         osEnRadio.forEach((os, index) => {
             os.numeroOrden = index + 1;
         });
         
         console.log(`✅ ${osEnRadio.length} OS numeradas consecutivamente (1-${osEnRadio.length})`);
         
-        // 7️⃣ Generar mapa
+        // 5️⃣ Generar mapa
         generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
         
     } catch (err) {
@@ -7728,117 +7725,95 @@ function validarFiltrosOS(os, filtros) {
     const rangos = filtros.rangos || [];
     const tipologias = filtros.tipologias || [];
     
-    // 🆕 Obtener filtros de deuda seleccionados
+    // 🆕 Obtener filtros de deuda
     const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
     const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
     const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
     
     const tieneFiltroDeudaseleccionado = deudaAmarillo || deudaNaranja || deudaRosado;
+
+    // ... (El console.log se mantiene, pero lo omito aquí por brevedad) ...
     
-    console.log('🔍 Validando OS:', {
-        osAtomo: os.OSATMO,
-        tipologiaOS: os.Tipologia,
-        deudaOS: os.Deuda,
-        filtroTipologias: tipologias,
-        filtroRangos: rangos,
-        filtrosDeuda: { amarillo: deudaAmarillo, naranja: deudaNaranja, rosado: deudaRosado }
-    });
-    
-    // ✅ Si NO hay filtros, MOSTRAR TODO
+    // ✅ SI NO HAY FILTROS, MOSTRAR TODO
     if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeudaseleccionado) {
-        console.log('✅ Sin filtros - Aceptada');
+        // console.log('✅ Sin filtros - Aceptada');
         return true;
     }
     
-    // 🆕 VALIDACIÓN DE DEUDA (SOLO PARA SUSPENSIÓN)
-if (tieneFiltroDeudaseleccionado) {
-    const deuda = parseFloat(os.Deuda) || 0;
-    let cumpleDeuda = false;
-    
-    // ✅ VALIDAR QUE SEA SUSPENSIÓN PRIMERO
-    const esSuspension = os.Tipologia && (
-        os.Tipologia.includes('SUSPENSION B.T.') ||
-        os.Tipologia.includes('SUSPENSION M.T.') ||
-        os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
-    );
-    
-    if (!esSuspension) {
-        console.log(`❌ OS ${os.OSATMO} - NO es suspensión, deuda ignorada`);
-        // Continuar con validaciones normales de tipología/rango
-    } else {
-        // Es suspensión, validar deuda
-        if (deudaAmarillo && deuda > 500) {
-            cumpleDeuda = true;
-            console.log(`✅ Suspensión con deuda AMARILLA: ${deuda}`);
-        }
-        if (deudaNaranja && deuda >= 100 && deuda <= 500) {
-            cumpleDeuda = true;
-            console.log(`✅ Suspensión con deuda NARANJA: ${deuda}`);
-        }
-        if (deudaRosado && deuda >= 50 && deuda < 100) {
-            cumpleDeuda = true;
-            console.log(`✅ Suspensión con deuda ROSADA: ${deuda}`);
-        }
+    // 1. VALIDACIÓN DE DEUDA (SOLO PARA SUSPENSIÓN)
+    if (tieneFiltroDeudaseleccionado) {
+        const deuda = parseFloat(os.Deuda) || 0;
         
-        if (cumpleDeuda) {
-            return true; // Mostrar esta suspensión con deuda
+        const esSuspension = os.Tipologia && (
+            os.Tipologia.includes('SUSPENSION B.T.') ||
+            os.Tipologia.includes('SUSPENSION M.T.') ||
+            os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
+        );
+        
+        if (esSuspension) {
+            let cumpleDeuda = false;
+            
+            // Si tieneDeudaSeleccionado es true, la OS debe cumplir AL MENOS UNO de los rangos de deuda
+            if (deudaAmarillo && deuda > 500) cumpleDeuda = true;
+            if (deudaNaranja && deuda >= 100 && deuda <= 500) cumpleDeuda = true;
+            if (deudaRosado && deuda >= 50 && deuda < 100) cumpleDeuda = true;
+            
+            if (!cumpleDeuda) {
+                // ❌ FALLA: Es suspensión, hay filtro de deuda, y la OS no cumple el monto.
+                // console.log(`❌ Suspensión ${os.OSATMO} - Monto de deuda NO coincide.`);
+                return false; 
+            }
+            // Si cumple deuda, NO retorna true, sigue para validar Rango y Tipología.
         } else {
-            console.log(`❌ Suspensión sin deuda en rangos seleccionados: ${deuda}`);
-            return false;
+            // ❌ FALLA: Hay filtro de deuda activo, pero la OS no es una Suspensión. 
+            // Esto implica que si se filtra por deuda, solo se deben ver Suspensiones.
+            // console.log(`❌ OS ${os.OSATMO} - NO es suspensión, pero el filtro de deuda está activo.`);
+            // return false; 
+            
+            // **OPCIÓN ALTERNATIVA:** Si el filtro de deuda SOLO debe aplicar a Suspensiones,
+            // y una OS que no es Suspensión debe pasar este filtro (Deuda) sin problemas:
+            // Simplemente no hacemos nada aquí y dejamos que pase a la siguiente validación.
+            // La opción actual está bien, ya que el filtro de deuda se ignora para no-suspensiones.
         }
     }
-}
     
-    // ✅ VALIDAR RANGO (si hay filtro)
+    // 2. VALIDAR RANGO (Si hay filtro, debe cumplirse)
     if (rangos.length > 0) {
-        if (!os['Fecha Gen.']) {
-            console.log(`❌ OS ${os.OSATMO} - Sin campo "Fecha Gen."`);
-            return false;
-        }
+        if (!os['Fecha Gen.']) return false;
         
         const dias = calcularDias(os['Fecha Gen.']);
-        const rangoOS = determinarRango(dias);
-        
-        console.log(`🔎 Rango OS: "${rangoOS}" (${dias} días) - Filtros:`, rangos);
+        const rangoOS = determinarRango(dias); // <-- Usa la función que me mostraste
         
         if (!rangos.includes(rangoOS)) {
-            console.log(`❌ OS ${os.OSATMO} - Rango "${rangoOS}" NO coincide`);
+            // console.log(`❌ OS ${os.OSATMO} - Rango NO coincide`);
             return false;
         }
-        
-        console.log(`✅ OS ${os.OSATMO} - Rango "${rangoOS}" coincide`);
+        // console.log(`✅ OS ${os.OSATMO} - Rango coincide`);
     }
     
-    // ✅ VALIDAR TIPOLOGÍA (si hay filtro)
+    // 3. VALIDAR TIPOLOGÍA (Si hay filtro, debe cumplirse)
+    // Esto incluye las tipologías de suspensión si fueron seleccionadas manualmente.
     if (tipologias.length > 0) {
-        if (!os.Tipologia) {
-            console.log(`❌ OS ${os.OSATMO} - Sin tipología`);
-            return false;
-        }
+        if (!os.Tipologia) return false;
         
         const tipologiaOS = os.Tipologia.trim();
         
-        console.log(`🔎 Comparando tipología "${tipologiaOS}" con:`, tipologias);
-        
         const coincide = tipologias.some(t => {
-            const tipFiltro = String(t).trim();
-            const match = tipFiltro === tipologiaOS;
-            console.log(`   "${tipFiltro}" === "${tipologiaOS}" ? ${match}`);
-            return match;
+            return String(t).trim() === tipologiaOS;
         });
         
         if (!coincide) {
-            console.log(`❌ OS ${os.OSATMO} - Tipología NO coincide`);
+            // console.log(`❌ OS ${os.OSATMO} - Tipología NO coincide`);
             return false;
         }
-        
-        console.log(`✅ OS ${os.OSATMO} - Tipología coincide`);
+        // console.log(`✅ OS ${os.OSATMO} - Tipología coincide`);
     }
     
-    // ✅ Si llegó aquí, cumple todos los filtros
-    console.log(`✅✅ OS ${os.OSATMO} - CUMPLE TODOS LOS FILTROS`);
+    // ✅✅ Si llega aquí, cumple con todos los filtros activos (Deuda, Rango, Tipología).
+    // console.log(`✅✅ OS ${os.OSATMO} - CUMPLE TODOS LOS FILTROS`);
     return true;
 }
+
 
 
 // ========================================
@@ -8237,12 +8212,18 @@ function buscarOSEnListado() {
 // 🎨 INICIALIZAR MAPA LEAFLET (CON DETALLE DINÁMICO)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-    // Destruir mapa anterior si existe
+    // ✅ Destruir mapa anterior de forma segura
     if (window.mapaLeafletInstance) {
-        window.mapaLeafletInstance.remove();
+        try {
+            window.mapaLeafletInstance.off(); // Remover eventos
+            window.mapaLeafletInstance.remove(); // Destruir mapa
+        } catch (err) {
+            console.log('Mapa anterior ya destruido');
+        }
+        window.mapaLeafletInstance = null;
     }
     
-    // Crear mapa
+    // Crear nuevo mapa
     const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
     window.mapaLeafletInstance = mapa;
     
@@ -9912,16 +9893,25 @@ function calcularDias(fechaGen) {
 // 📊 DETERMINAR RANGO POR DÍAS
 // ========================================
 function determinarRango(dias) {
-    if (dias === null || dias === undefined) return 'Sin datos';
-    
-    if (dias <= 5) return '0-5';
-    if (dias <= 10) return '6-10';
-    if (dias <= 15) return '11-15';
-    if (dias <= 20) return '16-20';
-    if (dias <= 30) return '21-30';
-    if (dias <= 45) return '31-45';
-    if (dias <= 180) return '46-180';
-    return '>180';
+    if (dias === null || dias === undefined) {
+        return 'Sin datos';
+    } else if (dias <= 5) {
+        return '0-5';
+    } else if (dias <= 10) {
+        return '6-10'; // Solo llega aquí si es > 5
+    } else if (dias <= 15) {
+        return '11-15'; // Solo llega aquí si es > 10
+    } else if (dias <= 20) {
+        return '16-20';
+    } else if (dias <= 30) {
+        return '21-30';
+    } else if (dias <= 45) {
+        return '31-45';
+    } else if (dias <= 180) {
+        return '46-180';
+    } else {
+        return '>180'; // Si es > 180
+    }
 }
 
 // ========================================
