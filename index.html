@@ -833,12 +833,6 @@ async function cargarTipologias() {
 
 
 
-function limpiarCacheTipologias() {
-    console.log('🗑️ Limpiando cache de tipologías...');
-    tipologiasCache = null;
-}
-
-
 
 // ========================================
 // 🔄 FUNCIÓN PARA LIMPIAR CACHE (OPCIONAL)
@@ -5097,6 +5091,73 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
     window.osKMLData = osConCoordenadas;
 }
 
+/**
+ * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
+ * @param {Array<Object>} osData - Lista completa de órdenes de servicio.
+ * @param {string} osPartida - ID de la OS de partida.
+ * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
+ */
+function optimizarRutaVecinoCercano(osData, osPartida) {
+    const osCentro = osData.find(os => os.osatomo === osPartida);
+    if (!osCentro) return [];
+
+    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+    const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+
+    let osCentroConDatos = {
+        ...osCentro,
+        lat: latCentro,
+        lng: lngCentro,
+        distancia: 0,
+        numeroOrden: 1,
+        esRegulada: osCentro.Tipo_de_OS && (osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && !osCentro.Tipo_de_OS.toLowerCase().includes('no'))
+    };
+
+    let puntosNoVisitados = osData
+        .filter(os => os.osatomo !== osPartida)
+        .map(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
+            const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
+            const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
+
+            return { ...os, lat, lng, esRegulada };
+        })
+        .filter(os => os.lat !== null && os.lng !== null);
+        
+    let rutaFinal = [osCentroConDatos];
+    let puntoActual = osCentroConDatos;
+    let orden = 2;
+
+    while (puntosNoVisitados.length > 0) {
+        let vecinoMasCercano = null;
+        let minDistancia = Infinity;
+        let vecinoIndex = -1;
+
+        puntosNoVisitados.forEach((os, index) => {
+            const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
+            if (dist < minDistancia) {
+                minDistancia = dist;
+                vecinoMasCercano = os;
+                vecinoIndex = index;
+            }
+        });
+
+        if (vecinoMasCercano) {
+            vecinoMasCercano.numeroOrden = orden++;
+            vecinoMasCercano.distancia = minDistancia;
+            rutaFinal.push(vecinoMasCercano);
+            puntoActual = vecinoMasCercano;
+            puntosNoVisitados.splice(vecinoIndex, 1);
+        } else {
+            break; 
+        }
+    }
+    return rutaFinal;
+}
+
+
+// REEMPLAZAR función generarMapaKMLConPuntoPartida
 
 function generarMapaKMLConPuntoPartida(unidad) {
     const osPartida = document.getElementById('selectPuntoPartidaKML').value;
@@ -5111,63 +5172,23 @@ function generarMapaKMLConPuntoPartida(unidad) {
         alert('❌ Error: Datos no disponibles');
         return;
     }
-    
-    // 1️⃣ Encontrar OS de partida
-    const osCentro = osData.find(os => os.OSATMO === osPartida);
-    if (!osCentro) {
-        alert('❌ Error: OS de partida no encontrada');
+
+    // 🆕 LLAMADA AL ALGORITMO OPTIMIZADO
+    const todosLosPuntos = optimizarRutaVecinoCercano(osData, osPartida);
+
+    if (todosLosPuntos.length === 0) {
+        alert('❌ Error al optimizar la ruta. Verifique las coordenadas.');
         return;
     }
     
-    // 2️⃣ Extraer coordenadas del centro
-    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+    const osCentro = todosLosPuntos[0]; // El centro es el primer punto en la ruta optimizada
     
-    // 3️⃣ Procesar otras OS con distancias
-    const osConDatos = osData
-        .filter(os => os.OSATMO !== osPartida) // Excluir centro
-        .map(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-            
-            const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
-            const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
-            
-            return {
-                ...os,
-                lat: lat,
-                lng: lng,
-                distancia: calcularDistanciaKm(latCentro, lngCentro, lat, lng),
-                esRegulada: esRegulada
-            };
-        });
+    console.log(`✅ Ruta Optimizada (Vecino Cercano) generada: ${todosLosPuntos.length} puntos numerados`);
     
-    // 4️⃣ Ordenar por distancia
-    osConDatos.sort((a, b) => a.distancia - b.distancia);
-    
-    // 5️⃣ Numerar consecutivamente (desde 2)
-    osConDatos.forEach((os, index) => {
-        os.numeroOrden = index + 2; // Empieza en 2 (centro es 1)
-    });
-    
-    // 6️⃣ Agregar centro como punto 1
-    const osCentroConDatos = {
-        ...osCentro,
-        lat: latCentro,
-        lng: lngCentro,
-        distancia: 0,
-        numeroOrden: 1,
-        esRegulada: false
-    };
-    
-    // Combinar (centro primero)
-    const todosLosPuntos = [osCentroConDatos, ...osConDatos];
-    
-    console.log(`✅ Ruta generada: ${todosLosPuntos.length} puntos numerados`);
-    
-    // 7️⃣ Generar HTML del mapa
-    mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro);
+    // Generar HTML del mapa
+    mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, osCentro.lat, osCentro.lng);
 }
+
 
 function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -5587,13 +5608,36 @@ async function generarKMLPorUnidad() {
         }
         
         // Filtrar por tipo de coordenadas
-        const conCoordenadasLector = osPendientes.filter(os => 
+        let conCoordenadasLector = osPendientes.filter(os => 
             os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
         );
         
-        const conCoordenadasGIS = osPendientes.filter(os => 
+        let conCoordenadasGIS = osPendientes.filter(os => 
             os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
         );
+        
+        // -----------------------------------------------------
+        // 🆕 APLICAR OPTIMIZACIÓN DE RUTA SI HAY PUNTO DE PARTIDA
+        // -----------------------------------------------------
+        const osPartida = document.getElementById('selectPuntoPartidaKML')?.value;
+        
+        if (osPartida) {
+            console.log(`✨ Aplicando optimización de ruta (Vecino Cercano) con partida: ${osPartida}`);
+            
+            // Reordenar la lista Lector
+            conCoordenadasLector = optimizarRutaVecinoCercano(conCoordenadasLector, osPartida);
+            
+            // Reordenar la lista GIS
+            conCoordenadasGIS = optimizarRutaVecinoCercano(conCoordenadasGIS, osPartida);
+        } else {
+            console.log('No hay punto de partida seleccionado, se usa el orden de la base de datos.');
+            
+            // Opcional: Asegurar que tengan el campo numeroOrden, si se usa en el KML.
+            conCoordenadasLector = conCoordenadasLector.map((os, index) => ({...os, numeroOrden: index + 1}));
+            conCoordenadasGIS = conCoordenadasGIS.map((os, index) => ({...os, numeroOrden: index + 1}));
+        }
+
+        // -----------------------------------------------------
         
         // Guardar en variables globales para descarga
         window.kmlDataLector = conCoordenadasLector;
@@ -5634,6 +5678,8 @@ async function generarKMLPorUnidad() {
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
+
+
 
 	// ========================================
 // 📥 DESCARGAR KML COORDENADAS LECTOR
@@ -9889,30 +9935,45 @@ function calcularDias(fechaGen) {
     return diffDias + 1;
 }
 
+	function calcularDias(fechaGenString) {
+    if (!fechaGenString) return null;
+    try {
+        const fechaGeneracion = new Date(fechaGenString);
+        const hoy = new Date();
+        // Establecer horas a 0 para cálculo exacto de días
+        hoy.setHours(0, 0, 0, 0); 
+        fechaGeneracion.setHours(0, 0, 0, 0); 
+        
+        const diferenciaMilisegundos = hoy.getTime() - fechaGeneracion.getTime();
+        const diferenciaDias = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
+        return diferenciaDias;
+    } catch (e) {
+        console.error("Error calculando días:", e);
+        return null;
+    }
+}
+
+
+
 	// ========================================
 // 📊 DETERMINAR RANGO POR DÍAS
 // ========================================
 function determinarRango(dias) {
-    if (dias === null || dias === undefined) {
-        return 'Sin datos';
-    } else if (dias <= 5) {
-        return '0-5';
-    } else if (dias <= 10) {
-        return '6-10'; // Solo llega aquí si es > 5
-    } else if (dias <= 15) {
-        return '11-15'; // Solo llega aquí si es > 10
-    } else if (dias <= 20) {
-        return '16-20';
-    } else if (dias <= 30) {
-        return '21-30';
-    } else if (dias <= 45) {
-        return '31-45';
-    } else if (dias <= 180) {
-        return '46-180';
-    } else {
-        return '>180'; // Si es > 180
-    }
+    // Si no es un número válido, se asume 'Sin datos'.
+    if (dias === null || dias === undefined || isNaN(dias)) return 'Sin datos';
+    
+    // La lógica secuencial es la más eficiente para rangos mutuamente excluyentes
+    if (dias <= 5) return '0-5';
+    if (dias <= 10) return '6-10';
+    if (dias <= 15) return '11-15';
+    if (dias <= 20) return '16-20';
+    if (dias <= 30) return '21-30';
+    if (dias <= 45) return '31-45';
+    if (dias <= 180) return '46-180';
+    
+    return '>180'; // Si es mayor a 180
 }
+
 
 // ========================================
 // ⚠️ DETERMINAR CONDICIÓN (TEMPORAL - Sin Dias_por_OS)
@@ -11076,31 +11137,24 @@ async function busquedaMultipleKML(campo, valores) {
     let todosLosResultados = [];
     
     // Buscar cada valor individualmente
-    for (const valor of valores) {
-        if (!valor) continue; // Saltar valores vacíos
-        
-        let query = supabaseClient.from(selectedTable).select('*');
-        query = query.eq(campo, valor); // Búsqueda exacta
-        
-        const { data, error } = await query;
-        
-        if (error) {
-            console.error(`Error buscando ${valor}:`, error.message);
-            continue;
-        }
-        
-        if (data && data.length > 0) {
-            todosLosResultados = todosLosResultados.concat(data);
-        }
-    }
-    
-    ocultarIndicadorBusqueda();
-    
-    // Validar resultados
-    if (todosLosResultados.length === 0) {
-        alert(`❌ No se encontraron resultados para los valores ingresados.\n\nValores buscados: ${valores.join(', ')}`);
-        return;
-    }
+    const { data: todosLosResultados, error } = await supabaseClient
+    .from(selectedTable)
+    .select('*')
+    .in(campo, valores.filter(v => v)); // Filtra valores vacíos/nulos antes de la consulta.
+
+ocultarIndicadorBusqueda(); 
+
+if (error) {
+    console.error('Error al buscar múltiples valores:', error.message);
+    alert('❌ Error al buscar múltiples valores: ' + error.message);
+    return;
+}
+
+// Validar resultados
+if (!todosLosResultados || todosLosResultados.length === 0) {
+    alert(`❌ No se encontraron resultados para los valores ingresados.\n\nValores buscados: ${valores.join(', ')}`);
+    return;
+}
     
     // Filtrar solo los que tienen coordenadas
     const conCoordenadas = todosLosResultados.filter(item => {
