@@ -5037,18 +5037,34 @@ function generarMapaAdminKMLRuta() {
 }
 
 
-	// ========================================
+// ========================================
 // 🗺️ GENERAR MAPA KML RUTA
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Filtrar OS con coordenadas
-    const osConCoordenadas = osAsignadas.filter(os => {
-        const coords = os.Coordenadas || os.Coordendasgis;
-        return coords && coords.includes(',');
-    });
-    
+    // -----------------------------------------------------------------
+    // 🆕 PASO CRÍTICO: NORMALIZAR Y FILTRAR DATOS AL PRINCIPIO
+    // -----------------------------------------------------------------
+    const osDataRaw = osAsignadas; 
+
+    // 1. Normalizar las propiedades y filtrar por coordenadas válidas
+    const osConCoordenadas = osDataRaw
+        .map(os => ({
+            ...os, 
+            // 🆕 NORMALIZACIÓN: Aseguramos el campo 'osatomo'
+            osatomo: os.osatomo || os.OSATMO || '',
+            // 🆕 NORMALIZACIÓN: Aseguramos el campo 'Tipologia' para el selector.
+            Tipologia: os.Tipologia || os.Tipo_de_OS || 'Sin tipología',
+            // Usamos las coordenadas correctas para el filtro
+            CoordenadasValidas: os.Coordenadas || os.Coordendasgis
+        }))
+        // 2. Filtrar OS que tienen coordenadas válidas Y un ID de OS válido
+        .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
+        .filter(os => os.osatomo.trim() !== ''); // Excluir si el ID está vacío
+        
+    // -----------------------------------------------------------------
+
     if (osConCoordenadas.length === 0) {
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: #fff3cd;">
@@ -5058,7 +5074,10 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
         return;
     }
     
-    // 🆕 SELECTOR CON OSATOMO VISIBLE
+    // Guardar datos globalmente (la lista ya está normalizada)
+    window.osKMLData = osConCoordenadas;
+
+    // 🆕 SELECTOR CON OSATOMO VISIBLE (Ahora usa las propiedades normalizadas)
     let htmlSelector = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
             <div class="result-header">📍 Seleccionar Punto de Partida</div>
@@ -5073,8 +5092,9 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                 <select id="selectPuntoPartidaKML" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione una OS --</option>
                     ${osConCoordenadas.map(os => 
-                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`
-			).join('')}
+                        // Usa los campos normalizados: osatomo como value y como texto junto a Tipologia
+                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
+                    ).join('')}
                 </select>
             </div>
             
@@ -5087,9 +5107,10 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
     
     resultsContainer.innerHTML = htmlSelector;
     
-    // Guardar datos globalmente
-    window.osKMLData = osConCoordenadas;
+    // ❌ ELIMINAR EL BLOQUE DE NORMALIZACIÓN DUPLICADO QUE ESTABA AL FINAL
 }
+
+
 
 /**
  * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
@@ -5202,13 +5223,24 @@ function generarMapaKMLConPuntoPartida(unidad) {
         return;
     }
 
-    // 🆕 LLAMADA AL ALGORITMO OPTIMIZADO
-    const todosLosPuntos = optimizarRutaVecinoCercano(osData, osPartida);
 
-    if (todosLosPuntos.length === 0) {
-        alert('❌ Error al optimizar la ruta. Verifique las coordenadas.');
-        return;
-    }
+	// 🆕 NORMALIZACIÓN CRÍTICA: Aseguramos que la propiedad clave siempre sea 'osatomo'
+// Esto previene errores de inconsistencia de mayúsculas/minúsculas.
+const osDataNormalizada = osData.map(os => ({
+    ...os,
+    // Usa el valor de 'osatomo' si existe, si no, usa el valor de 'OSATMO'.
+    osatomo: os.osatomo || os.OSATMO || '' 
+}));
+
+
+    // 🆕 LLAMADA AL ALGORITMO OPTIMIZADO con los datos normalizados
+const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
+
+if (todosLosPuntos.length === 0) {
+    // Si la función de optimización falla, mostramos el mensaje de alerta.
+    alert('❌ Error al optimizar la ruta. Verifique las coordenadas o el punto de partida.');
+    return;
+}
     
     const osCentro = todosLosPuntos[0]; // El centro es el primer punto en la ruta optimizada
     
