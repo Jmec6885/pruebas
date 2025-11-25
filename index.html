@@ -7884,19 +7884,17 @@ async function buscarYMostrarMapaUnidad() {
     try {
         const rol = currentUser?.rol;
         const rolRestringido = ['Consulta', 'Contratista'].includes(rol);
-        
-        // 1️⃣ Determinar filtros a usar
+
+        // 1️⃣ Cargar filtros
         let filtrosAplicar = null;
         if (rolRestringido) {
-            // Solo para roles restringidos: priorizar filtros_por_unidad
             const {  filtrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
                 .eq('unidad', unidadFiltro)
                 .maybeSingle();
-            filtrosAplicar = filtrosUnidad; // puede ser null
+            filtrosAplicar = filtrosUnidad;
         } else {
-            // Admin/Supervisor: usar filtros globales
             const { data: filtrosGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
@@ -7914,47 +7912,32 @@ async function buscarYMostrarMapaUnidad() {
 
         console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
 
-        // 2️⃣ CARGAR DATOS SEGÚN ROL
-        let candidatas = [];
+        // 2️⃣ Cargar SOLO las OS de la unidad (para roles restringidos) o todas (para Admin)
+        let todasOSRegistradas = [];
 
         if (rolRestringido) {
-            // ✅ PASO 1: Obtener OS asignadas a la unidad desde os_asignadas
-            const {  asignaciones } = await supabaseClient // ✅ CORREGIDO: espacio antes de 'asignaciones'
-                .from('os_asignadas')
-                .select('osatomo')
-                .eq('Unidad', unidadFiltro);
+            // ✅ Cargar SOLO las OS de la unidad desde OS Pendientes (sin pasar por os_asignadas de nuevo)
+            const {  osDeUnidad } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+                .eq('Unidad', unidadFiltro)
+                .eq('Estado_ATOMO', 'Registrada');
 
-            if (!asignaciones || asignaciones.length === 0) {
-                throw new Error('No hay OS asignadas para esta unidad');
+            if (!osDeUnidad) {
+                console.warn('No se encontraron OS en OS Pendientes para la unidad:', unidadFiltro);
+                osDeUnidad = [];
             }
 
-            const osNumeros = asignaciones.map(a => a.osatomo);
+            todasOSRegistradas = osDeUnidad;
+            console.log(`✅ ${todasOSRegistradas.length} OS cargadas directamente de OS Pendientes para ${unidadFiltro}`);
 
-            // ✅ PASO 2: Cargar datos completos desde OS Pendientes (solo asignadas)
-            const BATCH_SIZE = 1000;
-            for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
-                const batch = osNumeros.slice(i, i + BATCH_SIZE);
-                const { data, error } = await supabaseClient
-                    .from('OS Pendientes')
-                    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                    .in('OSATMO', batch)
-                    .eq('Estado_ATOMO', 'Registrada');
-                if (error) {
-                    console.warn('Error en lote:', error);
-                    continue;
-                }
-                if (data) candidatas.push(...data);
-            }
-
-            console.log(`✅ ${candidatas.length} OS asignadas cargadas para ${unidadFiltro}`);
-
-            // ✅ PASO 3: Aplicar filtros SOLO si existen
+            // Aplicar filtros SOLO si existen
             if (filtrosAplicar) {
-                candidatas = candidatas.filter(os => validarFiltrosOS(os, filtrosAplicar));
-            } // Si NO hay filtros → se mantienen todas
+                todasOSRegistradas = todasOSRegistradas.filter(os => validarFiltrosOS(os, filtrosAplicar));
+            }
 
         } else {
-            // Admin/Supervisor: cargar todas las OS Registradas
+            // Admin: cargar todas
             let offset = 0;
             const BATCH_SIZE = 1000;
             let hasMore = true;
@@ -7966,20 +7949,19 @@ async function buscarYMostrarMapaUnidad() {
                     .range(offset, offset + BATCH_SIZE - 1);
                 if (error) break;
                 if (!data || data.length === 0) break;
-                candidatas.push(...data);
+                todasOSRegistradas.push(...data);
                 hasMore = (data.length === BATCH_SIZE);
                 offset += BATCH_SIZE;
             }
-            // Aplicar filtros globales
             if (filtrosAplicar) {
-                candidatas = candidatas.filter(os => validarFiltrosOS(os, filtrosAplicar));
+                todasOSRegistradas = todasOSRegistradas.filter(os => validarFiltrosOS(os, filtrosAplicar));
             }
         }
 
-        // 3️⃣ FILTRAR POR RADIO Y VALIDAR COORDENADAS
+        // 3️⃣ Filtrar por radio
         const osEnRadio = [];
-        candidatas.forEach(os => {
-            if (os.OSATMO === osCentro.OSATMO) return; // saltar centro
+        todasOSRegistradas.forEach(os => {
+            if (os.OSATMO === osCentro.OSATMO) return;
             const coords = os.Coordenadas || os.Coordendasgis;
             if (!validarFormatoCoordenadas(coords)) return;
             const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
@@ -7991,7 +7973,6 @@ async function buscarYMostrarMapaUnidad() {
             }
         });
 
-        // 4️⃣ Ordenar y numerar
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         osEnRadio.forEach((os, i) => os.numeroOrden = i + 1);
 
@@ -8008,7 +7989,6 @@ async function buscarYMostrarMapaUnidad() {
         </div>`;
     }
 }
-
 
 
 // ========================================
