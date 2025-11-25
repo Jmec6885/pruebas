@@ -10218,23 +10218,7 @@ function calcularDias(fechaGen) {
     return diffDias + 1;
 }
 
-	function calcularDias(fechaGenString) {
-    if (!fechaGenString) return null;
-    try {
-        const fechaGeneracion = new Date(fechaGenString);
-        const hoy = new Date();
-        // Establecer horas a 0 para cálculo exacto de días
-        hoy.setHours(0, 0, 0, 0); 
-        fechaGeneracion.setHours(0, 0, 0, 0); 
-        
-        const diferenciaMilisegundos = hoy.getTime() - fechaGeneracion.getTime();
-        const diferenciaDias = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
-        return diferenciaDias;
-    } catch (e) {
-        console.error("Error calculando días:", e);
-        return null;
-    }
-}
+	
 
 
 
