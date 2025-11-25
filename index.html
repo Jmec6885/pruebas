@@ -7074,16 +7074,17 @@ async function cargarInterfazMapaRutas() {
             
             // Obtener osatomo de os_asignadas
             const { data: asignaciones, error: errorAsig } = await supabaseClient
-    .from('os_asignadas')
-    .select('osatomo, Unidad')
-    .eq('Unidad', unidadUsuario);
+                .from('os_asignadas')
+                .select('osatomo, Unidad')
+                .eq('Unidad', unidadUsuario);
             
             if (errorAsig) {
                 console.error('Error buscando OS:', errorAsig);
             }
             
             if (asignaciones && asignaciones.length > 0) {
-                const osNumeros = asignaciones.map(a => a.osatomo);
+                // Se usa el campo 'osatomo' de la asignación
+                const osNumeros = asignaciones.map(a => a.osatomo); 
                 
                 // ✅ Buscar OS Pendientes en lotes
                 const osCompletas = [];
@@ -7092,7 +7093,8 @@ async function cargarInterfazMapaRutas() {
                     const batch = osNumeros.slice(i, i + BATCH_SIZE);
                     const { data, error } = await supabaseClient
                         .from('OS Pendientes')
-                        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
+                        // Se usa 'OSATMO' para buscar
+                        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO') 
                         .in('OSATMO', batch); 
 
                     if (error) {
@@ -7102,7 +7104,6 @@ async function cargarInterfazMapaRutas() {
                     if (data) osCompletas.push(...data);
                 }
                 
-                // ✅ CORRECCIÓN: Usar la longitud de la lista para asignar el valor
                 if (osCompletas && osCompletas.length > 0) { 
                     osAsignadas = osCompletas;
                     console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
@@ -7110,11 +7111,13 @@ async function cargarInterfazMapaRutas() {
             }
         }
         
+        // 🛑 CORRECCIÓN CLAVE: Almacenar los datos de OS asignadas en la variable global
+        window.osMapaRutasData = osAsignadas; 
+        
         // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
         if (currentUser.rol === 'Administrador') {
             generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
         } else {
-            // Asumiendo que esta función aplica el filtro de coordenadas corregido del Punto 1.
             generarInterfazUnidadMapaRutas(filtros, osAsignadas);
         }
         
@@ -7808,70 +7811,80 @@ async function buscarYMostrarMapaAdmin() {
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
 // ========================================
 async function buscarYMostrarMapaUnidad() {
-    const osSeleccionada = document.getElementById('selectOSUnidad').value;
+    // Usamos el ID de elemento de tu código original: 'selectOSUnidad'
+    const osPartida = document.getElementById('selectOSUnidad').value; 
+    const resultsContainer = document.getElementById('searchResults');
     
-    if (!osSeleccionada) {
-        alert('⚠️ Por favor seleccione una OS');
+    // ⚠️ Mover el feedback de carga al inicio
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;">Cargando mapa...</div>';
+
+    if (!osPartida) {
+        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Por favor, seleccione una Orden de Servicio de partida.</div>';
+        return;
+    }
+
+    // 🛑 1. OBTENER DATOS BASE DESDE LA GLOBAL (OS ASIGNADAS)
+    // Esto es CLAVE para evitar el error de "no hay datos cargados"
+    const osAsignadas = window.osMapaRutasData;
+
+    if (!osAsignadas || osAsignadas.length === 0) {
+        resultsContainer.innerHTML = '<div class="result-card error-message">❌ No hay datos de OS asignadas cargados. Recargue la página.</div>';
+        console.error('Error en buscarYMostrarMapaUnidad: osAsignadas no contiene datos.');
+        return;
+    }
+
+    // 2. ENCONTRAR OS CENTRAL y COORDENADA (Ahora buscamos en la data local, no en la DB)
+    const osCentralData = osAsignadas.find(os => 
+        // Se busca por el valor seleccionado, que está en osatomo o OSATMO
+        (os.osatomo || os.OSATMO) == osPartida
+    );
+    
+    if (!osCentralData) {
+        // Esta validación reemplaza tu triple validación a la base de datos
+        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Error: La OS de partida seleccionada no se encuentra entre tus órdenes asignadas.</div>';
         return;
     }
     
-    const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
-    
-    try {
-        // 1️⃣ Verificar en os_asignadas
-        const { data: asignacion } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo, Unidad')
-            .eq('osatomo', osSeleccionada)
-            .eq('Unidad', unidadUsuario)
-            .maybeSingle();
-        
-        if (!asignacion) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #ffebee;">
-                    <div class="result-header">❌ OS No Asignada</div>
-                    <p style="text-align: center;">Esta OS no está asignada a tu unidad (${unidadUsuario})</p>
-                </div>`;
-            return;
-        }
-        
-        // 2️⃣ Buscar en OS Pendientes
-        const { data: osCentro } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('OSATMO', osSeleccionada)
-            .maybeSingle();
-        
-        if (!osCentro) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #ffebee;">
-                    <div class="result-header">❌ Error</div>
-                    <p style="text-align: center;">Esta OS no está en OS Pendientes</p>
-                </div>`;
-            return;
-        }
-        
-        // Validar coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordendasgis;
-        if (!coordenadas || !coordenadas.includes(',')) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd;">
-                    <div class="result-header">⚠️ Sin Coordenadas</div>
-                    <p style="text-align: center;">La OS seleccionada no tiene coordenadas</p>
-                </div>`;
-            return;
-        }
-        
-        // Cargar mapa
-        await cargarYMostrarMapa(osCentro, unidadUsuario);
-        
-    } catch (err) {
-        console.error('Error:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+    // Obtener la mejor coordenada disponible
+    const coordenadaCentral = osCentralData.CoordenadasValidas || osCentralData.Coordenadas || osCentralData.Coordendasgis;
+
+    if (!coordenadaCentral) {
+         resultsContainer.innerHTML = '<div class="result-card error-message">❌ Error: La OS de partida seleccionada no tiene coordenadas válidas.</div>';
+         return;
     }
+
+    let osParaMostrar = [...osAsignadas]; // Inicialmente, solo OS asignadas
+    let radio = 0;
+    let tipologias = [];
+    
+    // 3. OBTENER FILTRO GUARDADO
+    const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario); // Usar la función de transformación
+    
+    const { data: filtroUnidad } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('radio_km, tipologias') 
+        .eq('unidad', unidadUsuario) 
+        .maybeSingle(); // Usar maybeSingle por si no hay filtro
+
+    if (filtroUnidad) {
+        radio = filtroUnidad.radio_km || 0;
+        tipologias = filtroUnidad.tipologias || [];
+    }
+
+    // 4. LÓGICA DE BÚSQUEDA DE OS CERCANAS (si hay filtro guardado)
+    if (radio > 0 && tipologias.length > 0) {
+        console.log(`🔍 Buscando OS cercanas (radio: ${radio} km, tipologías: ${tipologias.join(', ')})`);
+        
+        // ** AQUÍ VA LA LÓGICA ASÍNCRONA PARA BUSCAR Y FUSIONAR OS CERCANAS **
+        // (Dejar este bloque vacío si la lógica PostGIS aún no está implementada)
+        
+    }
+    
+    // 5. LLAMAR A LA FUNCIÓN DE DIBUJO CON LA LISTA FINAL DE OS
+    // Se le pasa la OS Central y la lista COMPLETA de órdenes a dibujar.
+    cargarYMostrarMapa(osCentralData, osParaMostrar); 
 }
+
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
