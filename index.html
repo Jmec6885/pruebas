@@ -4711,54 +4711,61 @@ function actualizarSeleccionTipologiasUnidad() {
 }
 
 // Función para generar el campo de búsqueda/selector en "Mapa de Rutas"
+// Función para generar el campo de búsqueda/selector en "Mapa de Rutas"
 async function generarCampoMapaRutas(unidad) {
     const rol = currentUser?.rol;
-    const container = document.getElementById('searchContainerMapaRutas'); // Asume un nuevo contenedor
+    const container = document.getElementById('searchContainerMapaRutas'); 
 
     if (rol === 'Administrador' || rol === 'Supervisor') {
-        // Interfaz actual (Input de texto para buscar OS individualmente)
+        // Interfaz input manual
         container.innerHTML = `
             <label for="osBusqueda">Ingrese N° de OS:</label>
             <input type="text" id="osBusqueda" placeholder="Ej: 123456">
             <button onclick="buscarOSParaMapa(document.getElementById('osBusqueda').value)">Generar Mapa</button>
         `;
-    } else if (rol === 'Consulta' || rol === 'Contratista') {
-        // Interfaz de lista desplegable (Dropdown)
-        const unidadUsuario = currentUser.unidad;
+    } 
+    
+    else if (rol === 'Consulta' || rol === 'Contratista') {
         
-        // Fetch OS Asignadas para la unidad logeada
+        // ✅ SOLO UNA VEZ
         const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
-const { data: osAsignadas, error } = await supabaseClient
-    .from('os_asignadas') // nota: usar nombre de tabla consistente (minúsculas)
-    .select('osatomo, Tipologia, OSATMO, Unidad')
-    .eq('Unidad', unidadUsuario);
 
-if (error) {
-    console.error('Error cargando OS asignadas para unidad:', error);
-    // mostrar mensaje en interfaz...
-}
- 
-            
-        // Normalización y filtrado para el selector
-        const osParaSelector = osAsignadas.map(os => ({
-            osatomo: os.osatomo || os.OSATMO,
-            Tipologia: os.Tipologia || 'Sin Tipología'
-        })).filter(os => os.osatomo);
+        // Fetch OS Asignadas
+        const { data: osAsignadas, error } = await supabaseClient
+            .from('os_asignadas')
+            .select('osatomo, Tipologia, OSATMO, Unidad')
+            .eq('Unidad', unidadUsuario);
 
+        if (error) {
+            console.error('Error cargando OS asignadas para unidad:', error);
+            container.innerHTML = `<div class="result-card">❌ Error cargando OS asignadas</div>`;
+            return;
+        }
+
+        // Normalización
+        const osParaSelector = (osAsignadas || [])
+            .map(os => ({
+                osatomo: os.osatomo || os.OSATMO,
+                Tipologia: os.Tipologia || 'Sin Tipología'
+            }))
+            .filter(os => os.osatomo);
+
+        // Construcción del selector
         container.innerHTML = `
             <div class="form-group">
                 <label for="selectOSBusqueda">Seleccione OS de Partida (Unidad ${unidadUsuario}):</label>
                 <select id="selectOSBusqueda">
                     <option value="">-- Seleccione una OS --</option>
-                    ${osParaSelector.map(os => 
-                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
-                    ).join('')}
+                    ${osParaSelector
+                        .map(os => `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`)
+                        .join('')}
                 </select>
             </div>
             <button class="btn" onclick="buscarOSParaMapa(document.getElementById('selectOSBusqueda').value, true)">Generar Mapa de Unidad</button>
         `;
     }
 }
+
 async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
     const rol = currentUser?.rol;
     let osData;
