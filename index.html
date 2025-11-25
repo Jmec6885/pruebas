@@ -655,17 +655,17 @@
    			 <div class="table-description">Generar rutas por unidad</div>
 		    </div>
 		    
-		    <div class="table-option" onclick="seleccionarTabla('detalle_os')">
-    			<span class="table-icon">📊</span>
-    			<div class="table-title">Detalle OS</div>
-    			<div class="table-description">Análisis por unidad y estado</div>
-		    </div>
+		    <div class="table-option" id="opcionDetalleOS" onclick="seleccionarTabla('detalle_os')">
+    <span class="table-icon">📊</span>
+    <div class="table-title">Detalle OS</div>
+    <div class="table-description">Análisis por unidad y estado</div>
+</div>
 
-			<div class="table-option" onclick="seleccionarTabla('cargar_asignaciones')">
-   			 <span class="table-icon">📤</span>
-   			 <div class="table-title">Cargar Asignaciones</div>
-   			 <div class="table-description">Asignar OS a unidades (Admin)</div>
-		     </div>
+			<div class="table-option" id="opcionCargarAsignaciones" onclick="seleccionarTabla('cargar_asignaciones')">
+    <span class="table-icon">📤</span>
+    <div class="table-title">Cargar Asignaciones</div>
+    <div class="table-description">Asignar OS a unidades (Admin)</div>
+</div>
 
 		    <div class="table-option" onclick="seleccionarTabla('retiro_medidores')">
     			<span class="table-icon">📦</span>
@@ -757,6 +757,44 @@ const CONFIG_VISIBILIDAD = {
     camposAdminSolo: ['NombreCliente', 'Direccion']
 };
 
+
+
+// ========================================
+// 🛡️ CONTROL DE VISIBILIDAD DE MENÚ POR ROL
+// ========================================
+function controlarVisibilidadMenu() {
+    const rol = currentUser ? currentUser.rol : null;
+
+    // 1. Ocultar Detalle OS (Solo Admin y Supervisor)
+    const detalleOS = document.getElementById('opcionDetalleOS');
+    if (detalleOS) {
+        [cite_start]// Roles permitidos: Administrador, Supervisor [cite: 2988]
+        if (rol !== 'Administrador' && rol !== 'Supervisor') {
+            detalleOS.classList.add('hidden'); [cite_start]// hidden está definido en tu CSS [cite: 3624]
+        } else {
+            detalleOS.classList.remove('hidden');
+        }
+    }
+
+    // 2. Ocultar Cargar Asignaciones (Solo Admin)
+    const cargarAsignaciones = document.getElementById('opcionCargarAsignaciones');
+    if (cargarAsignaciones) {
+        // Rol permitido: Administrador
+        if (rol !== 'Administrador') {
+            cargarAsignaciones.classList.add('hidden');
+        } else {
+            cargarAsignaciones.classList.remove('hidden');
+        }
+    }
+}
+
+// Asegúrate de llamar a esta función en tu lógica de login exitoso:
+// function mostrarInterfazPrincipal() {
+//     // ... código existente ...
+//     controlarVisibilidadMenu(); // <-- Llamar aquí
+// }
+
+
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
 // ========================================
@@ -830,6 +868,7 @@ async function cargarTipologias() {
         return [];
     }
 }
+
 
 
 
@@ -5209,6 +5248,27 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
     // PASO CRÍTICO: NORMALIZAR Y FILTRAR DATOS AL PRINCIPIO
     const osDataRaw = osAsignadas; 
 
+if (osConCoordenadas.length === 0) {
+    // Si no hay OS con coordenadas, muestra un mensaje de advertencia
+    document.getElementById('containerSelectorOS').innerHTML = `
+        <p style="color: #e53e3e; margin-top: 10px;">
+            ⚠️ No se encontraron OS Asignadas con coordenadas válidas para esta unidad.
+        </p>`;
+    return;
+}
+
+// Si hay datos, procede a generar el HTML:
+let htmlSelector = ` 
+    <div class="form-group">
+        <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
+        <select id="selectPuntoPartidaKML" ...>
+            <option value="">-- Seleccione una OS --</option>
+            ${osConCoordenadas.map(os => 
+                // ... mapeo de opciones
+            ).join('')} 
+        </select> 
+    </div>`;
+
     // ✅ ESTA ES LA CORRECTA (dejar solo esta):
     const osConCoordenadas = osDataRaw
         .map(os => ({
@@ -7058,9 +7118,11 @@ for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
         }
         
     } catch (err) {
-        console.error('Error cargando Mapa de Rutas:', err);
-        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
-    }
+       console.error('Error cargando Mapa de Rutas:', error);
+    // Cambiar la referencia a la variable 'error'
+    resultsContainer.innerHTML = `<div class="result-card">❌ Error de conexión: ${error.message}</div>`; 
+    return;
+   }
 }
 
 
@@ -12086,5 +12148,3 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
-
-
