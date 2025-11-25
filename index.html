@@ -5286,7 +5286,7 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
         <div class="result-card" style="margin-top: 20px;">
             <div class="form-group" id="containerSelectorOS">
                 <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
-                <select id="selectPuntoPartidaKML" onchange="actualizarMapaKML(this.value)">
+                <select id="selectPuntoPartidaKML" onchange="generarMapaKMLConPuntoPartida('${unidad}')">
                     <option value="">-- Seleccione una OS --</option>
                     ${osConCoordenadas.map(os => 
                         `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
@@ -7074,9 +7074,9 @@ async function cargarInterfazMapaRutas() {
             
             // Obtener osatomo de os_asignadas
             const { data: asignaciones, error: errorAsig } = await supabaseClient
-                .from('os_asignadas')
-                .select('osatomo, Unidad')
-                .eq('Unidad', unidadUsuario);
+    .from('os_asignadas')
+    .select('osatomo, Unidad')
+    .eq('Unidad', unidadUsuario);
             
             if (errorAsig) {
                 console.error('Error buscando OS:', errorAsig);
@@ -7412,37 +7412,54 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 // ========================================
 // 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
 // ========================================
+// ========================================
+// 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO Y OPTIMIZADO)
+// ========================================
 async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
     const searchGrid = document.getElementById('searchGrid');
     const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-    
-    // ✅ Filtrar OS de SU unidad
-    const osDeUnidad = osAsignadas.filter(os => os.Unidad === miUnidad);
-    
+
+    // ✅ 1. Normalizar y filtrar solo OS con coordenadas válidas
+    const osDeUnidad = osAsignadas
+        .map(os => ({
+            ...os,
+            // ✅ Normalización crítica: asegurar que "osatomo" exista
+            osatomo: os.osatomo || os.OSATMO || os.OSATOMO || '',
+            Tipologia: os.Tipologia || 'Sin tipología',
+            CoordenadasValidas: os.Coordenadas || os.Coordendasgis
+        }))
+        .filter(os => {
+            // ✅ Validar que tenga número de OS
+            if (!os.osatomo.trim()) return false;
+            // ✅ Validar que tenga coordenadas con formato válido
+            const c = os.CoordenadasValidas;
+            return c && typeof c === 'string' && c.trim().includes(',');
+        });
+
+    // ✅ 2. Mostrar mensaje si no hay OS válidas
     if (osDeUnidad.length === 0) {
         searchGrid.innerHTML = `
             <div class="result-card" style="background: #fff3cd;">
-                <div class="result-header">⚠️ Sin OS Asignadas</div>
-                <p style="text-align: center;">No tienes OS asignadas para ${miUnidad}</p>
+                <div class="result-header">⚠️ Sin OS Asignadas con coordenadas</div>
+                <p style="text-align: center;">No tienes OS asignadas con coordenadas válidas para ${miUnidad}</p>
             </div>`;
         return;
     }
-    
+
+    // ✅ 3. Generar HTML del selector
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e3f2fd;">
             <div class="result-header">🔍 Buscar OS Asignada - ${miUnidad}</div>
-            
             <div class="form-group">
                 <label>Selecciona tu OS:</label>
                 <select id="selectOSUnidad" style="width: 100%; padding: 12px;">
                     <option value="">-- Seleccione --</option>
                     ${osDeUnidad.map(os => 
-                        `${os.osatomo} - ${os.Tipologia || 'Sin tipología'}`
+                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
                     ).join('')}
                 </select>
                 <small style="color: #666;">${osDeUnidad.length} OS | Radio: ${filtros.radio_km} km</small>
             </div>
-            
             <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" onclick="buscarYMostrarMapaUnidad()">
                     🗺️ Mostrar Mapa
@@ -7450,6 +7467,8 @@ async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
             </div>
         </div>`;
 }
+
+
 
 // ========================================
 // 🔍 VERIFICAR TABLA os_asignadas
