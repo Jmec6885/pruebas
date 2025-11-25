@@ -5237,61 +5237,45 @@ function generarMapaAdminKMLRuta() {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA KML RUTA (Función ya corregida y lista)
+// 🗺️ GENERAR MAPA KML RUTA
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
-    // ❌ ELIMINAR ESTA LÍNEA (está duplicada):
-    // const osConCoordenadas = osDataRaw.map(os => ({...
-
     const resultsContainer = document.getElementById('searchResults');
     
-    // PASO CRÍTICO: NORMALIZAR Y FILTRAR DATOS AL PRINCIPIO
-    const osDataRaw = osAsignadas; 
+    // 1. OBTENER Y NORMALIZAR DATOS (¡Mover al inicio!)
+    const osDataRaw = osAsignadas;
 
-if (osConCoordenadas.length === 0) {
-    // Si no hay OS con coordenadas, muestra un mensaje de advertencia
-    document.getElementById('containerSelectorOS').innerHTML = `
-        <p style="color: #e53e3e; margin-top: 10px;">
-            ⚠️ No se encontraron OS Asignadas con coordenadas válidas para esta unidad.
-        </p>`;
-    return;
-}
-
-// Si hay datos, procede a generar el HTML:
-let htmlSelector = ` 
-    <div class="form-group">
-        <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
-        <select id="selectPuntoPartidaKML" ...>
-            <option value="">-- Seleccione una OS --</option>
-            ${osConCoordenadas.map(os => 
-                // ... mapeo de opciones
-            ).join('')} 
-        </select> 
-    </div>`;
-
-    // ✅ ESTA ES LA CORRECTA (dejar solo esta):
+    // 2. PROCESAR Y FILTRAR OS CON COORDENADAS
     const osConCoordenadas = osDataRaw
         .map(os => ({
             ...os, 
             osatomo: os.osatomo || os.OSATOMO || '',
             Tipologia: os.Tipologia || 'Sin tipología',
-            CoordenadasValidas: os.Coordenadas || os.Coordendasgis
+            // Normalizar la coordenada (usar Coordenadas o Coordendasgis)
+            CoordenadasValidas: os.Coordenadas || os.Coordendasgis 
         }))
+        // Filtrar solo las OS con coordenadas válidas y osatomo
         .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
         .filter(os => os.osatomo.trim() !== '');
         
-    // ... (Manejo de osConCoordenadas.length === 0)
-    
-    // Guardar datos globalmente (la lista ya está normalizada)
+    // 3. MANEJO DE CASO SIN DATOS (Ahora sí, osConCoordenadas existe)
+    if (osConCoordenadas.length === 0) {
+        document.getElementById('containerSelectorOS').innerHTML = `
+            <p style="color: #e53e3e; margin-top: 10px;">
+                ⚠️ No se encontraron OS Asignadas con coordenadas válidas para esta unidad.
+            </p>`;
+        return; // Detener la función si no hay datos.
+    }
+
+    // Guardar datos globalmente
     window.osKMLData = osConCoordenadas;
 
-    // ... (Generación de htmlSelector)
+    // 4. GENERACIÓN DEL HTML (Debe ir una sola vez)
     let htmlSelector = `
         <div class="result-card" ...>
-            ...
             <div class="form-group">
                 <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
-                <select id="selectPuntoPartidaKML" ...>
+                <select id="selectPuntoPartidaKML" onchange="actualizarMapaKML(this.value)">
                     <option value="">-- Seleccione una OS --</option>
                     ${osConCoordenadas.map(os => 
                         // Usa los campos normalizados
@@ -5299,12 +5283,10 @@ let htmlSelector = `
                     ).join('')}
                 </select>
             </div>
-            ...
-        </div>`;
-    
+            </div>`;
+        
     resultsContainer.innerHTML = htmlSelector;
 }
-
 
 /**
  * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
