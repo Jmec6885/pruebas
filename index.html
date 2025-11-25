@@ -5301,96 +5301,98 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 
 
 /**
- * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
+ * Calcula la distancia entre dos puntos geográficos usando la fórmula de Haversine.
+ * @param {number} lat1 - Latitud del punto 1.
+ * @param {number} lng1 - Longitud del punto 1.
+ * @param {number} lat2 - Latitud del punto 2.
+ * @param {number} lng2 - Longitud del punto 2.
+ * @returns {number} Distancia en kilómetros.
+ */
+function calcularDistancia(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; 
+}
+
+/**
+ * Algoritmo del Vecino Cercano (Nearest Neighbor) para optimizar la ruta y numerar los puntos.
  * @param {Array<Object>} osData - Lista completa de órdenes de servicio.
  * @param {string} osPartida - ID de la OS de partida.
- * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
+ * @returns {Array<Object>} - Lista de OS ordenadas y numeradas por cercanía consecutiva.
  */
 function optimizarRutaVecinoCercano(osData, osPartida) {
-    // 1. Consistencia del campo ID y encontrar el centro
-    const osCentro = osData.find(os => os.osatomo === osPartida);
+    const osCentro = osData.find(os => (os.osatomo || os.OSATMO) === osPartida);
     if (!osCentro) {
         console.error("Error optimizando: OS de partida no encontrada en los datos.");
         return [];
     }
 
-    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    
-    // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
-    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
-    
-    // 🛑 VERIFICACIÓN CRÍTICA: Si el punto de partida NO tiene coordenadas válidas, retornamos array vacío.
+    const coordsCentro = (osCentro.CoordenadasValidas || osCentro.Coordenadas || osCentro.Coordendasgis || '').replace(' ', ',');
+    const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+
     if (isNaN(latCentro) || isNaN(lngCentro)) {
-        console.error(`Error optimizando: La OS de partida (${osPartida}) tiene coordenadas no válidas: ${coordsCentro}`);
+        console.error(`Error optimizando: La OS de partida (${osPartida}) no tiene coordenadas válidas.`);
         return [];
     }
     
-    // Inicializar el punto de partida
-    let osCentroConDatos = {
-        ...osCentro,
-        lat: latCentro,
-        lng: lngCentro,
-        distancia: 0,
-        numeroOrden: 1,
-        distanciaAlPuntoInicial: 0, // El punto inicial está a 0km de sí mismo.
-        esRegulada: osCentro.Tipo_de_OS && (osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && !osCentro.Tipo_de_OS.toLowerCase().includes('no'))
-    };
-
-    // 3. Inicializar puntos no visitados
+    let rutaFinal = [];
     let puntosNoVisitados = osData
-        .filter(os => os.osatomo !== osPartida)
-        .map(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
-            const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
-            const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
-
-            // Calcular y almacenar la distancia al punto inicial
-            const distanciaAlInicial = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) 
-                ? calcularDistanciaKm(latCentro, lngCentro, lat, lng) 
-                : Infinity;
-
-            return { 
-                ...os, 
-                lat, 
-                lng, 
-                esRegulada,
-                distanciaAlPuntoInicial: distanciaAlInicial // Distancia que querías mostrar en el mapa
-            };
-        })
-        // Solo incluimos puntos con coordenadas válidas para la optimización.
-        .filter(os => os.distanciaAlPuntoInicial !== Infinity);
+        .filter(os => (os.osatomo || os.OSATMO) !== osPartida)
+        .filter(os => (os.CoordenadasValidas || os.Coordenadas || os.Coordendasgis));
         
-    let rutaFinal = [osCentroConDatos];
-    let puntoActual = osCentroConDatos;
+    let puntoActual = {
+        ...osCentro,
+        numeroOrden: 1, // Punto de partida es el 1
+        lat: latCentro,
+        lng: lngCentro
+    };
+    
+    rutaFinal.push(puntoActual);
     let orden = 2;
 
-    // Bucle del Vecino Más Cercano (Nearest Neighbor)
     while (puntosNoVisitados.length > 0) {
-        let vecinoMasCercano = null;
         let minDistancia = Infinity;
+        let vecinoMasCercano = null;
         let vecinoIndex = -1;
 
-        puntosNoVisitados.forEach((os, index) => {
-            const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
-            if (dist < minDistancia) {
-                minDistancia = dist;
-                vecinoMasCercano = os;
-                vecinoIndex = index;
+        for (let i = 0; i < puntosNoVisitados.length; i++) {
+            const os = puntosNoVisitados[i];
+            const coordStr = (os.CoordenadasValidas || os.Coordenadas || os.Coordendasgis || '').replace(' ', ',');
+            const [osLat, osLng] = coordStr.split(',').map(Number);
+            
+            if (isNaN(osLat) || isNaN(osLng)) continue;
+
+            const distancia = calcularDistancia(puntoActual.lat, puntoActual.lng, osLat, osLng);
+            
+            if (distancia < minDistancia) {
+                minDistancia = distancia;
+                vecinoMasCercano = {
+                    ...os,
+                    lat: osLat,
+                    lng: osLng,
+                    distancia: distancia
+                };
+                vecinoIndex = i;
             }
-        });
+        }
 
         if (vecinoMasCercano && minDistancia !== Infinity) {
             vecinoMasCercano.numeroOrden = orden++;
-            vecinoMasCercano.distancia = minDistancia;
             rutaFinal.push(vecinoMasCercano);
             puntoActual = vecinoMasCercano;
             puntosNoVisitados.splice(vecinoIndex, 1);
         } else {
-            break; 
+            break;
         }
     }
-    return rutaFinal;
+    
+    // Retornar la lista ordenada
+    return rutaFinal.map(({ lat, lng, ...rest }) => rest);
 }
 
 
@@ -6519,6 +6521,35 @@ async function cargarInterfazIPR() {
     // Cargar registros existentes
     cargarRegistrosIPR();
 }
+
+
+/**
+ * Genera un resumen HTML de la cantidad de OS por tipología.
+ * @param {Array} osList - La lista de OS a procesar.
+ */
+function generarResumenTipologias(osList) {
+    const resumen = {};
+    const osParaConteo = osList.filter(os => os.numeroOrden); // Solo contar los que están en la ruta
+    
+    osParaConteo.forEach(os => {
+        const tipologia = os.Tipologia || 'Sin Tipología';
+        resumen[tipologia] = (resumen[tipologia] || 0) + 1;
+    });
+
+    let htmlContent = '<div class="result-card" style="margin-top: 20px;">';
+    htmlContent += '<div class="result-header" style="background: linear-gradient(90deg, #3b54d3, #3ac99c); color: white; padding: 10px 20px; border-radius: 8px 8px 0 0;">🔍 Resumen de OS en la Ruta</div>';
+    htmlContent += '<ul style="list-style: none; padding: 10px; text-align: left; margin: 0;">';
+
+    for (const [tipologia, count] of Object.entries(resumen)) {
+        htmlContent += `<li style="padding: 5px 10px; border-bottom: 1px dotted #e1e5e9;">
+            <strong style="color: #007bff;">${tipologia}:</strong> ${count} órdenes
+        </li>`;
+    }
+
+    htmlContent += '</ul></div>';
+    return htmlContent;
+}
+
 
 
 	async function cargarInterfazAsignaciones() {
@@ -7821,36 +7852,38 @@ async function buscarYMostrarMapaUnidad() {
         return;
     }
 
-    // 🛑 1. OBTENER DATOS BASE DESDE LA GLOBAL
-    const osAsignadas = window.osMapaRutasData;
+    // 1. OBTENER DATOS BASE NORMALIZADOS
+    const osAsignadas = window.osMapaRutasData; 
 
     if (!osAsignadas || osAsignadas.length === 0) {
         resultsContainer.innerHTML = '<div class="result-card error-message">❌ No hay datos de OS asignadas cargados. Recargue la página.</div>';
         return;
     }
+    
+    // Normalizar el dataset: Consistencia de campos y Coordenadas Válidas
+    const osDataNormalizada = osAsignadas
+        .map(os => ({ 
+            ...os, 
+            osatomo: os.osatomo || os.OSATMO || '', 
+            Tipologia: os.Tipologia || 'Sin tipología', 
+            CoordenadasValidas: os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',') ? os.Coordenadas : os.Coordendasgis 
+        }))
+        .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.trim() !== '' && os.CoordenadasValidas.includes(','))
+        .filter(os => os.osatomo.trim() !== '');
 
-    // 2. ENCONTRAR OS CENTRAL DENTRO DE LA LISTA GLOBAL
-    const osCentralData = osAsignadas.find(os => 
-        (os.osatomo || os.OSATMO) == osPartida
-    );
+    // 2. ENCONTRAR OS CENTRAL 
+    const osCentralData = osDataNormalizada.find(os => os.osatomo === osPartida);
     
     if (!osCentralData) {
-        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Error: La OS de partida seleccionada no se encuentra entre tus órdenes asignadas.</div>';
+        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Error: La OS de partida seleccionada no se encuentra o no tiene coordenadas válidas.</div>';
         return;
     }
     
-    const coordenadaCentral = osCentralData.CoordenadasValidas || osCentralData.Coordenadas || osCentralData.Coordendasgis;
-
-    if (!coordenadaCentral) {
-         resultsContainer.innerHTML = '<div class="result-card error-message">❌ Error: La OS de partida seleccionada no tiene coordenadas válidas.</div>';
-         return;
-    }
-
-    let osParaMostrar = [...osAsignadas]; // Copia inicial de OS asignadas
+    // 3. OBTENER FILTRO GUARDADO (Radio y Tipologías)
+    let osParaMostrar = [...osDataNormalizada];
     let radio = 0;
     let tipologias = [];
     
-    // 3. OBTENER FILTRO GUARDADO
     const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
     const { data: filtroUnidad } = await supabaseClient
         .from('filtros_por_unidad')
@@ -7862,18 +7895,30 @@ async function buscarYMostrarMapaUnidad() {
         radio = filtroUnidad.radio_km || 0;
         tipologias = filtroUnidad.tipologias || [];
     }
-
-    // 4. LÓGICA DE BÚSQUEDA DE OS CERCANAS (SI APLICA)
+    
+    // 4. APLICAR FILTROS (Si existieran)
     if (radio > 0 && tipologias.length > 0) {
         console.log(`🔍 Buscando OS cercanas (radio: ${radio} km, tipologías: ${tipologias.join(', ')})`);
         
-        // ** (DEBE IR AQUÍ, si la implementa con PostGIS, recuerde usar lotes para la lógica de filtros, no para la DB) **
-        // Por ahora, 'osParaMostrar' solo contendrá las 9 OS asignadas, lo cual es correcto.
+        // Simulación de Filtro por Tipología (Aquí debería ir su lógica de filtro de proximidad)
+        osParaMostrar = osParaMostrar.filter(os => 
+            os.osatomo === osPartida || 
+            tipologias.includes(os.Tipologia)
+        );
     }
     
-    // 5. LLAMAR A LA FUNCIÓN DE DIBUJO
+    // 🛑 5. AJUSTE CRÍTICO: ORDENAR Y NUMERAR LA RUTA
+    if (osParaMostrar.length > 1) {
+        console.log(`✨ Aplicando optimización de ruta (Vecino Cercano) con partida: ${osPartida}`);
+        osParaMostrar = optimizarRutaVecinoCercano(osParaMostrar, osPartida);
+    } else if (osParaMostrar.length === 1) {
+        osParaMostrar[0].numeroOrden = 1; // Si solo queda el punto central, es el número 1
+    }
+    
+    // 6. LLAMAR A LA FUNCIÓN DE DIBUJO
     cargarYMostrarMapa(osCentralData, osParaMostrar); 
 }
+
 
 
 	async function buscarYMostrarMapaUnidad() {
@@ -7948,71 +7993,121 @@ async function buscarYMostrarMapaUnidad() {
 function cargarYMostrarMapa(osCentralData, osParaMostrar) {
     const resultsContainer = document.getElementById('searchResults');
     
-    if (!osParaMostrar || osParaMostrar.length === 0) {
+    // 🛑 CORRECCIÓN (Error Admin): CHEQUEO ROBUSTO DE ARRAY 
+    if (!Array.isArray(osParaMostrar)) {
+        if (osParaMostrar && typeof osParaMostrar === 'object') {
+            osParaMostrar = [osParaMostrar];
+        } else {
+            resultsContainer.innerHTML = '<div class="result-card error-message">❌ Error: La lista de Órdenes de Servicio es inválida.</div>';
+            return;
+        }
+    }
+    
+    if (osParaMostrar.length === 0) {
         resultsContainer.innerHTML = '<div class="result-card error-message">❌ No hay OS para dibujar en el mapa.</div>';
         return;
     }
 
-    // Obtener la coordenada de la OS de partida
+    // Preparar el contenedor del mapa
+    resultsContainer.innerHTML = '<div id="mapaRutas" style="height: 500px; margin-top: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>';
+
+    // Obtener coordenadas centrales
     const coordenadaCentralStr = osCentralData.CoordenadasValidas || osCentralData.Coordenadas || osCentralData.Coordendasgis;
-    
-    // Normalización de coordenadas
     const coordenadaLimpia = coordenadaCentralStr.replace(' ', ',');
     const [lat, lng] = coordenadaLimpia.split(',').map(Number);
+    const osCentralId = osCentralData.OSATMO || osCentralData.osatomo;
 
-    // 1. Inicializar Mapa (Si no existe)
-    if (!window.mapaRutas) {
-        // ⚠️ El div con id='mapaRutas' se crea más abajo.
-        // Si el mapa ya existe y queremos re-dibujarlo, es mejor centrar y limpiar.
-        // Pero para el primer dibujo, necesitamos asegurarnos de que el div exista.
-        
-        // Primero, creamos el div para que Leaflet lo use.
-        resultsContainer.innerHTML = '<div id="mapaRutas" style="height: 500px; margin-top: 15px; border-radius: 8px;"></div>';
-        
-        window.mapaRutas = L.map('mapaRutas').setView([lat, lng], 13);
+    // Inicializar Mapa (Leaflet)
+    if (!window.mapaRutasInstance) {
+        window.mapaRutasInstance = L.map('mapaRutas').setView([lat, lng], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-        }).addTo(window.mapaRutas);
+        }).addTo(window.mapaRutasInstance);
     } else {
-        // Si ya existe, solo limpiar y centrar
         if (window.markerLayer) {
-            window.mapaRutas.removeLayer(window.markerLayer);
+            window.mapaRutasInstance.removeLayer(window.markerLayer);
         }
-        window.mapaRutas.setView([lat, lng], 13);
+        window.mapaRutasInstance.setView([lat, lng], 13);
     }
     
-    window.markerLayer = L.layerGroup().addTo(window.mapaRutas);
+    window.markerLayer = L.layerGroup().addTo(window.mapaRutasInstance);
+    
+    const puntosRuta = [];
+    
+    // DIBUJAR MARCADORES NUMERADOS Y RECORRIDO
+    osParaMostrar
+        .sort((a, b) => (a.numeroOrden || Infinity) - (b.numeroOrden || Infinity)) // Asegura que se dibujen en orden
+        .forEach(os => {
+            const coordStr = os.CoordenadasValidas || os.Coordenadas || os.Coordendasgis;
+            if (!coordStr) return;
+            
+            const [osLat, osLng] = coordStr.replace(' ', ',').split(',').map(Number);
+            
+            if (osLat && osLng) {
+                const osId = os.OSATMO || os.osatomo;
+                const isCentral = osId == osCentralId;
+                const numero = os.numeroOrden || '•';
 
-    // 3. DIBUJAR MARCADORES
-    osParaMostrar.forEach(os => {
-        const coordStr = os.CoordenadasValidas || os.Coordenadas || os.Coordendasgis;
-        if (!coordStr) return;
-        
-        const [osLat, osLng] = coordStr.replace(' ', ',').split(',').map(Number);
-        
-        if (osLat && osLng) {
-            const osId = os.OSATMO || os.osatomo;
-            const osCentralId = osCentralData.OSATMO || osCentralData.osatomo;
-            const isCentral = osId == osCentralId;
+                // Marcador personalizado con NUMERACIÓN
+                const icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `
+                        <div style="
+                            background-color: ${isCentral ? '#dc3545' : '#3b54d3'}; 
+                            color: white; 
+                            border-radius: 50%;
+                            width: 25px; 
+                            height: 25px; 
+                            text-align: center; 
+                            line-height: 25px; 
+                            font-weight: bold;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                        ">${numero}</div>
+                    `,
+                    iconSize: [25, 25],
+                    iconAnchor: [12.5, 12.5]
+                });
 
-            // Diferenciar el marcador central
-            const icon = L.divIcon({
-                className: isCentral ? 'custom-div-icon-central' : 'custom-div-icon',
-                html: `<div style="background-color: ${isCentral ? 'red' : 'blue'}; width: 15px; height: 15px; border-radius: 50%;"></div>`,
-                iconSize: [15, 15],
-                iconAnchor: [7.5, 7.5]
-            });
+                // POPUP CON MÁS DETALLE (Soluciona el problema de detalle para Consulta)
+                const popupContent = `
+                    <div style="font-size: 14px; line-height: 1.5; font-family: sans-serif;">
+                        <h4 style="margin: 0; padding-bottom: 5px; border-bottom: 1px solid #eee;">
+                            ${isCentral ? '📍 Punto de Partida (1)' : `Punto ${numero}`}
+                        </h4>
+                        <b>OS:</b> <span style="font-weight: 600; color: #3b54d3;">${osId}</span><br>
+                        <b>Unidad:</b> ${os.Unidad || 'N/A'}<br>
+                        <b>Tipo:</b> ${os.Tipologia || 'N/A'}<br>
+                        <b>Estado:</b> <span style="font-weight: bold; color: ${os.Estado_ATOMO === 'ASIGNADA' ? 'green' : '#ffc107'};">${os.Estado_ATOMO || 'N/A'}</span>
+                    </div>
+                `;
 
-            const popupContent = `<b>OS:</b> ${osId}<br><b>Tipo:</b> ${os.Tipologia}`;
-            L.marker([osLat, osLng], { icon: icon })
-                .bindPopup(popupContent)
-                .addTo(window.markerLayer);
-        }
-    });
+                L.marker([osLat, osLng], { icon: icon })
+                    .bindPopup(popupContent)
+                    .addTo(window.markerLayer);
+                
+                // Guardar puntos para dibujar la línea
+                if (os.numeroOrden) { // Solo añadir puntos que fueron ordenados
+                    puntosRuta.push([osLat, osLng]);
+                }
+            }
+        });
 
-    // ⚠️ Necesario para que Leaflet calcule bien el tamaño del mapa
-    window.mapaRutas.invalidateSize(); 
+    // Dibujar la línea de la ruta
+    if (puntosRuta.length > 1) {
+        const polyline = L.polyline(puntosRuta, {color: '#3ac99c', weight: 4, opacity: 0.7}).addTo(window.markerLayer);
+        // Ajustar el mapa para que se vean todos los puntos
+        window.mapaRutasInstance.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+    }
+
+    window.mapaRutasInstance.invalidateSize(); 
+
+    // MOSTRAR RESUMEN DE TIPOLOGÍAS
+    const resumenHTML = generarResumenTipologias(osParaMostrar);
+    resultsContainer.innerHTML += resumenHTML;
 }
+
+
 
 // ========================================
 // ✅ VALIDAR FORMATO DE COORDENADAS
