@@ -763,36 +763,41 @@ const CONFIG_VISIBILIDAD = {
 // 🛡️ CONTROL DE VISIBILIDAD DE MENÚ POR ROL
 // ========================================
 function controlarVisibilidadMenu() {
+    // Asegúrate de que currentUser ya está cargado
     const rol = currentUser ? currentUser.rol : null;
+    
+    // Si no hay rol (ej: antes del login), no hacemos nada
+    if (!rol) {
+        return; 
+    }
 
-    // 1. Ocultar Detalle OS (Solo Admin y Supervisor)
+    // 1. Detalle OS (Solo Admin y Supervisor)
     const detalleOS = document.getElementById('opcionDetalleOS');
     if (detalleOS) {
-        [cite_start]// Roles permitidos: Administrador, Supervisor [cite: 2988]
         if (rol !== 'Administrador' && rol !== 'Supervisor') {
-            detalleOS.classList.add('hidden'); [cite_start]// hidden está definido en tu CSS [cite: 3624]
+            detalleOS.style.display = 'none'; // Ocultar
         } else {
-            detalleOS.classList.remove('hidden');
+            detalleOS.style.display = 'block'; // Mostrar
         }
     }
 
-    // 2. Ocultar Cargar Asignaciones (Solo Admin)
+    // 2. Cargar Asignaciones (Solo Admin)
     const cargarAsignaciones = document.getElementById('opcionCargarAsignaciones');
     if (cargarAsignaciones) {
-        // Rol permitido: Administrador
         if (rol !== 'Administrador') {
-            cargarAsignaciones.classList.add('hidden');
+            cargarAsignaciones.style.display = 'none'; // Ocultar
         } else {
-            cargarAsignaciones.classList.remove('hidden');
+            cargarAsignaciones.style.display = 'block'; // Mostrar
         }
     }
 }
 
-// Asegúrate de llamar a esta función en tu lógica de login exitoso:
-// function mostrarInterfazPrincipal() {
-//     // ... código existente ...
-//     controlarVisibilidadMenu(); // <-- Llamar aquí
-// }
+// 📌 RECUERDA: Debes llamar a esta función en la función que se ejecuta al iniciar sesión con éxito, por ejemplo:
+/*
+function mostrarInterfazPrincipal() {
+    // ... Código para mostrar la interfaz ...
+    controlarVisibilidadMenu(); // <--- ¡Asegúrate de que esto se ejecuta!
+}
 
 
 // ========================================
@@ -5241,8 +5246,16 @@ function generarMapaAdminKMLRuta() {
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
+    const selectorContainer = document.getElementById('containerSelectorOS'); // 🎯 Nuevo: Capturar el contenedor selector
     
-    // 1. OBTENER Y NORMALIZAR DATOS (¡Mover al inicio!)
+    // 🛑 CORRECCIÓN: Verificar que los contenedores existen
+    if (!resultsContainer) {
+        console.error('Error KML Ruta: El contenedor "searchResults" no existe.');
+        return; 
+    }
+    // NOTA: 'containerSelectorOS' es usado más abajo y se verifica implícitamente
+
+    // 1. OBTENER Y NORMALIZAR DATOS
     const osDataRaw = osAsignadas;
 
     // 2. PROCESAR Y FILTRAR OS CON COORDENADAS
@@ -5251,29 +5264,33 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
             ...os, 
             osatomo: os.osatomo || os.OSATOMO || '',
             Tipologia: os.Tipologia || 'Sin tipología',
-            // Normalizar la coordenada (usar Coordenadas o Coordendasgis)
             CoordenadasValidas: os.Coordenadas || os.Coordendasgis 
         }))
         // Filtrar solo las OS con coordenadas válidas y osatomo
         .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
         .filter(os => os.osatomo.trim() !== '');
         
-    // 3. MANEJO DE CASO SIN DATOS (Ahora sí, osConCoordenadas existe)
+    // 3. MANEJO DE CASO SIN DATOS
     if (osConCoordenadas.length === 0) {
-        document.getElementById('containerSelectorOS').innerHTML = `
-            <p style="color: #e53e3e; margin-top: 10px;">
-                ⚠️ No se encontraron OS Asignadas con coordenadas válidas para esta unidad.
-            </p>`;
-        return; // Detener la función si no hay datos.
+        // Usamos selectorContainer aquí, por lo que lo verificamos:
+        if (selectorContainer) { 
+             selectorContainer.innerHTML = `
+                <p style="color: #e53e3e; margin-top: 10px;">
+                    ⚠️ No se encontraron OS Asignadas con coordenadas válidas para esta unidad.
+                </p>`;
+        } else {
+             resultsContainer.innerHTML = `<p style="color: #e53e3e; margin-top: 10px;">⚠️ No se encontraron OS Asignadas con coordenadas válidas.</p>`;
+        }
+        return; 
     }
 
     // Guardar datos globalmente
     window.osKMLData = osConCoordenadas;
 
-    // 4. GENERACIÓN DEL HTML (Debe ir una sola vez)
+    // 4. GENERACIÓN DEL HTML
     let htmlSelector = `
-        <div class="result-card" ...>
-            <div class="form-group">
+        <div class="result-card" style="margin-top: 20px;">
+            <div class="form-group" id="containerSelectorOS">
                 <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
                 <select id="selectPuntoPartidaKML" onchange="actualizarMapaKML(this.value)">
                     <option value="">-- Seleccione una OS --</option>
@@ -5283,7 +5300,8 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                     ).join('')}
                 </select>
             </div>
-            </div>`;
+            <div id="mapaKML" style="height: 500px; margin-top: 15px; border-radius: 8px;"></div>
+        </div>`;
         
     resultsContainer.innerHTML = htmlSelector;
 }
@@ -6966,6 +6984,12 @@ async function cargarInterfazMapaRutas() {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
     
+    // Verificación de seguridad para evitar errores 'Cannot set properties of null'
+    if (!searchGrid || !resultsContainer) {
+        console.error('Error Mapa Rutas: Contenedores HTML (searchGrid/searchResults) no encontrados.');
+        return;
+    }
+
     searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     resultsContainer.innerHTML = '';
     
@@ -6989,65 +7013,63 @@ async function cargarInterfazMapaRutas() {
             return;
         }
 
-        
-        // 🆕 CARGAR UNIDADES DESDE os_asignadas (CORREGIDO)
-console.log('🔍 Cargando unidades desde os_asignadas...');
+        // 🆕 CARGAR UNIDADES DESDE os_asignadas
+        console.log('🔍 Cargando unidades desde os_asignadas...');
 
-const unidadesUnicas = [];
-let offset = 0;
-const BATCH_SIZE = 1000;
+        const unidadesUnicas = [];
+        let offset = 0;
+        const BATCH_SIZE = 1000;
 
-while (true) {
-    // ✅ CORRECCIÓN: Usar el nombre correcto de la columna
-    const { data, error } = await supabaseClient
-        .from('os_asignadas')
-        .select('Unidad')  // Solo traer la columna Unidad
-        .range(offset, offset + BATCH_SIZE - 1);
-    
-    if (error) {
-        console.error('❌ Error cargando unidades:', error);
-        
-        searchGrid.innerHTML = `
-            <div class="result-card" style="background: #ffebee;">
-                <div class="result-header">❌ Error</div>
-                <p style="text-align: center; color: #666;">
-                    Error: ${error.message}<br>
-                    <strong>Código:</strong> ${error.code || 'N/A'}
-                </p>
-                <button class="btn" onclick="cargarInterfazMapaRutas()">
-                    🔄 Reintentar
-                </button>
-            </div>`;
-        return;
-    }
-    
-    if (!data || data.length === 0) break;
-    
-    // Agregar unidades únicas
-    data.forEach(row => {
-        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
-            unidadesUnicas.push(row.Unidad);
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('os_asignadas')
+                .select('Unidad')
+                .range(offset, offset + BATCH_SIZE - 1);
+            
+            if (error) {
+                console.error('❌ Error cargando unidades:', error);
+                
+                searchGrid.innerHTML = `
+                    <div class="result-card" style="background: #ffebee;">
+                        <div class="result-header">❌ Error</div>
+                        <p style="text-align: center; color: #666;">
+                            Error: ${error.message}<br>
+                            <strong>Código:</strong> ${error.code || 'N/A'}
+                        </p>
+                        <button class="btn" onclick="cargarInterfazMapaRutas()">
+                            🔄 Reintentar
+                        </button>
+                    </div>`;
+                return;
+            }
+            
+            if (!data || data.length === 0) break;
+            
+            // Agregar unidades únicas
+            data.forEach(row => {
+                if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+                    unidadesUnicas.push(row.Unidad);
+                }
+            });
+            
+            if (data.length < BATCH_SIZE) break;
+            offset += BATCH_SIZE;
         }
-    });
-    
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-}
 
-unidadesUnicas.sort();
-console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
+        unidadesUnicas.sort();
+        console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
 
-if (unidadesUnicas.length === 0) {
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #fff3cd;">
-            <div class="result-header">⚠️ Sin unidades</div>
-            <p style="text-align: center;">
-                No hay unidades en os_asignadas.<br>
-                <strong>Acción:</strong> Carga el archivo de asignaciones primero.
-            </p>
-        </div>`;
-    return;
-}
+        if (unidadesUnicas.length === 0) {
+            searchGrid.innerHTML = `
+                <div class="result-card" style="background: #fff3cd;">
+                    <div class="result-header">⚠️ Sin unidades</div>
+                    <p style="text-align: center;">
+                        No hay unidades en os_asignadas.<br>
+                        <strong>Acción:</strong> Carga el archivo de asignaciones primero.
+                    </p>
+                </div>`;
+            return;
+        }
         
         // 4️⃣ CARGAR OS ASIGNADAS (si NO es Admin)
         let osAsignadas = [];
@@ -7067,25 +7089,27 @@ if (unidadesUnicas.length === 0) {
             }
             
             if (asignaciones && asignaciones.length > 0) {
-                const osNumeros = asignaciones.map(a => a.OSATOMO);
+                const osNumeros = asignaciones.map(a => a.osatomo);
                 
-                // ✅ Buscar OS Pendientes en lotes de 100 (máximo permitido por Supabase)
-const osCompletas = [];
-const BATCH_SIZE = 1000;
-for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
-    const batch = osNumeros.slice(i, i + BATCH_SIZE);
-    const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
-        .in('OSATMO', batch); // ← ✅ OSATMO, NO OSATOMO
+                // ✅ Buscar OS Pendientes en lotes
+                const osCompletas = [];
+                const BATCH_SIZE = 1000;
+                for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
+                    const batch = osNumeros.slice(i, i + BATCH_SIZE);
+                    const { data, error } = await supabaseClient
+                        .from('OS Pendientes')
+                        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
+                        .in('OSATMO', batch); 
 
-    if (error) {
-        console.error('Error en batch de OS Pendientes:', error);
-        continue;
-    }
-    if (data) osCompletas.push(...data);
-}                
-                if (!errorOS && osCompletas) {
+                    if (error) {
+                        console.error('Error en batch de OS Pendientes:', error);
+                        continue;
+                    }
+                    if (data) osCompletas.push(...data);
+                }
+                
+                // ⚠️ Se eliminó la referencia a 'errorOS' que no existía. 
+                if (osCompletas) {
                     osAsignadas = osCompletas;
                     console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
                 }
@@ -7099,14 +7123,13 @@ for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
             generarInterfazUnidadMapaRutas(filtros, osAsignadas);
         }
         
-    } catch (err) {
-       console.error('Error cargando Mapa de Rutas:', error);
-    // Cambiar la referencia a la variable 'error'
-    resultsContainer.innerHTML = `<div class="result-card">❌ Error de conexión: ${error.message}</div>`; 
-    return;
-   }
+    } catch (err) { // 🛑 CORRECCIÓN CLAVE: Usar 'err'
+       console.error('Error cargando Mapa de Rutas:', err); // Usar 'err'
+       // Usar 'err' para obtener el mensaje de error
+       resultsContainer.innerHTML = `<div class="result-card">❌ Error de conexión: ${err.message}</div>`; 
+       return;
+    }
 }
-
 
 
 
