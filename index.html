@@ -7811,7 +7811,6 @@ async function buscarYMostrarMapaAdmin() {
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
 // ========================================
 async function buscarYMostrarMapaUnidad() {
-    // Usamos 'selectOSUnidad' según su código original
     const osPartida = document.getElementById('selectOSUnidad').value; 
     const resultsContainer = document.getElementById('searchResults');
     
@@ -7822,23 +7821,21 @@ async function buscarYMostrarMapaUnidad() {
         return;
     }
 
-    // 🛑 1. OBTENER DATOS BASE DESDE LA GLOBAL (OS ASIGNADAS)
+    // 🛑 1. OBTENER DATOS BASE DESDE LA GLOBAL
     const osAsignadas = window.osMapaRutasData;
 
     if (!osAsignadas || osAsignadas.length === 0) {
-        // Esta validación actúa como un fallback, pero no debería activarse si cargarInterfazMapaRutas funcionó.
         resultsContainer.innerHTML = '<div class="result-card error-message">❌ No hay datos de OS asignadas cargados. Recargue la página.</div>';
-        console.error('Error en buscarYMostrarMapaUnidad: osAsignadas no contiene datos.');
         return;
     }
 
-    // 2. ENCONTRAR OS CENTRAL y COORDENADA
+    // 2. ENCONTRAR OS CENTRAL DENTRO DE LA LISTA GLOBAL
     const osCentralData = osAsignadas.find(os => 
         (os.osatomo || os.OSATMO) == osPartida
     );
     
     if (!osCentralData) {
-        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Error: La OS de partida seleccionada no se encuentra en los datos asignados.</div>';
+        resultsContainer.innerHTML = '<div class="result-card error-message">⚠️ Error: La OS de partida seleccionada no se encuentra entre tus órdenes asignadas.</div>';
         return;
     }
     
@@ -7849,11 +7846,11 @@ async function buscarYMostrarMapaUnidad() {
          return;
     }
 
-    let osParaMostrar = [...osAsignadas]; // Copia de OS asignadas. Contiene las 9 OS.
+    let osParaMostrar = [...osAsignadas]; // Copia inicial de OS asignadas
     let radio = 0;
     let tipologias = [];
     
-    // 3. OBTENER FILTRO GUARDADO (Lógica correcta)
+    // 3. OBTENER FILTRO GUARDADO
     const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
     const { data: filtroUnidad } = await supabaseClient
         .from('filtros_por_unidad')
@@ -7866,17 +7863,17 @@ async function buscarYMostrarMapaUnidad() {
         tipologias = filtroUnidad.tipologias || [];
     }
 
-    // 4. LÓGICA DE BÚSQUEDA DE OS CERCANAS (si aplica)
+    // 4. LÓGICA DE BÚSQUEDA DE OS CERCANAS (SI APLICA)
     if (radio > 0 && tipologias.length > 0) {
         console.log(`🔍 Buscando OS cercanas (radio: ${radio} km, tipologías: ${tipologias.join(', ')})`);
         
-        // Aquí iría el código de búsqueda de OS cercanas que añade a osParaMostrar.
+        // ** (DEBE IR AQUÍ, si la implementa con PostGIS, recuerde usar lotes para la lógica de filtros, no para la DB) **
+        // Por ahora, 'osParaMostrar' solo contendrá las 9 OS asignadas, lo cual es correcto.
     }
     
-    // 5. LLAMAR A LA FUNCIÓN DE DIBUJO CON LA LISTA FINAL DE OS
+    // 5. LLAMAR A LA FUNCIÓN DE DIBUJO
     cargarYMostrarMapa(osCentralData, osParaMostrar); 
 }
-
 
 
 	async function buscarYMostrarMapaUnidad() {
@@ -7947,7 +7944,75 @@ async function buscarYMostrarMapaUnidad() {
     cargarYMostrarMapa(osCentralData, osParaMostrar); 
 }
 
+// 🛑 Asegúrese de que esta función NO sea 'async'
+function cargarYMostrarMapa(osCentralData, osParaMostrar) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (!osParaMostrar || osParaMostrar.length === 0) {
+        resultsContainer.innerHTML = '<div class="result-card error-message">❌ No hay OS para dibujar en el mapa.</div>';
+        return;
+    }
 
+    // Obtener la coordenada de la OS de partida
+    const coordenadaCentralStr = osCentralData.CoordenadasValidas || osCentralData.Coordenadas || osCentralData.Coordendasgis;
+    
+    // Normalización de coordenadas
+    const coordenadaLimpia = coordenadaCentralStr.replace(' ', ',');
+    const [lat, lng] = coordenadaLimpia.split(',').map(Number);
+
+    // 1. Inicializar Mapa (Si no existe)
+    if (!window.mapaRutas) {
+        // ⚠️ El div con id='mapaRutas' se crea más abajo.
+        // Si el mapa ya existe y queremos re-dibujarlo, es mejor centrar y limpiar.
+        // Pero para el primer dibujo, necesitamos asegurarnos de que el div exista.
+        
+        // Primero, creamos el div para que Leaflet lo use.
+        resultsContainer.innerHTML = '<div id="mapaRutas" style="height: 500px; margin-top: 15px; border-radius: 8px;"></div>';
+        
+        window.mapaRutas = L.map('mapaRutas').setView([lat, lng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(window.mapaRutas);
+    } else {
+        // Si ya existe, solo limpiar y centrar
+        if (window.markerLayer) {
+            window.mapaRutas.removeLayer(window.markerLayer);
+        }
+        window.mapaRutas.setView([lat, lng], 13);
+    }
+    
+    window.markerLayer = L.layerGroup().addTo(window.mapaRutas);
+
+    // 3. DIBUJAR MARCADORES
+    osParaMostrar.forEach(os => {
+        const coordStr = os.CoordenadasValidas || os.Coordenadas || os.Coordendasgis;
+        if (!coordStr) return;
+        
+        const [osLat, osLng] = coordStr.replace(' ', ',').split(',').map(Number);
+        
+        if (osLat && osLng) {
+            const osId = os.OSATMO || os.osatomo;
+            const osCentralId = osCentralData.OSATMO || osCentralData.osatomo;
+            const isCentral = osId == osCentralId;
+
+            // Diferenciar el marcador central
+            const icon = L.divIcon({
+                className: isCentral ? 'custom-div-icon-central' : 'custom-div-icon',
+                html: `<div style="background-color: ${isCentral ? 'red' : 'blue'}; width: 15px; height: 15px; border-radius: 50%;"></div>`,
+                iconSize: [15, 15],
+                iconAnchor: [7.5, 7.5]
+            });
+
+            const popupContent = `<b>OS:</b> ${osId}<br><b>Tipo:</b> ${os.Tipologia}`;
+            L.marker([osLat, osLng], { icon: icon })
+                .bindPopup(popupContent)
+                .addTo(window.markerLayer);
+        }
+    });
+
+    // ⚠️ Necesario para que Leaflet calcule bien el tamaño del mapa
+    window.mapaRutas.invalidateSize(); 
+}
 
 // ========================================
 // ✅ VALIDAR FORMATO DE COORDENADAS
