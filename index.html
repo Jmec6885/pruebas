@@ -2231,133 +2231,117 @@ function mostrarTablasSegunRol() {
         console.log('❌ currentUser no está disponible');
         return;
     }
-    
+
     console.log('🔍 Filtrando tablas para rol:', currentUser.rol);
     const tableOptions = document.querySelectorAll('.table-option');
-    
-    // 🎯 ADMINISTRADOR: Ve TODO incluyendo usuarios
-    if (currentUser.rol === 'Administrador') {
-        tableOptions.forEach(option => {
-            option.style.display = 'block';
-        });
+    const rol = currentUser.rol;
+
+    //---------------------------------------------
+    //  🎯 ADMINISTRADOR - VE TODO
+    //---------------------------------------------
+    if (rol === 'Administrador') {
+        tableOptions.forEach(opt => opt.style.display = 'block');
         console.log('✅ Administrador: Todas las tablas visibles');
         return;
     }
-    
-    // 🎯 SUPERVISOR: Ve TODO EXCEPTO usuarios
-    if (currentUser.rol === 'Supervisor') {
+
+    //---------------------------------------------
+    //  🎯 SUPERVISOR - TODO EXCEPTO usuarios
+    //---------------------------------------------
+    if (rol === 'Supervisor') {
         tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
+            const action = option.getAttribute('onclick') || '';
+            option.style.display = action.includes('usuarios') ? 'none' : 'block';
         });
-        console.log('✅ Supervisor: Todas menos usuarios');
-        return;
-    }
-    
-    // 🆕 DESPACHO: TODO excepto usuarios e IPR, CON ACCESO A NOMBRE CLIENTE
-    if (currentUser.rol === 'Despacho') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios') && !onclick.includes('retiro_medidores')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        console.log('✅ Despacho: Todo excepto usuarios e IPR');
-        return;
-    }
-    
-    // 🆕 BODEGA: Solo IPR + OS Cerradas
-    if (currentUser.rol === 'Bodega') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && (onclick.includes('retiro_medidores') || onclick.includes('OSCerradas'))) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        console.log('✅ Bodega: IPR + OS Cerradas');
-        return;
-    }
-    
-    // 🎯 LECTURA: Solo consultas_servicios
-    if (currentUser.rol === 'Lectura') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && onclick.includes('consultas_servicios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        console.log('✅ Lectura: Solo consultas_servicios');
-        return;
-    }
-    
-    // 🎯 ATTF y PODA: consultas_servicios + TX y Cortes + IPR
-    if (currentUser.rol === 'ATTF' || currentUser.rol === 'Poda') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && (onclick.includes('consultas_servicios') || 
-                           onclick.includes('TX y Cortes') || 
-                           onclick.includes('retiro_medidores'))) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        console.log('✅ ATTF/Poda: consultas_servicios + TX y Cortes + IPR');
-        return;
-    }
-    
-    // 🎯 CONTRATISTA y CONSULTA: Todo excepto usuarios + IPR
-    if (currentUser.rol === 'Contratista' || currentUser.rol === 'Consulta') {
-        tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && !onclick.includes('usuarios')) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        console.log('✅ Contratista/Consulta: Todo excepto usuarios');
         return;
     }
 
-    // 🗺️ MAPA DE RUTAS: Solo Contratista, Administrador, Consulta, Despacho
-    if (currentUser.rol === 'Contratista' || 
-        currentUser.rol === 'Administrador' || 
-        currentUser.rol === 'Consulta' ||
-        currentUser.rol === 'Despacho') {
-        
+    //---------------------------------------------
+    //  🎯 DESPACHO - TODO EXCEPTO usuarios e IPR
+    //---------------------------------------------
+    if (rol === 'Despacho') {
         tableOptions.forEach(option => {
-            const onclick = option.getAttribute('onclick');
-            if (onclick && onclick.includes('mapa_rutas')) {
-                option.style.display = 'block';
-            }
+            const action = option.getAttribute('onclick') || '';
+            option.style.display =
+                (!action.includes('usuarios') && !action.includes('retiro_medidores'))
+                ? 'block'
+                : 'none';
         });
-        
-        console.log('✅ Mapa de Rutas habilitado para:', currentUser.rol);
+        return;
     }
-    
-    // 🎯 DEFAULT: Todo excepto usuarios
+
+    //---------------------------------------------
+    //  🎯 BODEGA - SOLO IPR + OS CERRADAS
+    //---------------------------------------------
+    if (rol === 'Bodega') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
+            option.style.display =
+                (action.includes('retiro_medidores') || action.includes('OSCerradas'))
+                ? 'block'
+                : 'none';
+        });
+        return;
+    }
+
+    //---------------------------------------------
+    //  🎯 LECTURA - SOLO consultas_servicios
+    //---------------------------------------------
+    if (rol === 'Lectura') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
+            option.style.display = action.includes('consultas_servicios') ? 'block' : 'none';
+        });
+        return;
+    }
+
+    //---------------------------------------------
+    //  🎯 ATTF / PODA - servicios + TX y Cortes + IPR
+    //---------------------------------------------
+    if (rol === 'ATTF' || rol === 'Poda') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
+            option.style.display =
+                (action.includes('consultas_servicios') ||
+                 action.includes('TX y Cortes') ||
+                 action.includes('retiro_medidores'))
+                ? 'block'
+                : 'none';
+        });
+        return;
+    }
+
+    //---------------------------------------------
+    //  🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO:
+    //     ❌ usuarios
+    //     ❌ Detalle OS
+    //     ❌ Cargar Asignaciones
+    //     ✔ IPR (lo deben ver)
+    //---------------------------------------------
+    if (rol === 'Contratista' || rol === 'Consulta') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
+
+            const prohibido =
+                action.includes('usuarios') ||
+                action.includes('detalleOS') ||
+                action.includes('cargarAsignaciones');
+
+            option.style.display = prohibido ? 'none' : 'block';
+        });
+
+        console.log('🔒 Ocultado: usuarios, Detalle OS, Cargar Asignaciones');
+        return;
+    }
+
+    //---------------------------------------------
+    //  🎯 DEFAULT - TODO EXCEPTO usuarios
+    //---------------------------------------------
     tableOptions.forEach(option => {
-        const onclick = option.getAttribute('onclick');
-        if (onclick && !onclick.includes('usuarios')) {
-            option.style.display = 'block';
-        } else {
-            option.style.display = 'none';
-        }
+        const action = option.getAttribute('onclick') || '';
+        option.style.display = action.includes('usuarios') ? 'none' : 'block';
     });
 }
-
-
 
 
 async function desbloquearUsuario(username) {
@@ -4461,111 +4445,126 @@ function transformarUsuarioAUnidad(usuario) {
 	// ========================================
 // 📍 CARGAR INTERFAZ KML RUTA (CON MAPA)
 // ========================================
+// ==============================
+// 📍 CARGAR INTERFAZ KML RUTA (CORREGIDA)
+// ==============================
 async function cargarInterfazKMLRuta() {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
-    
+
     searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     resultsContainer.innerHTML = '';
-    
+
     try {
-        // ✅ CARGAR UNIDADES DESDE os_asignadas
         console.log('🔍 Intentando cargar desde os_asignadas...');
 
         const { data: asignaciones, error: errorAsignadas } = await supabaseClient
             .from('os_asignadas')
             .select('osatomo, Unidad, Estado');
 
-        // ... (Manejo de errores si errorAsignadas) ...
         if (errorAsignadas) {
             console.error('❌ Error cargando os_asignadas:', errorAsignadas);
-            // ... (Código para mostrar el error en searchGrid) ...
+            searchGrid.innerHTML = `<div class="result-card">❌ Error cargando asignaciones</div>`;
             return;
         }
 
-        console.log(`✅ ${asignaciones?.length || 0} asignaciones cargadas`);
-
-        // ... (Manejo si no hay asignaciones) ...
         if (!asignaciones || asignaciones.length === 0) {
-            // ... (Código para mostrar mensaje sin asignaciones en searchGrid) ...
+            searchGrid.innerHTML = `<div class="result-card">⚠️ No hay asignaciones de OS</div>`;
             return;
         }
 
+        // Normalizar lista de OSATOMO (strings)
+        const osNumeros = asignaciones
+            .map(a => (a.osatomo || '').toString().trim())
+            .filter(x => x.length > 0);
 
-        // Obtener OSATOMO únicos (Se mantiene)
-        const osNumeros = asignaciones.map(a => a.osatomo);
-
-        // Buscar datos completos en OS Pendientes (por lotes)
+        // -------------------------------------------
+        //   CARGAR DATOS COMPLETOS POR LOTES (CHUNKS de 100)
+        // -------------------------------------------
         const osCompletas = [];
-        const BATCH_SIZE = 500;
+        const CHUNK_SIZE = 100;
 
-        for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
-            const batch = osNumeros.slice(i, i + BATCH_SIZE);
-            
+        function chunkArray(arr, size) {
+            const out = [];
+            for (let i = 0; i < arr.length; i += size) {
+                out.push(arr.slice(i, i + size));
+            }
+            return out;
+        }
+
+        const grupos = chunkArray(osNumeros, CHUNK_SIZE);
+
+        for (const grupo of grupos) {
             const { data, error } = await supabaseClient
                 .from('OS Pendientes')
                 .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-                .in('OSATMO', batch.slice(0, 100)); // ✅ Máximo 100 por consulta
+                .in('OSATMO', grupo);
 
-            // Si hay más de 100, procesar en sub-lotes
-            for (let j = 100; j < batch.length; j += 100) {
-                const subBatch = batch.slice(j, j + 100);
-                const { data: subData } = await supabaseClient
-                    .from('OS Pendientes')
-                    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-                    .in('OSATMO', subBatch);
-                
-                if (subData) osCompletas.push(...subData);
-            }   
-            if (!error && data) {
+            if (error) {
+                console.error('Error en batch de OS Pendientes:', error);
+                // continuar con el siguiente grupo (no abortar todo)
+                continue;
+            }
+            if (data && data.length) {
+                // usar spread para aplanar correctamente
                 osCompletas.push(...data);
             }
         }
 
-        const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u => u).sort();
+        // Unidades únicas presentes en os_asignadas (filtradas)
+        const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
 
-        // ---------------------------------------------------------------------------------
-        // 🛠️ COMIENZO DEL BLOQUE DE FILTRADO POR ROL (CORREGIDO ESTRUCTURALMENTE)
-        // ---------------------------------------------------------------------------------
-        console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS asignadas`);
-        
-        let unidadesFiltradas = [];
-        let osParaMapa = [];
-        
-        // ROLES CON ACCESO TOTAL (Admin, Supervisor, Despacho)
-        if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
-            
-            unidadesFiltradas = unidadesUnicas;
-            console.log('✅ Llamando a generarInterfazAdminKMLRuta con:', unidadesFiltradas.length, 'unidades y', osCompletas.length, 'OS');
-            // Esta función mostrará el selector de UNIDAD
-            generarInterfazAdminKMLRuta(unidadesFiltradas, osCompletas); 
-            
-        // ROLES CON ACCESO RESTRINGIDO (Consulta, Contratista)
-        } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
-            
+        console.log(`✅ ${unidadesUnicas.length} unidades encontradas y ${osCompletas.length} OS cargadas`);
+
+        // LOGICA POR ROLES
+        const rol = currentUser && currentUser.rol;
+        if (!rol) {
+            searchGrid.innerHTML = `<div class="result-card">❌ Usuario no identificado</div>`;
+            return;
+        }
+
+        // Admin / Supervisor / Despacho -> interfaz admin (selector de unidad)
+        if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
+            // llamar a la interfaz admin (asegúrate de tener esta función)
+            // pasar unidadesUnicas y osCompletas
+            if (typeof generarInterfazAdminKMLRuta === 'function') {
+                generarInterfazAdminKMLRuta(unidadesUnicas, osCompletas);
+            } else {
+                console.warn('generarInterfazAdminKMLRuta no está definida.');
+                searchGrid.innerHTML = `<div class="result-card">⚠️ Interfaz admin no disponible</div>`;
+            }
+            return;
+        }
+
+        // Consulta / Contratista -> mostrar solo OS de su unidad
+        if (rol === 'Consulta' || rol === 'Contratista') {
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-            
-            // 🆕 CORRECCIÓN: Filtrar el dataset completo (osCompletas) por la unidad
-            osParaMapa = osCompletas.filter(os => 
-                (os.Unidad === miUnidad) && (os.OSATMO || os.osatomo)
-            );
-            
-            if (osParaMapa.length === 0) {
+            const osParaMapa = (osCompletas || []).filter(os => {
+                const unidadesCampo = os.Unidad || '';
+                return unidadesCampo === miUnidad && (os.OSATMO || os.osatomo || os.OSATOMO);
+            });
+
+            if (!osParaMapa || osParaMapa.length === 0) {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
                 return;
             }
-            
-            console.log(`✅ Rol Consulta/Contratista. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
-            // Llama a la función que genera el selector de OS de partida
-            generarMapaKMLRuta(osParaMapa, miUnidad); 
-            
-        // ROL SIN ACCESO (FINAL DEL IF/ELSE IF)
-        } else {
-            searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
+
+            console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
+            // generar interfaz específica para unidad
+            if (typeof generarMapaKMLRuta === 'function') {
+                // si ya tienes una función llamada generarMapaKMLRuta que toma (osParaMapa, miUnidad)
+                generarMapaKMLRuta(osParaMapa, miUnidad);
+            } else if (typeof generarInterfazUnidadMapaRutas === 'function') {
+                // si quieres que muestre el dropdown usamos la funcion que creamos abajo
+                generarInterfazUnidadMapaRutas({}, osParaMapa);
+            } else {
+                searchGrid.innerHTML = `<div class="result-card">⚠️ Interfaz de mapa no disponible</div>`;
+            }
             return;
         }
-        // ---------------------------------------------------------------------------------
-        
+
+        // Otros roles: sin acceso
+        searchGrid.innerHTML = `<div class="result-card">⚠️ Tu rol (${rol}) no tiene acceso a esta función</div>`;
     } catch (err) {
         console.error('Error cargando KML Ruta:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
@@ -4728,9 +4727,17 @@ async function generarCampoMapaRutas(unidad) {
         const unidadUsuario = currentUser.unidad;
         
         // Fetch OS Asignadas para la unidad logeada
-        const { data: osAsignadas } = await supabaseClient
-            .from('OS Asignadas')
-            .select('osatomo, Tipologia, OSATMO'); 
+        const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
+const { data: osAsignadas, error } = await supabaseClient
+    .from('os_asignadas') // nota: usar nombre de tabla consistente (minúsculas)
+    .select('osatomo, Tipologia, OSATMO, Unidad')
+    .eq('Unidad', unidadUsuario);
+
+if (error) {
+    console.error('Error cargando OS asignadas para unidad:', error);
+    // mostrar mensaje en interfaz...
+}
+ 
             
         // Normalización y filtrado para el selector
         const osParaSelector = osAsignadas.map(os => ({
@@ -7030,24 +7037,30 @@ if (unidadesUnicas.length === 0) {
                 
                 // ✅ Buscar OS Pendientes en lotes de 100 (máximo permitido por Supabase)
 const osCompletas = [];
-const BATCH_SIZE = 1000;
-for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
-    const batch = osNumeros.slice(i, i + BATCH_SIZE);
+const CHUNK_SIZE = 100; // seguro para .in()
+const grupos = chunkArray(osNumeros, CHUNK_SIZE);
+
+for (const grupo of grupos) {
     const { data, error } = await supabaseClient
         .from('OS Pendientes')
         .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
-        .in('OSATMO', batch); // ← ✅ OSATMO, NO OSATOMO
+        .in('OSATMO', grupo);
 
     if (error) {
         console.error('Error en batch de OS Pendientes:', error);
         continue;
     }
-    if (data) osCompletas.push(...data);
-}                
-                if (!errorOS && osCompletas) {
-                    osAsignadas = osCompletas;
-                    console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
-                }
+    if (data && data.length) osCompletas.push(...data); // <<-- usar spread para aplanar
+}
+               
+                if (!errorAsig && Array.isArray(osCompletas) && osCompletas.length > 0) {
+    // osCompletas podría ser un array de arrays si no cuidamos push; lo normalizamos:
+    osAsignadas = osCompletas.flat ? osCompletas.flat() : [].concat(...osCompletas);
+    console.log(`✅ ${osAsignadas.length} OS Asignadas encontradas para ${unidadUsuario}`);
+} else {
+    osAsignadas = [];
+    console.log('ℹ️ No se encontraron OS asignadas o hubo un error en la consulta.');
+}
             }
         }
         
@@ -7064,6 +7077,11 @@ for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
     }
 }
 
+function chunkArray(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
 
 
 
@@ -7353,13 +7371,26 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 // 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
 // ========================================
 async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
-    const searchGrid = document.getElementById('searchGrid');
+
+     const searchGrid = document.getElementById('searchGrid');
     const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-    
-    // ✅ Filtrar OS de SU unidad
-    const osDeUnidad = osAsignadas.filter(os => os.Unidad === miUnidad);
-    
-    if (osDeUnidad.length === 0) {
+
+    // Normalizar osAsignadas (aplana si viene como array de arrays)
+    const osAsignadasFlat = (osAsignadas || []).flat ? osAsignadas.flat() : [].concat(...osAsignadas || []);
+
+    // Normalizar nombres de campos y Coordenadas
+    const normalized = osAsignadasFlat.map(os => ({
+        ...os,
+        osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim(),
+        Tipologia: os.Tipologia || os.Tipología || os.tipologia || os.Tipo_de_OS || '',
+        Coordenadas: (os.Coordenadas || os.Coordendasgis || os.Coordenadasgis || os.coordenadas || '').toString().trim(),
+        Unidad: os.Unidad || os.unidad || ''
+    }));
+
+    // Filtrar solo las OS que corresponden a la unidad del usuario
+    const osDeUnidad = normalized.filter(os => os.Unidad === miUnidad);
+
+    if (!osDeUnidad || osDeUnidad.length === 0) {
         searchGrid.innerHTML = `
             <div class="result-card" style="background: #fff3cd;">
                 <div class="result-header">⚠️ Sin OS Asignadas</div>
@@ -7367,28 +7398,40 @@ async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
             </div>`;
         return;
     }
-    
+
+    // Generar HTML para las opciones del dropdown
+    const optionsHtml = osDeUnidad
+        .map(os => `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`)
+        .join('');
+
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e3f2fd;">
             <div class="result-header">🔍 Buscar OS Asignada - ${miUnidad}</div>
             
             <div class="form-group">
-                <label>Selecciona tu OS:</label>
-                <select id="selectOSUnidad" style="width: 100%; padding: 12px;">
-                    <option value="">-- Seleccione --</option>
-                    ${osDeUnidad.map(os => 
-                        `${os.osatomo} - ${os.Tipologia || 'Sin tipología'}`
-                    ).join('')}
+                <label for="selectOSBusqueda">Seleccione OS de Partida (Unidad ${miUnidad}):</label>
+                <select id="selectOSBusqueda" style="width:100%; padding:12px;">
+                    <option value="">-- Seleccione una OS --</option>
+                    ${optionsHtml}
                 </select>
-                <small style="color: #666;">${osDeUnidad.length} OS | Radio: ${filtros.radio_km} km</small>
+                <small style="color: #666; display:block; margin-top:8px;">${osDeUnidad.length} OS disponibles | Radio: ${filtros.radio_km || 'N/A'} km</small>
             </div>
             
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="buscarYMostrarMapaUnidad()">
+            <div style="text-align: center; margin-top: 16px;">
+                <button class="btn" onclick="buscarYMostrarMapaUnidad(document.getElementById('selectOSBusqueda').value)">
                     🗺️ Mostrar Mapa
                 </button>
             </div>
         </div>`;
+
+    // (Opcional) Si deseas lanzar automáticamente la búsqueda al cambiar la selección
+    const selectEl = document.getElementById('selectOSBusqueda');
+    if (selectEl) {
+        selectEl.addEventListener('change', function() {
+            // no obligamos a mostrar, solo dejamos disponible el botón; si quieres autover, descomenta:
+            // if (this.value) buscarYMostrarMapaUnidad(this.value);
+        });
+    }
 }
 
 // ========================================
