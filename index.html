@@ -7915,27 +7915,23 @@ async function buscarYMostrarMapaUnidad() {
         let todasOSRegistradas = [];
 
         if (rolRestringido) {
-            // ✅ Intentar reusar las OS ya cargadas (evita segunda consulta a os_asignadas)
-            let osAsignadasPrevias = window.osAsignadasMapaRutas;
-            let osNumeros = [];
+            // ✅ USAR LAS OS YA CARGADAS (mismo conjunto que el desplegable)
+            const osAsignadasPrevias = window.osAsignadasMapaRutas;
 
             if (!osAsignadasPrevias || osAsignadasPrevias.length === 0) {
-                // 🆕 Fallback: cargar asignaciones por última vez
-                console.warn('⚠️ Reusando fallido. Cargando asignaciones por fallback...');
-                const {  asignaciones } = await supabaseClient
-                    .from('os_asignadas')
-                    .select('osatomo')
-                    .eq('Unidad', unidadFiltro);
-                if (!asignaciones || asignaciones.length === 0) {
-                    throw new Error(`No hay OS asignadas para la unidad ${unidadFiltro}`);
-                }
-                osNumeros = asignaciones.map(a => a.osatomo);
-            } else {
-                osNumeros = osAsignadasPrevias.map(os => os.OSATMO || os.osatomo);
-                console.log(`✅ Reusando ${osNumeros.length} OS asignadas previamente cargadas`);
+                throw new Error(`No hay datos de OS asignadas cargados. Recargue la página.`);
             }
 
-            // ✅ Cargar datos completos desde OS Pendientes (por OSATMO)
+            // Extraer números de OS (ya están enriquecidos con datos de OS Pendientes)
+            const osNumeros = osAsignadasPrevias
+                .map(os => os.OSATMO || os.osatomo)
+                .filter(Boolean);
+
+            if (osNumeros.length === 0) {
+                throw new Error(`No se pudieron extraer números de OS válidos para ${unidadFiltro}`);
+            }
+
+            // Cargar desde OS Pendientes solo las OS ya validadas
             const BATCH_SIZE = 1000;
             const candidatas = [];
             for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
@@ -7945,10 +7941,6 @@ async function buscarYMostrarMapaUnidad() {
                     .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
                     .in('OSATMO', batch)
                     .eq('Estado_ATOMO', 'Registrada');
-                if (error) {
-                    console.warn('Error en lote:', error);
-                    continue;
-                }
                 if (data) candidatas.push(...data);
             }
 
