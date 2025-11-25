@@ -5259,12 +5259,21 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 
     // 2. PROCESAR Y FILTRAR OS CON COORDENADAS
     const osConCoordenadas = osDataRaw
-        .map(os => ({
-            ...os, 
-            osatomo: os.osatomo || os.OSATOMO || '',
-            Tipologia: os.Tipologia || 'Sin tipología',
-            CoordenadasValidas: os.Coordenadas || os.Coordendasgis 
-        }))
+    .map(os => ({
+        ...os,
+        // ✅ Normalización robusta del número de OS
+        osatomo: os.osatomo || os.OSATMO || os.OSATOMO || '',
+        Tipologia: os.Tipologia || 'Sin tipología',
+        CoordenadasValidas: os.Coordenadas || os.Coordendasgis
+    }))
+    .filter(os => {
+        const c = os.CoordenadasValidas;
+        // ✅ Validación más robusta: debe tener coma y no estar vacío
+        return c && typeof c === 'string' && c.trim().includes(',');
+    })
+    .filter(os => os.osatomo.trim() !== '');
+
+
         // ✅ CORRECCIÓN CLAVE: Filtrar OS con coordenadas que tengan coma (,) O espacio ( )
         .filter(os => os.CoordenadasValidas && (os.CoordenadasValidas.includes(',') || os.CoordenadasValidas.includes(' ')))
         .filter(os => os.osatomo.trim() !== '');
