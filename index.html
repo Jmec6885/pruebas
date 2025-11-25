@@ -4595,7 +4595,7 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
             </div>
 
             <div id="containerSelectorOS" style="display: none; margin-top: 15px;">
-                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Opcional):</label>
+                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Requerido): <span style="color:red">*</span></label>
                 <select id="selectPuntoPartidaAdmin" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione OS de partida --</option>
                 </select>
@@ -4623,7 +4623,6 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     // Guardar datos globalmente
     window.osAsignadasKML = osAsignadas;
 }
-
 
 // ========================================
 // 📊 ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
@@ -5133,24 +5132,69 @@ async function generarKMLAdminPorUnidad(tipo) {
 	// ========================================
 // 🗺️ GENERAR MAPA ADMIN KML RUTA
 // ========================================
+// ========================================
+// 🗺️ GENERAR MAPA ADMIN DIRECTO (CORREGIDO)
+// ========================================
 function generarMapaAdminKMLRuta() {
+    // 1. Validar Unidad
     const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
-    
     if (!unidadSeleccionada) {
         alert('⚠️ Por favor seleccione una unidad primero');
         return;
     }
-    
-    const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
-    
-    if (osUnidad.length === 0) {
-        alert('❌ No hay OS Asignadas para esta unidad');
+
+    // 2. Validar Punto de Partida (AHORA OBLIGATORIO)
+    const osPartida = document.getElementById('selectPuntoPartidaAdmin').value;
+    if (!osPartida) {
+        alert('⚠️ Debes seleccionar una OS como Punto de Partida para generar la ruta.');
         return;
     }
     
-    generarMapaKMLRuta(osUnidad, unidadSeleccionada);
-}
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
 
+    try {
+        // 3. Obtener y Filtrar datos
+        const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+        
+        // 4. Normalizar datos (Asegurar campos consistentes)
+        const osDataNormalizada = osUnidad
+            .map(os => ({
+                ...os, 
+                osatomo: os.osatomo || os.OSATOMO || os.OSATMO || '',
+                Tipologia: os.Tipologia || 'Sin tipología',
+                CoordenadasValidas: os.Coordenadas || os.Coordendasgis
+            }))
+            .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
+            .filter(os => os.osatomo.trim() !== '');
+
+        if (osDataNormalizada.length === 0) {
+            alert('❌ No hay OS con coordenadas válidas para esta unidad');
+            resultsContainer.innerHTML = '';
+            return;
+        }
+
+        // 5. Optimizar Ruta (Vecino Cercano)
+        // Usamos la OS seleccionada en el primer dropdown
+        const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
+        
+        if (todosLosPuntos.length === 0) {
+            alert('❌ Error al optimizar la ruta. Verifique que el punto de partida tenga coordenadas.');
+            resultsContainer.innerHTML = '';
+            return;
+        }
+        
+        // 6. Mostrar Mapa Directamente
+        const osCentro = todosLosPuntos[0];
+        console.log(`✅ Ruta generada directamente desde ${osPartida}`);
+        
+        mostrarMapaKMLConNumeracion(todosLosPuntos, unidadSeleccionada, osCentro.lat, osCentro.lng);
+
+    } catch (error) {
+        console.error(error);
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error al generar el mapa</div>';
+    }
+}
 
 
 // ========================================
@@ -12042,4 +12086,5 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
 
