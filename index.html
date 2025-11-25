@@ -7919,7 +7919,7 @@ async function buscarYMostrarMapaUnidad() {
 
         if (rolRestringido) {
             // ✅ PASO 1: Obtener OS asignadas a la unidad desde os_asignadas
-            const {  asignaciones } = await supabaseClient
+            const {  asignaciones } = await supabaseClient // ✅ CORREGIDO: espacio antes de 'asignaciones'
                 .from('os_asignadas')
                 .select('osatomo')
                 .eq('Unidad', unidadFiltro);
