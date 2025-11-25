@@ -766,7 +766,6 @@ function controlarVisibilidadMenu() {
     // Asegúrate de que currentUser ya está cargado
     const rol = currentUser ? currentUser.rol : null;
     
-    // Si no hay rol (ej: antes del login), no hacemos nada
     if (!rol) {
         return; 
     }
@@ -775,7 +774,7 @@ function controlarVisibilidadMenu() {
     const detalleOS = document.getElementById('opcionDetalleOS');
     if (detalleOS) {
         if (rol !== 'Administrador' && rol !== 'Supervisor') {
-            detalleOS.style.display = 'none'; // Ocultar
+            detalleOS.style.display = 'none'; // Ocultar para Consulta/Contratista
         } else {
             detalleOS.style.display = 'block'; // Mostrar
         }
@@ -785,12 +784,13 @@ function controlarVisibilidadMenu() {
     const cargarAsignaciones = document.getElementById('opcionCargarAsignaciones');
     if (cargarAsignaciones) {
         if (rol !== 'Administrador') {
-            cargarAsignaciones.style.display = 'none'; // Ocultar
+            cargarAsignaciones.style.display = 'none'; // Ocultar para Consulta/Contratista
         } else {
             cargarAsignaciones.style.display = 'block'; // Mostrar
         }
     }
 }
+
 
 // 📌 RECUERDA: Debes llamar a esta función en la función que se ejecuta al iniciar sesión con éxito, por ejemplo:
 /*
@@ -5246,14 +5246,13 @@ function generarMapaAdminKMLRuta() {
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
-    const selectorContainer = document.getElementById('containerSelectorOS'); // 🎯 Nuevo: Capturar el contenedor selector
-    
-    // 🛑 CORRECCIÓN: Verificar que los contenedores existen
+    const selectorContainer = document.getElementById('containerSelectorOS');
+
+    // 🛑 CORRECCIÓN: Verificar que los contenedores existen para evitar 'Cannot set properties of null'
     if (!resultsContainer) {
         console.error('Error KML Ruta: El contenedor "searchResults" no existe.');
         return; 
     }
-    // NOTA: 'containerSelectorOS' es usado más abajo y se verifica implícitamente
 
     // 1. OBTENER Y NORMALIZAR DATOS
     const osDataRaw = osAsignadas;
@@ -5266,13 +5265,13 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
             Tipologia: os.Tipologia || 'Sin tipología',
             CoordenadasValidas: os.Coordenadas || os.Coordendasgis 
         }))
-        // Filtrar solo las OS con coordenadas válidas y osatomo
-        .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
+        // ✅ CORRECCIÓN CLAVE: Filtrar OS con coordenadas que tengan coma (,) O espacio ( )
+        .filter(os => os.CoordenadasValidas && (os.CoordenadasValidas.includes(',') || os.CoordenadasValidas.includes(' ')))
         .filter(os => os.osatomo.trim() !== '');
         
     // 3. MANEJO DE CASO SIN DATOS
     if (osConCoordenadas.length === 0) {
-        // Usamos selectorContainer aquí, por lo que lo verificamos:
+        // Esto se ejecuta porque las 15 OS no pasaron el filtro anterior.
         if (selectorContainer) { 
              selectorContainer.innerHTML = `
                 <p style="color: #e53e3e; margin-top: 10px;">
@@ -5305,6 +5304,8 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
         
     resultsContainer.innerHTML = htmlSelector;
 }
+
+
 
 /**
  * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
@@ -6984,7 +6985,6 @@ async function cargarInterfazMapaRutas() {
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
     
-    // Verificación de seguridad para evitar errores 'Cannot set properties of null'
     if (!searchGrid || !resultsContainer) {
         console.error('Error Mapa Rutas: Contenedores HTML (searchGrid/searchResults) no encontrados.');
         return;
@@ -6994,6 +6994,7 @@ async function cargarInterfazMapaRutas() {
     resultsContainer.innerHTML = '';
     
     try {
+
         // 1️⃣ CARGAR FILTROS ACTUALES
         const { data: filtros, error: errorFiltros } = await supabaseClient
             .from('filtros_mapa')
@@ -7078,7 +7079,7 @@ async function cargarInterfazMapaRutas() {
             
             console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
             
-            // Obtener OSATOMO de os_asignadas
+            // Obtener osatomo de os_asignadas
             const { data: asignaciones, error: errorAsig } = await supabaseClient
                 .from('os_asignadas')
                 .select('osatomo, Unidad')
@@ -7108,8 +7109,8 @@ async function cargarInterfazMapaRutas() {
                     if (data) osCompletas.push(...data);
                 }
                 
-                // ⚠️ Se eliminó la referencia a 'errorOS' que no existía. 
-                if (osCompletas) {
+                // ✅ CORRECCIÓN: Usar la longitud de la lista para asignar el valor
+                if (osCompletas && osCompletas.length > 0) { 
                     osAsignadas = osCompletas;
                     console.log(`✅ ${osCompletas.length} OS Asignadas encontradas para ${unidadUsuario}`);
                 }
@@ -7120,12 +7121,12 @@ async function cargarInterfazMapaRutas() {
         if (currentUser.rol === 'Administrador') {
             generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
         } else {
+            // Asumiendo que esta función aplica el filtro de coordenadas corregido del Punto 1.
             generarInterfazUnidadMapaRutas(filtros, osAsignadas);
         }
         
-    } catch (err) { // 🛑 CORRECCIÓN CLAVE: Usar 'err'
-       console.error('Error cargando Mapa de Rutas:', err); // Usar 'err'
-       // Usar 'err' para obtener el mensaje de error
+    } catch (err) { 
+       console.error('Error cargando Mapa de Rutas:', err);
        resultsContainer.innerHTML = `<div class="result-card">❌ Error de conexión: ${err.message}</div>`; 
        return;
     }
