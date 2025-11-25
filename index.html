@@ -7915,20 +7915,27 @@ async function buscarYMostrarMapaUnidad() {
         let todasOSRegistradas = [];
 
         if (rolRestringido) {
-            // ✅ PASO 1: Obtener OS asignadas a la unidad desde os_asignadas
-            const {  asignaciones } = await supabaseClient
-                .from('os_asignadas')
-                .select('osatomo')
-                .eq('Unidad', unidadFiltro);
+            // ✅ Intentar reusar las OS ya cargadas (evita segunda consulta a os_asignadas)
+            let osAsignadasPrevias = window.osAsignadasMapaRutas;
+            let osNumeros = [];
 
-            if (!asignaciones || asignaciones.length === 0) {
-                throw new Error(`No hay OS asignadas para la unidad ${unidadFiltro}`);
+            if (!osAsignadasPrevias || osAsignadasPrevias.length === 0) {
+                // 🆕 Fallback: cargar asignaciones por última vez
+                console.warn('⚠️ Reusando fallido. Cargando asignaciones por fallback...');
+                const {  asignaciones } = await supabaseClient
+                    .from('os_asignadas')
+                    .select('osatomo')
+                    .eq('Unidad', unidadFiltro);
+                if (!asignaciones || asignaciones.length === 0) {
+                    throw new Error(`No hay OS asignadas para la unidad ${unidadFiltro}`);
+                }
+                osNumeros = asignaciones.map(a => a.osatomo);
+            } else {
+                osNumeros = osAsignadasPrevias.map(os => os.OSATMO || os.osatomo);
+                console.log(`✅ Reusando ${osNumeros.length} OS asignadas previamente cargadas`);
             }
 
-            const osNumeros = asignaciones.map(a => a.osatomo);
-            console.log(`✅ ${osNumeros.length} OS asignadas encontradas para ${unidadFiltro}`);
-
-            // ✅ PASO 2: Cargar esas OS desde OS Pendientes por OSATMO (NO por Unidad)
+            // ✅ Cargar datos completos desde OS Pendientes (por OSATMO)
             const BATCH_SIZE = 1000;
             const candidatas = [];
             for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
@@ -7946,13 +7953,11 @@ async function buscarYMostrarMapaUnidad() {
             }
 
             todasOSRegistradas = candidatas;
-            console.log(`✅ ${candidatas.length} OS cargadas desde OS Pendientes usando OSATMO`);
 
-            // ✅ PASO 3: Aplicar filtros SOLO si existen
+            // Aplicar filtros SOLO si existen
             if (filtrosAplicar) {
                 todasOSRegistradas = todasOSRegistradas.filter(os => validarFiltrosOS(os, filtrosAplicar));
             }
-            // Si NO hay filtros → se mantienen todas las OS asignadas
 
         } else {
             // Admin: cargar todas las OS Registradas
