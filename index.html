@@ -4579,15 +4579,13 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     const resultsContainer = document.getElementById('searchResults');
     
     resultsContainer.innerHTML = '';
-    
-    // ✅ SOLO UNA ASIGNACIÓN CON UN TEMPLATE LITERAL
+
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
             <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
             <h1 class="titulo-degradado">CLESA</h1>
             <p class="subtitulo">📍 Generación de KML por Unidad</p>
             
-            <!-- SELECCIÓN DIRECTA DE UNIDAD -->
             <div class="form-group">
                 <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
                 <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
@@ -4595,14 +4593,19 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
                     ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
                 </select>
             </div>
+
+            <div id="containerSelectorOS" style="display: none; margin-top: 15px;">
+                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Opcional):</label>
+                <select id="selectPuntoPartidaAdmin" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione OS de partida --</option>
+                </select>
+            </div>
             
-            <!-- RESUMEN DE OS ASIGNADAS -->
             <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
                 <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
                 <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
             </div>
             
-            <!-- BOTONES DE ACCIÓN -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
                     📥 KML Lector
@@ -4785,56 +4788,64 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 
 
 // ========================================
-// 💾 GUARDAR FILTROS POR UNIDAD
+// 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO)
 // ========================================
 async function guardarFiltrosPorUnidad() {
     
-    // ------------------------------------------------------------------
-    // 🆕 CAMBIO CLAVE: Obtener la ÚNICA unidad activa en el mapa
-    // Asumo que tienes un elemento que almacena la Unidad actual del mapa (ej. un input oculto)
-    const unidadActivaElemento = document.getElementById('unidadActivaMapaRutas'); // 👈 DEBES ASEGURARTE DE QUE ESTE ID EXISTA
-    
-    // Si no se encuentra el elemento, o el valor es nulo, intenta buscar un selector de unidad genérico
-    const unidadSeleccionada = unidadActivaElemento 
-        ? unidadActivaElemento.value 
-        : document.getElementById('selectUnidad')?.value || ''; // Fallback a un selector común
-
-    if (!unidadSeleccionada) {
-        alert('⚠️ No se pudo determinar la Unidad activa para guardar los filtros.');
-        return;
-    }
-
-
-    
-    // Creamos la lista de unidades de destino (solo 1)
-    const unidadesDestino = [unidadSeleccionada];
-    // ------------------------------------------------------------------
-    
-    // El resto de la recolección de filtros globales es la misma:
+    // 1. Recolección de filtros globales (checkboxes de interfaz)
     const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
     const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
     
     const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
     const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
     
-    const radioKm = parseInt(document.getElementById('radioKmUnidad').value);
+    // Validar input radio
+    const radioElement = document.getElementById('radioKmUnidad');
+    const radioKm = radioElement ? parseInt(radioElement.value) : 3;
     
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
-    
+
+    // 2. DETERMINAR LAS UNIDADES DESTINO
+    let unidadesDestino = [];
+
+    // Caso A: Estamos en el Panel Admin (usando checkboxes)
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    if (checkboxesUnidades.length > 0) {
+        unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
+    } else {
+        // Caso B: Estamos en el Mapa Individual (campo oculto o selector simple)
+        const unidadActivaElemento = document.getElementById('unidadActivaMapaRutas');
+        const selectorSimple = document.getElementById('selectUnidad'); // Fallback
+        
+        if (unidadActivaElemento && unidadActivaElemento.value) {
+            unidadesDestino.push(unidadActivaElemento.value);
+        } else if (selectorSimple && selectorSimple.value) {
+            unidadesDestino.push(selectorSimple.value);
+        }
+    }
+
+    // Si después de revisar ambos casos no hay unidades
+    if (unidadesDestino.length === 0) {
+        alert('⚠️ Debes seleccionar al menos una unidad (usando los checkboxes) o estar en un mapa de unidad activa.');
+        return;
+    }
+
+    // 3. Confirmación
     const confirmar = confirm(
-        `¿Guardar filtros para la unidad: ${unidadSeleccionada}?\n\n` +
-        `Rangos: ${rangos.length}\n` +
-        `Tipologías: ${tipologias.length}\n` +
-        `Radio: ${radioKm} km`
+        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n\n` +
+        `• Unidades: ${unidadesDestino.length}\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.length : 'Todos'}\n` +
+        `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
+        `• Radio: ${radioKm} km`
     );
     
     if (!confirmar) return;
     
     try {
-        // 🆕 La estructura de datos para guardar solo necesita la unidad activa
+        // Preparar datos para upsert masivo
         const registrosAGuardar = unidadesDestino.map(unidad => ({
             unidad: unidad,
             rangos: rangos.length > 0 ? rangos : null,
@@ -4849,20 +4860,17 @@ async function guardarFiltrosPorUnidad() {
             .upsert(registrosAGuardar, { onConflict: 'unidad' });
         
         if (error) {
-            alert('❌ Error: ' + error.message);
+            alert('❌ Error al guardar: ' + error.message);
             return;
         }
         
-        alert(`✅ Filtros guardados para la unidad: ${unidadSeleccionada}`);
-        
-        // No limpiamos los checkboxes aquí, ya que se usan para la configuración global
+        alert(`✅ Filtros guardados exitosamente para ${unidadesDestino.length} unidad(es).`);
         
     } catch (err) {
         console.error('Error:', err);
         alert('❌ Error de conexión');
     }
 }
-
 
 
 // ========================================
@@ -5021,18 +5029,44 @@ function actualizarResumenUnidadKML() {
     const resumenDiv = document.getElementById('resumenUnidadKML');
     const contenidoDiv = document.getElementById('contenidoResumenKML');
     
+    // 🆕 Elementos del nuevo selector
+    const containerOS = document.getElementById('containerSelectorOS');
+    const selectOS = document.getElementById('selectPuntoPartidaAdmin');
+    
     if (!unidadSeleccionada) {
         resumenDiv.style.display = 'none';
+        if(containerOS) containerOS.style.display = 'none';
         return;
     }
     
-    // Filtrar OS de la unidad seleccionada
+    // Filtrar OS de la unidad seleccionada desde la variable global cargada
     const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
     
+    // 🆕 LLENAR EL SELECTOR DE OS
+    if (selectOS && containerOS) {
+        // Limpiar opciones anteriores
+        selectOS.innerHTML = '<option value="">-- Seleccione OS de partida --</option>';
+        
+        // Filtrar OS que tengan número válido para mostrar
+        const osParaLista = osUnidad.filter(os => os.OSATMO || os.osatomo);
+        
+        // Generar opciones concatenadas
+        osParaLista.forEach(os => {
+            const numero = os.OSATMO || os.osatomo;
+            const tipo = os.Tipologia || 'Sin tipología';
+            const option = document.createElement('option');
+            option.value = numero;
+            option.textContent = `${numero} - ${tipo}`;
+            selectOS.appendChild(option);
+        });
+        
+        containerOS.style.display = 'block';
+    }
+
+    // Lógica existente del resumen
     const conCoordenadasLector = osUnidad.filter(os => 
         os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
     );
-    
     const conCoordenadasGIS = osUnidad.filter(os => 
         os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
     );
@@ -5042,11 +5076,8 @@ function actualizarResumenUnidadKML() {
         • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
         • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
     `;
-    
     resumenDiv.style.display = 'block';
 }
-
-
 
 
 	// ========================================
@@ -7583,7 +7614,6 @@ async function guardarFiltrosMapa() {
 
 async function buscarYMostrarMapaAdmin() {
     const osIngresada = document.getElementById('buscarOSAdmin').value.trim();
-    
     if (!osIngresada) {
         alert('⚠️ Por favor ingrese un número de OS');
         return;
@@ -7593,58 +7623,62 @@ async function buscarYMostrarMapaAdmin() {
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // 1️⃣ Verificar en os_asignadas
+        // 1️⃣ Intentar buscar la unidad en os_asignadas (solo informativo, NO bloqueante)
+        let unidadDetectada = null;
         const { data: asignacion } = await supabaseClient
             .from('os_asignadas')
-            .select('osatomo')
+            .select('osatomo, Unidad')
             .eq('osatomo', osIngresada)
             .maybeSingle();
-        
-        if (!asignacion) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #ffebee;">
-                    <div class="result-header">⚠️ OS No Asignada</div>
-                    <p style="text-align: center;">Esta OS no está en la tabla de asignaciones</p>
-                </div>`;
-            return;
+            
+        if (asignacion) {
+            console.log(`✅ OS encontrada en asignaciones. Unidad: ${asignacion.Unidad}`);
+            unidadDetectada = asignacion.Unidad;
+        } else {
+            console.log('ℹ️ OS no encontrada en asignaciones, buscando en pendientes...');
         }
         
-        // 2️⃣ Buscar en OS Pendientes
+        // 2️⃣ Buscar DATOS REALES en OS Pendientes (La fuente de verdad)
         const { data: osCentro } = await supabaseClient
             .from('OS Pendientes')
             .select('*')
             .eq('OSATMO', osIngresada)
             .maybeSingle();
-        
+
+        // SI NO EXISTE EN PENDIENTES -> ERROR FINAL
         if (!osCentro) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #ffebee;">
                     <div class="result-header">❌ OS No Encontrada</div>
-                    <p style="text-align: center;">La OS "${osIngresada}" no existe en OS Pendientes</p>
+                    <p style="text-align: center;">La OS "${osIngresada}" no existe en la tabla de OS Pendientes.</p>
                 </div>`;
             return;
         }
         
+        // Si no teníamos unidad de la tabla asignada, usamos la de OS Pendientes
+        if (!unidadDetectada && osCentro.Unidad) {
+            unidadDetectada = osCentro.Unidad;
+        }
+
         // Validar coordenadas
         const coordenadas = osCentro.Coordenadas || osCentro.Coordendasgis;
         if (!coordenadas || !coordenadas.includes(',')) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd;">
                     <div class="result-header">⚠️ Sin Coordenadas</div>
-                    <p style="text-align: center;">La OS "${osIngresada}" no tiene coordenadas válidas</p>
+                    <p style="text-align: center;">La OS "${osIngresada}" existe pero no tiene coordenadas válidas.</p>
                 </div>`;
             return;
         }
         
-        // Cargar mapa (sin filtro de unidad)
-        await cargarYMostrarMapa(osCentro, null);
-        
+        // Cargar mapa (pasamos la unidad detectada para el contexto)
+        await cargarYMostrarMapa(osCentro, unidadDetectada);
+
     } catch (err) {
         console.error('Error:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión al buscar OS</div>';
     }
 }
-
 
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
@@ -12008,3 +12042,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>
+
