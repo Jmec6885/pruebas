@@ -4470,87 +4470,71 @@ async function cargarInterfazKMLRuta() {
     
     try {
         // ✅ CARGAR UNIDADES DESDE os_asignadas
-console.log('🔍 Intentando cargar desde os_asignadas...');
+        console.log('🔍 Intentando cargar desde os_asignadas...');
 
-const { data: asignaciones, error: errorAsignadas } = await supabaseClient
-    .from('os_asignadas')
-    .select('osatomo, Unidad, Estado');
+        const { data: asignaciones, error: errorAsignadas } = await supabaseClient
+            .from('os_asignadas')
+            .select('osatomo, Unidad, Estado');
 
-// 🆕 DEBUG: Ver el error exacto
-if (errorAsignadas) {
-    console.error('❌ Error cargando os_asignadas:', errorAsignadas);
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
-            <div class="result-header">❌ Error al cargar asignaciones</div>
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>Detalles del error:</strong><br>
-                <code style="color: #d32f2f; font-size: 13px;">${errorAsignadas.message}</code>
-            </div>
-            <p style="text-align: center; color: #666;">
-                Posibles causas:<br>
-                • La tabla os_asignadas no existe<br>
-                • RLS está bloqueando el acceso<br>
-                • Permisos insuficientes
-            </p>
-        </div>`;
-    return;
-}
+        // ... (Manejo de errores si errorAsignadas) ...
+        if (errorAsignadas) {
+            console.error('❌ Error cargando os_asignadas:', errorAsignadas);
+            // ... (Código para mostrar el error en searchGrid) ...
+            return;
+        }
 
-console.log(`✅ ${asignaciones?.length || 0} asignaciones cargadas`);
+        console.log(`✅ ${asignaciones?.length || 0} asignaciones cargadas`);
 
-if (!asignaciones || asignaciones.length === 0) {
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
-            <div class="result-header">⚠️ Sin asignaciones</div>
-            <p style="text-align: center; color: #666;">
-                No hay OS asignadas en la tabla os_asignadas.<br>
-                Cargue el archivo de asignaciones primero.
-            </p>
-        </div>`;
-    return;
-}
+        // ... (Manejo si no hay asignaciones) ...
+        if (!asignaciones || asignaciones.length === 0) {
+            // ... (Código para mostrar mensaje sin asignaciones en searchGrid) ...
+            return;
+        }
 
-// Obtener OSATOMO únicos
-const osNumeros = asignaciones.map(a => a.osatomo);
 
-// Buscar datos completos en OS Pendientes (por lotes)
-const osCompletas = [];
-const BATCH_SIZE = 500;
+        // Obtener OSATOMO únicos (Se mantiene)
+        const osNumeros = asignaciones.map(a => a.osatomo);
 
-for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
-    const batch = osNumeros.slice(i, i + BATCH_SIZE);
-    
-    const { data, error } = await supabaseClient
-    .from('OS Pendientes')
-    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-    .in('OSATMO', batch.slice(0, 100)); // ✅ Máximo 100 por consulta
+        // Buscar datos completos en OS Pendientes (por lotes)
+        const osCompletas = [];
+        const BATCH_SIZE = 500;
 
-// Si hay más de 100, procesar en sub-lotes
-for (let j = 100; j < batch.length; j += 100) {
-    const subBatch = batch.slice(j, j + 100);
-    const { data: subData } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-        .in('OSATMO', subBatch);
-    
-    if (subData) osCompletas.push(...subData);
-}    
-    if (!error && data) {
-        osCompletas.push(...data);
-    }
-}
+        for (let i = 0; i < osNumeros.length; i += BATCH_SIZE) {
+            const batch = osNumeros.slice(i, i + BATCH_SIZE);
+            
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
+                .in('OSATMO', batch.slice(0, 100)); // ✅ Máximo 100 por consulta
 
-const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u => u).sort();
+            // Si hay más de 100, procesar en sub-lotes
+            for (let j = 100; j < batch.length; j += 100) {
+                const subBatch = batch.slice(j, j + 100);
+                const { data: subData } = await supabaseClient
+                    .from('OS Pendientes')
+                    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
+                    .in('OSATMO', subBatch);
+                
+                if (subData) osCompletas.push(...subData);
+            }   
+            if (!error && data) {
+                osCompletas.push(...data);
+            }
+        }
 
-// ---------------------------------------------------------------------------------
-        // 🛠️ COMIENZO DEL BLOQUE DE FILTRADO POR ROL
+        const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u => u).sort();
+
         // ---------------------------------------------------------------------------------
+        // 🛠️ COMIENZO DEL BLOQUE DE FILTRADO POR ROL (CORREGIDO ESTRUCTURALMENTE)
+        // ---------------------------------------------------------------------------------
+        console.log(`✅ ${unidadesUnicas.length} unidades con ${osCompletas.length} OS asignadas`);
+        
         let unidadesFiltradas = [];
         let osParaMapa = [];
         
         // ROLES CON ACCESO TOTAL (Admin, Supervisor, Despacho)
         if (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho') {
-            // Ver todas las unidades
+            
             unidadesFiltradas = unidadesUnicas;
             console.log('✅ Llamando a generarInterfazAdminKMLRuta con:', unidadesFiltradas.length, 'unidades y', osCompletas.length, 'OS');
             // Esta función mostrará el selector de UNIDAD
@@ -4559,22 +4543,23 @@ const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u =>
         // ROLES CON ACCESO RESTRINGIDO (Consulta, Contratista)
         } else if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
             
-            // 1. Obtener su unidad logeada
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
             
-            // 2. Filtrar OS solo para su unidad
-            osParaMapa = osCompletas.filter(os => os.Unidad === miUnidad);
+            // 🆕 CORRECCIÓN: Filtrar el dataset completo (osCompletas) por la unidad
+            osParaMapa = osCompletas.filter(os => 
+                (os.Unidad === miUnidad) && (os.OSATMO || os.osatomo)
+            );
             
             if (osParaMapa.length === 0) {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
                 return;
             }
             
-            // 3. 🆕 LLAMADA DIRECTA: Llama a generarMapaKMLRuta con TODAS sus OS.
-            // Esto genera el selector de OS de partida sin necesidad de un selector de unidades.
             console.log(`✅ Rol Consulta/Contratista. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
+            // Llama a la función que genera el selector de OS de partida
             generarMapaKMLRuta(osParaMapa, miUnidad); 
             
+        // ROL SIN ACCESO (FINAL DEL IF/ELSE IF)
         } else {
             searchGrid.innerHTML = '<div class="result-card">⚠️ Tu rol no tiene acceso a esta función</div>';
             return;
@@ -4586,7 +4571,6 @@ const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad))].filter(u =>
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
-
 
 
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
@@ -4819,6 +4803,8 @@ async function guardarFiltrosPorUnidad() {
         alert('⚠️ No se pudo determinar la Unidad activa para guardar los filtros.');
         return;
     }
+
+<button onclick="guardarFiltrosPorUnidad()">💾 Guardar Filtros para esta Unidad</button>
     
     // Creamos la lista de unidades de destino (solo 1)
     const unidadesDestino = [unidadSeleccionada];
@@ -5135,29 +5121,27 @@ function generarMapaAdminKMLRuta() {
 }
 
 
-// ========================================
-// 🗺️ GENERAR MAPA KML RUTA
-// ========================================
+
 // ========================================
 // 🗺️ GENERAR MAPA KML RUTA (Función ya corregida y lista)
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
+    // ❌ ELIMINAR ESTA LÍNEA (está duplicada):
+    // const osConCoordenadas = osDataRaw.map(os => ({...
+
     const resultsContainer = document.getElementById('searchResults');
     
-    // -----------------------------------------------------------------
     // PASO CRÍTICO: NORMALIZAR Y FILTRAR DATOS AL PRINCIPIO
-    // -----------------------------------------------------------------
     const osDataRaw = osAsignadas; 
 
-    // 1. Normalizar las propiedades y filtrar por coordenadas válidas
+    // ✅ ESTA ES LA CORRECTA (dejar solo esta):
     const osConCoordenadas = osDataRaw
         .map(os => ({
             ...os, 
-            osatomo: os.osatomo || os.OSATMO || '',
-            Tipologia: os.Tipologia || os.Tipo_de_OS || 'Sin tipología', // Usamos Tipologia o Tipo_de_OS
+            osatomo: os.osatomo || os.OSATOMO || '',
+            Tipologia: os.Tipologia || 'Sin tipología',
             CoordenadasValidas: os.Coordenadas || os.Coordendasgis
         }))
-        // 2. Filtrar OS que tienen coordenadas válidas Y un ID de OS válido
         .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
         .filter(os => os.osatomo.trim() !== '');
         
@@ -7170,6 +7154,11 @@ if (unidadesUnicas.length === 0) {
                     <input type="number" id="radioKmUnidad" min="1" max="20" value="3" 
                            style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                 </div>
+	
+		<!-- 🆕 Asegurar visibilidad del bloque de filtros por unidad -->
+
+document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
+
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
                     <button class="btn" onclick="guardarFiltrosPorUnidad()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
@@ -7234,23 +7223,25 @@ if (unidadesUnicas.length === 0) {
                 </button>
             </div>
         </div>
-        
-        <!-- SECCIÓN: BUSCAR OS -->
-        <div class="result-card" style="margin-top: 20px;">
-            <div class="result-header">🔍 Buscar OS para visualizar</div>
-            <p style="color: #666; margin-bottom: 15px;">Ingresa CUALQUIER número de OS (no necesita estar asignada)</p>
-            <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end;">
-                <div class="form-group" style="margin: 0;">
-                    <label>OS ATOMO:</label>
-                    <input type="text" id="buscarOSAdmin" placeholder="Ingrese número de OS" 
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                </div>
-                <button class="btn btn-secondary" onclick="buscarYMostrarMapaAdmin()" style="margin: 0;">
-                    🔍 Mostrar Mapa
-                </button>
-            </div>
+
+<!-- SECCIÓN: BUSCAR OS -->
+<div class="result-card" style="margin-top: 20px;">
+    <div class="result-header">🔍 Buscar OS para visualizar</div>
+    <p style="color: #666; margin-bottom: 15px;">Ingresa CUALQUIER número de OS (no necesita estar asignada)</p>
+    <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end;">
+        <div class="form-group" style="margin: 0;">
+           <label>Número de OS:</label>
+           <input type="text" id="buscarOSAdmin" placeholder="Ej: 123456" 
+                  style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
         </div>
-    `;
+        <button class="btn btn-secondary" onclick="buscarYMostrarMapaAdmin()" style="margin: 0;">
+            🔍 Mostrar Mapa
+        </button>
+    </div>
+</div>
+        
+        `;
+
     
     // Cargar tipologías para filtros por unidad
     cargarTipologiasParaFiltrosUnidad();
@@ -7310,7 +7301,7 @@ async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
                 <select id="selectOSUnidad" style="width: 100%; padding: 12px;">
                     <option value="">-- Seleccione --</option>
                     ${osDeUnidad.map(os => 
-                        `<option value="${os.OSATMO}">${os.OSATMO} - ${os.Tipologia || 'Sin tipología'}</option>`
+                        `${os.osatomo} - ${os.Tipologia || 'Sin tipología'}`
                     ).join('')}
                 </select>
                 <small style="color: #666;">${osDeUnidad.length} OS | Radio: ${filtros.radio_km} km</small>
