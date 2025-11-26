@@ -4907,7 +4907,7 @@ async function guardarFiltrosPorUnidad() {
     try {
         // 4. Preparar registros con filtros de deuda incluidos
         const registrosAGuardar = unidadesDestino.map(unidad => ({
-            unidad: unidad,
+            Unidad: unidad,
             rangos: rangos.length > 0 ? rangos : null,
             tipologias: tipologias.length > 0 ? tipologias : null,
             deuda_amarillo: deudaAmarillo,
@@ -4987,7 +4987,7 @@ async function generarMapaUnidadConFiltros() {
         const { data: filtrosUnidad } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
-            .eq('unidad', unidadSeleccionada)
+            .eq('Unidad', unidadSeleccionada)
             .maybeSingle();
         
         let filtrosAplicar;
@@ -7954,7 +7954,7 @@ if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Cont
     const { data: filtrosUnidad, error: errUnidad } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
-        .eq('unidad', unidadFiltro)
+        .eq('Unidad', unidadFiltro)
         .maybeSingle();
 
     if (!errUnidad && filtrosUnidad) {
