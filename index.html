@@ -4479,9 +4479,7 @@ function transformarUsuarioAUnidad(usuario) {
 
 
 
-	// ========================================
-// 📍 CARGAR INTERFAZ KML RUTA (CON MAPA)
-// ========================================
+
 // ==============================
 // 📍 CARGAR INTERFAZ KML RUTA (CORREGIDA)
 // ==============================
@@ -4576,10 +4574,21 @@ async function cargarInterfazKMLRuta() {
         // Consulta / Contratista -> mostrar solo OS de su unidad
         if (rol === 'Consulta' || rol === 'Contratista') {
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-            const osParaMapa = (osCompletas || []).filter(os => {
-                const unidadesCampo = os.Unidad || '';
-                return unidadesCampo === miUnidad && (os.OSATMO || os.osatomo || os.OSATOMO);
-            });
+            // ✅ Paso 1: Obtener lista de OSATMO asignadas a la unidad del usuario
+const osAsignadasAMiUnidad = asignaciones
+    .filter(a => a.Unidad === miUnidad)
+    .map(a => String(a.osatomo).trim())
+    .filter(x => x);
+
+if (osAsignadasAMiUnidad.length === 0) {
+    searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
+    return;
+}
+
+// ✅ Paso 2: Filtrar OS Pendientes usando esa lista exacta
+const osParaMapa = osCompletas.filter(os =>
+    osAsignadasAMiUnidad.includes(String(os.OSATMO).trim())
+);
 
             if (!osParaMapa || osParaMapa.length === 0) {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
