@@ -7941,31 +7941,49 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
     try {
         let filtrosAplicar = null;
+        const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
-        // 1. Filtros por unidad (Consulta/Contratista)
-        if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
-            const {  filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
-                .from('filtros_por_unidad')
-                .select('*')
-                .eq('Unidad', unidadFiltro)  // ✅ con mayúscula
-                .maybeSingle();
-
-            if (!errorFiltrosUnidad && filtrosUnidad) {
-                filtrosAplicar = filtrosUnidad;
-            }
-        }
-
-        // 2. Filtros globales (fallback)
-        if (!filtrosAplicar) {
+        // ✅ 1. Si es Admin → usar filtros globales SIEMPRE
+        if (esAdmin) {
             const {  filtrosGlobales, error: errorGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .single();
 
-            filtrosAplicar = !errorGlobales && filtrosGlobales ? filtrosGlobales : { rangos: null, tipologias: null, radio_km: 3 };
+            if (errorGlobales) {
+                console.warn('⚠️ Error al cargar filtros globales, usando valores por defecto');
+            }
+            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+        }
+        // ✅ 2. Si es Consulta/Contratista → usar filtros por unidad, fallback a globales
+        else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+            const {  filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadFiltro)
+                .maybeSingle();
+
+            if (!errorFiltrosUnidad && filtrosUnidad) {
+                filtrosAplicar = filtrosUnidad;
+            } else {
+                // Fallback a filtros globales si no hay por unidad
+                const {  filtrosGlobales } = await supabaseClient
+                    .from('filtros_mapa')
+                    .select('*')
+                    .single();
+                filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+            }
+        }
+        // ✅ 3. Otros casos (por seguridad)
+        else {
+            const {  filtrosGlobales } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .single();
+            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
         }
 
-        // ✅ USAR SOLO filtrosAplicar de aquí en adelante
+        // ✅ Continuar con el resto exactamente igual
         window.filtrosAplicados = filtrosAplicar;
         window.osCentroActual = osCentro;
         window.unidadFiltroActual = unidadFiltro;
@@ -7980,11 +7998,9 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
         console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
 
-        // 3. Cargar OS Pendientes
         resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
             <p style="text-align: center; color: #666;">Buscando OS Pendientes en el área...</p></div>`;
 
-        const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser.rol);
         let todasOSRegistradas = [];
         const BATCH_SIZE = 1000;
         let offset = 0;
@@ -8011,7 +8027,6 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
             offset += BATCH_SIZE;
         }
 
-        // 4. Filtrar por radio y aplicar filtros
         const osEnRadio = [];
         todasOSRegistradas.forEach(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
