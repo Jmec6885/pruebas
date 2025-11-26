@@ -7943,21 +7943,23 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         let filtrosAplicar = null;
         const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
-        // ✅ 1. Si es Admin → usar filtros globales SIEMPRE
+        // ✅ CORRECCIÓN 1: Usar destructuring correcto
         if (esAdmin) {
-            const {  filtrosGlobales, error: errorGlobales } = await supabaseClient
+            const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .single();
 
             if (errorGlobales) {
-                console.warn('⚠️ Error al cargar filtros globales, usando valores por defecto');
+                console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
             }
+            
             filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+            console.log('🔍 Filtros globales cargados para Admin:', filtrosAplicar);
         }
-        // ✅ 2. Si es Consulta/Contratista → usar filtros por unidad, fallback a globales
+        // ✅ CORRECCIÓN 2: Verificar también filtros por unidad para Despacho
         else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
-            const {  filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
+            const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
                 .eq('Unidad', unidadFiltro)
@@ -7965,35 +7967,45 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
             if (!errorFiltrosUnidad && filtrosUnidad) {
                 filtrosAplicar = filtrosUnidad;
+                console.log('🔍 Filtros por unidad cargados:', filtrosAplicar);
             } else {
-                // Fallback a filtros globales si no hay por unidad
-                const {  filtrosGlobales } = await supabaseClient
+                // Fallback a filtros globales
+                const { data: filtrosGlobales } = await supabaseClient
                     .from('filtros_mapa')
                     .select('*')
                     .single();
                 filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
             }
         }
-        // ✅ 3. Otros casos (por seguridad)
         else {
-            const {  filtrosGlobales } = await supabaseClient
+            const { data: filtrosGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .single();
             filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
         }
 
-        // ✅ Continuar con el resto exactamente igual
+        // ✅ CORRECCIÓN 3: Validar que los filtros se cargaron correctamente
+        if (!filtrosAplicar) {
+            console.error('❌ Filtros no se cargaron correctamente');
+            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+        }
+
+        console.log('📊 Filtros finales aplicados:', filtrosAplicar);
+
+        // Guardar globalmente
         window.filtrosAplicados = filtrosAplicar;
         window.osCentroActual = osCentro;
         window.unidadFiltroActual = unidadFiltro;
 
         const radioKm = filtrosAplicar.radio_km || 3;
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+        
         if (!coordsCentro || !coordsCentro.includes(',')) {
             resultsContainer.innerHTML = `<div class="result-card">⚠️ Coordenadas inválidas para el centro del mapa</div>`;
             return;
         }
+        
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
 
         console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
@@ -8016,6 +8028,7 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
             }
 
             const { data, error } = await query.range(offset, offset + BATCH_SIZE - 1);
+            
             if (error) {
                 console.error('Error en batch:', error);
                 break;
@@ -8026,6 +8039,8 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
             if (data.length < BATCH_SIZE) break;
             offset += BATCH_SIZE;
         }
+
+        console.log(`📊 Total de OS cargadas: ${todasOSRegistradas.length}`);
 
         const osEnRadio = [];
         todasOSRegistradas.forEach(os => {
@@ -8039,6 +8054,7 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
                 const tipo = (os.Tipo_de_OS || '').toLowerCase();
                 const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
 
+                // ✅ CORRECCIÓN 4: Validar filtros correctamente
                 if (esRegulada) {
                     osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
                 } else if (validarFiltrosOS(os, filtrosAplicar)) {
@@ -8046,6 +8062,8 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
                 }
             }
         });
+
+        console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
 
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         osEnRadio.forEach((os, i) => os.numeroOrden = i + 1);
@@ -8564,15 +8582,19 @@ function buscarOSEnListado() {
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     // ✅ Destruir mapa anterior de forma segura
-    if (window.mapaLeafletInstance) {
-        try {
-            window.mapaLeafletInstance.off(); // Remover eventos
-            window.mapaLeafletInstance.remove(); // Destruir mapa
-        } catch (err) {
-            console.log('Mapa anterior ya destruido');
-        }
-        window.mapaLeafletInstance = null;
+    // En inicializarMapaLeaflet(), ANTES de crear el mapa nuevo:
+if (window.mapaLeafletInstance) {
+    try {
+        window.mapaLeafletInstance.eachLayer(layer => {
+            layer.remove();
+        });
+        window.mapaLeafletInstance.off();
+        window.mapaLeafletInstance.remove();
+    } catch (err) {
+        console.log('Limpieza de mapa completa');
     }
+    window.mapaLeafletInstance = null;
+}
     
     // Crear nuevo mapa
     const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
