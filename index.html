@@ -7142,7 +7142,7 @@ console.log(`✅ Total OS completas cargadas: ${osCompletas.length}`);
         }
         
         // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
-        const rolesAdmin = ['Administrador', 'Despacho'];
+        
 if (rolesAdmin.includes(currentUser.rol)) {
     generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
 } else {
