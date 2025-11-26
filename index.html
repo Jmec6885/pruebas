@@ -5261,47 +5261,39 @@ function generarMapaAdminKMLRuta() {
 // 🗺️ GENERAR MAPA KML RUTA (Función ya corregida y lista)
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
-    // ❌ ELIMINAR ESTA LÍNEA (está duplicada):
-    // const osConCoordenadas = osDataRaw.map(os => ({...
-
     const resultsContainer = document.getElementById('searchResults');
-    
-    // PASO CRÍTICO: NORMALIZAR Y FILTRAR DATOS AL PRINCIPIO
-    const osDataRaw = osAsignadas; 
 
-    // ✅ ESTA ES LA CORRECTA (dejar solo esta):
-    const osConCoordenadas = osDataRaw
-        .map(os => ({
-            ...os, 
-            osatomo: os.osatomo || os.OSATOMO || '',
-            Tipologia: os.Tipologia || 'Sin tipología',
-            CoordenadasValidas: os.Coordenadas || os.Coordendasgis
-        }))
-        .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
-        .filter(os => os.osatomo.trim() !== '');
-        
-    // ... (Manejo de osConCoordenadas.length === 0)
-    
-    // Guardar datos globalmente (la lista ya está normalizada)
-    window.osKMLData = osConCoordenadas;
+    // ✅ Normalizar todos los registros a un campo común: osatomo
+    const osNormalizadas = osAsignadas.map(os => ({
+        ...os,
+        osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim()
+    })).filter(os => os.osatomo !== '');
 
-    // ... (Generación de htmlSelector)
+    if (osNormalizadas.length === 0) {
+        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS con número válido para esta unidad</div>';
+        return;
+    }
+
+    // Guardar globalmente
+    window.osKMLData = osNormalizadas;
+
+    // Generar HTML del selector usando el campo normalizado
     let htmlSelector = `
-        <div class="result-card" ...>
-            ...
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <h3>📍 Seleccionar Punto de Partida</h3>
             <div class="form-group">
                 <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
-                <select id="selectPuntoPartidaKML" ...>
+                <select id="selectPuntoPartidaKML" style="width: 100%; padding: 15px; border-radius: 12px; font-size: 16px;">
                     <option value="">-- Seleccione una OS --</option>
-                    ${osConCoordenadas.map(os => 
-                        // Usa los campos normalizados
-                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
+                    ${osNormalizadas.map(os => 
+                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`
                     ).join('')}
                 </select>
             </div>
-            ...
-        </div>`;
-    
+            <button class="btn" onclick="generarMapaKMLConPuntoPartida('${unidad}')">🗺️ Generar Mapa</button>
+        </div>
+    `;
+
     resultsContainer.innerHTML = htmlSelector;
 }
 
