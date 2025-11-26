@@ -4850,6 +4850,16 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 // 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO)
 // ========================================
 async function guardarFiltrosPorUnidad() {
+
+// 🆕 Validación obligatoria para Despacho
+if (currentUser.rol === 'Despacho') {
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    if (checkboxesUnidades.length === 0) {
+        alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad para guardar filtros');
+        return;
+    }
+}
+
     // 1. Recolección de filtros de la interfaz
     const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
     const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
@@ -7370,7 +7380,8 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
             
                         
             <!-- BOTÓN: GUARDAR FILTROS GLOBALES -->
-            <div style="text-align: center; margin-top: 20px;">
+            ${currentUser.rol === 'Administrador' ? `
+    <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
                     💾 Guardar Filtros Globales
                 </button>
@@ -7806,6 +7817,28 @@ async function buscarYMostrarMapaAdmin() {
         if (asignacion) {
             console.log(`✅ OS encontrada en asignaciones. Unidad: ${asignacion.Unidad}`);
             unidadDetectada = asignacion.Unidad;
+
+	// 🆕 Para Despacho, verificar si tiene filtros configurados para esta unidad
+if (currentUser.rol === 'Despacho' && unidadDetectada) {
+    const { data: filtrosUnidad } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidadDetectada)
+        .maybeSingle();
+    
+    if (!filtrosUnidad) {
+        const confirmar = confirm(
+            `⚠️ No tienes filtros configurados para ${unidadDetectada}\n\n` +
+            `Se usarán los filtros globales.\n\n` +
+            `¿Deseas configurar filtros específicos primero?`
+        );
+        if (confirmar) {
+            volverATablas();
+            return;
+        }
+    }
+}
+
         } else {
             console.log('ℹ️ OS no encontrada en asignaciones, buscando en pendientes...');
         }
@@ -7943,20 +7976,38 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         let filtrosAplicar = null;
         const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
-        // ✅ CORRECCIÓN 1: Usar destructuring correcto
-        if (esAdmin) {
-            const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .single();
+        // ✅ 1. Admin: filtros globales | Despacho: filtros por unidad
+if (esAdmin) {
+    const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .single();
+    
+    if (errorGlobales) {
+        console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
+    }
+    filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+    
+} else if (currentUser.rol === 'Despacho' && unidadFiltro) {
+    // 🆕 Despacho usa filtros por unidad
+    const { data: filtrosUnidad } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidadFiltro)
+        .maybeSingle();
+    
+    if (filtrosUnidad) {
+        filtrosAplicar = filtrosUnidad;
+        console.log('📋 Despacho usando filtros de unidad:', unidadFiltro);
+    } else {
+        // Fallback a filtros globales
+        const { data: filtrosGlobales } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .single();
+        filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+    }
 
-            if (errorGlobales) {
-                console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
-            }
-            
-            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-            console.log('🔍 Filtros globales cargados para Admin:', filtrosAplicar);
-        }
         // ✅ CORRECCIÓN 2: Verificar también filtros por unidad para Despacho
         else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
             const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
