@@ -906,12 +906,16 @@ const TURNOS_ATTF = {
 function verificarHorarioPermitido(rol, userData = null) {
     const ahora = new Date();
     const horaActual = ahora.getHours();
+    const minutoActual = ahora.getMinutes();
     const diaActual = ahora.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+    
+    // ✅ CORRECCIÓN CRÍTICA: Usar la fecha REAL de hoy (no de mañana)
     const fechaHoy = ahora.toISOString().split('T')[0];
     
     console.log('🔍 Verificando horario:', {
         rol: rol,
         horaActual: horaActual,
+        minutoActual: minutoActual,
         diaActual: diaActual,
         fechaHoy: fechaHoy,
         userData: userData
@@ -930,13 +934,12 @@ function verificarHorarioPermitido(rol, userData = null) {
             userData.horario_excepcional_inicio && 
             userData.horario_excepcional_fin) {
             
-            const horaInicio = parseInt(userData.horario_excepcional_inicio.split(':')[0]);
-            const minutoInicio = parseInt(userData.horario_excepcional_inicio.split(':')[1]);
-            const horaFin = parseInt(userData.horario_excepcional_fin.split(':')[0]);
-            const minutoFin = parseInt(userData.horario_excepcional_fin.split(':')[1]);
+            // ✅ CORRECCIÓN: Convertir strings de hora a minutos correctamente
+            const [horaInicio, minutoInicio] = userData.horario_excepcional_inicio.split(':').map(Number);
+            const [horaFin, minutoFin] = userData.horario_excepcional_fin.split(':').map(Number);
             
-            // Convertir todo a minutos para comparación precisa
-            const minutosActuales = (horaActual * 60) + ahora.getMinutes();
+            // Convertir todo a minutos desde medianoche
+            const minutosActuales = (horaActual * 60) + minutoActual;
             const minutosInicio = (horaInicio * 60) + minutoInicio;
             const minutosFin = (horaFin * 60) + minutoFin;
             
@@ -946,7 +949,8 @@ function verificarHorarioPermitido(rol, userData = null) {
                 horaFin: userData.horario_excepcional_fin,
                 minutosActuales: minutosActuales,
                 minutosInicio: minutosInicio,
-                minutosFin: minutosFin
+                minutosFin: minutosFin,
+                dentroDelRango: minutosActuales >= minutosInicio && minutosActuales <= minutosFin
             });
             
             if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
@@ -956,7 +960,7 @@ function verificarHorarioPermitido(rol, userData = null) {
                 console.log(`❌ Fuera del horario excepcional`);
                 return { 
                     permitido: false, 
-                    mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+                    mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
                 };
             }
         }
@@ -1043,7 +1047,6 @@ function verificarHorarioPermitido(rol, userData = null) {
     // Rol no reconocido
     return { permitido: true };
 }
-
 
 
 async function verificarInactividad(userData) {
