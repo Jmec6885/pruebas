@@ -4850,43 +4850,44 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 // 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO)
 // ========================================
 async function guardarFiltrosPorUnidad() {
-    
-    // 1. Recolección de filtros globales (checkboxes de interfaz)
+    // 1. Recolección de filtros de la interfaz
     const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
     const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
-    
+
     const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
     const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
-    
+
+    // 🆕 Obtener estado de los checkboxes de deuda
+    const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
+    const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
+    const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
+
     // Validar input radio
     const radioElement = document.getElementById('radioKmUnidad');
     const radioKm = radioElement ? parseInt(radioElement.value) : 3;
-    
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
 
-    // 2. DETERMINAR LAS UNIDADES DESTINO
+    // 2. Determinar unidades destino
     let unidadesDestino = [];
-
-    // Caso A: Estamos en el Panel Admin (usando checkboxes)
     const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    
     if (checkboxesUnidades.length > 0) {
+        // Caso A: Panel Admin (múltiples unidades)
         unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
     } else {
-        // Caso B: Estamos en el Mapa Individual (campo oculto o selector simple)
+        // Caso B: Mapa individual (unidad activa)
         const unidadActivaElemento = document.getElementById('unidadActivaMapaRutas');
-        const selectorSimple = document.getElementById('selectUnidad'); // Fallback
-        
-        if (unidadActivaElemento && unidadActivaElemento.value) {
+        const selectorSimple = document.getElementById('selectUnidad');
+        if (unidadActivaElemento?.value) {
             unidadesDestino.push(unidadActivaElemento.value);
-        } else if (selectorSimple && selectorSimple.value) {
+        } else if (selectorSimple?.value) {
             unidadesDestino.push(selectorSimple.value);
         }
     }
 
-    // Si después de revisar ambos casos no hay unidades
     if (unidadesDestino.length === 0) {
         alert('⚠️ Debes seleccionar al menos una unidad (usando los checkboxes) o estar en un mapa de unidad activa.');
         return;
@@ -4898,33 +4899,35 @@ async function guardarFiltrosPorUnidad() {
         `• Unidades: ${unidadesDestino.length}\n` +
         `• Rangos: ${rangos.length > 0 ? rangos.length : 'Todos'}\n` +
         `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
+        `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
         `• Radio: ${radioKm} km`
     );
-    
     if (!confirmar) return;
-    
+
     try {
-        // Preparar datos para upsert masivo
+        // 4. Preparar registros con filtros de deuda incluidos
         const registrosAGuardar = unidadesDestino.map(unidad => ({
             unidad: unidad,
             rangos: rangos.length > 0 ? rangos : null,
             tipologias: tipologias.length > 0 ? tipologias : null,
+            deuda_amarillo: deudaAmarillo,
+            deuda_naranja: deudaNaranja,
+            deuda_rosado: deudaRosado,
             radio_km: radioKm,
             fecha_actualizacion: new Date().toISOString(),
             configurado_por: currentUser.usuario
         }));
-        
+
         const { error } = await supabaseClient
             .from('filtros_por_unidad')
             .upsert(registrosAGuardar, { onConflict: 'unidad' });
-        
+
         if (error) {
             alert('❌ Error al guardar: ' + error.message);
             return;
         }
-        
+
         alert(`✅ Filtros guardados exitosamente para ${unidadesDestino.length} unidad(es).`);
-        
     } catch (err) {
         console.error('Error:', err);
         alert('❌ Error de conexión');
@@ -7943,11 +7946,37 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         </div>`;
     
     try {
-        // 🆕 FORZAR RECARGA DE FILTROS DESDE BD
-        const { data: filtros, error } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .single();
+        // 🆕 FORZAR RECARGA DE FILTROS (GLOBALES + POR UNIDAD)
+let filtros = null;
+
+// 1. Si es rol no administrativo, intentar cargar filtro por unidad
+if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+    const { data: filtrosUnidad, error: errUnidad } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('unidad', unidadFiltro)
+        .maybeSingle();
+
+    if (!errUnidad && filtrosUnidad) {
+        filtros = filtrosUnidad; // ✅ Usar filtro por unidad
+    }
+}
+
+// 2. Si no hay filtro por unidad (o es admin), usar filtros globales
+if (!filtros) {
+    const { data: filtrosGlobales, error: errGlobal } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .single();
+    if (errGlobal) throw errGlobal;
+    filtros = filtrosGlobales;
+}
+
+// 3. Limpiar caché y guardar
+delete window.filtrosAplicados;
+window.filtrosAplicados = filtros;
+window.osCentroActual = osCentro;
+window.unidadFiltroActual = unidadFiltro;
         
         if (error) throw error;
         
@@ -7972,17 +8001,26 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
             </div>`;
         
         // ✅ BUSCAR EN TODA LA TABLA OS PENDIENTES (POR LOTES)
-        const todasOSRegistradas = [];
-        const BATCH_SIZE = 1000;
-        let offset = 0;
-        let hasMore = true;
-        
-        while (hasMore) {
-            const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                .in('Estado_ATOMO', ['Registrada', 'Asignada']) // ✅ SOLO REGISTRADAS
-                .range(offset, offset + BATCH_SIZE - 1);
+const BATCH_SIZE = 1000;
+let todasOSRegistradas = [];
+let offset = 0;
+let hasMore = true;
+
+// 🎯 Determinar si el usuario es Admin o no
+const esAdmin = (currentUser.rol === 'Administrador' || currentUser.rol === 'Supervisor' || currentUser.rol === 'Despacho');
+
+while (hasMore) {
+    let query = supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+        .in('Estado_ATOMO', ['Registrada', 'Asignada']);
+
+    // 🎯 Si NO es admin, filtrar POR UNIDAD
+    if (!esAdmin && unidadFiltro) {
+        query = query.eq('Unidad', unidadFiltro);
+    }
+
+    const { data, error } = await query.range(offset, offset + BATCH_SIZE - 1);
             
             if (error) {
                 console.error('Error en batch:', error);
@@ -8118,95 +8156,57 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 // ✅ VALIDAR SI OS CUMPLE FILTROS (CON DEUDA)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    const rangos = filtros.rangos || [];
-    const tipologias = filtros.tipologias || [];
-    
-    // 🆕 Obtener filtros de deuda
-    const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
-    const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
-    const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
-    
-    const tieneFiltroDeudaseleccionado = deudaAmarillo || deudaNaranja || deudaRosado;
+    // Normalizar filtros desde BD (pueden venir como null)
+    const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
+    const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
 
-    // ... (El console.log se mantiene, pero lo omito aquí por brevedad) ...
-    
-    // ✅ SI NO HAY FILTROS, MOSTRAR TODO
-    if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeudaseleccionado) {
-        // console.log('✅ Sin filtros - Aceptada');
+    // 🆕 Leer filtros de deuda desde el OBJETO filtros (NO del DOM)
+    const deudaAmarillo = Boolean(filtros.deuda_amarillo);
+    const deudaNaranja = Boolean(filtros.deuda_naranja);
+    const deudaRosado = Boolean(filtros.deuda_rosado);
+    const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
+
+    // ✅ Si no hay ningún filtro activo → mostrar todo
+    if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
         return true;
     }
-    
-    // 1. VALIDACIÓN DE DEUDA (SOLO PARA SUSPENSIÓN)
-    if (tieneFiltroDeudaseleccionado) {
+
+    // 1️⃣ FILTRO DE DEUDA (solo aplica a suspensiones)
+    if (tieneFiltroDeuda) {
         const deuda = parseFloat(os.Deuda) || 0;
-        
         const esSuspension = os.Tipologia && (
             os.Tipologia.includes('SUSPENSION B.T.') ||
             os.Tipologia.includes('SUSPENSION M.T.') ||
             os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
         );
-        
+
         if (esSuspension) {
-            let cumpleDeuda = false;
-            
-            // Si tieneDeudaSeleccionado es true, la OS debe cumplir AL MENOS UNO de los rangos de deuda
-            if (deudaAmarillo && deuda > 500) cumpleDeuda = true;
-            if (deudaNaranja && deuda >= 100 && deuda <= 500) cumpleDeuda = true;
-            if (deudaRosado && deuda >= 50 && deuda < 100) cumpleDeuda = true;
-            
-            if (!cumpleDeuda) {
-                // ❌ FALLA: Es suspensión, hay filtro de deuda, y la OS no cumple el monto.
-                // console.log(`❌ Suspensión ${os.OSATMO} - Monto de deuda NO coincide.`);
-                return false; 
-            }
-            // Si cumple deuda, NO retorna true, sigue para validar Rango y Tipología.
-        } else {
-            // ❌ FALLA: Hay filtro de deuda activo, pero la OS no es una Suspensión. 
-            // Esto implica que si se filtra por deuda, solo se deben ver Suspensiones.
-            // console.log(`❌ OS ${os.OSATMO} - NO es suspensión, pero el filtro de deuda está activo.`);
-            // return false; 
-            
-            // **OPCIÓN ALTERNATIVA:** Si el filtro de deuda SOLO debe aplicar a Suspensiones,
-            // y una OS que no es Suspensión debe pasar este filtro (Deuda) sin problemas:
-            // Simplemente no hacemos nada aquí y dejamos que pase a la siguiente validación.
-            // La opción actual está bien, ya que el filtro de deuda se ignora para no-suspensiones.
+            let cumple = false;
+            if (deudaAmarillo && deuda > 500) cumple = true;
+            if (deudaNaranja && deuda >= 100 && deuda <= 500) cumple = true;
+            if (deudaRosado && deuda >= 50 && deuda < 100) cumple = true;
+            if (!cumple) return false; // ❌ No cumple el rango de deuda requerido
         }
+        // ⚠️ Si NO es suspensión → el filtro de deuda se ignora → sigue validando
     }
-    
-    // 2. VALIDAR RANGO (Si hay filtro, debe cumplirse)
+
+    // 2️⃣ FILTRO DE RANGO
     if (rangos.length > 0) {
         if (!os['Fecha Gen.']) return false;
-        
         const dias = calcularDias(os['Fecha Gen.']);
-        const rangoOS = determinarRango(dias); // <-- Usa la función que me mostraste
-        
-        if (!rangos.includes(rangoOS)) {
-            // console.log(`❌ OS ${os.OSATMO} - Rango NO coincide`);
-            return false;
-        }
-        // console.log(`✅ OS ${os.OSATMO} - Rango coincide`);
+        const rangoOS = determinarRango(dias);
+        if (!rangos.includes(rangoOS)) return false;
     }
-    
-    // 3. VALIDAR TIPOLOGÍA (Si hay filtro, debe cumplirse)
-    // Esto incluye las tipologías de suspensión si fueron seleccionadas manualmente.
+
+    // 3️⃣ FILTRO DE TIPOLOGÍA
     if (tipologias.length > 0) {
         if (!os.Tipologia) return false;
-        
         const tipologiaOS = os.Tipologia.trim();
-        
-        const coincide = tipologias.some(t => {
-            return String(t).trim() === tipologiaOS;
-        });
-        
-        if (!coincide) {
-            // console.log(`❌ OS ${os.OSATMO} - Tipología NO coincide`);
-            return false;
-        }
-        // console.log(`✅ OS ${os.OSATMO} - Tipología coincide`);
+        const coincide = tipologias.some(t => String(t).trim() === tipologiaOS);
+        if (!coincide) return false;
     }
-    
-    // ✅✅ Si llega aquí, cumple con todos los filtros activos (Deuda, Rango, Tipología).
-    // console.log(`✅✅ OS ${os.OSATMO} - CUMPLE TODOS LOS FILTROS`);
+
+    // ✅ Cumple todos los filtros activos
     return true;
 }
 
