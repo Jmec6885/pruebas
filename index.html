@@ -7390,15 +7390,16 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 // ========================================
 // 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
 // ========================================
+// ========================================
+// 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
+// ========================================
 async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
-
-     const searchGrid = document.getElementById('searchGrid');
+    const searchGrid = document.getElementById('searchGrid');
     const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
 
-    // Normalizar osAsignadas (aplana si viene como array de arrays)
+    // Normalizar osAsignadas
     const osAsignadasFlat = (osAsignadas || []).flat ? osAsignadas.flat() : [].concat(...osAsignadas || []);
 
-    // Normalizar nombres de campos y Coordenadas
     const normalized = osAsignadasFlat.map(os => ({
         ...os,
         osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim(),
@@ -7407,7 +7408,6 @@ async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
         Unidad: os.Unidad || os.unidad || ''
     }));
 
-    // Filtrar solo las OS que corresponden a la unidad del usuario
     const osDeUnidad = normalized.filter(os => os.Unidad === miUnidad);
 
     if (!osDeUnidad || osDeUnidad.length === 0) {
@@ -7419,54 +7419,65 @@ async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
         return;
     }
 
-    // Generar HTML para las opciones del dropdown
-   const optionsHtml = osDeUnidad
-    .filter(os => os.osatomo && os.osatomo.trim() !== '') // ✅ Solo OS válidas
-    .map(os => `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`)
-    .join('');
+    // ✅ CORRECCIÓN: Generar opciones solo con OS válidas
+    const optionsHtml = osDeUnidad
+        .filter(os => os.osatomo && os.osatomo.trim() !== '')
+        .map(os => `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`)
+        .join('');
 
-// 🆕 Validar si quedaron opciones después del filtro
-if (optionsHtml === '') {
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #ffebee;">
-            <div class="result-header">⚠️ Sin OS Válidas</div>
-            <p style="text-align: center;">
-                Las OS de ${miUnidad} no tienen números válidos para mostrar.<br>
-                <strong>Debug:</strong> Se cargaron ${osDeUnidad.length} OS de os_asignadas.
-            </p>
-        </div>`;
-    return;
-}
+    if (optionsHtml === '') {
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #ffebee;">
+                <div class="result-header">⚠️ Sin OS Válidas</div>
+                <p style="text-align: center;">
+                    Las OS de ${miUnidad} no tienen números válidos.<br>
+                    <strong>Debug:</strong> ${osDeUnidad.length} OS cargadas.
+                </p>
+            </div>`;
+        return;
+    }
 
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e3f2fd;">
             <div class="result-header">🔍 Buscar OS Asignada - ${miUnidad}</div>
             
             <div class="form-group">
-                <label for="selectOSBusqueda">Seleccione OS de Partida (Unidad ${miUnidad}):</label>
-                <select id="selectOSBusqueda" style="width:100%; padding:12px;">
+                <label for="selectOSBusqueda">Seleccione OS de Partida:</label>
+                <select id="selectOSBusqueda" style="width:100%; padding:12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione una OS --</option>
                     ${optionsHtml}
                 </select>
-                <small style="color: #666; display:block; margin-top:8px;">${osDeUnidad.length} OS disponibles | Radio: ${filtros.radio_km || 'N/A'} km</small>
+                <small style="color: #666; display:block; margin-top:8px;">
+                    ${osDeUnidad.length} OS disponibles | Radio: ${filtros.radio_km || 3} km
+                </small>
             </div>
             
-            <div style="text-align: center; margin-top: 16px;">
-                <button class="btn" onclick="buscarYMostrarMapaUnidad(document.getElementById('selectOSBusqueda').value)">
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="buscarYMostrarMapaUnidad()">
                     🗺️ Mostrar Mapa
                 </button>
             </div>
         </div>`;
 
-    // (Opcional) Si deseas lanzar automáticamente la búsqueda al cambiar la selección
-    const selectEl = document.getElementById('selectOSBusqueda');
-    if (selectEl) {
-        selectEl.addEventListener('change', function() {
-            // no obligamos a mostrar, solo dejamos disponible el botón; si quieres autover, descomenta:
-            // if (this.value) buscarYMostrarMapaUnidad(this.value);
+    console.log('✅ Interfaz de unidad generada correctamente');
+}
+
+	// ✅ FUNCIÓN DE DEBUG (agregar temporalmente)
+function debugSelectOSBusqueda() {
+    const select = document.getElementById('selectOSBusqueda');
+    console.log('🔍 Debug del selector:');
+    console.log('- Elemento existe:', !!select);
+    console.log('- Valor actual:', select?.value);
+    console.log('- Cantidad de opciones:', select?.options?.length);
+    
+    if (select) {
+        console.log('- Opciones disponibles:');
+        Array.from(select.options).forEach((opt, i) => {
+            console.log(`  ${i}: ${opt.value} - ${opt.text}`);
         });
     }
 }
+
 
 // ========================================
 // 🔍 VERIFICAR TABLA os_asignadas
@@ -7805,8 +7816,21 @@ async function buscarYMostrarMapaAdmin() {
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
 // ========================================
-async function buscarYMostrarMapaUnidad() {
-    const osSeleccionada = document.getElementById('selectOSUnidad').value;
+// ========================================
+// 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD) - CORREGIDO
+// ========================================
+async function buscarYMostrarMapaUnidad(osSeleccionada) {
+    // ✅ CAMBIO 1: Recibir osSeleccionada como parámetro
+    if (!osSeleccionada) {
+        // Si no se pasó por parámetro, intentar obtenerlo del DOM
+        const selectElement = document.getElementById('selectOSBusqueda');
+        if (!selectElement) {
+            alert('⚠️ Error: No se encontró el selector de OS');
+            console.error('❌ Elemento selectOSBusqueda no existe en el DOM');
+            return;
+        }
+        osSeleccionada = selectElement.value;
+    }
     
     if (!osSeleccionada) {
         alert('⚠️ Por favor seleccione una OS');
@@ -7870,6 +7894,8 @@ async function buscarYMostrarMapaUnidad() {
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
+
+
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
