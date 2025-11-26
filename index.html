@@ -7942,11 +7942,16 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         </div>`;
     
     try {
-        // 1️⃣ Cargar filtros
-        const { data: filtros } = await supabaseClient
+        // 🆕 FORZAR RECARGA DE FILTROS DESDE BD
+        const { data: filtros, error } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .single();
+        
+        if (error) throw error;
+        
+        // 🆕 LIMPIAR CACHE ANTERIOR
+        delete window.filtrosAplicados;
         
         window.filtrosAplicados = filtros;
         window.osCentroActual = osCentro;
@@ -7975,7 +7980,7 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
             const { data, error } = await supabaseClient
                 .from('OS Pendientes')
                 .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                .eq('Estado_ATOMO', 'Registrada') // ✅ SOLO REGISTRADAS
+                .in('Estado_ATOMO', ['Registrada', 'Asignada']) // ✅ SOLO REGISTRADAS
                 .range(offset, offset + BATCH_SIZE - 1);
             
             if (error) {
