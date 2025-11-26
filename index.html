@@ -909,28 +909,59 @@ function verificarHorarioPermitido(rol, userData = null) {
     const diaActual = ahora.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
     const fechaHoy = ahora.toISOString().split('T')[0];
     
+    console.log('🔍 Verificando horario:', {
+        rol: rol,
+        horaActual: horaActual,
+        diaActual: diaActual,
+        fechaHoy: fechaHoy,
+        userData: userData
+    });
+    
     // Supervisor/Administrador: acceso 24/7
     if (rol === 'Supervisor' || rol === 'Administrador') {
         return { permitido: true };
     }
     
-    // 🆕 VALIDAR EXCEPCIONES DE HORARIO
+    // 🆕 VALIDAR EXCEPCIONES PRIMERO (ANTES DE TODO)
     if (userData && (rol === 'Lectura' || rol === 'Consulta' || rol === 'Contratista' || rol === 'Despacho')) {
-        // Verificar horario excepcional para día específico
+        
+        // ✅ PRIORIDAD 1: Verificar horario excepcional para día específico
         if (userData.fecha_excepcional === fechaHoy && 
             userData.horario_excepcional_inicio && 
             userData.horario_excepcional_fin) {
             
             const horaInicio = parseInt(userData.horario_excepcional_inicio.split(':')[0]);
+            const minutoInicio = parseInt(userData.horario_excepcional_inicio.split(':')[1]);
             const horaFin = parseInt(userData.horario_excepcional_fin.split(':')[0]);
+            const minutoFin = parseInt(userData.horario_excepcional_fin.split(':')[1]);
             
-            if (horaActual >= horaInicio && horaActual < horaFin) {
-                console.log(`✅ Horario excepcional activo: ${horaInicio}:00 - ${horaFin}:00`);
+            // Convertir todo a minutos para comparación precisa
+            const minutosActuales = (horaActual * 60) + ahora.getMinutes();
+            const minutosInicio = (horaInicio * 60) + minutoInicio;
+            const minutosFin = (horaFin * 60) + minutoFin;
+            
+            console.log('🎯 Horario excepcional detectado:', {
+                fecha: fechaHoy,
+                horaInicio: userData.horario_excepcional_inicio,
+                horaFin: userData.horario_excepcional_fin,
+                minutosActuales: minutosActuales,
+                minutosInicio: minutosInicio,
+                minutosFin: minutosFin
+            });
+            
+            if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
+                console.log(`✅ Horario excepcional ACTIVO: ${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`);
                 return { permitido: true };
+            } else {
+                console.log(`❌ Fuera del horario excepcional`);
+                return { 
+                    permitido: false, 
+                    mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`
+                };
             }
         }
         
-        // Verificar domingo permitido
+        // ✅ PRIORIDAD 2: Verificar domingo permitido
         if (diaActual === 0) { // Es domingo
             if (userData.domingo_permitido && userData.domingo_fecha === fechaHoy) {
                 console.log('✅ Domingo habilitado para este usuario');
@@ -944,9 +975,9 @@ function verificarHorarioPermitido(rol, userData = null) {
         }
     }
     
-    // 🎯 CAMBIO: Contratista - Lunes-Sábado, 5 AM - 6 PM
+    // 🎯 Contratista - Lunes-Sábado, 5 AM - 6 PM
     if (rol === 'Contratista') {
-        if (diaActual === 0) { // Domingo bloqueado
+        if (diaActual === 0) {
             return { permitido: false, mensaje: 'El rol Contratista no tiene acceso los domingos.' };
         }
         if (horaActual >= 5 && horaActual < 18) {
@@ -955,9 +986,9 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
     }
     
-    // 🎯 CAMBIO: Lectura - Lunes-Sábado, 5 AM - 6 PM
+    // 🎯 Lectura - Lunes-Sábado, 5 AM - 6 PM
     if (rol === 'Lectura') {
-        if (diaActual === 0) { // Domingo bloqueado
+        if (diaActual === 0) {
             return { permitido: false, mensaje: 'El rol Lectura no tiene acceso los domingos.' };
         }
         if (horaActual >= 5 && horaActual < 18) {
@@ -966,9 +997,9 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
     }
     
-    // 🎯 CAMBIO: Consulta - Lunes-Sábado, 5 AM - 6 PM
+    // 🎯 Consulta - Lunes-Sábado, 5 AM - 6 PM
     if (rol === 'Consulta') {
-        if (diaActual === 0) { // Domingo bloqueado
+        if (diaActual === 0) {
             return { permitido: false, mensaje: 'El rol Consulta no tiene acceso los domingos.' };
         }
         if (horaActual >= 5 && horaActual < 18) {
@@ -979,7 +1010,7 @@ function verificarHorarioPermitido(rol, userData = null) {
 
     // 🆕 DESPACHO: Lunes-Sábado, 6 AM - 6 PM
     if (rol === 'Despacho') {
-        if (diaActual === 0) { // Domingo bloqueado
+        if (diaActual === 0) {
             return { permitido: false, mensaje: 'El rol Despacho no tiene acceso los domingos.' };
         }
         if (horaActual >= 6 && horaActual < 18) {
@@ -988,15 +1019,15 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: false, mensaje: 'Su acceso está limitado de 6:00 AM a 6:00 PM.' };
     }
 
-    // 🎯 CAMBIO: Bodega - 24/7 (Lunes-Sábado, domingo bloqueado)
+    // 🎯 Bodega - 24/7 (Lunes-Sábado, domingo bloqueado)
     if (rol === 'Bodega') {
-        if (diaActual === 0) { // Domingo bloqueado
+        if (diaActual === 0) {
             return { permitido: false, mensaje: 'El rol Bodega no tiene acceso los domingos.' };
         }
         return { permitido: true };
     }
     
-    // Poda: 5 AM - 6 PM (validación adicional de descanso en otra función)
+    // Poda: 5 AM - 6 PM
     if (rol === 'Poda') {
         if (horaActual >= 5 && horaActual < 18) {
             return { permitido: true };
@@ -1004,15 +1035,14 @@ function verificarHorarioPermitido(rol, userData = null) {
         return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
     }
     
-    // ATTF: Validación compleja por turnos (se maneja en otra función)
+    // ATTF: Validación compleja por turnos
     if (rol === 'ATTF') {
-        return { permitido: true }; // Validación detallada en loginATTF()
+        return { permitido: true };
     }
     
     // Rol no reconocido
     return { permitido: true };
 }
-
 
 
 
