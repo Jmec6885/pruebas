@@ -7977,75 +7977,40 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         let filtrosAplicar = null;
         const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
-        // ... (Tu código anterior)
+        // ✅ 1. Admin: filtros globales | Despacho: filtros por unidad
+        if (esAdmin) {
+            const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .single();
+            
+            if (errorGlobales) {
+                console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
+            }
+            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+            
+        } else if (currentUser.rol === 'Despacho' && unidadFiltro) {
+            // 🆕 Despacho usa filtros por unidad
+            const { data: filtrosUnidad } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadFiltro)
+                .maybeSingle();
+            
+            if (filtrosUnidad) {
+                filtrosAplicar = filtrosUnidad;
+                console.log('📋 Despacho usando filtros de unidad:', unidadFiltro);
+            } else {
+                // Fallback a filtros globales
+                const { data: filtrosGlobales } = await supabaseClient
+                    .from('filtros_mapa')
+                    .select('*')
+                    .single();
+                filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+            }
 
-// ... (Tu código anterior)
-
-// ✅ 1. Admin: filtros globales | Despacho: filtros por unidad
-if (esAdmin) {
-    const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .single();
-    
-    if (errorGlobales) {
-        console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
-    }
-    filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-    
-} else if (currentUser.rol === 'Despacho' && unidadFiltro) {
-    // 🆕 Despacho usa filtros por unidad
-    const { data: filtrosUnidad } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadFiltro)
-        .maybeSingle();
-    
-    if (filtrosUnidad) {
-        filtrosAplicar = filtrosUnidad;
-        console.log('📋 Despacho usando filtros de unidad:', unidadFiltro);
-    } else {
-        // Fallback a filtros globales
-        const { data: filtrosGlobales } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .single();
-        filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-    }
-
-} // <--- Cierre del primer else if
-else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
-    // ✅ CORRECCIÓN 2: Verificar filtros por unidad para Consulta/Contratista
-    const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadFiltro)
-        .maybeSingle();
-
-    if (!errorFiltrosUnidad && filtrosUnidad) {
-        filtrosAplicar = filtrosUnidad;
-        console.log('🔍 Filtros por unidad cargados:', filtrosAplicar);
-    } else {
-        // Fallback a filtros globales
-        const { data: filtrosGlobales } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .single();
-        filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-    }
-}
-else {
-    // Para roles que no son Admin/Super/Despacho y sin filtro de unidad o sin filtro específico
-    const { data: filtrosGlobales } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .single();
-    filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-}
-
-
-        // ✅ CORRECCIÓN 2: Verificar también filtros por unidad para Despacho
-        else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+        } else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+            // ✅ CORRECCIÓN 2: Verificar filtros por unidad para Consulta/Contratista
             const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
@@ -8065,12 +8030,15 @@ else {
             }
         }
         else {
+            // Para roles que no son Admin/Super/Despacho y sin filtro de unidad o sin filtro específico
             const { data: filtrosGlobales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .single();
             filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
         }
+
+        // ❌ EL BLOQUE DUPLICADO FUE ELIMINADO AQUÍ.
 
         // ✅ CORRECCIÓN 3: Validar que los filtros se cargaron correctamente
         if (!filtrosAplicar) {
