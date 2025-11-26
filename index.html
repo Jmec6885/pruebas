@@ -7852,9 +7852,7 @@ async function buscarYMostrarMapaAdmin() {
     }
 }
 
-// ========================================
-// 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD)
-// ========================================
+
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD) - CORREGIDO
 // ========================================
@@ -7938,47 +7936,49 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
-    
-    resultsContainer.innerHTML = `
-        <div class="result-card">
-            <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p>
-        </div>`;
-    
+    resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
+        <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
+
     try {
-        // 🆕 FORZAR RECARGA DE FILTROS (GLOBALES + POR UNIDAD)
-let filtros = null;
+        // 🆕 FORZAR RECARGA DE FILTROS DESDE BD
+        let filtrosAplicar = null;
 
-// 1. Si es rol no administrativo, intentar cargar filtro por unidad
-if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
-    const { data: filtrosUnidad, error: errUnidad } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadFiltro)
-        .maybeSingle();
+        // 1. Intentar cargar filtros POR UNIDAD (solo si hay unidad)
+        if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+            const {  filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadFiltro)  // ✅ "Unidad" con mayúscula
+                .maybeSingle();
 
-    if (!errUnidad && filtrosUnidad) {
-        filtros = filtrosUnidad; // ✅ Usar filtro por unidad
-    }
-}
+            if (errorFiltrosUnidad) {
+                console.warn('No se encontraron filtros por unidad:', errorFiltrosUnidad);
+                // No detener; continuar sin filtros
+            } else if (filtrosUnidad) {
+                filtrosAplicar = filtrosUnidad;
+            }
+        }
 
-// 2. Si no hay filtro por unidad (o es admin), usar filtros globales
-if (!filtros) {
-    const { data: filtrosGlobales, error: errGlobal } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .single();
-    if (errGlobal) throw errGlobal;
-    filtros = filtrosGlobales;
-}
+        // 2. Si no hay filtros por unidad, usar filtros globales
+        if (!filtrosAplicar) {
+            const {  filtrosGlobales, error: errorGlobales } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .single();
 
-// 3. Limpiar caché y guardar
-delete window.filtrosAplicados;
-window.filtrosAplicados = filtros;
-window.osCentroActual = osCentro;
-window.unidadFiltroActual = unidadFiltro;
-        
-        if (error) throw error;
+            if (errorGlobales) {
+                console.error('Error cargando filtros globales:', errorGlobales);
+                // Puedes usar valores por defecto o abortar
+                filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+            } else {
+                filtrosAplicar = filtrosGlobales;
+            }
+        }
+
+        // ✅ Ahora sí: usar filtrosAplicar en validarFiltrosOS
+        window.filtrosAplicados = filtrosAplicar;
+        window.osCentroActual = osCentro;
+        window.unidadFiltroActual = unidadFiltro;
         
         // 🆕 LIMPIAR CACHE ANTERIOR
         delete window.filtrosAplicados;
