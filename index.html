@@ -8007,10 +8007,17 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 if (esAdmin) {
     // Admin/Supervisor: Filtros GLOBALES (usuario = NULL)
     const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .is('usuario', null)  // ← Filtro global sin usuario
-        .single();
+  .from('filtros_mapa')
+  .select('*')
+  .is('usuario', null)
+  .maybeSingle(); // ← permite 0 o 1 resultados
+
+	if (!filtrosGlobales) {
+  console.log('ℹ️ No hay filtros globales. Usando valores por defecto.');
+  filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+} else {
+  filtrosAplicar = filtrosGlobales;
+}
     
     if (errorGlobales) {
         console.warn('⚠️ Error cargando filtros globales:', errorGlobales);
