@@ -7993,6 +7993,67 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 }
 
 
+// ========================================
+// 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO)
+// ========================================
+async function cargarFiltrosUniversales(unidad = null) {
+    console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad: unidad, rol: currentUser.rol });
+    
+    let filtros = { rangos: null, tipologias: null, radio_km: 3 };
+    
+    try {
+        // 🎯 ORDEN DE PRIORIDAD (Mayor a Menor)
+        
+        // 1️⃣ Filtros personales del usuario (Despacho)
+        if (currentUser.rol === 'Despacho') {
+            const { data: filtrosPersonales } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .eq('usuario', currentUser.usuario)
+                .maybeSingle();
+            
+            if (filtrosPersonales) {
+                console.log('✅ Usando filtros personales de Despacho');
+                return filtrosPersonales;
+            }
+        }
+        
+        // 2️⃣ Filtros por unidad (Contratista/Consulta)
+        if (unidad) {
+            const { data: filtrosUnidad } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidad)
+                .maybeSingle();
+            
+            if (filtrosUnidad) {
+                console.log('✅ Usando filtros por unidad:', unidad);
+                return filtrosUnidad;
+            }
+        }
+        
+        // 3️⃣ Filtros globales (Admin/Supervisor)
+        const { data: filtrosGlobales } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .is('usuario', null)
+            .single();
+        
+        if (filtrosGlobales) {
+            console.log('✅ Usando filtros globales');
+            return filtrosGlobales;
+        }
+        
+        // 4️⃣ Valores por defecto
+        console.log('⚠️ Sin filtros configurados, usando defaults');
+        return filtros;
+        
+    } catch (err) {
+        console.error('❌ Error cargando filtros:', err);
+        return filtros;
+    }
+}
+
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8110,11 +8171,7 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
                 .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
                 .in('Estado_ATOMO', ['Registrada', 'Asignada']);
 
-            // Solo filtrar por unidad si NO es Admin/Supervisor/Despacho
-const esRolConAccesoGlobal = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
-if (!esRolConAccesoGlobal && unidadFiltro) {
-  query = query.eq('Unidad', unidadFiltro);
-}
+  
 
             const { data, error } = await query.range(offset, offset + BATCH_SIZE - 1);
             
