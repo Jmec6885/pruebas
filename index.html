@@ -4911,7 +4911,18 @@ if (currentUser.rol === 'Despacho') {
     }
 
     // 3. Confirmación
-    // 4. Preparar registros con filtros de deuda incluidos
+    const confirmar = confirm(
+        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n\n` +
+        `• Unidades: ${unidadesDestino.length}\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.length : 'Todos'}\n` +
+        `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
+        `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
+        `• Radio: ${radioKm} km`
+    );
+    if (!confirmar) return;
+
+    try {
+        // 4. Preparar registros con filtros de deuda incluidos
 const registrosAGuardar = unidadesDestino.map(unidad => ({
   Unidad: unidad, // ✅ Nombre exacto de la columna (con mayúscula)
   rangos: rangos.length > 0 ? rangos : null,
@@ -4928,25 +4939,6 @@ const registrosAGuardar = unidadesDestino.map(unidad => ({
 const { error } = await supabaseClient
   .from('filtros_por_unidad')
   .upsert(registrosAGuardar, { onConflict: 'Unidad' }); // ← "Unidad", no "unidad"
-    if (!confirmar) return;
-
-    try {
-        // 4. Preparar registros con filtros de deuda incluidos
-        const registrosAGuardar = unidadesDestino.map(unidad => ({
-            Unidad: unidad,
-            rangos: rangos.length > 0 ? rangos : null,
-            tipologias: tipologias.length > 0 ? tipologias : null,
-            deuda_amarillo: deudaAmarillo,
-            deuda_naranja: deudaNaranja,
-            deuda_rosado: deudaRosado,
-            radio_km: radioKm,
-            fecha_actualizacion: new Date().toISOString(),
-            configurado_por: currentUser.usuario
-        }));
-
-        const { error } = await supabaseClient
-            .from('filtros_por_unidad')
-            .upsert(registrosAGuardar, { onConflict: 'unidad' });
 
         if (error) {
             alert('❌ Error al guardar: ' + error.message);
