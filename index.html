@@ -7002,15 +7002,23 @@ async function cargarInterfazMapaRutas() {
     
     try {
         // 1️⃣ CARGAR FILTROS ACTUALES
-        const { data: filtros, error: errorFiltros } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .single();
-        
-        if (errorFiltros) {
-            searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar filtros</div>';
-            return;
-        }
+       let filtrosQuery;
+if (currentUser.rol === 'Despacho') {
+  filtrosQuery = supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .eq('usuario', currentUser.usuario)
+    .single();
+} else {
+  // Admin, Supervisor, etc. → usar filtros globales
+  filtrosQuery = supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .is('usuario', null)
+    .single();
+}
+
+const { data: filtros, error: errorFiltros } = await filtrosQuery;
         
         // 2️⃣ CARGAR TIPOLOGÍAS (usando cache)
         const tipologiasUnicas = await cargarTipologias();
