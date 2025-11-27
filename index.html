@@ -3483,14 +3483,14 @@ async function guardarCambiosUsuario(userId) {
             cambios.fecha_turno_regreso = document.getElementById('edit_fecha_turno_regreso').value || null;
             cambios.contador_turnos = parseInt(document.getElementById('edit_contador').value) || 0;
             cambios.estado_ciclo = document.getElementById('edit_estado_ciclo').value || null;
-        } else if (userData.rol === 'Lectura' || userData.rol === 'Consulta' || userData.rol === 'Contratista') {
-            // Campos de excepciones de horario
-            cambios.domingo_permitido = document.getElementById('edit_domingo_permitido').checked;
-            cambios.domingo_fecha = document.getElementById('edit_domingo_fecha').value || null;
-            cambios.horario_excepcional_inicio = document.getElementById('edit_horario_excepcional_inicio').value || null;
-            cambios.horario_excepcional_fin = document.getElementById('edit_horario_excepcional_fin').value || null;
-            cambios.fecha_excepcional = document.getElementById('edit_fecha_excepcional').value || null;
-        }
+        } else if (userData.rol === 'Lectura' || userData.rol === 'Consulta' || userData.rol === 'Contratista' || userData.rol === 'Despacho') {
+    // Campos de excepciones de horario
+    cambios.domingo_permitido = document.getElementById('edit_domingo_permitido').checked;
+    cambios.domingo_fecha = document.getElementById('edit_domingo_fecha').value || null;
+    cambios.horario_excepcional_inicio = document.getElementById('edit_horario_excepcional_inicio').value || null;
+    cambios.horario_excepcional_fin = document.getElementById('edit_horario_excepcional_fin').value || null;
+    cambios.fecha_excepcional = document.getElementById('edit_fecha_excepcional').value || null;
+}
         
         const { error } = await supabaseClient
             .from('usuarios')
