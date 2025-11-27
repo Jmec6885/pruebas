@@ -8068,35 +8068,9 @@ if (!filtrosAplicar) {
 
 console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
-            // ✅ CORRECCIÓN 2: Verificar filtros por unidad para Consulta/Contratista
-            const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
-                .from('filtros_por_unidad')
-                .select('*')
-                .eq('Unidad', unidadFiltro)
-                .maybeSingle();
+                    
 
-            if (!errorFiltrosUnidad && filtrosUnidad) {
-                filtrosAplicar = filtrosUnidad;
-                console.log('🔍 Filtros por unidad cargados:', filtrosAplicar);
-            } else {
-                // Fallback a filtros globales
-                const { data: filtrosGlobales } = await supabaseClient
-                    .from('filtros_mapa')
-                    .select('*')
-                    .single();
-                filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-            }
-        }
-        else {
-            // Para roles que no son Admin/Super/Despacho y sin filtro de unidad o sin filtro específico
-            const { data: filtrosGlobales } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .single();
-            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-        }
-
-        // ❌ EL BLOQUE DUPLICADO FUE ELIMINADO AQUÍ.
+       
 
         // ✅ CORRECCIÓN 3: Validar que los filtros se cargaron correctamente
         if (!filtrosAplicar) {
