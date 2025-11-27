@@ -3391,7 +3391,7 @@ function mostrarFormularioEdicion(user) {
     
     if (user.rol === 'ATTF' || user.rol === 'Poda') {
         seccionEspecifica = seccionGestionTurnos(user);
-    } else if (user.rol === 'Lectura' || user.rol === 'Consulta' || user.rol === 'Contratista') {
+    } else if (user.rol === 'Lectura' || user.rol === 'Consulta' || user.rol === 'Contratista' || user.rol === 'Despacho') {
         seccionEspecifica = seccionExcepcionesHorario(user);
     } else {
         seccionEspecifica = `
