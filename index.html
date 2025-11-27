@@ -7388,14 +7388,22 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
             
             
                         
-            <!-- BOTÓN: GUARDAR FILTROS GLOBALES -->
-            ${currentUser.rol === 'Administrador' ? `
+            // BOTÓN: GUARDAR FILTROS
+${currentUser.rol === 'Administrador' ? `
     <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
-                     💾 Guardar Filtros Globales
+        <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
+            💾 Guardar Filtros Globales
+        </button>
+    </div>
+` : currentUser.rol === 'Despacho' ? `
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            💾 Guardar MIS Filtros Personales
         </button>
     </div>
 ` : ''}
+        </div>
+
         </div>
 
 <!-- SECCIÓN: BUSCAR OS -->
@@ -7986,39 +7994,44 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         let filtrosAplicar = null;
         const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
-        // ✅ 1. Admin: filtros globales | Despacho: filtros por unidad
-        if (esAdmin) {
-            const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .single();
-            
-            if (errorGlobales) {
-                console.warn('⚠️ Error al cargar filtros globales:', errorGlobales);
-            }
-            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-            
-        } else if (currentUser.rol === 'Despacho' && unidadFiltro) {
-            // 🆕 Despacho usa filtros por unidad
-            const { data: filtrosUnidad } = await supabaseClient
-                .from('filtros_por_unidad')
-                .select('*')
-                .eq('Unidad', unidadFiltro)
-                .maybeSingle();
-            
-            if (filtrosUnidad) {
-                filtrosAplicar = filtrosUnidad;
-                console.log('📋 Despacho usando filtros de unidad:', unidadFiltro);
-            } else {
-                // Fallback a filtros globales
-                const { data: filtrosGlobales } = await supabaseClient
-                    .from('filtros_mapa')
-                    .select('*')
-                    .single();
-                filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-            }
-
-        } else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+       // ✅ 1. CARGAR FILTROS SEGÚN ROL
+if (esAdmin) {
+    // Admin/Supervisor: Filtros GLOBALES (usuario = NULL)
+    const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .is('usuario', null)  // ← Filtro global sin usuario
+        .single();
+    
+    if (errorGlobales) {
+        console.warn('⚠️ Error cargando filtros globales:', errorGlobales);
+    }
+    filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+    
+} else if (currentUser.rol === 'Despacho') {
+    // 🆕 DESPACHO: Filtros PERSONALES (basado en su usuario)
+    const { data: filtrosPersonales, error: errorPersonales } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .eq('usuario', currentUser.usuario)  // ← Filtros del usuario Despacho
+        .maybeSingle();
+    
+    if (filtrosPersonales) {
+        console.log(`✅ Usando filtros personales de ${currentUser.usuario}`);
+        filtrosAplicar = filtrosPersonales;
+    } else {
+        // Fallback a filtros globales si no tiene filtros personales aún
+        console.log('⚠️ Despacho sin filtros personales, usando globales');
+        const { data: filtrosGlobales } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .is('usuario', null)
+            .single();
+        filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+    }
+    
+} else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
+    // ... (tu código actual de filtros por unidad)
             // ✅ CORRECCIÓN 2: Verificar filtros por unidad para Consulta/Contratista
             const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
@@ -8250,15 +8263,16 @@ function validarFiltrosOS(os, filtros) {
 
 
 // ========================================
-// 💾 GUARDAR FILTROS GLOBALES (NUEVO NOMBRE)
+// 💾 GUARDAR FILTROS (ADMIN GLOBAL / DESPACHO PERSONAL)
 // ========================================
 async function guardarFiltrosMapaGlobales() {
-    if (currentUser.rol !== 'Administrador') {
-        alert('⚠️ Solo administradores pueden modificar filtros');
+    // 🔒 VALIDAR PERMISOS
+    if (currentUser.rol !== 'Administrador' && currentUser.rol !== 'Despacho') {
+        alert('⚠️ Solo Administradores y Despacho pueden modificar filtros');
         return;
     }
 
-    // 1️⃣ Obtener rangos seleccionados
+    // 1️⃣ Obtener rangos y tipologías seleccionadas
     const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
     const rangos = [];
     const tipologias = [];
@@ -8274,31 +8288,27 @@ async function guardarFiltrosMapaGlobales() {
         }
     });
 
-    // 2️⃣ ✅ BUSCAR EL INPUT CON MÚLTIPLES SELECTORES
+    // 2️⃣ Obtener radio
     let radioKmElement = document.getElementById('radioKm');
-    
-    if (!radioKmElement) {
-        radioKmElement = document.getElementById('radioKmGlobal');
-    }
-    
-    if (!radioKmElement) {
-        // Buscar cualquier input de tipo number en la página
-        radioKmElement = document.querySelector('input[type="number"][id*="radio"]');
-    }
-    
+    if (!radioKmElement) radioKmElement = document.getElementById('radioKmGlobal');
+    if (!radioKmElement) radioKmElement = document.querySelector('input[type="number"][id*="radio"]');
     const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
-    
-    console.log('💾 Radio detectado:', radioKm, 'desde input:', radioKmElement?.id || 'DEFAULT');
 
+    // 3️⃣ Validación
+    if (radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
 
-    // 3️⃣ Confirmación
+    // 4️⃣ Confirmar acción
+    const esDespacho = currentUser.rol === 'Despacho';
     const confirmar = confirm(
-        `¿SUSTITUIR configuración de filtros globales?\n\n` +
-        `📊 NUEVOS VALORES:\n` +
+        `¿${esDespacho ? 'Guardar TUS filtros personales' : 'SUSTITUIR filtros globales'}?\n\n` +
+        `📊 VALORES:\n` +
         `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
-        `• Tipologías: ${tipologias.length} seleccionada(s)\n` +
+        `• Tipologías: ${tipologias.length}\n` +
         `• Radio: ${radioKm} km\n\n` +
-        `⚠️ Esto REEMPLAZARÁ los filtros globales.\n\n` +
+        `${esDespacho ? 'Solo TÚ verás estos filtros' : '⚠️ Esto afectará a TODOS los usuarios'}\n\n` +
         `✅ SÍ - Guardar\n❌ NO - Cancelar`
     );
 
@@ -8307,31 +8317,57 @@ async function guardarFiltrosMapaGlobales() {
     try {
         const rangosAGuardar = rangos.length > 0 ? rangos : null;
         const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
-        
-        const { error } = await supabaseClient
-            .from('filtros_mapa')
-            .update({
-                rangos: rangosAGuardar,
-                tipologias: tipologiasAGuardar,
-                radio_km: radioKm,
-                fecha_actualizacion: new Date().toISOString()
-            })
-            .eq('id', 1);
 
-        if (error) {
-            alert('❌ Error al guardar: ' + error.message);
-            return;
+        // 🆕 LÓGICA SEPARADA POR ROL
+        if (esDespacho) {
+            // ✅ DESPACHO: Guardar con su usuario específico
+            const { error } = await supabaseClient
+                .from('filtros_mapa')
+                .upsert({
+                    usuario: currentUser.usuario,  // ← CLAVE: Identificador único
+                    rangos: rangosAGuardar,
+                    tipologias: tipologiasAGuardar,
+                    radio_km: radioKm,
+                    fecha_actualizacion: new Date().toISOString()
+                }, {
+                    onConflict: 'usuario'  // ← Upsert basado en usuario
+                });
+
+            if (error) {
+                alert('❌ Error: ' + error.message);
+                return;
+            }
+
+            alert('✅ Tus filtros personales fueron guardados correctamente');
+            console.log(`✅ Filtros de ${currentUser.usuario} guardados`);
+
+        } else {
+            // ✅ ADMIN: Actualizar filtro global (id=1, usuario=NULL)
+            const { error } = await supabaseClient
+                .from('filtros_mapa')
+                .update({
+                    rangos: rangosAGuardar,
+                    tipologias: tipologiasAGuardar,
+                    radio_km: radioKm,
+                    fecha_actualizacion: new Date().toISOString()
+                })
+                .eq('id', 1)
+                .is('usuario', null);  // ← Solo actualizar el registro global
+
+            if (error) {
+                alert('❌ Error: ' + error.message);
+                return;
+            }
+
+            alert('✅ Filtros globales actualizados');
+            console.log('✅ Filtros globales guardados');
         }
 
-        alert(`✅ Filtros globales actualizados correctamente`);
-        console.log('✅ Filtros guardados:', { rangos, tipologias, radioKm });
-
     } catch (err) {
-        console.error('Error guardando filtros:', err);
+        console.error('Error:', err);
         alert('❌ Error de conexión');
     }
 }
-
 
 	// ========================================
 // 🗺️ GENERAR MAPA CON LEAFLET (CON PANEL DE DETALLE)
