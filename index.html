@@ -8004,50 +8004,60 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
         const esAdmin = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
 
        // ✅ 1. CARGAR FILTROS SEGÚN ROL
-if (esAdmin) {
-    // Admin/Supervisor: Filtros GLOBALES (usuario = NULL)
-    const { data: filtrosGlobales, error: errorGlobales } = await supabaseClient
-  .from('filtros_mapa')
-  .select('*')
-  .is('usuario', null)
-  .maybeSingle(); // ← permite 0 o 1 resultados
+// ✅ CARGAR FILTROS SEGÚN ROL Y CONDICIÓN
+let filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
 
-	if (!filtrosGlobales) {
-  console.log('ℹ️ No hay filtros globales. Usando valores por defecto.');
-  filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
-} else {
-  filtrosAplicar = filtrosGlobales;
+const esAdmin = ['Administrador', 'Supervisor'].includes(currentUser?.rol);
+const esDespacho = currentUser?.rol === 'Despacho';
+
+if (esAdmin) {
+  // Admin/Supervisor → Filtros GLOBALES (usuario = NULL)
+  const {  data: filtrosGlobales } = await supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .is('usuario', null)
+    .single();
+  if (filtrosGlobales) filtrosAplicar = filtrosGlobales;
+  console.log('📋 Admin/Supervisor usando filtros globales');
+} 
+else if (esDespacho) {
+  // Despacho → SUS PROPIOS FILTROS (usuario = currentUser.usuario)
+  const {  data: filtrosPersonales } = await supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .eq('usuario', currentUser.usuario)
+    .maybeSingle(); // ← permite 0 o 1 resultado
+  if (filtrosPersonales) {
+    filtrosAplicar = filtrosPersonales;
+    console.log(`📋 Despacho usando filtros personales de ${currentUser.usuario}`);
+  } else {
+    // Si no tiene filtros personales, usar globales como fallback
+    const {  data: filtrosGlobales } = await supabaseClient
+      .from('filtros_mapa')
+      .select('*')
+      .is('usuario', null)
+      .single()
+      .then(r => r.data)
+      .catch(() => null);
+    if (filtrosGlobales) {
+      filtrosAplicar = filtrosGlobales;
+      console.log('⚠️ Despacho sin filtros personales → usando globales');
+    }
+  }
+} 
+else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
+  // Consulta/Contratista → Filtros por UNIDAD
+  const {  data: filtrosUnidad } = await supabaseClient
+    .from('filtros_por_unidad')
+    .select('*')
+    .eq('Unidad', unidadFiltro)
+    .maybeSingle();
+  if (filtrosUnidad) {
+    filtrosAplicar = filtrosUnidad;
+    console.log(`📋 Filtros por unidad ${unidadFiltro}`);
+  }
 }
-    
-    if (errorGlobales) {
-        console.warn('⚠️ Error cargando filtros globales:', errorGlobales);
-    }
-    filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-    
-} else if (currentUser.rol === 'Despacho') {
-    // 🆕 DESPACHO: Filtros PERSONALES (basado en su usuario)
-    const { data: filtrosPersonales, error: errorPersonales } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .eq('usuario', currentUser.usuario)  // ← Filtros del usuario Despacho
-        .maybeSingle();
-    
-    if (filtrosPersonales) {
-        console.log(`✅ Usando filtros personales de ${currentUser.usuario}`);
-        filtrosAplicar = filtrosPersonales;
-    } else {
-        // Fallback a filtros globales si no tiene filtros personales aún
-        console.log('⚠️ Despacho sin filtros personales, usando globales');
-        const { data: filtrosGlobales } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .is('usuario', null)
-            .single();
-        filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
-    }
-    
-} else if (unidadFiltro && (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista')) {
-    // ... (tu código actual de filtros por unidad)
+
             // ✅ CORRECCIÓN 2: Verificar filtros por unidad para Consulta/Contratista
             const { data: filtrosUnidad, error: errorFiltrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
