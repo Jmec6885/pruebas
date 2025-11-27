@@ -8110,9 +8110,11 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
                 .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
                 .in('Estado_ATOMO', ['Registrada', 'Asignada']);
 
-            if (!esAdmin && unidadFiltro) {
-                query = query.eq('Unidad', unidadFiltro);
-            }
+            // Solo filtrar por unidad si NO es Admin/Supervisor/Despacho
+const esRolConAccesoGlobal = ['Administrador', 'Supervisor', 'Despacho'].includes(currentUser?.rol);
+if (!esRolConAccesoGlobal && unidadFiltro) {
+  query = query.eq('Unidad', unidadFiltro);
+}
 
             const { data, error } = await query.range(offset, offset + BATCH_SIZE - 1);
             
