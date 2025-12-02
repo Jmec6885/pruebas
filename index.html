@@ -5288,7 +5288,7 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
         return [];
     }
 
-    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+    const coordsCentro = osCentro.Coordendasgis || osCentro.Coordenadas;
     
     // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
     const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
@@ -5575,7 +5575,7 @@ function descargarKMLRutaNumerada() {
     
     const ubicaciones = window.datosRutaKML.map(os => ({
         etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: os.Coordenadas || os.Coordendasgis,
+        coordenadas: os.Coordendasgis || os.Coordenadas,
         numeroOrden: os.numeroOrden
     }));
     
@@ -5590,6 +5590,7 @@ function descargarKMLRutaNumerada() {
     
     console.log('✅ KML numerado descargado');
 }
+
 
 	
 // ========================================
@@ -8123,7 +8124,7 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         window.unidadFiltroActual = unidadFiltro;
 
         const radioKm = filtrosAplicar.radio_km || 3;
-        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+        const coordsCentro = osCentro.Coordendasgis || osCentro.Coordenadas; 
         
         if (!coordsCentro || !coordsCentro.includes(',')) {
             resultsContainer.innerHTML = `<div class="result-card">⚠️ Coordenadas inválidas para el centro del mapa</div>`;
@@ -8166,7 +8167,7 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
         const osEnRadio = [];
         todasOSRegistradas.forEach(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
+            const coords = os.Coordendasgis || os.Coordenadas;
             if (!validarFormatoCoordenadas(coords)) return;
 
             const [lat, lng] = coords.split(',').map(Number);
