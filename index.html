@@ -664,7 +664,7 @@
 			<div class="table-option" onclick="seleccionarTabla('cargar_asignaciones')">
   <span class="table-icon">📤</span>
   <div class="table-title">Cargar Asignaciones</div>
-  <div class="table-description">Asignar OS a unidades (Admin)</div>
+  <div class="table-description">Adjuntar Archivo</div>
 </div>
 
 		    <div class="table-option" onclick="seleccionarTabla('retiro_medidores')">
@@ -2291,19 +2291,18 @@ function mostrarTablasSegunRol() {
         return;
     }
 
-    //---------------------------------------------
-    //  🎯 DESPACHO - TODO EXCEPTO usuarios e IPR
-    //---------------------------------------------
-    if (rol === 'Despacho') {
-        tableOptions.forEach(option => {
-            const action = option.getAttribute('onclick') || '';
-            option.style.display =
-                (!action.includes('usuarios') && !action.includes('retiro_medidores'))
-                ? 'block'
-                : 'none';
-        });
-        return;
-    }
+    // 🎯 DESPACHO - Todo excepto usuarios e IPR
+if (rol === 'Despacho') {
+  tableOptions.forEach(option => {
+    const action = option.getAttribute('onclick') || '';
+    const prohibido = 
+      action.includes("'usuarios'") ||         // Gestión de Usuarios
+      action.includes("'retiro_medidores'");  // IPR
+    option.style.display = prohibido ? 'none' : 'block';
+  });
+  console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
+  return;
+}
 
     //---------------------------------------------
     //  🎯 BODEGA - SOLO IPR + OS CERRADAS
@@ -12343,14 +12342,14 @@ if (tableName === 'mapa_rutas') {
 
 	// 📤 Validar acceso a Cargar Asignaciones
 if (tableName === 'cargar_asignaciones') {
-    if (currentUser.rol !== 'Administrador') {
-        alert('⚠️ Solo Administradores pueden cargar asignaciones');
-        return;
-    }
-    cargarInterfazAsignaciones();
+  const rolesPermitidos = ['Administrador', 'Despacho'];
+  if (!rolesPermitidos.includes(currentUser.rol)) {
+    alert('⚠️ Solo Administradores y Despacho pueden cargar asignaciones');
     return;
+  }
+  cargarInterfazAsignaciones();
+  return;
 }
-
 
 
     // Seleccionar tabla y mostrar interfaz
