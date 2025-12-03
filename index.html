@@ -3626,12 +3626,13 @@ function mostrarFormularioNuevoUsuario() {
 // 💾 GUARDAR NUEVO USUARIO
 // ========================================
 async function guardarNuevoUsuario() {
-    const usuario = document.getElementById('nuevo_usuario').value.trim();
-    const password = document.getElementById('nuevo_password').value.trim();
-    const passwordConfirm = document.getElementById('nuevo_password_confirm').value.trim();
-    const rol = document.getElementById('nuevo_rol').value;
+    // ✅ Protección contra elementos no encontrados
+    const usuario = (document.getElementById('nuevo_usuario')?.value || '').trim();
+    const password = (document.getElementById('nuevo_password')?.value || '').trim();
+    const passwordConfirm = (document.getElementById('nuevo_password_confirm')?.value || '').trim();
+    const rol = (document.getElementById('nuevo_rol')?.value || '').trim();
     
-    // Validaciones
+    // ✅ Validaciones robustas
     if (!usuario || !password || !passwordConfirm || !rol) {
         alert('⚠️ Por favor complete todos los campos');
         return;
@@ -3651,6 +3652,7 @@ async function guardarNuevoUsuario() {
         alert('⚠️ La contraseña debe tener al menos 6 caracteres');
         return;
     }
+
     
     // Verificar si el usuario ya existe
     const { data: existente } = await supabaseClient
@@ -12392,6 +12394,89 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
     }
 });
+
+
+// ========================================
+// ✅ CREAR NUEVO USUARIO
+// ========================================
+async function crearUsuario() {
+  const usuarioInput = document.getElementById('nuevo_usuario');
+  const passwordInput = document.getElementById('nuevo_password');
+  const passwordConfirmInput = document.getElementById('nuevo_password_confirm');
+  const rolSelect = document.getElementById('nuevo_rol');
+
+  // 1. Validar campos
+  const usuario = usuarioInput?.value?.trim();
+  const password = passwordInput?.value?.trim();
+  const passwordConfirm = passwordConfirmInput?.value?.trim();
+  const rol = rolSelect?.value;
+
+  if (!usuario || !password || !passwordConfirm || !rol) {
+    alert('⚠️ Todos los campos son obligatorios');
+    return;
+  }
+
+  if (usuario.length < 4) {
+    alert('⚠️ El usuario debe tener al menos 4 caracteres');
+    return;
+  }
+
+  if (password.length < 6) {
+    alert('⚠️ La contraseña debe tener al menos 6 caracteres');
+    return;
+  }
+
+  if (password !== passwordConfirm) {
+    alert('⚠️ Las contraseñas no coinciden');
+    return;
+  }
+
+  // 2. Verificar si el usuario ya existe
+  try {
+    const { data, error } = await supabaseClient
+      .from('usuarios')
+      .select('usuario')
+      .eq('usuario', usuario)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = "no rows returned"
+      alert('❌ Error al verificar usuario: ' + error.message);
+      return;
+    }
+
+    if (data) {
+      alert(`❌ El usuario "${usuario}" ya existe`);
+      return;
+    }
+
+    // 3. Insertar nuevo usuario
+    const { error: insertError } = await supabaseClient
+      .from('usuarios')
+      .insert({
+        usuario: usuario,
+        password: password,
+        rol: rol,
+        activo: true,
+        Contador: 0,
+        sessionactiva: false,
+        ultimaconexion: null,
+        ultima_actividad: new Date().toISOString()
+      });
+
+    if (insertError) {
+      alert('❌ Error al crear usuario: ' + insertError.message);
+      return;
+    }
+
+    // 4. Éxito
+    alert(`✅ Usuario "${usuario}" creado correctamente\nRol: ${rol}`);
+    mostrarFormularioNuevoUsuario(); // Opcional: volver a mostrar el formulario limpio
+
+  } catch (err) {
+    console.error('Error inesperado:', err);
+    alert('❌ Error inesperado al crear usuario');
+  }
+}
 
 
 </script>
