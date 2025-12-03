@@ -11731,7 +11731,7 @@ if (
     
     let valor = String(item[field] || 'N/A');
     
-    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
+    if ((field === 'Comentario' || field === 'ComentarioGeneral' || field === 'Direccion') && valor !== 'N/A') { 
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
     } else {
@@ -12092,7 +12092,7 @@ function mostrarDetalleRelacionados(tabla) {
     
     let valor = String(item[field] || 'N/A');
     
-    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
+    if ((field === 'Comentario' || field === 'ComentarioGeneral' || field === 'Direccion') && valor !== 'N/A') {
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
     } else {
