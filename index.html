@@ -12290,19 +12290,19 @@ function seleccionarTabla(tableName) {
   console.log("🔍 seleccionarTabla llamado con:", JSON.stringify(tableName));
   
  if (tableName === 'cargar_asignaciones') {
-  if (currentUser.rol !== 'Administrador') {
-    alert('⚠️ Solo Administradores pueden cargar asignaciones');
+  const rolesPermitidos = ['Administrador', 'Despacho'];
+  if (!rolesPermitidos.includes(currentUser.rol)) {
+    alert('⚠️ Solo Administradores y Despacho pueden cargar asignaciones');
     return;
   }
   cargarInterfazAsignaciones();
 
-  // ✅ ¡ESTO ES CLAVE!
+  // ✅ Mostrar la sección de búsqueda
   document.getElementById('tableSelectionSection').style.display = 'none';
   document.getElementById('searchSection').style.display = 'block';
 
   return;
 }
-
 
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
