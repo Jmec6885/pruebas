@@ -12285,6 +12285,17 @@ function verificarDatosOffline() {
 
 // === FUNCIÓN PARA SELECCIONAR TABLA ===
 function seleccionarTabla(tableName) {
+  console.log("🔍 seleccionarTabla llamado con:", JSON.stringify(tableName));
+  
+  if (tableName === 'cargar_asignaciones') {
+    console.log("✅ Entrando al caso 'cargar_asignaciones'");
+    if (currentUser.rol !== 'Administrador') {
+      alert('⚠️ Solo Administradores pueden cargar asignaciones');
+      return;
+    }
+    cargarInterfazAsignaciones();
+    return;
+  }
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
         const modulosProhibidos = ['usuarios', 'detalle_os', 'cargar_asignaciones'];
