@@ -751,25 +751,6 @@ let selectedTable = null;
 let tipologiasCache = null;
 let consultasData = [];
 
-// ✅ Obtiene la fecha LOCAL de El Salvador (UTC-6, sin DST)
-function getFechaLocalElSalvador() {
-    const ahora = new Date();
-    const offsetUTC = -6;
-    const utc = ahora.getTime() + (ahora.getTimezoneOffset() * 60000);
-    const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
-    return fechaElSalvador.toISOString().split('T')[0]; // YYYY-MM-DD
-}
-
-// ✅ Obtiene la fecha de MAÑANA en El Salvador
-function getFechaMananaElSalvador() {
-    const hoy = new Date();
-    const offsetUTC = -6;
-    const utc = hoy.getTime() + (hoy.getTimezoneOffset() * 60000);
-    const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
-    fechaElSalvador.setDate(fechaElSalvador.getDate() + 1);
-    return fechaElSalvador.toISOString().split('T')[0];
-}
-
 // === CONFIGURACIÓN DE VISIBILIDAD ===
 const CONFIG_VISIBILIDAD = {
     mostrarNombreCliente: false,
@@ -4876,102 +4857,102 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 // 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO)
 // ========================================
 async function guardarFiltrosPorUnidad() {
-  // 1. Validar que se haya seleccionado una fecha
-  const fechaInput = document.getElementById('fechaProgramadaFiltro')?.value;
-  if (!fechaInput) {
-    alert('⚠️ Debes seleccionar una fecha programada');
-    return;
-  }
 
-  // 2. Recolección de filtros desde la interfaz
-  const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
-  const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
-
-  const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
-  const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
-
-  const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
-  const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
-  const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
-
-  const radioKmElement = document.getElementById('radioKmUnidad');
-  const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
-  if (radioKm < 1 || radioKm > 20) {
-    alert('⚠️ El radio debe estar entre 1 y 20 km');
-    return;
-  }
-
-  // 3. Determinar unidades destino (admin o vista individual)
-  let unidadesDestino = []; // ✅ SIEMPRE declarar como array vacío
-
-  // Caso A: Rol Despacho → checkboxes seleccionados
-  if (currentUser?.rol === 'Despacho') {
+// 🆕 Validación obligatoria para Despacho
+if (currentUser.rol === 'Despacho') {
     const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
     if (checkboxesUnidades.length === 0) {
-      alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad');
-      return;
+        alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad para guardar filtros');
+        return;
     }
-    unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
-  }
-  // Caso B: Interfaz de unidad individual (ej. mapa por unidad)
-  else {
-    const unidadActiva = document.getElementById('unidadActivaMapaRutas')?.value;
-    const unidadSelector = document.getElementById('selectUnidad')?.value;
-    if (unidadActiva) {
-      unidadesDestino.push(unidadActiva);
-    } else if (unidadSelector) {
-      unidadesDestino.push(unidadSelector);
-    }
-    if (unidadesDestino.length === 0) {
-      alert('⚠️ No se detectó ninguna unidad activa. Asegúrate de estar en un mapa de unidad o seleccionar una.');
-      return;
-    }
-  }
-
-  // 4. Confirmación visual
-  const confirmar = confirm(
-    `¿Guardar filtros para ${unidadesDestino.length} unidad(es) en la fecha ${fechaInput}?\n` +
-    `• Rangos: ${rangos.length || 'Todos'}\n` +
-    `• Tipologías: ${tipologias.length || 'Todas'}\n` +
-    `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
-    `• Radio: ${radioKm} km`
-  );
-  if (!confirmar) return;
-
-  // 5. Preparar registros para guardar
-  const registrosAGuardar = unidadesDestino.map(unidad => ({
-    "Unidad": unidad,
-    rangos: rangos.length ? rangos : null,
-    tipologias: tipologias.length ? tipologias : null,
-    deuda_amarillo: deudaAmarillo,
-    deuda_naranja: deudaNaranja,
-    deuda_rosado: deudaRosado,
-    radio_km: radioKm,
-    fecha_actualizacion: new Date().toISOString(),
-    configurado_por: currentUser?.usuario || 'Sistema',
-    fecha_programada: fechaInput // ← clave para programación
-  }));
-
-  // 6. Guardar en Supabase (upsert con clave compuesta)
-  try {
-    const { error } = await supabaseClient
-      .from('filtros_por_unidad')
-      .upsert(registrosAGuardar, {
-        onConflict: 'Unidad,fecha_programada' // ← ¡importante!
-      });
-
-    if (error) {
-      console.error('Error Supabase:', error);
-      alert('❌ Error al guardar: ' + (error.message || 'conexión'));
-      return;
-    }
-
-    alert(`✅ Filtros guardados exitosamente para ${unidadesDestino.length} unidad(es) en ${fechaInput}`);
-  } catch (err) {
-    console.error('Error inesperado:', err);
-    alert('❌ Error de conexión');
-  }
 }
+
+    // 1. Recolección de filtros de la interfaz
+    const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
+    const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
+
+    const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
+    const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
+
+    // 🆕 Obtener estado de los checkboxes de deuda
+    const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
+    const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
+    const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
+
+    // Validar input radio
+    const radioElement = document.getElementById('radioKmUnidad');
+    const radioKm = radioElement ? parseInt(radioElement.value) : 3;
+    if (radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
+
+    // 2. Determinar unidades destino
+    let unidadesDestino = [];
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    
+    if (checkboxesUnidades.length > 0) {
+        // Caso A: Panel Admin (múltiples unidades)
+        unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
+    } else {
+        // Caso B: Mapa individual (unidad activa)
+        const unidadActivaElemento = document.getElementById('unidadActivaMapaRutas');
+        const selectorSimple = document.getElementById('selectUnidad');
+        if (unidadActivaElemento?.value) {
+            unidadesDestino.push(unidadActivaElemento.value);
+        } else if (selectorSimple?.value) {
+            unidadesDestino.push(selectorSimple.value);
+        }
+    }
+
+    if (unidadesDestino.length === 0) {
+        alert('⚠️ Debes seleccionar al menos una unidad (usando los checkboxes) o estar en un mapa de unidad activa.');
+        return;
+    }
+
+    // 3. Confirmación
+    const confirmar = confirm(
+        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n\n` +
+        `• Unidades: ${unidadesDestino.length}\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.length : 'Todos'}\n` +
+        `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
+        `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
+        `• Radio: ${radioKm} km`
+    );
+    if (!confirmar) return;
+
+    try {
+        // 4. Preparar registros con filtros de deuda incluidos
+const registrosAGuardar = unidadesDestino.map(unidad => ({
+  Unidad: unidad, // ✅ Nombre exacto de la columna (con mayúscula)
+  rangos: rangos.length > 0 ? rangos : null,
+  tipologias: tipologias.length > 0 ? tipologias : null,
+  deuda_amarillo: deudaAmarillo,
+  deuda_naranja: deudaNaranja,
+  deuda_rosado: deudaRosado,
+  radio_km: radioKm,
+  fecha_actualizacion: new Date().toISOString(),
+  configurado_por: currentUser.usuario
+}));
+
+// ✅ onConflict debe usar el nombre EXACTO de la columna
+const { error } = await supabaseClient
+  .from('filtros_por_unidad')
+  .upsert(registrosAGuardar, { onConflict: 'Unidad' }); // ← "Unidad", no "unidad"
+
+        if (error) {
+            alert('❌ Error al guardar: ' + error.message);
+            return;
+        }
+
+        alert(`✅ Filtros guardados exitosamente para ${unidadesDestino.length} unidad(es).`);
+    } catch (err) {
+        console.error('Error:', err);
+        alert('❌ Error de conexión');
+    }
+}
+
+
 // ========================================
 // 🗑️ BORRAR TODOS LOS FILTROS DE UNIDADES
 // ========================================
@@ -5352,7 +5333,7 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
         return [];
     }
 
-    const coordsCentro = osCentro.Coordendasgis || osCentro.Coordenadas;
+    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
     
     // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
     const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
@@ -5639,7 +5620,7 @@ function descargarKMLRutaNumerada() {
     
     const ubicaciones = window.datosRutaKML.map(os => ({
         etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: os.Coordendasgis || os.Coordenadas,
+        coordenadas: os.Coordenadas || os.Coordendasgis,
         numeroOrden: os.numeroOrden
     }));
     
@@ -5654,7 +5635,6 @@ function descargarKMLRutaNumerada() {
     
     console.log('✅ KML numerado descargado');
 }
-
 
 	
 // ========================================
@@ -6559,6 +6539,11 @@ async function cargarInterfazIPR() {
     cargarRegistrosIPR();
 }
 
+	async function cargarInterfazAsignaciones() {
+  console.log("🔍 DEBUG: cargarInterfazAsignaciones() fue llamada");
+  // resto del código...
+}
+
 
 	async function cargarInterfazAsignaciones() {
     const searchGrid = document.getElementById('searchGrid');
@@ -7190,9 +7175,7 @@ function chunkArray(arr, size) {
     return out;
 }
 
-function setFechaMañana() {
-    document.getElementById('fechaProgramadaFiltro').value = getFechaMananaElSalvador();
-}
+
 
 // ========================================
 // 👨‍💼 INTERFAZ ADMINISTRADOR CON FILTROS POR UNIDAD Y DEUDA
@@ -7360,24 +7343,7 @@ if (unidadesUnicas.length === 0) {
 	
 		<!-- 🆕 Asegurar visibilidad del bloque de filtros por unidad -->
 
-<!-- Campo de fecha programada -->
-<div class="form-group" style="margin-top: 20px;">
-  <label style="font-weight: 600; color: #2d3748;">📅 Fecha programada (obligatoria):</label>
-  <div style="display: flex; gap: 10px; align-items: center;">
-    <input type="date" id="fechaProgramadaFiltro" required
-           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-    <button type="button" class="btn btn-secondary" onclick="setFechaMañana()" style="white-space: nowrap;">
-      🕒 Mañana
-    </button>
-  </div>
-</div>
-
-<button class="btn btn-danger" onclick="eliminarFiltroPorUnidadYFecha()"
-        style="margin-top: 10px; background: linear-gradient(135deg, #d32f2f, #b71c1c);">
-    🗑️ Eliminar filtro por unidad y fecha
-</button>
-
-
+document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
@@ -8149,12 +8115,10 @@ else if (esDespacho) {
 } 
 else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
   // Consulta/Contratista → Filtros por UNIDAD
- const hoy = getFechaLocalElSalvador(); // ← Usa la función segura
-const {  filtrosUnidad } = await supabaseClient
+  const { data: filtrosUnidad } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
     .eq('Unidad', unidadFiltro)
-    .eq('fecha_programada', hoy)
     .maybeSingle();
   if (filtrosUnidad) {
     filtrosAplicar = filtrosUnidad;
@@ -8188,7 +8152,7 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         window.unidadFiltroActual = unidadFiltro;
 
         const radioKm = filtrosAplicar.radio_km || 3;
-        const coordsCentro = osCentro.Coordendasgis || osCentro.Coordenadas; 
+        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         
         if (!coordsCentro || !coordsCentro.includes(',')) {
             resultsContainer.innerHTML = `<div class="result-card">⚠️ Coordenadas inválidas para el centro del mapa</div>`;
@@ -8231,7 +8195,7 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
         const osEnRadio = [];
         todasOSRegistradas.forEach(os => {
-            const coords = os.Coordendasgis || os.Coordenadas;
+            const coords = os.Coordenadas || os.Coordendasgis;
             if (!validarFormatoCoordenadas(coords)) return;
 
             const [lat, lng] = coords.split(',').map(Number);
@@ -8261,28 +8225,6 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         console.error('Error cargando mapa:', err);
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
-}
-
-
-	async function eliminarFiltroPorUnidadYFecha() {
-    const unidad = prompt("Ingrese la unidad (ej: CL-OPC-NTE-004):");
-    const fecha = prompt("Ingrese la fecha (ej: 2025-11-29):");
-    if (!unidad || !fecha) return;
-
-    const confirmar = confirm(`¿Eliminar filtro de ${unidad} programado para ${fecha}?`);
-    if (!confirmar) return;
-
-    const { error } = await supabaseClient
-        .from('filtros_por_unidad')
-        .delete()
-        .eq('Unidad', unidad)
-        .eq('fecha_programada', fecha);
-
-    if (error) {
-        alert('❌ Error: ' + error.message);
-        return;
-    }
-    alert(`✅ Filtro eliminado para ${unidad} en ${fecha}`);
 }
 
 
