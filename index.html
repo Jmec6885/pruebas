@@ -12284,15 +12284,21 @@ function verificarDatosOffline() {
 function seleccionarTabla(tableName) {
   console.log("🔍 seleccionarTabla llamado con:", JSON.stringify(tableName));
   
-  if (tableName === 'cargar_asignaciones') {
-    console.log("✅ Entrando al caso 'cargar_asignaciones'");
-    if (currentUser.rol !== 'Administrador') {
-      alert('⚠️ Solo Administradores pueden cargar asignaciones');
-      return;
-    }
-    cargarInterfazAsignaciones();
+ if (tableName === 'cargar_asignaciones') {
+  if (currentUser.rol !== 'Administrador') {
+    alert('⚠️ Solo Administradores pueden cargar asignaciones');
     return;
   }
+  cargarInterfazAsignaciones();
+
+  // ✅ ¡ESTO ES CLAVE!
+  document.getElementById('tableSelectionSection').style.display = 'none';
+  document.getElementById('searchSection').style.display = 'block';
+
+  return;
+}
+
+
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
         const modulosProhibidos = ['usuarios', 'detalle_os', 'cargar_asignaciones'];
