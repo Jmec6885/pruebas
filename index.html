@@ -3060,6 +3060,8 @@ async function logout() {
 }
 
 
+
+
     function volverATablas() {
       document.getElementById('searchSection').style.display = 'none';
       document.getElementById('tableSelectionSection').style.display = 'block';
@@ -6539,13 +6541,15 @@ async function cargarInterfazIPR() {
 
 
 	async function cargarInterfazAsignaciones() {
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
-    
-    if (currentUser.rol !== 'Administrador') {
-        searchGrid.innerHTML = '<div class="result-card">⚠️ Solo Administradores</div>';
-        return;
-    }
+  const searchGrid = document.getElementById('searchGrid');
+  const resultsContainer = document.getElementById('searchResults');
+  
+  // ✅ Permitir a Administrador y Despacho
+  const rolesPermitidos = ['Administrador', 'Despacho'];
+  if (!rolesPermitidos.includes(currentUser.rol)) {
+    searchGrid.innerHTML = '<div class="result-card">⚠️ Solo Administradores y Despacho pueden cargar asignaciones</div>';
+    return;
+  }
     
     searchGrid.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
