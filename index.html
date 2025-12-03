@@ -752,10 +752,9 @@ let tipologiasCache = null;
 let consultasData = [];
 
 // === CONFIGURACIÓN DE VISIBILIDAD ===
-const CONFIG_VISIBILIDAD = {
-    mostrarNombreCliente: false,
-    camposAdminSolo: ['NombreCliente', 'Direccion']
-};
+const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'];
+
+
 
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
@@ -3043,12 +3042,21 @@ if (selectedTable === 'mapa_rutas') {
 }
     
     // Caso normal para otras tablas
-    let html = '';
     config.fields.forEach(field => {
-        // 🎯 Ocultar campos solo-admin
-        if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field.key) && currentUser.rol !== 'Administrador') {
-            return;
-        }
+  // 🚫 Ocultar NombreCliente en consultas_servicios si el rol no está autorizado
+  if (
+    field.key === 'NombreCliente' &&
+    selectedTable === 'consultas_servicios' &&
+    !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+  ) {
+    return; // Saltar este campo
+  }
+
+  html += `<div class="form-group">
+    <label>${field.label}:</label>
+    <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label}">
+  </div>`;
+});
         
         html += `
             <div class="form-group">
@@ -11716,10 +11724,14 @@ if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes'
     verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
 }
         config.resultFields.forEach(field => {
-    // 🎯 Ocultar NombreCliente en resultados si la config lo indica
-    if (CONFIG_VISIBILIDAD.camposAdminSolo.includes(field) && currentUser.rol !== 'Administrador') {
-        return; // No mostrar este campo
-    }
+    // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
+if (
+  field === 'NombreCliente' &&
+  selectedTable === 'consultas_servicios' &&
+  !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+) {
+  return; // No mostrar
+}
     
     let valor = String(item[field] || 'N/A');
     
@@ -12300,7 +12312,7 @@ function seleccionarTabla(tableName) {
 
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
-        const modulosProhibidos = ['usuarios', 'detalle_os', 'cargar_asignaciones'];
+        const modulosProhibidos = ['usuarios', 'detalle_os'];
         if (modulosProhibidos.includes(tableName)) {
             alert('⚠️ Su rol no tiene acceso a este módulo');
             return;
