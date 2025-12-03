@@ -6942,7 +6942,7 @@ const formatoValido = /^CL-[A-Z]{3}(?:-[A-Z]{3})?-(?:PAC-)?[0-9]{3}$/i.test(unid
             const batch = registrosValidos.slice(i, i + BATCH_SIZE);
             
             const registros = batch.map(fila => ({
-                OSATOMO: fila[0].toString().trim(),
+                osatomo: fila[0].toString().trim(),
                 Unidad: fila[1].toString().trim(),
                 Estado: fila[2] ? fila[2].toString().trim() : 'Asignada',
                 fecha_asignacion: new Date().toISOString(),
