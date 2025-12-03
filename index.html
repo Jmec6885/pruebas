@@ -751,7 +751,7 @@ let selectedTable = null;
 let tipologiasCache = null;
 let consultasData = [];
 
-// === CONFIGURACIÓN DE VISIBILIDAD ===
+// === ROLES CON ACCESO A NOMBRE DE CLIENTE ===
 const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'];
 
 
@@ -3626,13 +3626,12 @@ function mostrarFormularioNuevoUsuario() {
 // 💾 GUARDAR NUEVO USUARIO
 // ========================================
 async function guardarNuevoUsuario() {
-    // ✅ Protección contra elementos no encontrados
-    const usuario = (document.getElementById('nuevo_usuario')?.value || '').trim();
-    const password = (document.getElementById('nuevo_password')?.value || '').trim();
-    const passwordConfirm = (document.getElementById('nuevo_password_confirm')?.value || '').trim();
-    const rol = (document.getElementById('nuevo_rol')?.value || '').trim();
+    const usuario = document.getElementById('nuevo_usuario').value.trim();
+    const password = document.getElementById('nuevo_password').value.trim();
+    const passwordConfirm = document.getElementById('nuevo_password_confirm').value.trim();
+    const rol = document.getElementById('nuevo_rol').value;
     
-    // ✅ Validaciones robustas
+    // Validaciones
     if (!usuario || !password || !passwordConfirm || !rol) {
         alert('⚠️ Por favor complete todos los campos');
         return;
@@ -3652,7 +3651,6 @@ async function guardarNuevoUsuario() {
         alert('⚠️ La contraseña debe tener al menos 6 caracteres');
         return;
     }
-
     
     // Verificar si el usuario ya existe
     const { data: existente } = await supabaseClient
@@ -11731,7 +11729,7 @@ if (
     
     let valor = String(item[field] || 'N/A');
     
-    if ((field === 'Comentario' || field === 'ComentarioGeneral' || field === 'Direccion') && valor !== 'N/A') { 
+    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') { 
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
     } else {
@@ -11841,10 +11839,6 @@ function formatearComentario(valor) {
         .replace(/Ejecutada por/g, '<br><strong>Ejecutada por:</strong>')
         .replace(/Fecha Lect/g, '<br><strong>Fecha Lect:</strong>')
 	.replace(/Cliente/g, '<br><strong>Cliente:</strong>')
-	.replace(/SUBESTACION/g, '<br><strong>SUBESTACION:</strong>')
-	.replace(/Medidor/g, '<br><strong>Medidor:</strong>')
-	.replace(/Direccion/g, '<br><strong>Direccion:</strong>')
-	.replace(/Tarifa/g, '<br><strong>Tarifa:</strong>')
  	.replace(/Nombre Cliente/g, '<br><strong>Nombre Cliente:</strong>')
         .replace(/Tension/g, '<br><strong>Tension:</strong>')
 	.replace(/Multiplicador/g, '<br><strong>Multiplicador:</strong>')
@@ -12061,66 +12055,73 @@ function mostrarResultadosRelacionados(relacionadasPorTabla, datosOriginales) {
 // ===================================================================
 
 function mostrarDetalleRelacionados(tabla) {
-    if (!window.resultadosRelacionados || !window.resultadosRelacionados[tabla]) {
-        alert('No hay datos disponibles');
-        return;
-    }
-    
-    const datos = window.resultadosRelacionados[tabla];
-    const config = tableConfigs[tabla];
-    const container = document.getElementById('searchResults');
-    
-    // Guardar estado original
-    window.contenidoOriginalBusqueda = container.innerHTML;
-    
-    let html = `
-        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
-            <div class="result-header">📋 ${config.title} - Información Relacionada</div>
-            <div style="margin-bottom: 15px; text-align: center;">
-                <button class="btn btn-back" onclick="restaurarResultadosOriginales()">
-                    ← Volver a Resultados Principales
-                </button>
-            </div>
-        </div>`;
-    
-    const selectedTableOriginal = selectedTable;
-    selectedTable = tabla;
-    
-    datos.forEach((item, index) => {
-        html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
-        config.resultFields.forEach(field => {
-    // 🎯 Ocultar NombreCliente en resultados relacionados
-    if (field === 'NombreCliente' && !CONFIG_VISIBILIDAD.mostrarNombreCliente) {
+  if (!window.resultadosRelacionados || !window.resultadosRelacionados[tabla]) {
+    alert('No hay datos disponibles');
+    return;
+  }
+
+  const datos = window.resultadosRelacionados[tabla];
+  const config = tableConfigs[tabla];
+  const container = document.getElementById('searchResults');
+
+  // Guardar estado original
+  window.contenidoOriginalBusqueda = container.innerHTML;
+
+  let html = `
+    <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
+      <div class="result-header">📋 ${config.title} - Información Relacionada</div>
+      <div style="margin-bottom: 15px; text-align: center;">
+        <button class="btn btn-back" onclick="restaurarResultadosOriginales()">
+          ← Volver a Resultados Principales
+        </button>
+      </div>
+    </div>`;
+
+  const selectedTableOriginal = selectedTable;
+  selectedTable = tabla;
+
+  datos.forEach((item, index) => {
+    html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
+
+    config.resultFields.forEach(field => {
+      // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
+      if (
+        field === 'NombreCliente' &&
+        tabla === 'consultas_servicios' &&
+        !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+      ) {
         return; // No mostrar este campo
-    }
-    
-    let valor = String(item[field] || 'N/A');
-    
-    if ((field === 'Comentario' || field === 'ComentarioGeneral' || field === 'Direccion') && valor !== 'N/A') {
+      }
+
+      let valor = String(item[field] || 'N/A');
+
+      if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-    } else {
+      } else {
         html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-    }
-});
-        
-        html += '<div class="action-buttons">';
-        config.actions.forEach(action => {
-            const val = item[action];
-            if (!val) return;
-            
-            if (action.toLowerCase().includes('coordenadas')) {
-                html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
-            } else if (action === 'FotoLink' || action === 'fotolink') {
-                html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-            }
-        });
-        html += '</div></div>';
+      }
     });
-    
-    selectedTable = selectedTableOriginal;
-    container.innerHTML = html;
+
+    html += '<div class="action-buttons">';
+    config.actions.forEach(action => {
+      const val = item[action];
+      if (!val) return;
+
+      if (action.toLowerCase().includes('coordenadas')) {
+        html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas</button>`;
+      } else if (action === 'FotoLink' || action === 'fotolink') {
+        html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
+      }
+    });
+    html += '</div></div>';
+  });
+
+  selectedTable = selectedTableOriginal;
+  container.innerHTML = html;
 }
+
+
 
 // ===================================================================
 // 📌 MOSTRAR BOTONES DE RESULTADOS ADICIONALES
@@ -12398,89 +12399,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
     }
 });
-
-
-// ========================================
-// ✅ CREAR NUEVO USUARIO
-// ========================================
-async function crearUsuario() {
-  const usuarioInput = document.getElementById('nuevo_usuario');
-  const passwordInput = document.getElementById('nuevo_password');
-  const passwordConfirmInput = document.getElementById('nuevo_password_confirm');
-  const rolSelect = document.getElementById('nuevo_rol');
-
-  // 1. Validar campos
-  const usuario = usuarioInput?.value?.trim();
-  const password = passwordInput?.value?.trim();
-  const passwordConfirm = passwordConfirmInput?.value?.trim();
-  const rol = rolSelect?.value;
-
-  if (!usuario || !password || !passwordConfirm || !rol) {
-    alert('⚠️ Todos los campos son obligatorios');
-    return;
-  }
-
-  if (usuario.length < 4) {
-    alert('⚠️ El usuario debe tener al menos 4 caracteres');
-    return;
-  }
-
-  if (password.length < 6) {
-    alert('⚠️ La contraseña debe tener al menos 6 caracteres');
-    return;
-  }
-
-  if (password !== passwordConfirm) {
-    alert('⚠️ Las contraseñas no coinciden');
-    return;
-  }
-
-  // 2. Verificar si el usuario ya existe
-  try {
-    const { data, error } = await supabaseClient
-      .from('usuarios')
-      .select('usuario')
-      .eq('usuario', usuario)
-      .single();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 = "no rows returned"
-      alert('❌ Error al verificar usuario: ' + error.message);
-      return;
-    }
-
-    if (data) {
-      alert(`❌ El usuario "${usuario}" ya existe`);
-      return;
-    }
-
-    // 3. Insertar nuevo usuario
-    const { error: insertError } = await supabaseClient
-      .from('usuarios')
-      .insert({
-        usuario: usuario,
-        password: password,
-        rol: rol,
-        activo: true,
-        Contador: 0,
-        sessionactiva: false,
-        ultimaconexion: null,
-        ultima_actividad: new Date().toISOString()
-      });
-
-    if (insertError) {
-      alert('❌ Error al crear usuario: ' + insertError.message);
-      return;
-    }
-
-    // 4. Éxito
-    alert(`✅ Usuario "${usuario}" creado correctamente\nRol: ${rol}`);
-    mostrarFormularioNuevoUsuario(); // Opcional: volver a mostrar el formulario limpio
-
-  } catch (err) {
-    console.error('Error inesperado:', err);
-    alert('❌ Error inesperado al crear usuario');
-  }
-}
 
 
 </script>
