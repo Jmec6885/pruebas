@@ -2296,14 +2296,13 @@ if (rol === 'Despacho') {
   tableOptions.forEach(option => {
     const action = option.getAttribute('onclick') || '';
     const prohibido = 
-      action.includes("'usuarios'") ||         // Gestión de Usuarios
-      action.includes("'retiro_medidores'");  // IPR
+      action.includes("'usuarios'") || 
+      action.includes("'retiro_medidores'");
     option.style.display = prohibido ? 'none' : 'block';
   });
   console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
   return;
 }
-
     //---------------------------------------------
     //  🎯 BODEGA - SOLO IPR + OS CERRADAS
     //---------------------------------------------
@@ -12348,6 +12347,9 @@ if (tableName === 'cargar_asignaciones') {
     return;
   }
   cargarInterfazAsignaciones();
+  // ✅ Mostrar la interfaz de carga
+  document.getElementById('tableSelectionSection').style.display = 'none';
+  document.getElementById('searchSection').style.display = 'block';
   return;
 }
 
