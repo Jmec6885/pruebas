@@ -2991,82 +2991,72 @@ async function logout() {
 
 
     function generarCamposBusqueda(config) {
-    const searchGrid = document.getElementById('searchGrid');
-    
-    // 🆕 Caso especial para gestión de usuarios
-    if (selectedTable === 'usuarios') {
+  const searchGrid = document.getElementById('searchGrid');
+
+  // 🆕 Caso especial para gestión de usuarios
+  if (selectedTable === 'usuarios') {
     searchGrid.innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
-            <div class="form-group" style="margin: 0;">
-                <label>Buscar Usuario:</label>
-                <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
-            </div>
-            <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
+        <div class="form-group" style="margin: 0;">
+          <label>Buscar Usuario:</label>
+          <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
         </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-            <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
-                ➕ Crear Nuevo Usuario
-            </button>
-            <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                📤 Actualización Masiva
-            </button>
-        </div>
+        <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+        <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+          ➕ Crear Nuevo Usuario
+        </button>
+        <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          📤 Actualización Masiva
+        </button>
+      </div>
     `;
     return;
-}
-    
-    // 🆕 Caso especial para KML Ruta
-    if (selectedTable === 'kml_ruta') {
-        cargarInterfazKMLRuta();
-        return;
-    }
-
-    // 🆕 Caso especial para Detalle OS
-if (selectedTable === 'detalle_os') {
-    cargarInterfazDetalleOS();
-    return;
-}
-
-
-// 🆕 Caso especial para IPR
-    if (selectedTable === 'retiro_medidores') {
-        cargarInterfazIPR();
-        return;
-    }
-
-	// 🗺️ Caso especial para Mapa de Rutas
-if (selectedTable === 'mapa_rutas') {
-    cargarInterfazMapaRutas();
-    return;
-}
-    
-    // Caso normal para otras tablas
-    config.fields.forEach(field => {
-  // 🚫 Ocultar NombreCliente en consultas_servicios si el rol no está autorizado
-  if (
-    field.key === 'NombreCliente' &&
-    selectedTable === 'consultas_servicios' &&
-    !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
-  ) {
-    return; // Saltar este campo
   }
 
-  html += `<div class="form-group">
-    <label>${field.label}:</label>
-    <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label}">
-  </div>`;
-});
-        
-        html += `
-            <div class="form-group">
-                <label>${field.label}:</label>
-                <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label ? field.label.toLowerCase() : ''}" />
-                <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
-            </div>
-        `;
-    });
-    searchGrid.innerHTML = html;
+  // 🆕 Casos especiales
+  if (selectedTable === 'kml_ruta') {
+    cargarInterfazKMLRuta();
+    return;
+  }
+  if (selectedTable === 'detalle_os') {
+    cargarInterfazDetalleOS();
+    return;
+  }
+  if (selectedTable === 'retiro_medidores') {
+    cargarInterfazIPR();
+    return;
+  }
+  if (selectedTable === 'mapa_rutas') {
+    cargarInterfazMapaRutas();
+    return;
+  }
+
+  // ✅ Caso normal: generar campos de búsqueda
+  let html = ''; // ← ¡DECLARAR html aquí!
+
+  config.fields.forEach(field => {
+    // 🚫 Ocultar NombreCliente en consultas_servicios para roles no autorizados
+    if (
+      field.key === 'NombreCliente' &&
+      selectedTable === 'consultas_servicios' &&
+      !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+    ) {
+      return; // Saltar este campo
+    }
+
+    // ✅ Agregar campo de búsqueda
+    html += `
+      <div class="form-group">
+        <label>${field.label}:</label>
+        <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label}">
+        <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
+      </div>
+    `;
+  });
+
+  searchGrid.innerHTML = html;
 }
 
 
