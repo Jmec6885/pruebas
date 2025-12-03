@@ -6730,7 +6730,8 @@ async function cargarInterfazIPR() {
         
         // Validar formato de Unidad (CL-XXX-XXX o CL-XXX-PAC-XXX)
         const unidad = fila[1].toString().trim();
-        const formatoValido = /^CL-[A-Z]{3}-(?:PAC-)?[0-9]{3}$/i.test(unidad);
+        // ✅ Acepta: CL-XXX-NNN, CL-XXX-PAC-NNN, CL-XXX-YYY-NNN
+const formatoValido = /^CL-[A-Z]{3}(?:-[A-Z]{3})?-(?:PAC-)?[0-9]{3}$/i.test(unidad);
         
         if (!formatoValido) {
             return {
