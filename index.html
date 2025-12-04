@@ -901,6 +901,120 @@ const TURNOS_ATTF = {
 };
 
 
+// ========================================
+// 🔄 Permitir cambiar fechas de descanso manualmente (ATTF)
+// ========================================
+function cambiarFechasDescansoATTF() {
+  const loginSection = document.getElementById('loginSection');
+  if (!loginSection) return;
+
+  // Pedir fechas manualmente
+  const fechaInicio = prompt("📅 Ingrese fecha de inicio de descanso (YYYY-MM-DD):");
+  const fechaFin = prompt("📅 Ingrese fecha de fin de descanso (YYYY-MM-DD):");
+
+  if (!fechaInicio || !fechaFin) {
+    alert("⚠️ Ambas fechas son obligatorias");
+    return;
+  }
+
+  // Validar formato básico
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(fechaInicio) || !regex.test(fechaFin)) {
+    alert("⚠️ Formato de fecha inválido. Use YYYY-MM-DD");
+    return;
+  }
+
+  // Guardar temporalmente
+  window.fechasDescansoPersonalizadas = { inicio: fechaInicio, fin: fechaFin };
+
+  // Mostrar vista de confirmación con estas fechas
+  const turnoRegreso = document.getElementById('turnoRegreso')?.value || '';
+  const turnoRegresoObj = TURNOS_ATTF[turnoRegreso];
+
+  loginSection.innerHTML = `
+    <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+    <h1 class="titulo-degradado">CLESA</h1>
+    <p class="subtitulo">Confirmar Descanso Personalizado</p>
+    
+    <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
+      <strong>📅 Fechas seleccionadas:</strong><br>
+      <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
+        Inicio: ${fechaInicio}<br>
+        Fin: ${fechaFin}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Turno de REGRESO:</label>
+      <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+        <option value="">-- Seleccione --</option>
+        ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
+          `<option value="${key}" ${turnoRegreso === key ? 'selected' : ''}>${turno.nombre}</option>`
+        ).join('')}
+      </select>
+    </div>
+
+    <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+      <button class="btn" onclick="confirmarDescansoPersonalizadoATTF()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+        ✅ Aceptar
+      </button>
+      <button class="btn btn-secondary" onclick="mostrarForzarDescansoATTF()">
+        ↩️ Volver
+      </button>
+    </div>
+  `;
+}
+
+async function confirmarDescansoPersonalizadoATTF() {
+  const turnoRegreso = document.getElementById('turnoRegreso').value;
+  if (!turnoRegreso) {
+    alert('⚠️ Seleccione el turno de regreso');
+    return;
+  }
+
+  const { inicio, fin } = window.fechasDescansoPersonalizadas || {};
+  if (!inicio || !fin) {
+    alert('⚠️ No hay fechas seleccionadas');
+    return;
+  }
+
+  const confirmar = confirm(
+    `¿Confirmar descanso personalizado?\n` +
+    `📅 Inicio: ${inicio}\n` +
+    `📅 Fin: ${fin}\n` +
+    `🔙 Regreso: ${TURNOS_ATTF[turnoRegreso]?.nombre || '---'}`
+  );
+
+  if (!confirmar) return;
+
+  // Guardar en base de datos
+  const fechaRegresoDate = new Date(fin + 'T00:00:00');
+  fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+  const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
+
+  const { error } = await supabaseClient
+    .from('usuarios')
+    .update({
+      descanso_fecha_inicio: inicio,
+      descanso_fecha_fin: fin,
+      turno_regreso: turnoRegreso,
+      fecha_turno_regreso: fechaRegreso,
+      contador_turnos: 0,
+      estado_ciclo: 'ciclo_normal',
+      turno_manana: null,
+      fecha_turno_manana: null,
+      ultimaconexion: new Date().toISOString()
+    })
+    .eq('id', currentUser.id);
+
+  if (error) {
+    alert('❌ Error: ' + error.message);
+    return;
+  }
+
+  alert('✅ Descanso personalizado guardado');
+  accederMenuATTF();
+}
 
 function verificarHorarioPermitido(rol, userData = null) {
     const ahora = new Date();
