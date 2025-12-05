@@ -8242,17 +8242,27 @@ else if (esDespacho) {
   }
 } 
 else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
-  // Consulta/Contratista → Filtros por UNIDAD (solo si coinciden con HOY)
   const hoy = getFechaLocalElSalvador();
-  const { data: filtrosUnidad } = await supabaseClient
+  const {  filtrosUnidad } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
     .eq('Unidad', unidadFiltro)
     .eq('fecha_programada', hoy)
     .maybeSingle();
+
   if (filtrosUnidad) {
+    // ✅ Hay filtros programados → aplicarlos normalmente
     filtrosAplicar = filtrosUnidad;
     console.log(`📋 Filtros por unidad ${unidadFiltro} para el día ${hoy}`);
+  } else {
+    // ❌ No hay filtros → usar UN MODO RESTRINGIDO: solo asignadas
+    filtrosAplicar = {
+      rangos: [],       // ← Vacío = sin rango
+      tipologias: [],   // ← Vacío = sin tipología
+      radio_km: 0,      // ← Radio 0 = solo la OS de partida (pero necesitas todas asignadas)
+      modoRestringido: true // ← Flag para indicar que solo se deben mostrar asignadas
+    };
+    console.log(`📋 Sin filtros para hoy. Modo restringido activado para ${unidadFiltro}`);
   }
 }
 
@@ -8324,25 +8334,55 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         console.log(`📊 Total de OS cargadas: ${todasOSRegistradas.length}`);
 
         const osEnRadio = [];
-        todasOSRegistradas.forEach(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            if (!validarFormatoCoordenadas(coords)) return;
+        // 🆕 Cargar lista de OS asignadas a la unidad (solo si modo restringido)
+let osAsignadasAUnidad = new Set();
+if (filtrosAplicar.modoRestringido) {
+  const { data: asignaciones } = await supabaseClient
+    .from('os_asignadas')
+    .select('osatomo')
+    .eq('Unidad', unidadFiltro);
+  osAsignadasAUnidad = new Set(asignaciones?.map(a => String(a.osatomo).trim()) || []);
+}
 
-            const [lat, lng] = coords.split(',').map(Number);
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+todasOSRegistradas.forEach(os => {
+  // 🆕 Modo restringido: solo incluir si está asignada
+  if (filtrosAplicar.modoRestringido) {
+    if (!osAsignadasAUnidad.has(String(os.OSATMO).trim())) {
+      return; // Saltar si no está asignada
+    }
+  }
 
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                const tipo = (os.Tipo_de_OS || '').toLowerCase();
-                const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
+  const coords = os.Coordenadas || os.Coordendasgis;
+  if (!validarFormatoCoordenadas(coords)) return;
 
-                // ✅ CORRECCIÓN 4: Validar filtros correctamente
-                if (esRegulada) {
-                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
-                } else if (validarFiltrosOS(os, filtrosAplicar)) {
-                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
-                }
-            }
-        });
+  const [lat, lng] = coords.split(',').map(Number);
+  const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+
+  // 🆕 En modo restringido, ignorar el radio (mostrar todas las asignadas, sin límite de distancia)
+  if (filtrosAplicar.modoRestringido) {
+    // Solo excluir la OS de partida
+    if (os.OSATMO !== osCentro.OSATMO) {
+      const tipo = (os.Tipo_de_OS || '').toLowerCase();
+      const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
+      if (esRegulada) {
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
+      } else {
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
+      }
+    }
+  } else {
+    // ✅ Comportamiento normal (con radio y filtros)
+    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+      const tipo = (os.Tipo_de_OS || '').toLowerCase();
+      const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
+      if (esRegulada) {
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
+      } else if (validarFiltrosOS(os, filtrosAplicar)) {
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
+      }
+    }
+  }
+});
 
         console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
 
