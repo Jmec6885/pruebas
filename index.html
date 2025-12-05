@@ -8226,11 +8226,13 @@ else if (esDespacho) {
   }
 } 
 else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
-  // Consulta/Contratista → Filtros por UNIDAD
+  // Consulta/Contratista → Filtros por UNIDAD (solo si coinciden con HOY)
+  const hoy = getFechaLocalElSalvador();
   const { data: filtrosUnidad } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
     .eq('Unidad', unidadFiltro)
+    .eq('fecha_programada', hoy)
     .maybeSingle();
   if (filtrosUnidad) {
     filtrosAplicar = filtrosUnidad;
