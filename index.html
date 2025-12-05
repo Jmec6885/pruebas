@@ -8187,6 +8187,8 @@ async function cargarFiltrosUniversales(unidad = null) {
     }
 }
 
+console.log('🔍 unidadFiltro recibida:', JSON.stringify(unidadFiltro));
+
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8222,7 +8224,7 @@ else if (esDespacho) {
     .from('filtros_mapa')
     .select('*')
     .eq('usuario', currentUser.usuario)
-    .maybeSingle();
+    .limit(1).single();
   if (filtrosPersonales) {
     filtrosAplicar = filtrosPersonales;
     console.log(`📋 Despacho usando filtros personales de ${currentUser.usuario}`);
@@ -8241,8 +8243,13 @@ else if (esDespacho) {
     }
   }
 } 
+
 else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
+  // ✅ Normalizar unidadFiltro: quitar espacios, asegurar formato
+  unidadFiltro = String(unidadFiltro).trim();
   const hoy = getFechaLocalElSalvador();
+  console.log('🔍 Buscando filtros para Unidad:', JSON.stringify(unidadFiltro), 'Fecha:', hoy);
+
   const {  filtrosUnidad } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
@@ -8257,14 +8264,15 @@ else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol))
   } else {
     // ❌ No hay filtros → usar UN MODO RESTRINGIDO: solo asignadas
     filtrosAplicar = {
-      rangos: [],       // ← Vacío = sin rango
-      tipologias: [],   // ← Vacío = sin tipología
-      radio_km: 0,      // ← Radio 0 = solo la OS de partida (pero necesitas todas asignadas)
-      modoRestringido: true // ← Flag para indicar que solo se deben mostrar asignadas
+      rangos: [],
+      tipologias: [],
+      radio_km: 0,
+      modoRestringido: true
     };
     console.log(`📋 Sin filtros para hoy. Modo restringido activado para ${unidadFiltro}`);
   }
 }
+
 
 // ✅ Validar que haya filtros válidos
 if (!filtrosAplicar) {
@@ -12482,6 +12490,8 @@ function seleccionarTabla(tableName) {
 
   return;
 }
+
+
 
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
