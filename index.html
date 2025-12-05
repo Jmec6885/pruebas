@@ -8187,10 +8187,11 @@ async function cargarFiltrosUniversales(unidad = null) {
     }
 }
 
-console.log('🔍 unidadFiltro recibida:', JSON.stringify(unidadFiltro));
+
 
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
+console.log('🔍 unidadFiltro recibida:', JSON.stringify(unidadFiltro));
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
         <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
