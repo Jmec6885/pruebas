@@ -756,11 +756,11 @@ const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'
 
 // ✅ FUNCIONES DE FECHA PARA EL SALVADOR (UTC-6)
 function getFechaLocalElSalvador() {
+  // ✅ Calcular fecha según UTC-6 (El Salvador)
   const ahora = new Date();
-  const offsetUTC = -6;
   const utc = ahora.getTime() + (ahora.getTimezoneOffset() * 60000);
-  const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
-  return fechaElSalvador.toISOString().split('T')[0]; // Ej: "2025-12-05"
+  const fechaSLV = new Date(utc + (-6 * 3600000)); // UTC-6
+  return fechaSLV.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
 function getFechaMananaElSalvador() {
@@ -12571,6 +12571,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
     }
 });
+
+// 🔍 DEPURACIÓN DE FECHA
+console.log('🕒 Hora actual del sistema:', new Date().toString());
+console.log('🌍 Zona horaria detectada:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+console.log('🇸🇻 Fecha calculada para El Salvador:', getFechaLocalElSalvador());
 
 
 </script>
