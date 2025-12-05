@@ -754,7 +754,23 @@ let consultasData = [];
 // === ROLES CON ACCESO A NOMBRE DE CLIENTE ===
 const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'];
 
+// ✅ FUNCIONES DE FECHA PARA EL SALVADOR (UTC-6)
+function getFechaLocalElSalvador() {
+  const ahora = new Date();
+  const offsetUTC = -6;
+  const utc = ahora.getTime() + (ahora.getTimezoneOffset() * 60000);
+  const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
+  return fechaElSalvador.toISOString().split('T')[0]; // Ej: "2025-12-05"
+}
 
+function getFechaMananaElSalvador() {
+  const hoy = new Date();
+  const offsetUTC = -6;
+  const utc = hoy.getTime() + (hoy.getTimezoneOffset() * 60000);
+  const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
+  fechaElSalvador.setDate(fechaElSalvador.getDate() + 1);
+  return fechaElSalvador.toISOString().split('T')[0];
+}
 
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
