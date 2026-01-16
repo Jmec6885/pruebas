@@ -5393,11 +5393,11 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
 */
 function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas = null) {
-    // 1. Consistencia del campo ID y encontrar el centro
-    const osCentro = osData.find(os => os.osatomo === osPartida);
+    // 1. Encontrar la OS de partida en los datos proporcionados
+    const osCentro = osData.find(os => os.OSATMO === osPartida);
     if (!osCentro) {
         console.error("Error optimizando: OS de partida no encontrada en los datos.");
-        return [];
+        return osData; // 🆕 Devolver los datos originales si falla
     }
 
     // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
@@ -8167,34 +8167,36 @@ async function cargarFiltrosUniversales(unidad = null) {
         }
 
         // 3️⃣ Filtros globales (Admin/Supervisor)
-// Buscar primero un filtro global con fecha_vigencia = HOY
-let { data: filtrosGlobalesHoy } = await supabaseClient
+const HOY = new Date().toISOString().split('T')[0];
+let filtrosGlobales = null;
+
+// Buscar filtro global para HOY
+const { data: filtrosHoy } = await supabaseClient
     .from('filtros_mapa')
     .select('*')
     .is('usuario', null)
     .eq('fecha_vigencia', HOY)
     .maybeSingle();
 
-if (!filtrosGlobalesHoy) {
-    // Si no hay para hoy, usar el filtro global sin fecha_vigencia
-    let { data: filtrosGlobalesDefault, error } = await supabaseClient
+if (filtrosHoy) {
+    filtrosGlobales = filtrosHoy;
+} else {
+    // Buscar filtro global por defecto (sin fecha_vigencia)
+    const { data: filtrosDefault, error } = await supabaseClient
         .from('filtros_mapa')
         .select('*')
         .is('usuario', null)
         .is('fecha_vigencia', null)
         .single();
     
-    if (error) {
-        console.warn('⚠️ No se encontró filtro global por defecto:', error.message);
-        filtrosGlobalesHoy = null;
-    } else {
-        filtrosGlobalesHoy = filtrosGlobalesDefault;
+    if (!error) {
+        filtrosGlobales = filtrosDefault;
     }
 }
 
-if (filtrosGlobalesHoy) {
-    console.log('✅ Usando filtros globales (con/sin fecha_vigencia)');
-    return filtrosGlobalesHoy;
+if (filtrosGlobales) {
+    console.log('✅ Usando filtros globales');
+    return filtrosGlobales;
 }
 
 
@@ -8319,16 +8321,38 @@ if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
 
         console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
 
-        // Optimizar la ruta usando el algoritmo del vecino más cercano
-const osOptimizadas = optimizarRutaVecinoCercano(osEnRadio, osCentro.OSATMO, {
-    lat: latCentro,
-    lng: lngCentro
+// ✅ Incluir la OS de partida en los datos para optimizar
+const osParaOptimizar = [osCentro, ...osEnRadio];
+
+// ✅ Aplicar reglas de negocio completas a TODAS las OS
+const osConFiltros = osParaOptimizar.filter(os => {
+    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+    const deuda = parseFloat(os.Deuda) || 0;
+    const tieneDeudaAlta = deuda > 500;
+    
+    return esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
 });
+
+console.log(`✅ OS después de aplicar filtros: ${osConFiltros.length}`);
+
+// ✅ Optimizar la ruta solo con las OS que pasaron el filtro
+let osOptimizadas;
+try {
+    osOptimizadas = optimizarRutaVecinoCercano(osConFiltros, osCentro.OSATMO, {
+        lat: latCentro,
+        lng: lngCentro
+    });
+} catch (err) {
+    console.warn('⚠️ Falló la optimización. Mostrando sin ordenar.', err);
+    osOptimizadas = osConFiltros;
+}
 
 // Asignar números de orden
 osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
 
-        generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
+// Generar mapa
+generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
 
     } catch (err) {
         console.error('Error cargando mapa:', err);
@@ -8396,10 +8420,12 @@ function validarFiltrosOS(os, filtros) {
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // Si no hay filtros activos, mostrar todo
+    // Si no hay filtros activos, NO mostrar nada (porque las excepciones ya se manejaron antes)
     if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
-        return true;
+        return false; // ⚠️ Cambiado a false
     }
+
+  
 
     // Filtro de deuda (solo para suspensiones)
     if (tieneFiltroDeuda) {
