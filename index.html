@@ -5393,17 +5393,25 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
  * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
  */
 function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas = null) {
-  // ✅ CORRECCIÓN: Normalizar búsqueda
+  // ✅ CORRECCIÓN: Normalizar búsqueda de OS de partida
   const osPartida = osData.find(os => {
-    const osNum = (os.OSATMO || os.OSATOMO || os.osatomo || '').toString().trim();
-    return osNum === osPartidaId.toString().trim();
+    const osNum = String(os.OSATMO || os.OSATOMO || os.osatomo || '').trim();
+    const osIdBuscado = String(osPartidaId).trim();
+    return osNum === osIdBuscado;
   });
   
   if (!osPartida) {
     console.error('❌ OS de partida no encontrada:', osPartidaId);
-    console.log('📋 IDs disponibles:', osData.slice(0, 5).map(os => os.OSATMO || os.OSATOMO));
+    console.log('📋 IDs disponibles (primeros 5):', 
+      osData.slice(0, 5).map(os => os.OSATMO || os.OSATOMO || os.osatomo)
+    );
+    
+    // ✅ CAMBIO: En lugar de fallar, usar el primer elemento
+    console.log('⚠️ Usando primera OS disponible como punto de partida');
     return osData.length > 0 ? osData : [];
   }
+
+
 
   // 2. Obtener coordenadas del centro
   const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
@@ -8112,12 +8120,16 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
 
 // ========================================
-// 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO) - CON SOPORTE PARA FECHA_VIGENCIA
+// 🔍 CARGAR FILTROS UNIVERSALES (CORREGIDO)
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
-    const HOY = new Date().toISOString().split('T')[0]; // ✅ Solo una declaración
-
-    console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad, rol: currentUser.rol });
+    const HOY = new Date().toISOString().split('T')[0];
+    
+    console.log('🔍 Cargando filtros para:', { 
+        usuario: currentUser.usuario, 
+        unidad, 
+        rol: currentUser.rol 
+    });
     
     let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
 
@@ -8142,7 +8154,7 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
 
             if (filtrosHoy) {
-                console.log('✅ Usando filtros personales de Despacho');
+                console.log('✅ Usando filtros personales de Despacho:', filtrosHoy);
                 return filtrosHoy;
             }
         }
@@ -8167,15 +8179,13 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
 
             if (filtrosUnidadHoy) {
-                console.log('✅ Usando filtros por unidad:', unidad);
+                console.log('✅ Usando filtros por unidad:', unidad, filtrosUnidadHoy);
                 return filtrosUnidadHoy;
             }
         }
 
         // 3️⃣ Filtros globales (Admin/Supervisor)
-        // ❌ ELIMINAR LA LÍNEA DUPLICADA: const HOY = ...
-        
-        // Buscar filtro global con fecha_vigencia = HOY
+        // ✅ CORRECCIÓN 1: Buscar primero con fecha de HOY
         let { data: filtrosHoy, error: errorHoy } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
@@ -8183,32 +8193,34 @@ async function cargarFiltrosUniversales(unidad = null) {
             .eq('fecha_vigencia', HOY)
             .maybeSingle();
 
-        if (filtrosHoy) {
-            console.log('✅ Usando filtro global para hoy');
+        if (!errorHoy && filtrosHoy) {
+            console.log('✅ Usando filtro global para hoy:', filtrosHoy);
             return filtrosHoy;
         }
 
-        // Si no hay para hoy, buscar el filtro global por defecto
+        // ✅ CORRECCIÓN 2: Buscar filtro global por defecto (fecha_vigencia = NULL)
         let { data: filtrosDefault, error: errorDefault } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
             .is('fecha_vigencia', null)
-            .single();
+            .maybeSingle(); // ✅ Cambio: Usar maybeSingle() en vez de single()
 
         if (!errorDefault && filtrosDefault) {
-            console.log('✅ Usando filtro global por defecto');
+            console.log('✅ Usando filtro global por defecto:', filtrosDefault);
             return filtrosDefault;
         }
 
-        // 4️⃣ Valores por defecto
+        // 4️⃣ Si no hay NADA, retornar valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
         return filtros;
+        
     } catch (err) {
         console.error('❌ Error cargando filtros:', err);
         return filtros;
     }
 }
+
 
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
@@ -8374,6 +8386,12 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 // ✅ VALIDAR SI OS CUMPLE FILTROS (CON REGLAS DE EXCEPCIÓN)
 // ========================================
 function validarFiltrosOS(os, filtros) {
+    // ✅ DEBUG: Ver qué filtros se están aplicando
+    console.log('🔍 Validando OS:', os.OSATMO, {
+        rangosActivos: filtros.rangos,
+        tipologiasActivas: filtros.tipologias,
+        tipologiaOS: os.Tipologia
+    });
     const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
     const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
     const deudaAmarillo = Boolean(filtros.deuda_amarillo);
