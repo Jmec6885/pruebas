@@ -5386,30 +5386,29 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 
 
 /**
-* Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
-* @param {Array<Object>} osData - Lista completa de órdenes de servicio.
-* @param {string} osPartida - ID de la OS de partida (opcional).
-* @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
-* @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
-*/
-function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas = null) {
-    // 1. Encontrar la OS de partida en los datos proporcionados
-    const osCentro = osData.find(os => os.OSATMO === osPartida);
-    if (!osCentro) {
-        console.error("Error optimizando: OS de partida no encontrada en los datos.");
-        return osData; // 🆕 Devolver los datos originales si falla
-    }
+ * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
+ * @param {Array<Object>} osData - Lista completa de órdenes de servicio (ya filtrada).
+ * @param {string} osPartida - ID de la OS de partida.
+ * @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
+ * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
+ */
+function optimizarRutaVecinoCercano(osData, osPartidaId) {
+  const osPartida = osData.find(os => os.OSATMO === osPartidaId); // Ajustar field
+  if (!osPartida) {
+    console.error('Error optimizando: OS de partida no encontrada en los datos.');
+    alert('⚠️ OS de partida no encontrada. Usando primera OS como inicio.');
+    return osData; // O usa osData[0]
+  }
 
-    // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
+    // 2. Obtener coordenadas del centro
     const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    // 🛑 VERIFICACIÓN CRÍTICA: Si el punto de partida NO tiene coordenadas válidas, retornamos array vacío.
     const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
     if (isNaN(latCentro) || isNaN(lngCentro)) {
         console.error(`Error optimizando: La OS de partida (${osPartida}) tiene coordenadas no válidas: ${coordsCentro}`);
-        return [];
+        return osData;
     }
 
-    // ✅ Si se proporciona un punto de partida con coordenadas, usarlo como centro
+    // 3. Determinar el punto inicial
     let puntoInicialLat = latCentro;
     let puntoInicialLng = lngCentro;
     if (puntoPartidaCoordenadas && !isNaN(puntoPartidaCoordenadas.lat) && !isNaN(puntoPartidaCoordenadas.lng)) {
@@ -5418,26 +5417,27 @@ function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas =
         console.log(`✅ Usando punto de partida personalizado: ${puntoInicialLat}, ${puntoInicialLng}`);
     }
 
-    // Inicializar el punto de partida
-    let osCentroConDatos = {
+    // 4. Preparar la OS de partida con datos completos
+    const osCentroConDatos = {
         ...osCentro,
         lat: puntoInicialLat,
         lng: puntoInicialLng,
         distancia: 0,
         numeroOrden: 1,
-        distanciaAlPuntoInicial: 0, // El punto inicial está a 0km de sí mismo.
-        esRegulada: osCentro.Tipo_de_OS && (osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && !osCentro.Tipo_de_OS.toLowerCase().includes('no'))
+        distanciaAlPuntoInicial: 0,
+        esRegulada: osCentro.Tipo_de_OS && 
+                   osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && 
+                   !osCentro.Tipo_de_OS.toLowerCase().includes('no')
     };
 
-    // 3. Inicializar puntos no visitados
-    let puntosNoVisitados = osData
-        .filter(os => os.osatomo !== osPartida)
+    // 5. Preparar puntos no visitados
+    const puntosNoVisitados = osData
+        .filter(os => os.OSATMO !== osPartida)
         .map(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
-            const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
-            const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
-            // Calcular y almacenar la distancia al punto inicial
+            const valorTipo = (os.Tipo_de_OS || '').toLowerCase();
+            const esRegulada = valorTipo.includes('regulad') && !valorTipo.includes('no');
             const distanciaAlInicial = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng))
                 ? calcularDistanciaKm(puntoInicialLat, puntoInicialLng, lat, lng)
                 : Infinity;
@@ -5446,29 +5446,31 @@ function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas =
                 lat,
                 lng,
                 esRegulada,
-                distanciaAlPuntoInicial: distanciaAlInicial // Distancia que querías mostrar en el mapa
+                distanciaAlPuntoInicial: distanciaAlInicial
             };
         })
-        // Solo incluimos puntos con coordenadas válidas para la optimización.
         .filter(os => os.distanciaAlPuntoInicial !== Infinity);
 
+    // 6. Algoritmo del vecino más cercano
     let rutaFinal = [osCentroConDatos];
     let puntoActual = osCentroConDatos;
     let orden = 2;
 
-    // Bucle del Vecino Más Cercano (Nearest Neighbor)
     while (puntosNoVisitados.length > 0) {
         let vecinoMasCercano = null;
         let minDistancia = Infinity;
         let vecinoIndex = -1;
-        puntosNoVisitados.forEach((os, index) => {
+
+        for (let i = 0; i < puntosNoVisitados.length; i++) {
+            const os = puntosNoVisitados[i];
             const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
             if (dist < minDistancia) {
                 minDistancia = dist;
                 vecinoMasCercano = os;
-                vecinoIndex = index;
+                vecinoIndex = i;
             }
-        });
+        }
+
         if (vecinoMasCercano && minDistancia !== Infinity) {
             vecinoMasCercano.numeroOrden = orden++;
             vecinoMasCercano.distancia = minDistancia;
@@ -5482,6 +5484,7 @@ function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas =
 
     return rutaFinal;
 }
+
 
 // ========================================
 // 📍 GENERAR RUTA DESDE UN PUNTO FIJO (Ej: Centro de Ahuachapán, Sonsonate)
@@ -8163,28 +8166,34 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
         }
 
-        // 3️⃣ Filtros globales
-        let { data: filtrosGlobalesHoy } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .is('usuario', null)
-            .eq('fecha_vigencia', HOY)
-            .maybeSingle();
+        // 3️⃣ Filtros globales (Admin/Supervisor)
+const HOY = new Date().toISOString().split('T')[0];
 
-        if (!filtrosGlobalesHoy) {
-            let { data: filtrosGlobalesDefault } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .is('usuario', null)
-                .is('fecha_vigencia', null)
-                .single();
-            filtrosGlobalesHoy = filtrosGlobalesDefault;
-        }
+// Buscar filtro global con fecha_vigencia = HOY
+let { data: filtrosHoy, error: errorHoy } = await supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .is('usuario', null)
+    .eq('fecha_vigencia', HOY)
+    .maybeSingle();
 
-        if (filtrosGlobalesHoy) {
-            console.log('✅ Usando filtros globales');
-            return filtrosGlobalesHoy;
-        }
+if (filtrosHoy) {
+    console.log('✅ Usando filtro global para hoy');
+    return filtrosHoy;
+}
+
+// Si no hay para hoy, buscar el filtro global por defecto
+let { data: filtrosDefault, error: errorDefault } = await supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .is('usuario', null)
+    .is('fecha_vigencia', null)
+    .single();
+
+if (!errorDefault && filtrosDefault) {
+    console.log('✅ Usando filtro global por defecto');
+    return filtrosDefault;
+}
 
         // 4️⃣ Valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
