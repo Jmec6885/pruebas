@@ -8167,29 +8167,37 @@ async function cargarFiltrosUniversales(unidad = null) {
         }
 
         // 3️⃣ Filtros globales (Admin/Supervisor)
-        // Buscar primero un filtro global con fecha_vigencia = HOY
-        let { data: filtrosGlobalesHoy } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .is('usuario', null)
-            .eq('fecha_vigencia', HOY)
-            .maybeSingle();
+// Buscar primero un filtro global con fecha_vigencia = HOY
+let { data: filtrosGlobalesHoy } = await supabaseClient
+    .from('filtros_mapa')
+    .select('*')
+    .is('usuario', null)
+    .eq('fecha_vigencia', HOY)
+    .maybeSingle();
 
-        if (!filtrosGlobalesHoy) {
-            // Si no hay para hoy, usar el filtro global sin fecha_vigencia
-            let { data: filtrosGlobalesDefault } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .is('usuario', null)
-                .is('fecha_vigencia', null)
-                .single();
-            filtrosGlobalesHoy = filtrosGlobalesDefault;
-        }
+if (!filtrosGlobalesHoy) {
+    // Si no hay para hoy, usar el filtro global sin fecha_vigencia
+    let { data: filtrosGlobalesDefault, error } = await supabaseClient
+        .from('filtros_mapa')
+        .select('*')
+        .is('usuario', null)
+        .is('fecha_vigencia', null)
+        .single();
+    
+    if (error) {
+        console.warn('⚠️ No se encontró filtro global por defecto:', error.message);
+        filtrosGlobalesHoy = null;
+    } else {
+        filtrosGlobalesHoy = filtrosGlobalesDefault;
+    }
+}
 
-        if (filtrosGlobalesHoy) {
-            console.log('✅ Usando filtros globales (con/sin fecha_vigencia)');
-            return filtrosGlobalesHoy;
-        }
+if (filtrosGlobalesHoy) {
+    console.log('✅ Usando filtros globales (con/sin fecha_vigencia)');
+    return filtrosGlobalesHoy;
+}
+
+
 
         // 4️⃣ Valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
@@ -8311,10 +8319,16 @@ if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
 
         console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
 
-        osEnRadio.sort((a, b) => a.distancia - b.distancia);
-        osEnRadio.forEach((os, i) => os.numeroOrden = i + 1);
+        // Optimizar la ruta usando el algoritmo del vecino más cercano
+const osOptimizadas = optimizarRutaVecinoCercano(osEnRadio, osCentro.OSATMO, {
+    lat: latCentro,
+    lng: lngCentro
+});
 
-        generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+// Asignar números de orden
+osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
+
+        generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
 
     } catch (err) {
         console.error('Error cargando mapa:', err);
