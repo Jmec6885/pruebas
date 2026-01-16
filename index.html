@@ -5188,25 +5188,21 @@ async function generarMapaUnidadConFiltros() {
     if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
         // ✅ Usa una sola declaración de esRegulada
         const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-        const deuda = parseFloat(os.Deuda) || 0;
-        const tieneDeudaAlta = deuda > 500;
+const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+const deuda = parseFloat(os.Deuda) || 0;
+const tieneDeudaAlta = deuda > 500;
 
-        // ✅ Depuración
-        console.log('🔍 Filtros aplicados:', filtrosAplicar);
-
-        // ✅ Regla de negocio
-        let mostrar = esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
-        
-        if (mostrar) {
-            osEnRadio.push({
-                ...os,
-                distancia: distancia,
-                esRegulada: esRegulada,
-                lat: lat,
-                lng: lng
-            });
-        }
+// ✅ Aplicar reglas de negocio completas
+if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
+    osEnRadio.push({
+        ...os,
+        lat,
+        lng,
+        distancia,
+        esRegulada,
+        tieneDeudaAlta
+    });
+}
     }
 });
         
@@ -8212,63 +8208,10 @@ async function cargarFiltrosUniversales(unidad = null) {
     try {
         
 
-       // ✅ CARGAR FILTROS SEGÚN ROL Y CONDICIÓN
-let filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+     // ✅ Cargar filtros usando la función unificada (que ya maneja roles, fechas y prioridades)
+let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
+console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
-const esAdmin = ['Administrador', 'Supervisor'].includes(currentUser?.rol);
-const esDespacho = currentUser?.rol === 'Despacho';
-
-if (esAdmin) {
-  // Admin/Supervisor → Filtros GLOBALES (usuario = NULL)
-  const { data: filtrosGlobales } = await supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .is('usuario', null)
-    .single()
-    .then(r => r.data)
-    .catch(() => null);
-  if (filtrosGlobales) {
-    filtrosAplicar = filtrosGlobales;
-    console.log('📋 Admin/Supervisor usando filtros globales');
-  }
-} 
-else if (esDespacho) {
-  // Despacho → SUS PROPIOS FILTROS (usuario = currentUser.usuario)
-  const { data: filtrosPersonales } = await supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .eq('usuario', currentUser.usuario)
-    .maybeSingle();
-  if (filtrosPersonales) {
-    filtrosAplicar = filtrosPersonales;
-    console.log(`📋 Despacho usando filtros personales de ${currentUser.usuario}`);
-  } else {
-    // Fallback a filtros globales
-    const { data: filtrosGlobales } = await supabaseClient
-      .from('filtros_mapa')
-      .select('*')
-      .is('usuario', null)
-      .single()
-      .then(r => r.data)
-      .catch(() => null);
-    if (filtrosGlobales) {
-      filtrosAplicar = filtrosGlobales;
-      console.log('⚠️ Despacho sin filtros personales → usando globales');
-    }
-  }
-} 
-else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
-  // Consulta/Contratista → Filtros por UNIDAD
-  const { data: filtrosUnidad } = await supabaseClient
-    .from('filtros_por_unidad')
-    .select('*')
-    .eq('Unidad', unidadFiltro)
-    .maybeSingle();
-  if (filtrosUnidad) {
-    filtrosAplicar = filtrosUnidad;
-    console.log(`📋 Filtros por unidad ${unidadFiltro}`);
-  }
-}
 
 // ✅ Validar que haya filtros válidos
 if (!filtrosAplicar) {
@@ -8346,15 +8289,23 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
             if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                const tipo = (os.Tipo_de_OS || '').toLowerCase();
-                const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
+                // Evaluar condiciones de excepción
+const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+const deuda = parseFloat(os.Deuda) || 0;
+const tieneDeudaAlta = deuda > 500;
 
-                // ✅ CORRECCIÓN 4: Validar filtros correctamente
-                if (esRegulada) {
-                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
-                } else if (validarFiltrosOS(os, filtrosAplicar)) {
-                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
-                }
+// Aplicar reglas de negocio completas
+if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
+    osEnRadio.push({
+        ...os,
+        lat,
+        lng,
+        distancia,
+        esRegulada,
+        tieneDeudaAlta
+    });
+}
             }
         });
 
@@ -8424,33 +8375,21 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 // ✅ VALIDAR SI OS CUMPLE FILTROS (CON REGLAS DE EXCEPCIÓN)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    // 1. Normalizar datos de la OS
-    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-    const deuda = parseFloat(os.Deuda) || 0;
-    const tieneDeudaAlta = deuda > 500;
-
-    // 2. REGLAS DE EXCEPCIÓN: Si cumple alguna, se muestra SIEMPRE
-    if (esRegulada || tieneDeudaAlta) {
-        return true;
-    }
-
-    // 3. Para el resto, aplicar los filtros normales
     const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
     const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
-
     const deudaAmarillo = Boolean(filtros.deuda_amarillo);
     const deudaNaranja = Boolean(filtros.deuda_naranja);
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // Si no hay filtros activos, mostrar todo (este caso ya está cubierto arriba, pero es bueno mantenerlo)
+    // Si no hay filtros activos, mostrar todo
     if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
         return true;
     }
 
-    // 4. FILTRO DE DEUDA (solo para suspensiones con deuda ≤ $500)
+    // Filtro de deuda (solo para suspensiones)
     if (tieneFiltroDeuda) {
+        const deuda = parseFloat(os.Deuda) || 0;
         const esSuspension = os.Tipologia && (
             os.Tipologia.includes('SUSPENSION B.T.') ||
             os.Tipologia.includes('SUSPENSION M.T.') ||
@@ -8458,15 +8397,14 @@ function validarFiltrosOS(os, filtros) {
         );
         if (esSuspension) {
             let cumple = false;
-            if (deudaAmarillo && deuda > 500) cumple = true; // redundante, pero coherente
+            if (deudaAmarillo && deuda > 500) cumple = true;
             if (deudaNaranja && deuda >= 100 && deuda <= 500) cumple = true;
             if (deudaRosado && deuda >= 50 && deuda < 100) cumple = true;
             if (!cumple) return false;
         }
-        // Si NO es suspensión, el filtro de deuda se ignora
     }
 
-    // 5. FILTRO DE RANGO
+    // Filtro de rango
     if (rangos.length > 0) {
         if (!os['Fecha Gen.']) return false;
         const dias = calcularDias(os['Fecha Gen.']);
@@ -8474,7 +8412,7 @@ function validarFiltrosOS(os, filtros) {
         if (!rangos.includes(rangoOS)) return false;
     }
 
-    // 6. FILTRO DE TIPOLOGÍA
+    // Filtro de tipología
     if (tipologias.length > 0) {
         if (!os.Tipologia) return false;
         const tipologiaOS = os.Tipologia.trim();
@@ -8482,9 +8420,9 @@ function validarFiltrosOS(os, filtros) {
         if (!coincide) return false;
     }
 
-    // ✅ Cumple todos los filtros activos
     return true;
 }
+
 
 
 // ========================================
