@@ -8101,22 +8101,20 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 }
 
 
+
 // ========================================
 // 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO) - CON SOPORTE PARA FECHA_VIGENCIA
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
-    const HOY = new Date().toISOString().split('T')[0]; // ✅ Declarar HOY al inicio
+    const HOY = new Date().toISOString().split('T')[0]; // ✅ Solo una declaración
 
-    console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad: unidad, rol: currentUser.rol });
+    console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad, rol: currentUser.rol });
     
     let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
 
     try {
-        // 🎯 ORDEN DE PRIORIDAD (Mayor a Menor)
-
         // 1️⃣ Filtros personales del usuario (Despacho)
         if (currentUser.rol === 'Despacho') {
-            // Buscar primero un filtro con fecha_vigencia = HOY
             let { data: filtrosHoy } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
@@ -8125,7 +8123,6 @@ async function cargarFiltrosUniversales(unidad = null) {
                 .maybeSingle();
 
             if (!filtrosHoy) {
-                // Si no hay para hoy, buscar el filtro sin fecha_vigencia (el "por defecto")
                 let { data: filtrosDefault } = await supabaseClient
                     .from('filtros_mapa')
                     .select('*')
@@ -8136,14 +8133,13 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
 
             if (filtrosHoy) {
-                console.log('✅ Usando filtros personales de Despacho (con/sin fecha_vigencia)');
+                console.log('✅ Usando filtros personales de Despacho');
                 return filtrosHoy;
             }
         }
 
-        // 2️⃣ Filtros por unidad (Contratista/Consulta)
+        // 2️⃣ Filtros por unidad
         if (unidad) {
-            // Buscar primero un filtro con fecha_programada = HOY
             let { data: filtrosUnidadHoy } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
@@ -8152,7 +8148,6 @@ async function cargarFiltrosUniversales(unidad = null) {
                 .maybeSingle();
 
             if (!filtrosUnidadHoy) {
-                // Si no hay para hoy, buscar el filtro sin fecha_programada
                 let { data: filtrosUnidadDefault } = await supabaseClient
                     .from('filtros_por_unidad')
                     .select('*')
@@ -8168,40 +8163,28 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
         }
 
-        // 3️⃣ Filtros globales (Admin/Supervisor)
-const HOY = new Date().toISOString().split('T')[0];
-let filtrosGlobales = null;
+        // 3️⃣ Filtros globales
+        let { data: filtrosGlobalesHoy } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .is('usuario', null)
+            .eq('fecha_vigencia', HOY)
+            .maybeSingle();
 
-// Buscar filtro global para HOY
-const { data: filtrosHoy } = await supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .is('usuario', null)
-    .eq('fecha_vigencia', HOY)
-    .maybeSingle();
+        if (!filtrosGlobalesHoy) {
+            let { data: filtrosGlobalesDefault } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .is('usuario', null)
+                .is('fecha_vigencia', null)
+                .single();
+            filtrosGlobalesHoy = filtrosGlobalesDefault;
+        }
 
-if (filtrosHoy) {
-    filtrosGlobales = filtrosHoy;
-} else {
-    // Buscar filtro global por defecto (sin fecha_vigencia)
-    const { data: filtrosDefault, error } = await supabaseClient
-        .from('filtros_mapa')
-        .select('*')
-        .is('usuario', null)
-        .is('fecha_vigencia', null)
-        .single();
-    
-    if (!error) {
-        filtrosGlobales = filtrosDefault;
-    }
-}
-
-if (filtrosGlobales) {
-    console.log('✅ Usando filtros globales');
-    return filtrosGlobales;
-}
-
-
+        if (filtrosGlobalesHoy) {
+            console.log('✅ Usando filtros globales');
+            return filtrosGlobalesHoy;
+        }
 
         // 4️⃣ Valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
@@ -8218,32 +8201,15 @@ if (filtrosGlobales) {
         <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
 
     try {
-        
+        // ✅ Cargar filtros usando la función unificada
+        let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
+        console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
-     // ✅ Cargar filtros usando la función unificada (que ya maneja roles, fechas y prioridades)
-let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
-console.log('📊 Filtros finales aplicados:', filtrosAplicar);
-
-
-// ✅ Validar que haya filtros válidos
-if (!filtrosAplicar) {
-  console.error('❌ Filtros no se cargaron correctamente');
-  filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
-}
-
-console.log('📊 Filtros finales aplicados:', filtrosAplicar);
-
-                    
-
-       
-
-        // ✅ CORRECCIÓN 3: Validar que los filtros se cargaron correctamente
+        // ✅ Validar que haya filtros válidos
         if (!filtrosAplicar) {
             console.error('❌ Filtros no se cargaron correctamente');
             filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         }
-
-        console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
         // Guardar globalmente
         window.filtrosAplicados = filtrosAplicar;
@@ -8259,25 +8225,22 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         }
         
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
-
         console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
 
         resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
             <p style="text-align: center; color: #666;">Buscando OS Pendientes en el área...</p></div>`;
 
+        // 📥 Cargar todas las OS Pendientes
         let todasOSRegistradas = [];
         const BATCH_SIZE = 1000;
         let offset = 0;
 
         while (true) {
-            let query = supabaseClient
+            const { data, error } = await supabaseClient
                 .from('OS Pendientes')
                 .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
-                .in('Estado_ATOMO', ['Registrada', 'Asignada']);
-
-  
-
-            const { data, error } = await query.range(offset, offset + BATCH_SIZE - 1);
+                .in('Estado_ATOMO', ['Registrada', 'Asignada'])
+                .range(offset, offset + BATCH_SIZE - 1);
             
             if (error) {
                 console.error('Error en batch:', error);
@@ -8292,69 +8255,49 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
         console.log(`📊 Total de OS cargadas: ${todasOSRegistradas.length}`);
 
+        // 📍 Filtrar solo las OS dentro del radio (sin aplicar reglas aún)
         const osEnRadio = [];
-        todasOSRegistradas.forEach(os => {
+        for (const os of todasOSRegistradas) {
             const coords = os.Coordenadas || os.Coordendasgis;
-            if (!validarFormatoCoordenadas(coords)) return;
+            if (!validarFormatoCoordenadas(coords)) continue;
 
             const [lat, lng] = coords.split(',').map(Number);
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
             if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                // Evaluar condiciones de excepción
-const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-const deuda = parseFloat(os.Deuda) || 0;
-const tieneDeudaAlta = deuda > 500;
-
-// Aplicar reglas de negocio completas
-if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
-    osEnRadio.push({
-        ...os,
-        lat,
-        lng,
-        distancia,
-        esRegulada,
-        tieneDeudaAlta
-    });
-}
+                osEnRadio.push({ ...os, lat, lng, distancia });
             }
+        }
+
+        // ✅ Incluir la OS de partida y aplicar reglas de negocio UNA SOLA VEZ
+        const osParaOptimizar = [osCentro, ...osEnRadio];
+        const osConFiltros = osParaOptimizar.filter(os => {
+            const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+            const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+            const deuda = parseFloat(os.Deuda) || 0;
+            const tieneDeudaAlta = deuda > 500;
+            return esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
         });
 
-        console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
+        console.log(`✅ OS después de aplicar filtros: ${osConFiltros.length}`);
 
-// ✅ Incluir la OS de partida en los datos para optimizar
-const osParaOptimizar = [osCentro, ...osEnRadio];
+        // ✅ Optimizar la ruta
+        let osOptimizadas;
+        try {
+            osOptimizadas = optimizarRutaVecinoCercano(osConFiltros, osCentro.OSATMO, {
+                lat: latCentro,
+                lng: lngCentro
+            });
+        } catch (err) {
+            console.warn('⚠️ Falló la optimización. Mostrando sin ordenar.', err);
+            osOptimizadas = osConFiltros;
+        }
 
-// ✅ Aplicar reglas de negocio completas a TODAS las OS
-const osConFiltros = osParaOptimizar.filter(os => {
-    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-    const deuda = parseFloat(os.Deuda) || 0;
-    const tieneDeudaAlta = deuda > 500;
-    
-    return esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
-});
+        // Asignar números de orden
+        osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
 
-console.log(`✅ OS después de aplicar filtros: ${osConFiltros.length}`);
-
-// ✅ Optimizar la ruta solo con las OS que pasaron el filtro
-let osOptimizadas;
-try {
-    osOptimizadas = optimizarRutaVecinoCercano(osConFiltros, osCentro.OSATMO, {
-        lat: latCentro,
-        lng: lngCentro
-    });
-} catch (err) {
-    console.warn('⚠️ Falló la optimización. Mostrando sin ordenar.', err);
-    osOptimizadas = osConFiltros;
-}
-
-// Asignar números de orden
-osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
-
-// Generar mapa
-generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
+        // Generar mapa
+        generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
 
     } catch (err) {
         console.error('Error cargando mapa:', err);
