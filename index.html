@@ -754,23 +754,7 @@ let consultasData = [];
 // === ROLES CON ACCESO A NOMBRE DE CLIENTE ===
 const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'];
 
-// ✅ FUNCIONES DE FECHA PARA EL SALVADOR (UTC-6)
-function getFechaLocalElSalvador() {
-  // ✅ Calcular fecha según UTC-6 (El Salvador)
-  const ahora = new Date();
-  const utc = ahora.getTime() + (ahora.getTimezoneOffset() * 60000);
-  const fechaSLV = new Date(utc + (-6 * 3600000)); // UTC-6
-  return fechaSLV.toISOString().split('T')[0]; // YYYY-MM-DD
-}
 
-function getFechaMananaElSalvador() {
-  const hoy = new Date();
-  const offsetUTC = -6;
-  const utc = hoy.getTime() + (hoy.getTimezoneOffset() * 60000);
-  const fechaElSalvador = new Date(utc + (offsetUTC * 3600000));
-  fechaElSalvador.setDate(fechaElSalvador.getDate() + 1);
-  return fechaElSalvador.toISOString().split('T')[0];
-}
 
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
@@ -7471,7 +7455,7 @@ if (unidadesUnicas.length === 0) {
 	
 		<!-- 🆕 Asegurar visibilidad del bloque de filtros por unidad -->
 
-
+document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
@@ -7530,7 +7514,7 @@ if (unidadesUnicas.length === 0) {
             
             
                         
-          
+            // BOTÓN: GUARDAR FILTROS
 ${currentUser.rol === 'Administrador' ? `
     <div style="text-align: center; margin-top: 20px;">
         <button class="btn" onclick="guardarFiltrosMapaGlobales()" style="font-size: 16px; padding: 15px 30px;">
@@ -8188,10 +8172,7 @@ async function cargarFiltrosUniversales(unidad = null) {
 }
 
 
-
-
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
-console.log('🔍 unidadFiltro recibida:', JSON.stringify(unidadFiltro));
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
         <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
@@ -8225,7 +8206,7 @@ else if (esDespacho) {
     .from('filtros_mapa')
     .select('*')
     .eq('usuario', currentUser.usuario)
-    .limit(1).single();
+    .maybeSingle();
   if (filtrosPersonales) {
     filtrosAplicar = filtrosPersonales;
     console.log(`📋 Despacho usando filtros personales de ${currentUser.usuario}`);
@@ -8244,36 +8225,18 @@ else if (esDespacho) {
     }
   }
 } 
-
 else if (unidadFiltro && ['Consulta', 'Contratista'].includes(currentUser?.rol)) {
-  // ✅ Normalizar unidadFiltro: quitar espacios, asegurar formato
-  unidadFiltro = String(unidadFiltro).trim();
-  const hoy = getFechaLocalElSalvador();
-  console.log('🔍 Buscando filtros para Unidad:', JSON.stringify(unidadFiltro), 'Fecha:', hoy);
-
-  const {  filtrosUnidad } = await supabaseClient
+  // Consulta/Contratista → Filtros por UNIDAD
+  const { data: filtrosUnidad } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
     .eq('Unidad', unidadFiltro)
-    .eq('fecha_programada', hoy)
     .maybeSingle();
-
   if (filtrosUnidad) {
-    // ✅ Hay filtros programados → aplicarlos normalmente
     filtrosAplicar = filtrosUnidad;
-    console.log(`📋 Filtros por unidad ${unidadFiltro} para el día ${hoy}`);
-  } else {
-    // ❌ No hay filtros → usar UN MODO RESTRINGIDO: solo asignadas
-    filtrosAplicar = {
-      rangos: [],
-      tipologias: [],
-      radio_km: 0,
-      modoRestringido: true
-    };
-    console.log(`📋 Sin filtros para hoy. Modo restringido activado para ${unidadFiltro}`);
+    console.log(`📋 Filtros por unidad ${unidadFiltro}`);
   }
 }
-
 
 // ✅ Validar que haya filtros válidos
 if (!filtrosAplicar) {
@@ -8343,55 +8306,25 @@ console.log('📊 Filtros finales aplicados:', filtrosAplicar);
         console.log(`📊 Total de OS cargadas: ${todasOSRegistradas.length}`);
 
         const osEnRadio = [];
-        // 🆕 Cargar lista de OS asignadas a la unidad (solo si modo restringido)
-let osAsignadasAUnidad = new Set();
-if (filtrosAplicar.modoRestringido) {
-  const { data: asignaciones } = await supabaseClient
-    .from('os_asignadas')
-    .select('osatomo')
-    .eq('Unidad', unidadFiltro);
-  osAsignadasAUnidad = new Set(asignaciones?.map(a => String(a.osatomo).trim()) || []);
-}
+        todasOSRegistradas.forEach(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            if (!validarFormatoCoordenadas(coords)) return;
 
-todasOSRegistradas.forEach(os => {
-  // 🆕 Modo restringido: solo incluir si está asignada
-  if (filtrosAplicar.modoRestringido) {
-    if (!osAsignadasAUnidad.has(String(os.OSATMO).trim())) {
-      return; // Saltar si no está asignada
-    }
-  }
+            const [lat, lng] = coords.split(',').map(Number);
+            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
-  const coords = os.Coordenadas || os.Coordendasgis;
-  if (!validarFormatoCoordenadas(coords)) return;
+            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+                const tipo = (os.Tipo_de_OS || '').toLowerCase();
+                const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
 
-  const [lat, lng] = coords.split(',').map(Number);
-  const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-
-  // 🆕 En modo restringido, ignorar el radio (mostrar todas las asignadas, sin límite de distancia)
-  if (filtrosAplicar.modoRestringido) {
-    // Solo excluir la OS de partida
-    if (os.OSATMO !== osCentro.OSATMO) {
-      const tipo = (os.Tipo_de_OS || '').toLowerCase();
-      const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
-      if (esRegulada) {
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
-      } else {
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
-      }
-    }
-  } else {
-    // ✅ Comportamiento normal (con radio y filtros)
-    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-      const tipo = (os.Tipo_de_OS || '').toLowerCase();
-      const esRegulada = tipo.includes('regulad') && !tipo.includes('no');
-      if (esRegulada) {
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
-      } else if (validarFiltrosOS(os, filtrosAplicar)) {
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
-      }
-    }
-  }
-});
+                // ✅ CORRECCIÓN 4: Validar filtros correctamente
+                if (esRegulada) {
+                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true });
+                } else if (validarFiltrosOS(os, filtrosAplicar)) {
+                    osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false });
+                }
+            }
+        });
 
         console.log(`✅ OS filtradas en radio: ${osEnRadio.length}`);
 
@@ -12492,8 +12425,6 @@ function seleccionarTabla(tableName) {
   return;
 }
 
-
-
     // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
     if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
         const modulosProhibidos = ['usuarios', 'detalle_os'];
@@ -12582,11 +12513,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
     }
 });
-
-// 🔍 DEPURACIÓN DE FECHA
-console.log('🕒 Hora actual del sistema:', new Date().toString());
-console.log('🌍 Zona horaria detectada:', Intl.DateTimeFormat().resolvedOptions().timeZone);
-console.log('🇸🇻 Fecha calculada para El Salvador:', getFechaLocalElSalvador());
 
 
 </script>
