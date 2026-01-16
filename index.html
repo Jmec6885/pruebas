@@ -5322,76 +5322,9 @@ async function generarKMLAdminPorUnidad(tipo) {
 }
 
 	
-	// ========================================
-// 🗺️ GENERAR MAPA ADMIN KML RUTA
-// ========================================
-// ========================================
-// 🗺️ GENERAR MAPA ADMIN DIRECTO (CORREGIDO)
-// ========================================
-function generarMapaAdminKMLRuta() {
-    // 1. Validar Unidad
-    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
-    if (!unidadSeleccionada) {
-        alert('⚠️ Por favor seleccione una unidad primero');
-        return;
-    }
-
-    // 2. Validar Punto de Partida (AHORA OBLIGATORIO)
-    const osPartida = document.getElementById('selectPuntoPartidaAdmin').value;
-    if (!osPartida) {
-        alert('⚠️ Debes seleccionar una OS como Punto de Partida para generar la ruta.');
-        return;
-    }
-    
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
-
-    try {
-        // 3. Obtener y Filtrar datos
-        const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
-        
-        // 4. Normalizar datos (Asegurar campos consistentes)
-        const osDataNormalizada = osUnidad
-            .map(os => ({
-                ...os, 
-                osatomo: os.osatomo || os.OSATOMO || os.OSATMO || '',
-                Tipologia: os.Tipologia || 'Sin tipología',
-                CoordenadasValidas: os.Coordenadas || os.Coordendasgis
-            }))
-            .filter(os => os.CoordenadasValidas && os.CoordenadasValidas.includes(','))
-            .filter(os => os.osatomo.trim() !== '');
-
-        if (osDataNormalizada.length === 0) {
-            alert('❌ No hay OS con coordenadas válidas para esta unidad');
-            resultsContainer.innerHTML = '';
-            return;
-        }
-
-        // 5. Optimizar Ruta (Vecino Cercano)
-        // Usamos la OS seleccionada en el primer dropdown
-        const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
-        
-        if (todosLosPuntos.length === 0) {
-            alert('❌ Error al optimizar la ruta. Verifique que el punto de partida tenga coordenadas.');
-            resultsContainer.innerHTML = '';
-            return;
-        }
-        
-        // 6. Mostrar Mapa Directamente
-        const osCentro = todosLosPuntos[0];
-        console.log(`✅ Ruta generada directamente desde ${osPartida}`);
-        
-        mostrarMapaKMLConNumeracion(todosLosPuntos, unidadSeleccionada, osCentro.lat, osCentro.lng);
-
-    } catch (error) {
-        console.error(error);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error al generar el mapa</div>';
-    }
-}
-
 
 // ========================================
-// 🗺️ GENERAR MAPA KML RUTA (Función ya corregida y lista)
+// 🗺️ GENERAR MAPA KML RUTA (CON BOTONES DE PUNTOS FIJOS)
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
@@ -5423,6 +5356,20 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                     ).join('')}
                 </select>
             </div>
+
+            <!-- Botones para puntos fijos -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Ahuachapán', 13.924670, -89.842820)">
+                    📍 Ahuachapán (13.924670, -89.842820)
+                </button>
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Sonsonate', 13.727937, -89.717790)">
+                    📍 Sonsonate (13.727937, -89.717790)
+                </button>
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Santa Ana', 13.9680, -89.6240)">
+                    📍 Santa Ana (13.9680, -89.6240)
+                </button>
+            </div>
+
             <button class="btn" onclick="generarMapaKMLConPuntoPartida('${unidad}')">🗺️ Generar Mapa</button>
         </div>
     `;
@@ -5432,12 +5379,13 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 
 
 /**
- * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
- * @param {Array<Object>} osData - Lista completa de órdenes de servicio.
- * @param {string} osPartida - ID de la OS de partida.
- * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
- */
-function optimizarRutaVecinoCercano(osData, osPartida) {
+* Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
+* @param {Array<Object>} osData - Lista completa de órdenes de servicio.
+* @param {string} osPartida - ID de la OS de partida (opcional).
+* @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
+* @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
+*/
+function optimizarRutaVecinoCercano(osData, osPartida, puntoPartidaCoordenadas = null) {
     // 1. Consistencia del campo ID y encontrar el centro
     const osCentro = osData.find(os => os.osatomo === osPartida);
     if (!osCentro) {
@@ -5445,22 +5393,29 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
         return [];
     }
 
-    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    
     // 2. Extracción de coordenadas con manejo de errores (lat y lng como NaN si no son válidas)
-    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
-    
+    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
     // 🛑 VERIFICACIÓN CRÍTICA: Si el punto de partida NO tiene coordenadas válidas, retornamos array vacío.
+    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
     if (isNaN(latCentro) || isNaN(lngCentro)) {
         console.error(`Error optimizando: La OS de partida (${osPartida}) tiene coordenadas no válidas: ${coordsCentro}`);
         return [];
     }
-    
+
+    // ✅ Si se proporciona un punto de partida con coordenadas, usarlo como centro
+    let puntoInicialLat = latCentro;
+    let puntoInicialLng = lngCentro;
+    if (puntoPartidaCoordenadas && !isNaN(puntoPartidaCoordenadas.lat) && !isNaN(puntoPartidaCoordenadas.lng)) {
+        puntoInicialLat = puntoPartidaCoordenadas.lat;
+        puntoInicialLng = puntoPartidaCoordenadas.lng;
+        console.log(`✅ Usando punto de partida personalizado: ${puntoInicialLat}, ${puntoInicialLng}`);
+    }
+
     // Inicializar el punto de partida
     let osCentroConDatos = {
         ...osCentro,
-        lat: latCentro,
-        lng: lngCentro,
+        lat: puntoInicialLat,
+        lng: puntoInicialLng,
         distancia: 0,
         numeroOrden: 1,
         distanciaAlPuntoInicial: 0, // El punto inicial está a 0km de sí mismo.
@@ -5475,23 +5430,21 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
             const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
             const valorTipo = os.Tipo_de_OS ? os.Tipo_de_OS.toLowerCase() : '';
             const esRegulada = (valorTipo.includes('regulad') && !valorTipo.includes('no'));
-
             // Calcular y almacenar la distancia al punto inicial
-            const distanciaAlInicial = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) 
-                ? calcularDistanciaKm(latCentro, lngCentro, lat, lng) 
+            const distanciaAlInicial = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng))
+                ? calcularDistanciaKm(puntoInicialLat, puntoInicialLng, lat, lng)
                 : Infinity;
-
-            return { 
-                ...os, 
-                lat, 
-                lng, 
+            return {
+                ...os,
+                lat,
+                lng,
                 esRegulada,
                 distanciaAlPuntoInicial: distanciaAlInicial // Distancia que querías mostrar en el mapa
             };
         })
         // Solo incluimos puntos con coordenadas válidas para la optimización.
         .filter(os => os.distanciaAlPuntoInicial !== Infinity);
-        
+
     let rutaFinal = [osCentroConDatos];
     let puntoActual = osCentroConDatos;
     let orden = 2;
@@ -5501,7 +5454,6 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
         let vecinoMasCercano = null;
         let minDistancia = Infinity;
         let vecinoIndex = -1;
-
         puntosNoVisitados.forEach((os, index) => {
             const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
             if (dist < minDistancia) {
@@ -5510,7 +5462,6 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
                 vecinoIndex = index;
             }
         });
-
         if (vecinoMasCercano && minDistancia !== Infinity) {
             vecinoMasCercano.numeroOrden = orden++;
             vecinoMasCercano.distancia = minDistancia;
@@ -5518,12 +5469,36 @@ function optimizarRutaVecinoCercano(osData, osPartida) {
             puntoActual = vecinoMasCercano;
             puntosNoVisitados.splice(vecinoIndex, 1);
         } else {
-            break; 
+            break;
         }
     }
+
     return rutaFinal;
 }
 
+// ========================================
+// 📍 GENERAR RUTA DESDE UN PUNTO FIJO (Ej: Centro de Ahuachapán, Sonsonate)
+// ========================================
+function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    try {
+        // 1. Obtener todas las OS Pendientes
+        const osData = window.osAsignadasKML.filter(os => os.Unidad === window.unidadActivaMapaRutas); // O usa la variable global que tengas
+        if (!osData || osData.length === 0) {
+            throw new Error('No hay OS asignadas para la unidad.');
+        }
+
+        // 2. Aplicar el algoritmo con el punto fijo
+        const rutaOptimizada = optimizarRutaVecinoCercano(osData, '', { lat: puntoLat, lng: puntoLng });
+
+        // 3. Mostrar el mapa con la ruta optimizada
+        mostrarMapaKMLConNumeracion(rutaOptimizada, puntoNombre, puntoLat, puntoLng);
+    } catch (err) {
+        console.error('Error generando ruta desde punto fijo:', err);
+        resultsContainer.innerHTML = '<div class="result-card">❌ Error al generar la ruta</div>';
+    }
+}
 
 
 // REEMPLAZAR función generarMapaKMLConPuntoPartida
@@ -7455,6 +7430,8 @@ if (unidadesUnicas.length === 0) {
 	
 		<!-- 🆕 Asegurar visibilidad del bloque de filtros por unidad -->
 
+
+
 document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
 
                 
@@ -7511,6 +7488,28 @@ document.getElementById('contadorUnidadesSeleccionadas').textContent = '0';
                     </span>
                 </div>
             </div>
+
+<!-- 🆕 CAMPO DE FECHA PARA GUARDAR FILTROS -->
+<div class="form-group" style="margin-top: 15px;">
+    <label style="font-weight: 600; color: #2d3748;">📅 Fecha de Vigencia (Opcional):</label>
+    <input type="date" id="fechaVigenciaFiltros" placeholder="Seleccione fecha"
+           min="${new Date().toISOString().split('T')[0]}"
+           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+    <small style="color: #666; display: block; margin-top: 5px;">
+        Dejar vacío para vigencia inmediata.
+    </small>
+</div>
+
+<!-- 🆕 CAMPO DE FECHA PARA GUARDAR FILTROS -->
+<div class="form-group" style="margin-top: 15px;">
+    <label style="font-weight: 600; color: #2d3748;">📅 Fecha de Vigencia (Opcional):</label>
+    <input type="date" id="fechaVigenciaFiltros" placeholder="Seleccione fecha"
+           min="${new Date().toISOString().split('T')[0]}"
+           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+    <small style="color: #666; display: block; margin-top: 5px;">
+        Dejar vacío para vigencia inmediata.
+    </small>
+</div>
             
             
                         
@@ -7581,9 +7580,7 @@ ${currentUser.rol === 'Administrador' ? `
 }
 
 
-// ========================================
-// 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
-// ========================================
+
 // ========================================
 // 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
 // ========================================
@@ -8111,66 +8108,103 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
 
 // ========================================
-// 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO)
+// 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO) - CON SOPORTE PARA FECHA_VIGENCIA
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
     console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad: unidad, rol: currentUser.rol });
-    
-    let filtros = { rangos: null, tipologias: null, radio_km: 3 };
-    
+    const HOY = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
+
     try {
         // 🎯 ORDEN DE PRIORIDAD (Mayor a Menor)
-        
+
         // 1️⃣ Filtros personales del usuario (Despacho)
         if (currentUser.rol === 'Despacho') {
-            const { data: filtrosPersonales } = await supabaseClient
+            // Buscar primero un filtro con fecha_vigencia = HOY
+            let { data: filtrosHoy } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .eq('usuario', currentUser.usuario)
+                .eq('fecha_vigencia', HOY)
                 .maybeSingle();
-            
-            if (filtrosPersonales) {
-                console.log('✅ Usando filtros personales de Despacho');
-                return filtrosPersonales;
+
+            if (!filtrosHoy) {
+                // Si no hay para hoy, buscar el filtro sin fecha_vigencia (el "por defecto")
+                let { data: filtrosDefault } = await supabaseClient
+                    .from('filtros_mapa')
+                    .select('*')
+                    .eq('usuario', currentUser.usuario)
+                    .is('fecha_vigencia', null)
+                    .maybeSingle();
+                filtrosHoy = filtrosDefault;
+            }
+
+            if (filtrosHoy) {
+                console.log('✅ Usando filtros personales de Despacho (con/sin fecha_vigencia)');
+                return filtrosHoy;
             }
         }
-        
+
         // 2️⃣ Filtros por unidad (Contratista/Consulta)
         if (unidad) {
-            const { data: filtrosUnidad } = await supabaseClient
+            // Buscar primero un filtro con fecha_programada = HOY
+            let { data: filtrosUnidadHoy } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
                 .eq('Unidad', unidad)
+                .eq('fecha_programada', HOY)
                 .maybeSingle();
-            
-            if (filtrosUnidad) {
+
+            if (!filtrosUnidadHoy) {
+                // Si no hay para hoy, buscar el filtro sin fecha_programada
+                let { data: filtrosUnidadDefault } = await supabaseClient
+                    .from('filtros_por_unidad')
+                    .select('*')
+                    .eq('Unidad', unidad)
+                    .is('fecha_programada', null)
+                    .maybeSingle();
+                filtrosUnidadHoy = filtrosUnidadDefault;
+            }
+
+            if (filtrosUnidadHoy) {
                 console.log('✅ Usando filtros por unidad:', unidad);
-                return filtrosUnidad;
+                return filtrosUnidadHoy;
             }
         }
-        
+
         // 3️⃣ Filtros globales (Admin/Supervisor)
-        const { data: filtrosGlobales } = await supabaseClient
+        // Buscar primero un filtro global con fecha_vigencia = HOY
+        let { data: filtrosGlobalesHoy } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
-            .single();
-        
-        if (filtrosGlobales) {
-            console.log('✅ Usando filtros globales');
-            return filtrosGlobales;
+            .eq('fecha_vigencia', HOY)
+            .maybeSingle();
+
+        if (!filtrosGlobalesHoy) {
+            // Si no hay para hoy, usar el filtro global sin fecha_vigencia
+            let { data: filtrosGlobalesDefault } = await supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .is('usuario', null)
+                .is('fecha_vigencia', null)
+                .single();
+            filtrosGlobalesHoy = filtrosGlobalesDefault;
         }
-        
+
+        if (filtrosGlobalesHoy) {
+            console.log('✅ Usando filtros globales (con/sin fecha_vigencia)');
+            return filtrosGlobalesHoy;
+        }
+
         // 4️⃣ Valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
         return filtros;
-        
     } catch (err) {
         console.error('❌ Error cargando filtros:', err);
         return filtros;
     }
 }
-
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8389,44 +8423,52 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 
 
 // ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (CON DEUDA)
+// ✅ VALIDAR SI OS CUMPLE FILTROS (CON REGLAS DE EXCEPCIÓN)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    // Normalizar filtros desde BD (pueden venir como null)
+    // 1. Normalizar datos de la OS
+    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+    const deuda = parseFloat(os.Deuda) || 0;
+    const tieneDeudaAlta = deuda > 500;
+
+    // 2. REGLAS DE EXCEPCIÓN: Si cumple alguna, se muestra SIEMPRE
+    if (esRegulada || tieneDeudaAlta) {
+        return true;
+    }
+
+    // 3. Para el resto, aplicar los filtros normales
     const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
     const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
 
-    // 🆕 Leer filtros de deuda desde el OBJETO filtros (NO del DOM)
     const deudaAmarillo = Boolean(filtros.deuda_amarillo);
     const deudaNaranja = Boolean(filtros.deuda_naranja);
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // ✅ Si no hay ningún filtro activo → mostrar todo
+    // Si no hay filtros activos, mostrar todo (este caso ya está cubierto arriba, pero es bueno mantenerlo)
     if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
         return true;
     }
 
-    // 1️⃣ FILTRO DE DEUDA (solo aplica a suspensiones)
+    // 4. FILTRO DE DEUDA (solo para suspensiones con deuda ≤ $500)
     if (tieneFiltroDeuda) {
-        const deuda = parseFloat(os.Deuda) || 0;
         const esSuspension = os.Tipologia && (
             os.Tipologia.includes('SUSPENSION B.T.') ||
             os.Tipologia.includes('SUSPENSION M.T.') ||
             os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
         );
-
         if (esSuspension) {
             let cumple = false;
-            if (deudaAmarillo && deuda > 500) cumple = true;
+            if (deudaAmarillo && deuda > 500) cumple = true; // redundante, pero coherente
             if (deudaNaranja && deuda >= 100 && deuda <= 500) cumple = true;
             if (deudaRosado && deuda >= 50 && deuda < 100) cumple = true;
-            if (!cumple) return false; // ❌ No cumple el rango de deuda requerido
+            if (!cumple) return false;
         }
-        // ⚠️ Si NO es suspensión → el filtro de deuda se ignora → sigue validando
+        // Si NO es suspensión, el filtro de deuda se ignora
     }
 
-    // 2️⃣ FILTRO DE RANGO
+    // 5. FILTRO DE RANGO
     if (rangos.length > 0) {
         if (!os['Fecha Gen.']) return false;
         const dias = calcularDias(os['Fecha Gen.']);
@@ -8434,7 +8476,7 @@ function validarFiltrosOS(os, filtros) {
         if (!rangos.includes(rangoOS)) return false;
     }
 
-    // 3️⃣ FILTRO DE TIPOLOGÍA
+    // 6. FILTRO DE TIPOLOGÍA
     if (tipologias.length > 0) {
         if (!os.Tipologia) return false;
         const tipologiaOS = os.Tipologia.trim();
@@ -8447,9 +8489,8 @@ function validarFiltrosOS(os, filtros) {
 }
 
 
-
 // ========================================
-// 💾 GUARDAR FILTROS (ADMIN GLOBAL / DESPACHO PERSONAL)
+// 💾 GUARDAR FILTROS (ADMIN GLOBAL / DESPACHO PERSONAL) - CON FECHA DE VIGENCIA
 // ========================================
 async function guardarFiltrosMapaGlobales() {
     // 🔒 VALIDAR PERMISOS
@@ -8462,7 +8503,6 @@ async function guardarFiltrosMapaGlobales() {
     const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
     const rangos = [];
     const tipologias = [];
-
     rangosCheckboxes.forEach(cb => {
         if (cb.checked && cb.value) {
             const valor = cb.value;
@@ -8480,24 +8520,28 @@ async function guardarFiltrosMapaGlobales() {
     if (!radioKmElement) radioKmElement = document.querySelector('input[type="number"][id*="radio"]');
     const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
 
-    // 3️⃣ Validación
+    // 3️⃣ 🆕 Obtener fecha de vigencia
+    const fechaVigenciaInput = document.getElementById('fechaVigenciaFiltros');
+    const fechaVigencia = fechaVigenciaInput?.value || null;
+
+    // 4️⃣ Validaciones
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
 
-    // 4️⃣ Confirmar acción
+    // 5️⃣ Confirmar acción
     const esDespacho = currentUser.rol === 'Despacho';
     const confirmar = confirm(
-        `¿${esDespacho ? 'Guardar TUS filtros personales' : 'SUSTITUIR filtros globales'}?\n\n` +
+        `¿${esDespacho ? 'Guardar TUS filtros personales' : 'SUSTITUIR filtros globales'}?\n` +
         `📊 VALORES:\n` +
         `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
         `• Tipologías: ${tipologias.length}\n` +
-        `• Radio: ${radioKm} km\n\n` +
+        `• Radio: ${radioKm} km\n` +
+        `${fechaVigencia ? `• Fecha de Vigencia: ${fechaVigencia}\n` : ''}` +
         `${esDespacho ? 'Solo TÚ verás estos filtros' : '⚠️ Esto afectará a TODOS los usuarios'}\n\n` +
         `✅ SÍ - Guardar\n❌ NO - Cancelar`
     );
-
     if (!confirmar) return;
 
     try {
@@ -8510,23 +8554,21 @@ async function guardarFiltrosMapaGlobales() {
             const { error } = await supabaseClient
                 .from('filtros_mapa')
                 .upsert({
-                    usuario: currentUser.usuario,  // ← CLAVE: Identificador único
+                    usuario: currentUser.usuario,
                     rangos: rangosAGuardar,
                     tipologias: tipologiasAGuardar,
                     radio_km: radioKm,
-                    fecha_actualizacion: new Date().toISOString()
+                    fecha_actualizacion: new Date().toISOString(),
+                    fecha_vigencia: fechaVigencia // ✅ NUEVO CAMPO
                 }, {
-                    onConflict: 'usuario'  // ← Upsert basado en usuario
+                    onConflict: 'usuario'
                 });
-
             if (error) {
                 alert('❌ Error: ' + error.message);
                 return;
             }
-
             alert('✅ Tus filtros personales fueron guardados correctamente');
             console.log(`✅ Filtros de ${currentUser.usuario} guardados`);
-
         } else {
             // ✅ ADMIN: Actualizar filtro global (id=1, usuario=NULL)
             const { error } = await supabaseClient
@@ -8535,25 +8577,25 @@ async function guardarFiltrosMapaGlobales() {
                     rangos: rangosAGuardar,
                     tipologias: tipologiasAGuardar,
                     radio_km: radioKm,
-                    fecha_actualizacion: new Date().toISOString()
+                    fecha_actualizacion: new Date().toISOString(),
+                    fecha_vigencia: fechaVigencia // ✅ NUEVO CAMPO
                 })
                 .eq('id', 1)
-                .is('usuario', null);  // ← Solo actualizar el registro global
-
+                .is('usuario', null);
             if (error) {
                 alert('❌ Error: ' + error.message);
                 return;
             }
-
             alert('✅ Filtros globales actualizados');
             console.log('✅ Filtros globales guardados');
         }
-
     } catch (err) {
         console.error('Error:', err);
         alert('❌ Error de conexión');
     }
 }
+
+
 
 	// ========================================
 // 🗺️ GENERAR MAPA CON LEAFLET (CON PANEL DE DETALLE)
