@@ -5036,16 +5036,18 @@ if (currentUser.rol === 'Despacho') {
     try {
         // 4. Preparar registros con filtros de deuda incluidos
 const registrosAGuardar = unidadesDestino.map(unidad => ({
-  Unidad: unidad, // ✅ Nombre exacto de la columna (con mayúscula)
-  rangos: rangos.length > 0 ? rangos : null,
-  tipologias: tipologias.length > 0 ? tipologias : null,
-  deuda_amarillo: deudaAmarillo,
-  deuda_naranja: deudaNaranja,
-  deuda_rosado: deudaRosado,
-  radio_km: radioKm,
-  fecha_actualizacion: new Date().toISOString(),
-  configurado_por: currentUser.usuario
+    Unidad: unidad,
+    rangos: rangos.length > 0 ? rangos : null,
+    tipologias: tipologias.length > 0 ? tipologias : null,
+    deuda_amarillo: deudaAmarillo,
+    deuda_naranja: deudaNaranja,
+    deuda_rosado: deudaRosado,
+    radio_km: radioKm,
+    fecha_actualizacion: new Date().toISOString(),
+    configurado_por: currentUser.usuario,
+    fecha_programada: fechaProgramada || null // 🆕 Añade esta línea
 }));
+
 
 // ✅ onConflict debe usar el nombre EXACTO de la columna
 const { error } = await supabaseClient
@@ -5185,7 +5187,17 @@ async function generarMapaUnidadConFiltros() {
                                   os.Tipo_de_OS.toLowerCase().includes('regulad') && 
                                   !os.Tipo_de_OS.toLowerCase().includes('no');
                 
-                let mostrar = esRegulada || validarFiltrosOS(os, filtrosAplicar);
+                // ✅ Primero, imprime los filtros para depuración
+console.log('🔍 Filtros aplicados:', filtrosAplicar);
+
+// ✅ Luego, aplica la lógica de decisión (¡NO la reemplaces!)
+const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+const deuda = parseFloat(os.Deuda) || 0;
+const tieneDeudaAlta = deuda > 500;
+
+// La regla de negocio: reguladas y deuda alta siempre se muestran
+let mostrar = esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
                 
                 if (mostrar) {
                     osEnRadio.push({
