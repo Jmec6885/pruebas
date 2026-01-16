@@ -8105,8 +8105,10 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 // 🔍 CARGAR FILTROS UNIVERSALES (UNIFICADO) - CON SOPORTE PARA FECHA_VIGENCIA
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
+    const HOY = new Date().toISOString().split('T')[0]; // ✅ Declarar HOY al inicio
+
     console.log('🔍 Cargando filtros para:', { usuario: currentUser.usuario, unidad: unidad, rol: currentUser.rol });
-    const HOY = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    
     let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
 
     try {
