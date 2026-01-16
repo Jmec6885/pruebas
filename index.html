@@ -5169,47 +5169,38 @@ async function generarMapaUnidadConFiltros() {
             'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda'
         );
         
-        const soloRegistradas = osRegistradas.filter(os => os.Estado_ATOMO === 'Registrada');
-        
-        const radioKm = filtrosAplicar.radio_km || 3;
-        const osEnRadio = [];
-        
         soloRegistradas.forEach(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            
-            if (!validarFormatoCoordenadas(coords)) return;
-            
-            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-            
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                const esRegulada = os.Tipo_de_OS && 
-                                  os.Tipo_de_OS.toLowerCase().includes('regulad') && 
-                                  !os.Tipo_de_OS.toLowerCase().includes('no');
-                
-                // ✅ Primero, imprime los filtros para depuración
-console.log('🔍 Filtros aplicados:', filtrosAplicar);
+    const coords = os.Coordenadas || os.Coordendasgis;
+    
+    if (!validarFormatoCoordenadas(coords)) return;
+    
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    
+    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+        // ✅ Usa una sola declaración de esRegulada
+        const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+        const deuda = parseFloat(os.Deuda) || 0;
+        const tieneDeudaAlta = deuda > 500;
 
-// ✅ Luego, aplica la lógica de decisión (¡NO la reemplaces!)
-const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-const deuda = parseFloat(os.Deuda) || 0;
-const tieneDeudaAlta = deuda > 500;
+        // ✅ Depuración
+        console.log('🔍 Filtros aplicados:', filtrosAplicar);
 
-// La regla de negocio: reguladas y deuda alta siempre se muestran
-let mostrar = esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
-                
-                if (mostrar) {
-                    osEnRadio.push({
-                        ...os,
-                        distancia: distancia,
-                        esRegulada: esRegulada,
-                        lat: lat,
-                        lng: lng
-                    });
-                }
-            }
-        });
+        // ✅ Regla de negocio
+        let mostrar = esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
+        
+        if (mostrar) {
+            osEnRadio.push({
+                ...os,
+                distancia: distancia,
+                esRegulada: esRegulada,
+                lat: lat,
+                lng: lng
+            });
+        }
+    }
+});
         
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
