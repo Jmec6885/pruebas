@@ -4966,105 +4966,113 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 
 
 // ========================================
-// 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO)
+// 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO CON FECHA)
 // ========================================
 async function guardarFiltrosPorUnidad() {
-
-// 🆕 Validación obligatoria para Despacho
-if (currentUser.rol === 'Despacho') {
-    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
-    if (checkboxesUnidades.length === 0) {
-        alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad para guardar filtros');
-        return;
+    // 🆕 Validación obligatoria para Despacho
+    if (currentUser.rol === 'Despacho') {
+        const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+        if (checkboxesUnidades.length === 0) {
+            alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad para guardar filtros');
+            return;
+        }
     }
-}
 
     // 1. Recolección de filtros de la interfaz
-    const checkboxesRangos = document.querySelectorAll('.checkbox-rango-unidad:checked');
-    const rangos = Array.from(checkboxesRangos).map(cb => cb.value);
+    const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
+    const rangos = [];
+    const tipologias = [];
+    let deudaAmarillo = false, deudaNaranja = false, deudaRosado = false;
 
-    const checkboxesTipologias = document.querySelectorAll('.checkbox-tipologia-unidad:checked');
-    const tipologias = Array.from(checkboxesTipologias).map(cb => cb.value);
+    rangosCheckboxes.forEach(cb => {
+        if (cb.checked && cb.value) {
+            const valor = cb.value;
+            if (valor.includes('-') || valor.startsWith('>')) {
+                rangos.push(valor);
+            } else if (cb.id === 'deuda_amarillo') {
+                deudaAmarillo = true;
+            } else if (cb.id === 'deuda_naranja') {
+                deudaNaranja = true;
+            } else if (cb.id === 'deuda_rosado') {
+                deudaRosado = true;
+            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
+                tipologias.push(valor);
+            }
+        }
+    });
 
-    // 🆕 Obtener estado de los checkboxes de deuda
-    const deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
-    const deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
-    const deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
+    // 2. Obtener radio
+    const radioKmElement = document.getElementById('radioKmUnidad');
+    const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
 
-    // Validar input radio
-    const radioElement = document.getElementById('radioKmUnidad');
-    const radioKm = radioElement ? parseInt(radioElement.value) : 3;
+    // 3. 🆕 Obtener unidades seleccionadas
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    const unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
+
+    // 4. 🆕 Obtener fecha programada
+    const fechaProgramadaInput = document.getElementById('fechaProgramadaFiltros');
+    const fechaProgramada = fechaProgramadaInput?.value || null;
+
+    // 5. Validaciones
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
 
-    // 2. Determinar unidades destino
-    let unidadesDestino = [];
-    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
-    
-    if (checkboxesUnidades.length > 0) {
-        // Caso A: Panel Admin (múltiples unidades)
-        unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
-    } else {
-        // Caso B: Mapa individual (unidad activa)
-        const unidadActivaElemento = document.getElementById('unidadActivaMapaRutas');
-        const selectorSimple = document.getElementById('selectUnidad');
-        if (unidadActivaElemento?.value) {
-            unidadesDestino.push(unidadActivaElemento.value);
-        } else if (selectorSimple?.value) {
-            unidadesDestino.push(selectorSimple.value);
-        }
-    }
-
     if (unidadesDestino.length === 0) {
-        alert('⚠️ Debes seleccionar al menos una unidad (usando los checkboxes) o estar en un mapa de unidad activa.');
+        alert('⚠️ Debe seleccionar al menos una unidad');
         return;
     }
 
-    // 3. Confirmación
+    // 6. Confirmar
     const confirmar = confirm(
-        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n\n` +
-        `• Unidades: ${unidadesDestino.length}\n` +
-        `• Rangos: ${rangos.length > 0 ? rangos.length : 'Todos'}\n` +
+        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n` +
+        `• Unidades: ${unidadesDestino.join(', ')}\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Todos'}\n` +
         `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
         `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
-        `• Radio: ${radioKm} km`
+        `• Radio: ${radioKm} km\n` +
+        `${fechaProgramada ? `• Fecha Programada: ${fechaProgramada}\n` : ''}`
     );
     if (!confirmar) return;
 
     try {
-        // 4. Preparar registros con filtros de deuda incluidos
-const registrosAGuardar = unidadesDestino.map(unidad => ({
-    Unidad: unidad,
-    rangos: rangos.length > 0 ? rangos : null,
-    tipologias: tipologias.length > 0 ? tipologias : null,
-    deuda_amarillo: deudaAmarillo,
-    deuda_naranja: deudaNaranja,
-    deuda_rosado: deudaRosado,
-    radio_km: radioKm,
-    fecha_actualizacion: new Date().toISOString(),
-    configurado_por: currentUser.usuario,
-    fecha_programada: fechaProgramada || null // 🆕 Añade esta línea
-}));
+        // 7. Preparar registros
+        const registrosAGuardar = unidadesDestino.map(unidad => ({
+            Unidad: unidad,
+            rangos: rangos.length > 0 ? rangos : null,
+            tipologias: tipologias.length > 0 ? tipologias : null,
+            deuda_amarillo: deudaAmarillo,
+            deuda_naranja: deudaNaranja,
+            deuda_rosado: deudaRosado,
+            radio_km: radioKm,
+            fecha_actualizacion: new Date().toISOString(),
+            configurado_por: currentUser.usuario,
+            fecha_programada: fechaProgramada // ✅ ¡AHORA SÍ ESTÁ DEFINIDA!
+        }));
 
-
-// ✅ onConflict debe usar el nombre EXACTO de la columna
-const { error } = await supabaseClient
-  .from('filtros_por_unidad')
-  .upsert(registrosAGuardar, { onConflict: 'Unidad' }); // ← "Unidad", no "unidad"
+        // 8. Guardar en BD
+        const { error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .upsert(registrosAGuardar, {
+                onConflict: '"Unidad", fecha_programada' // ✅ Usa la clave única compuesta
+            });
 
         if (error) {
+            console.error('❌ Error Supabase:', error);
             alert('❌ Error al guardar: ' + error.message);
             return;
         }
 
-        alert(`✅ Filtros guardados exitosamente para ${unidadesDestino.length} unidad(es).`);
+        alert('✅ Filtros guardados correctamente para las unidades seleccionadas');
+        console.log('✅ Filtros por unidad guardados:', unidadesDestino);
+
     } catch (err) {
-        console.error('Error:', err);
+        console.error('Error inesperado:', err);
         alert('❌ Error de conexión');
     }
 }
+
 
 
 // ========================================
@@ -7430,6 +7438,19 @@ if (unidadesUnicas.length === 0) {
                     <input type="number" id="radioKmUnidad" min="1" max="20" value="3" 
                            style="width: 100px; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                 </div>
+
+
+
+		<!-- 🆕 CAMPO DE FECHA PARA FILTROS POR UNIDAD -->
+<div class="form-group" style="margin-top: 15px;">
+    <label style="font-weight: 600; color: #2d3748;">📅 Fecha Programada (Opcional):</label>
+    <input type="date" id="fechaProgramadaFiltros" placeholder="Seleccione fecha"
+           min="${new Date().toISOString().split('T')[0]}"
+           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+    <small style="color: #666; display: block; margin-top: 5px;">
+        Dejar vacío para vigencia inmediata.
+    </small>
+</div>
 	
 		<!-- 🆕 Asegurar visibilidad del bloque de filtros por unidad -->
 
