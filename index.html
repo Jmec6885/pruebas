@@ -5392,21 +5392,27 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
  * @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
  * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
  */
-function optimizarRutaVecinoCercano(osData, osPartidaId) {
-  const osPartida = osData.find(os => os.OSATMO === osPartidaId); // Ajustar field
+function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas = null) {
+  // ✅ CORRECCIÓN: Normalizar búsqueda
+  const osPartida = osData.find(os => {
+    const osNum = (os.OSATMO || os.OSATOMO || os.osatomo || '').toString().trim();
+    return osNum === osPartidaId.toString().trim();
+  });
+  
   if (!osPartida) {
-    console.error('Error optimizando: OS de partida no encontrada en los datos.');
-    alert('⚠️ OS de partida no encontrada. Usando primera OS como inicio.');
-    return osData; // O usa osData[0]
+    console.error('❌ OS de partida no encontrada:', osPartidaId);
+    console.log('📋 IDs disponibles:', osData.slice(0, 5).map(os => os.OSATMO || os.OSATOMO));
+    return osData.length > 0 ? osData : [];
   }
 
-    // 2. Obtener coordenadas del centro
-    const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
-    if (isNaN(latCentro) || isNaN(lngCentro)) {
-        console.error(`Error optimizando: La OS de partida (${osPartida}) tiene coordenadas no válidas: ${coordsCentro}`);
-        return osData;
-    }
+  // 2. Obtener coordenadas del centro
+  const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
+  const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
+  
+  if (isNaN(latCentro) || isNaN(lngCentro)) {
+    console.error(`❌ Coordenadas inválidas para OS ${osPartidaId}:`, coordsCentro);
+    return osData;
+  }
 
     // 3. Determinar el punto inicial
     let puntoInicialLat = latCentro;
@@ -8167,33 +8173,33 @@ async function cargarFiltrosUniversales(unidad = null) {
         }
 
         // 3️⃣ Filtros globales (Admin/Supervisor)
-const HOY = new Date().toISOString().split('T')[0];
+        // ❌ ELIMINAR LA LÍNEA DUPLICADA: const HOY = ...
+        
+        // Buscar filtro global con fecha_vigencia = HOY
+        let { data: filtrosHoy, error: errorHoy } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .is('usuario', null)
+            .eq('fecha_vigencia', HOY)
+            .maybeSingle();
 
-// Buscar filtro global con fecha_vigencia = HOY
-let { data: filtrosHoy, error: errorHoy } = await supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .is('usuario', null)
-    .eq('fecha_vigencia', HOY)
-    .maybeSingle();
+        if (filtrosHoy) {
+            console.log('✅ Usando filtro global para hoy');
+            return filtrosHoy;
+        }
 
-if (filtrosHoy) {
-    console.log('✅ Usando filtro global para hoy');
-    return filtrosHoy;
-}
+        // Si no hay para hoy, buscar el filtro global por defecto
+        let { data: filtrosDefault, error: errorDefault } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .is('usuario', null)
+            .is('fecha_vigencia', null)
+            .single();
 
-// Si no hay para hoy, buscar el filtro global por defecto
-let { data: filtrosDefault, error: errorDefault } = await supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .is('usuario', null)
-    .is('fecha_vigencia', null)
-    .single();
-
-if (!errorDefault && filtrosDefault) {
-    console.log('✅ Usando filtro global por defecto');
-    return filtrosDefault;
-}
+        if (!errorDefault && filtrosDefault) {
+            console.log('✅ Usando filtro global por defecto');
+            return filtrosDefault;
+        }
 
         // 4️⃣ Valores por defecto
         console.log('⚠️ Sin filtros configurados, usando defaults');
@@ -8203,6 +8209,7 @@ if (!errorDefault && filtrosDefault) {
         return filtros;
     }
 }
+
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
