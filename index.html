@@ -11912,7 +11912,15 @@ async function verificarCoordenadaReal(cuentaContrato, medidor, index) {
 // 🎨 FUNCIÓN AUXILIAR: FORMATEAR COMENTARIOS
 // ===================================================================
 
-function formatearComentario(valor) {
+function formatearComentario(valor, esDireccion = false) {
+    if (!valor || valor === "Sin Datos") return '<br><em>Sin Datos</em>';
+    
+    let texto = valor.toString();
+
+    // Si sabemos que es la columna Dirección y no tiene la etiqueta, se la ponemos
+    if (esDireccion && !texto.toLowerCase().includes("dirección")) {
+        texto = "Dirección: " + texto;
+    }
     return valor
         .replace(/\*([^*]+)\*/g, '<br><strong>$1</strong>')
         .replace(/OS SAP/g, '<br><strong>OS SAP</strong>')
