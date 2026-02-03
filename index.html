@@ -1003,7 +1003,7 @@ async function confirmarDescansoPersonalizadoATTF() {
       estado_ciclo: 'ciclo_normal',
       turno_manana: null,
       fecha_turno_manana: null,
-      ultimaconexion: new Date().toISOString()
+      ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
     })
     .eq('id', currentUser.id);
 
@@ -1017,24 +1017,18 @@ async function confirmarDescansoPersonalizadoATTF() {
 }
 
 function verificarHorarioPermitido(rol, userData = null) {
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-    const minutoActual = ahora.getMinutes();
-    const diaActual = ahora.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+    const fechaElSalvador = getFechaElSalvador();
+    const fechaHoy = formatearFechaElSalvador(fechaElSalvador);
+    const horaActual = fechaElSalvador.getHours();
+    const minutoActual = fechaElSalvador.getMinutes();
+    const diaActual = fechaElSalvador.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
     
-    // ✅ CORRECCIÓN CRÍTICA: Usar la fecha REAL de hoy (no de mañana)
-    const fechaHoy = ahora.getFullYear() + '-' + 
-                 String(ahora.getMonth() + 1).padStart(2, '0') + '-' + 
-                 String(ahora.getDate()).padStart(2, '0');
-    
-    console.log('🔍 Verificando horario:', {
-        rol: rol,
-        horaActual: horaActual,
-        minutoActual: minutoActual,
-        diaActual: diaActual,
-        fechaHoy: fechaHoy,
-        userData: userData
+    console.log('🔍 Verificando horario (El Salvador):', {
+        fecha: fechaHoy,
+        hora: `${horaActual}:${String(minutoActual).padStart(2, '0')}`,
+        rol: rol
     });
+
     
     // Supervisor/Administrador: acceso 24/7
     if (rol === 'Supervisor' || rol === 'Administrador') {
@@ -1045,40 +1039,51 @@ function verificarHorarioPermitido(rol, userData = null) {
     if (userData && (rol === 'Lectura' || rol === 'Consulta' || rol === 'Contratista' || rol === 'Despacho')) {
         
         // ✅ PRIORIDAD 1: Verificar horario excepcional para día específico
-        if (userData.fecha_excepcional === fechaHoy && 
-            userData.horario_excepcional_inicio && 
-            userData.horario_excepcional_fin) {
-            
-            // ✅ CORRECCIÓN: Convertir strings de hora a minutos correctamente
-            const [horaInicio, minutoInicio] = userData.horario_excepcional_inicio.split(':').map(Number);
-            const [horaFin, minutoFin] = userData.horario_excepcional_fin.split(':').map(Number);
-            
-            // Convertir todo a minutos desde medianoche
-            const minutosActuales = (horaActual * 60) + minutoActual;
-            const minutosInicio = (horaInicio * 60) + minutoInicio;
-            const minutosFin = (horaFin * 60) + minutoFin;
-            
-            console.log('🎯 Horario excepcional detectado:', {
-                fecha: fechaHoy,
-                horaInicio: userData.horario_excepcional_inicio,
-                horaFin: userData.horario_excepcional_fin,
-                minutosActuales: minutosActuales,
-                minutosInicio: minutosInicio,
-                minutosFin: minutosFin,
-                dentroDelRango: minutosActuales >= minutosInicio && minutosActuales <= minutosFin
-            });
-            
-            if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
-                console.log(`✅ Horario excepcional ACTIVO: ${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`);
-                return { permitido: true };
-            } else {
-                console.log(`❌ Fuera del horario excepcional`);
-                return { 
-                    permitido: false, 
-                    mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
-                };
-            }
+if (userData && userData.fecha_excepcional) {
+    // ✅ NORMALIZAR AMBAS FECHAS al mismo formato
+    const fechaExcepcional = new Date(userData.fecha_excepcional + 'T00:00:00');
+    const fechaExcepcionalStr = fechaExcepcional.getFullYear() + '-' +
+        String(fechaExcepcional.getMonth() + 1).padStart(2, '0') + '-' +
+        String(fechaExcepcional.getDate()).padStart(2, '0');
+    
+    if (fechaExcepcionalStr === fechaHoy &&
+        userData.horario_excepcional_inicio &&
+        userData.horario_excepcional_fin) {
+        
+        // ✅ Convertir strings de hora a minutos correctamente
+        const [horaInicio, minutoInicio] = userData.horario_excepcional_inicio.split(':').map(Number);
+        const [horaFin, minutoFin] = userData.horario_excepcional_fin.split(':').map(Number);
+        
+        // Convertir todo a minutos desde medianoche
+        const minutosActuales = (horaActual * 60) + minutoActual;
+        const minutosInicio = (horaInicio * 60) + minutoInicio;
+        const minutosFin = (horaFin * 60) + minutoFin;
+        
+        console.log('🎯 Horario excepcional detectado:', {
+            fechaConfigurada: fechaExcepcionalStr,
+            fechaActual: fechaHoy,
+            horaInicio: userData.horario_excepcional_inicio,
+            horaFin: userData.horario_excepcional_fin,
+            minutosActuales: minutosActuales,
+            minutosInicio: minutosInicio,
+            minutosFin: minutosFin,
+            dentroDelRango: minutosActuales >= minutosInicio && minutosActuales <= minutosFin
+        });
+        
+        if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
+            console.log(`✅ Horario excepcional ACTIVO: ${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`);
+            return { permitido: true };
+        } else {
+            console.log(`❌ Fuera del horario excepcional`);
+            return {
+                permitido: false,
+                mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.
+Hora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+            };
         }
+    }
+}
+
         
         // ✅ PRIORIDAD 2: Verificar domingo permitido
         if (diaActual === 0) { // Es domingo
@@ -1169,7 +1174,7 @@ async function verificarInactividad(userData) {
         // Primera vez, actualizar timestamp
         await supabaseClient
             .from('usuarios')
-            .update({ ultima_actividad: new Date().toISOString() })
+            .update({ ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             .eq('id', userData.id);
         return { inactivo: false };
     }
@@ -1216,7 +1221,7 @@ function verificarDiaDescanso(userData) {
     
     const ahora = new Date();
     const horaActual = ahora.getHours();
-    const fechaHoy = ahora.toISOString().split('T')[0];
+    const fechaHoy = getFechaHoyElSalvador();
     
     // Verificar si hoy está en el rango de descanso
     if (fechaHoy < userData.descanso_fecha_inicio || fechaHoy > userData.descanso_fecha_fin) {
@@ -1357,8 +1362,8 @@ if (checkInactividad.inactivo) {
             .update({
                 sessionactiva: true,
                 sessiontoken: sessionToken,
-                ultimaconexion: new Date().toISOString(),
-                ultima_actividad: new Date().toISOString() // Actualizar timestamp
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', data.id);
 
@@ -1433,7 +1438,7 @@ async function loginATTF(userData) {
     console.log('👷 Iniciando flujo ATTF');
     
     const ahora = new Date();
-    const fechaHoy = ahora.toISOString().split('T')[0];
+    const fechaHoy = getFechaHoyElSalvador();
     const horaActual = ahora.getHours();
     
     // 1. Verificar si está en día de descanso
@@ -1690,7 +1695,7 @@ function verificarSeleccionDescanso() {
     if (turnoManana === 'descanso') {
         // 🎯 CAMBIO: Calcular límites de fechas (día 2 hasta día 6)
         const ahora = new Date();
-        const fechaHoy = ahora.toISOString().split('T')[0];
+        const fechaHoy = getFechaHoyElSalvador();
         
         // Fecha mínima: Mañana (día 2)
         const fechaMinima = new Date(ahora);
@@ -1790,7 +1795,7 @@ async function confirmarTurnoMananaATTF() {
         
         // Guardar en BD
         const ahora = new Date();
-        const fechaHoy = ahora.toISOString().split('T')[0];
+        const fechaHoy = getFechaHoyElSalvador();
         const fechaManana = new Date(ahora);
         fechaManana.setDate(fechaManana.getDate() + 1);
         const fechaMananaStr = fechaManana.toISOString().split('T')[0];
@@ -1808,7 +1813,7 @@ async function confirmarTurnoMananaATTF() {
                 fecha_turno_manana: fechaMananaStr,
                 contador_turnos: nuevoContador,
                 estado_ciclo: 'ciclo_normal',
-                ultimaconexion: new Date().toISOString()
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
         
@@ -1833,7 +1838,7 @@ async function confirmarTurnoMananaATTF() {
         
         // 🎯 VALIDACIÓN: Verificar que no exceda día 6
         const ahora = new Date();
-        const fechaHoy = ahora.toISOString().split('T')[0];
+        const fechaHoy = getFechaHoyElSalvador();
         
         const validacion = validarFechaDescansoMaxima(fechaInicio, fechaHoy);
         if (!validacion.valido) {
@@ -1875,7 +1880,7 @@ async function confirmarTurnoMananaATTF() {
                 // 🎯 CAMBIO: NO guardar turno_manana cuando se elige descanso
                 turno_manana: null,
                 fecha_turno_manana: null,
-                ultimaconexion: new Date().toISOString()
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
         
@@ -2095,7 +2100,7 @@ async function confirmarDescansoObligatorioATTF() {
             // 🎯 CAMBIO: Limpiar turnos de hoy y mañana
             turno_manana: null,
             fecha_turno_manana: null,
-            ultimaconexion: new Date().toISOString()
+            ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
         })
         .eq('id', currentUser.id);
     
@@ -2115,7 +2120,7 @@ async function loginPoda(userData) {
     console.log('🌳 Iniciando flujo Poda');
     
     const ahora = new Date();
-    const fechaHoy = ahora.toISOString().split('T')[0];
+    const fechaHoy = getFechaHoyElSalvador();
     
     // 1. Verificar si está en día de descanso
     if (verificarDiaDescanso(userData)) {
@@ -2225,8 +2230,8 @@ async function confirmarDescansoPoda() {
         .update({
             descanso_fecha_inicio: fechaInicio,
             descanso_fecha_fin: fechaFin,
-            ultimaconexion: new Date().toISOString(),
-            ultima_actividad: new Date().toISOString()
+            ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
         })
         .eq('id', currentUser.id);
     
@@ -2256,7 +2261,7 @@ async function confirmarDescansoPoda() {
 async function limpiarDiasDescansoViejos() {
     // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
     const ahora = new Date();
-    const fechaHoyStr = ahora.toISOString().split('T')[0];
+    const fechaHoyStr = getFechaHoyElSalvador();
     
     // 2. Buscar usuarios cuyo descanso terminó o termina hoy
     // La fecha de fin de descanso (descanso_fecha_fin) es el último día libre.
@@ -2326,7 +2331,7 @@ async function limpiarDiasDescansoViejos() {
 async function limpiarTurnosViejos() {
     const ahora = new Date();
     // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
-    const fechaHoyStr = ahora.toISOString().split('T')[0];
+    const fechaHoyStr = getFechaHoyElSalvador();
     
     // Buscar usuarios donde la fecha_turno_hoy no sea hoy (es decir, ya pasó)
     const { data: usuarios, error } = await supabaseClient
@@ -2553,7 +2558,7 @@ async function incrementarContadorBusquedas() {
             .from('usuarios')
             .update({ 
                 Contador: nuevoContador,
-                ultimaconexion: new Date().toISOString()
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
         
@@ -3077,7 +3082,7 @@ async function renovarSesion() {
   if (!currentUser) return;
   await supabaseClient
     .from('usuarios')
-    .update({ ultimaconexion: new Date().toISOString() })
+    .update({ ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()) })
     .eq('id', currentUser.id);
 }
 
@@ -6812,6 +6817,77 @@ async function cargarInterfazIPR() {
         }
     });
 }
+
+// ========================================
+// 🕐 FUNCIÓN PARA OBTENER FECHA/HORA DE EL SALVADOR
+// ========================================
+function getFechaElSalvador() {
+    // El Salvador está en UTC-6
+    const ahora = new Date();
+    const offsetElSalvador = -6 * 60; // UTC-6 en minutos
+    const offsetLocal = ahora.getTimezoneOffset(); // Offset del navegador
+    const diff = offsetElSalvador - offsetLocal;
+    
+    const fechaElSalvador = new Date(ahora.getTime() + diff * 60 * 1000);
+    return fechaElSalvador;
+}
+
+// ========================================
+// 📅 FUNCIÓN PARA FORMATEAR FECHA (YYYY-MM-DD)
+// ========================================
+function formatearFechaElSalvador(fecha) {
+    const año = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    return `${año}-${mes}-${dia}`;
+}
+
+// ========================================
+// ⏰ FUNCIÓN PARA FORMATEAR FECHA COMPLETA (YYYY-MM-DDTHH:mm:ss)
+// ========================================
+function formatearFechaCompletaElSalvador(fecha) {
+    const año = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    const hora = String(fecha.getHours()).padStart(2, '0');
+    const minuto = String(fecha.getMinutes()).padStart(2, '0');
+    const segundo = String(fecha.getSeconds()).padStart(2, '0');
+    return `${año}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
+}
+
+// ========================================
+// 🆕 FUNCIÓN PARA OBTENER SOLO LA FECHA DE HOY (El Salvador)
+// ========================================
+function getFechaHoyElSalvador() {
+    const fechaElSalvador = getFechaElSalvador();
+    return formatearFechaElSalvador(fechaElSalvador);
+}
+
+// ========================================
+// 🆕 FUNCIÓN PARA OBTENER HORA ACTUAL (El Salvador)
+// ========================================
+function getHoraActualElSalvador() {
+    const fechaElSalvador = getFechaElSalvador();
+    return {
+        hora: fechaElSalvador.getHours(),
+        minuto: fechaElSalvador.getMinutes(),
+        segundo: fechaElSalvador.getSeconds()
+    };
+}
+
+		function verificarZonaHoraria() {
+    const fechaUTC = new Date();
+    const fechaSV = getFechaElSalvador();
+    
+    console.log('=== VERIFICACIÓN DE ZONA HORARIA ===');
+    console.log('Fecha UTC:', fechaUTC.toISOString());
+    console.log('Fecha El Salvador:', formatearFechaCompletaElSalvador(fechaSV));
+    console.log('Diferencia esperada: 6 horas (UTC-6)');
+    console.log('=====================================');
+}
+
+// Llamar al inicio
+verificarZonaHoraria();
 
 	function validarEstructuraAsignaciones(datos) {
     // Validar que todas las filas tengan 3 columnas
@@ -12345,12 +12421,12 @@ async function capturarCoordenadasGPS() {
         const coordenadas = `${posicion.coords.latitude},${posicion.coords.longitude}`;
         await supabaseClient.from("usuarios").update({ 
             coordenadas, 
-            ultimaconexion: new Date().toISOString() 
+            ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
         }).eq("id", currentUser.id);
     } catch (error) {
         if (currentUser) {
             await supabaseClient.from("usuarios").update({ 
-                ultimaconexion: new Date().toISOString() 
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
             }).eq("id", currentUser.id);
         }
     }
