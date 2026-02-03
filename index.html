@@ -1175,6 +1175,7 @@ async function verificarInactividad(userData) {
         await supabaseClient
             .from('usuarios')
             .update({ ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+				 })
             .eq('id', userData.id);
         return { inactivo: false };
     }
