@@ -1017,87 +1017,145 @@ async function confirmarDescansoPersonalizadoATTF() {
 }
 
 function verificarHorarioPermitido(rol, userData = null) {
-    const fechaElSalvador = getFechaElSalvador();
-    const fechaHoy = formatearFechaElSalvador(fechaElSalvador);
-    const horaActual = fechaElSalvador.getHours();
-    const minutoActual = fechaElSalvador.getMinutes();
-    const diaActual = fechaElSalvador.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+    // ✅ Obtener fecha/hora de El Salvador
+    const fechaElSalvador = new Date();
+    const offsetElSalvador = -6 * 60; // UTC-6
+    const offsetLocal = fechaElSalvador.getTimezoneOffset();
+    const diff = offsetElSalvador - offsetLocal;
+    const fechaSV = new Date(fechaElSalvador.getTime() + diff * 60 * 1000);
+    
+    const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
+    const horaActual = fechaSV.getHours();
+    const minutoActual = fechaSV.getMinutes();
+    const diaActual = fechaSV.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
     
     console.log('🔍 Verificando horario (El Salvador):', {
         fecha: fechaHoy,
-        hora: `${horaActual}:${String(minutoActual).padStart(2, '0')}`,
-        rol: rol
+        hora: `${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`,
+        rol: rol,
+        fecha_excepcional: userData?.fecha_excepcional,
+        horario_excepcional_inicio: userData?.horario_excepcional_inicio,
+        horario_excepcional_fin: userData?.horario_excepcional_fin
     });
-
     
-    // Supervisor/Administrador: acceso 24/7
-    if (rol === 'Supervisor' || rol === 'Administrador') {
+    // ========================================
+    // ✅ PRIORIDAD 1: Verificar horario excepcional
+    // ========================================
+    if (userData && userData.fecha_excepcional) {
+        // ✅ NORMALIZAR fecha excepcional a formato YYYY-MM-DD
+        const fechaExcepcional = new Date(userData.fecha_excepcional + 'T00:00:00');
+        const fechaExcepcionalStr = `${fechaExcepcional.getFullYear()}-${String(fechaExcepcional.getMonth() + 1).padStart(2, '0')}-${String(fechaExcepcional.getDate()).padStart(2, '0')}`;
+        
+        if (fechaExcepcionalStr === fechaHoy &&
+            userData.horario_excepcional_inicio &&
+            userData.horario_excepcional_fin) {
+            
+            // Convertir horas a minutos para comparación precisa
+            const [horaInicio, minutoInicio] = userData.horario_excepcional_inicio.split(':').map(Number);
+            const [horaFin, minutoFin] = userData.horario_excepcional_fin.split(':').map(Number);
+            
+            const minutosActuales = (horaActual * 60) + minutoActual;
+            const minutosInicio = (horaInicio * 60) + minutoInicio;
+            const minutosFin = (horaFin * 60) + minutoFin;
+            
+            console.log('🎯 Horario excepcional configurado para HOY:', {
+                fechaConfigurada: fechaExcepcionalStr,
+                rango: `${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`,
+                minutosActuales: minutosActuales,
+                minutosInicio: minutosInicio,
+                minutosFin: minutosFin
+            });
+            
+            // ✅ SI está DENTRO del rango excepcional → PERMITIR INMEDIATAMENTE
+            if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
+                console.log(`✅ ACCESO PERMITIDO por horario excepcional: ${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`);
+                return { permitido: true };
+            }
+            
+            // ⚠️ SI está FUERA del rango → CONTINUAR a validación normal (NO bloquear)
+            console.log(`⚠️ Fecha excepcional coincide pero hora (${horaActual}:${String(minutoActual).padStart(2, '0')}) fuera de rango excepcional. Evaluando horario regular...`);
+        }
+    }
+    
+    // ========================================
+    // ✅ PRIORIDAD 2: Validar según rol (horario regular)
+    // ========================================
+    const HORARIOS = {
+        'Administrador': { permitido: true },
+        'Supervisor': { permitido: true },
+        'Despacho': { permitido: true },
+        'ATFF': { permitido: true },
+        'Consulta': { permitido: true },
+        'Contratista': { permitido: true },
+        'Bodega': { permitido: true },
+        'ATTF': {
+            dias: [1, 2, 3, 4, 5, 6], // Lunes a Sábado
+            horarios: [
+                { inicio: 6, fin: 14, nombre: 'Turno 6am-2pm' },    // Turno 1
+                { inicio: 10, fin: 18, nombre: 'Turno 10am-6pm' },  // Turno 2
+                { inicio: 14, fin: 22, nombre: 'Turno 2pm-10pm' },  // Turno 3
+                { inicio: 18, fin: 24, nombre: 'Turno 6pm-2am' },   // Turno 4 (nocturno inicia hoy)
+                { inicio: 0, fin: 2, nombre: 'Turno 6pm-2am (cont.)' }, // Turno 4 (nocturno termina mañana)
+                { inicio: 22, fin: 24, nombre: 'Turno 10pm-6am' },  // Turno 5 (nocturno inicia hoy)
+                { inicio: 0, fin: 6, nombre: 'Turno 10pm-6am (cont.)' } // Turno 5 (nocturno termina mañana)
+            ]
+        },
+        'Poda': {
+            dias: [1, 2, 3, 4, 5, 6], // Lunes a Sábado
+            horarios: [
+                { inicio: 6, fin: 15, nombre: 'Turno Día' },
+                { inicio: 13, fin: 22, nombre: 'Turno Tarde' }
+            ]
+        }
+    };
+    
+    const config = HORARIOS[rol];
+    if (!config) {
+        console.warn(`❌ Rol no configurado: ${rol}`);
+        return { permitido: false, mensaje: 'Rol no autorizado para acceso' };
+    }
+    
+    if (config.permitido === true) {
+        console.log(`✅ Rol ${rol} tiene acceso ilimitado`);
         return { permitido: true };
     }
     
-    // 🆕 VALIDAR EXCEPCIONES PRIMERO (ANTES DE TODO)
-    if (userData && (rol === 'Lectura' || rol === 'Consulta' || rol === 'Contratista' || rol === 'Despacho')) {
-        
-        // ✅ PRIORIDAD 1: Verificar horario excepcional para día específico
-if (userData && userData.fecha_excepcional) {
-    // ✅ NORMALIZAR AMBAS FECHAS al mismo formato
-    const fechaExcepcional = new Date(userData.fecha_excepcional + 'T00:00:00');
-    const fechaExcepcionalStr = fechaExcepcional.getFullYear() + '-' +
-        String(fechaExcepcional.getMonth() + 1).padStart(2, '0') + '-' +
-        String(fechaExcepcional.getDate()).padStart(2, '0');
+    // Validar día de la semana
+    if (config.dias && !config.dias.includes(diaActual)) {
+        const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        return {
+            permitido: false,
+            mensaje: `Acceso permitido solo de Lunes a Sábado.\nHoy es ${diasSemana[diaActual]}`
+        };
+    }
     
-    if (fechaExcepcionalStr === fechaHoy &&
-        userData.horario_excepcional_inicio &&
-        userData.horario_excepcional_fin) {
-        
-        // ✅ Convertir strings de hora a minutos correctamente
-        const [horaInicio, minutoInicio] = userData.horario_excepcional_inicio.split(':').map(Number);
-        const [horaFin, minutoFin] = userData.horario_excepcional_fin.split(':').map(Number);
-        
-        // Convertir todo a minutos desde medianoche
-        const minutosActuales = (horaActual * 60) + minutoActual;
-        const minutosInicio = (horaInicio * 60) + minutoInicio;
-        const minutosFin = (horaFin * 60) + minutoFin;
-        
-        console.log('🎯 Horario excepcional detectado:', {
-            fechaConfigurada: fechaExcepcionalStr,
-            fechaActual: fechaHoy,
-            horaInicio: userData.horario_excepcional_inicio,
-            horaFin: userData.horario_excepcional_fin,
-            minutosActuales: minutosActuales,
-            minutosInicio: minutosInicio,
-            minutosFin: minutosFin,
-            dentroDelRango: minutosActuales >= minutosInicio && minutosActuales <= minutosFin
-        });
-        
-        if (minutosActuales >= minutosInicio && minutosActuales <= minutosFin) {
-            console.log(`✅ Horario excepcional ACTIVO: ${userData.horario_excepcional_inicio} - ${userData.horario_excepcional_fin}`);
-            return { permitido: true };
+    // Validar horario
+    const enHorario = config.horarios.some(h => {
+        if (h.inicio < h.fin) {
+            // Horario normal (no cruza medianoche)
+            return horaActual >= h.inicio && horaActual < h.fin;
         } else {
-            console.log(`❌ Fuera del horario excepcional`);
-            return {
-                permitido: false,
-                mensaje: `Horario excepcional de HOY: ${userData.horario_excepcional_inicio} a ${userData.horario_excepcional_fin}.
-Hora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
-            };
+            // Horario que cruza medianoche (ej: 22:00 - 06:00)
+            return horaActual >= h.inicio || horaActual < h.fin;
         }
-    }
-}
-
+    });
+    
+    if (!enHorario) {
+        const horariosTexto = config.horarios.map(h => 
+            h.inicio < h.fin 
+                ? `${String(h.inicio).padStart(2, '0')}:00 - ${String(h.fin).padStart(2, '0')}:00`
+                : `${String(h.inicio).padStart(2, '0')}:00 - ${String(h.fin).padStart(2, '0')}:00 (día siguiente)`
+        ).join('\n');
         
-        // ✅ PRIORIDAD 2: Verificar domingo permitido
-        if (diaActual === 0) { // Es domingo
-            if (userData.domingo_permitido && userData.domingo_fecha === fechaHoy) {
-                console.log('✅ Domingo habilitado para este usuario');
-                return { permitido: true };
-            } else {
-                return { 
-                    permitido: false, 
-                    mensaje: 'Los domingos están bloqueados. Si necesitas trabajar hoy, contacta al administrador.' 
-                };
-            }
-        }
+        return {
+            permitido: false,
+            mensaje: `Horario de acceso para ${rol}:\n${horariosTexto}\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+        };
     }
+    
+    console.log(`✅ Acceso permitido para rol ${rol} en horario regular`);
+    return { permitido: true };
+}
     
     // 🎯 Contratista - Lunes-Sábado, 5 AM - 6 PM
     if (rol === 'Contratista') {
