@@ -5411,41 +5411,39 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
 /**
  * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
  * @param {Array<Object>} osData - Lista completa de órdenes de servicio (ya filtrada).
- * @param {string} osPartida - ID de la OS de partida.
+ * @param {string} osPartidaId - ID de la OS de partida.
  * @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
  * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
  */
 function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas = null) {
-  // ✅ CORRECCIÓN: Normalizar búsqueda de OS de partida
-  const osPartida = osData.find(os => {
-    const osNum = String(os.OSATMO || os.OSATOMO || os.osatomo || '').trim();
-    const osIdBuscado = String(osPartidaId).trim();
-    return osNum === osIdBuscado;
-  });
-  
-  if (!osPartida) {
-    console.error('❌ OS de partida no encontrada:', osPartidaId);
-    console.log('📋 IDs disponibles (primeros 5):', 
-      osData.slice(0, 5).map(os => os.OSATMO || os.OSATOMO || os.osatomo)
-    );
+    // ✅ CORRECCIÓN: Normalizar búsqueda de OS de partida
+    const osPartida = osData.find(os => {
+        const osNum = String(os.OSATMO || os.OSATOMO || os.osatomo || '').trim();
+        const osIdBuscado = String(osPartidaId).trim();
+        return osNum === osIdBuscado;
+    });
     
-    // ✅ CAMBIO: En lugar de fallar, usar el primer elemento
-    console.log('⚠️ Usando primera OS disponible como punto de partida');
-    return osData.length > 0 ? osData : [];
-  }
+    if (!osPartida) {
+        console.error('❌ OS de partida no encontrada:', osPartidaId);
+        console.log('📋 IDs disponibles (primeros 5):', 
+            osData.slice(0, 5).map(os => os.OSATMO || os.OSATOMO || os.osatomo)
+        );
+        
+        // ✅ CAMBIO: En lugar de fallar, usar el primer elemento
+        console.log('⚠️ Usando primera OS disponible como punto de partida');
+        return osData.length > 0 ? osData : [];
+    }
 
+    // ✅ CORREGIDO: Obtener coordenadas del centro (usando osPartida, no osCentro)
+    const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
+    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
+    
+    if (isNaN(latCentro) || isNaN(lngCentro)) {
+        console.error(`❌ Coordenadas inválidas para OS ${osPartidaId}:`, coordsCentro);
+        return osData;
+    }
 
-
-  // 2. Obtener coordenadas del centro
-  const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
-  const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
-  
-  if (isNaN(latCentro) || isNaN(lngCentro)) {
-    console.error(`❌ Coordenadas inválidas para OS ${osPartidaId}:`, coordsCentro);
-    return osData;
-  }
-
-    // 3. Determinar el punto inicial
+    // ✅ CORREGIDO: Determinar el punto inicial
     let puntoInicialLat = latCentro;
     let puntoInicialLng = lngCentro;
     if (puntoPartidaCoordenadas && !isNaN(puntoPartidaCoordenadas.lat) && !isNaN(puntoPartidaCoordenadas.lng)) {
@@ -5454,22 +5452,25 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
         console.log(`✅ Usando punto de partida personalizado: ${puntoInicialLat}, ${puntoInicialLng}`);
     }
 
-    // 4. Preparar la OS de partida con datos completos
-    const osCentroConDatos = {
-        ...osCentro,
+    // ✅ CORREGIDO: Usar osPartida en lugar de osCentro (que no existe)
+    const osPartidaConDatos = {
+        ...osPartida,
         lat: puntoInicialLat,
         lng: puntoInicialLng,
         distancia: 0,
         numeroOrden: 1,
         distanciaAlPuntoInicial: 0,
-        esRegulada: osCentro.Tipo_de_OS && 
-                   osCentro.Tipo_de_OS.toLowerCase().includes('regulad') && 
-                   !osCentro.Tipo_de_OS.toLowerCase().includes('no')
+        esRegulada: osPartida.Tipo_de_OS && 
+                   osPartida.Tipo_de_OS.toLowerCase().includes('regulad') && 
+                   !osPartida.Tipo_de_OS.toLowerCase().includes('no')
     };
 
-    // 5. Preparar puntos no visitados
+    // ✅ CORREGIDO: Comparar con osPartidaId o osPartida.OSATMO, no con el objeto completo
     const puntosNoVisitados = osData
-        .filter(os => os.OSATMO !== osPartida)
+        .filter(os => {
+            const osId = String(os.OSATMO || os.OSATOMO || os.osatomo || '').trim();
+            return osId !== String(osPartidaId).trim();
+        })
         .map(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
@@ -5488,9 +5489,9 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
         })
         .filter(os => os.distanciaAlPuntoInicial !== Infinity);
 
-    // 6. Algoritmo del vecino más cercano
-    let rutaFinal = [osCentroConDatos];
-    let puntoActual = osCentroConDatos;
+    // ✅ Algoritmo del vecino más cercano
+    let rutaFinal = [osPartidaConDatos];
+    let puntoActual = osPartidaConDatos;
     let orden = 2;
 
     while (puntosNoVisitados.length > 0) {
@@ -5519,6 +5520,7 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
         }
     }
 
+    console.log(`✅ Ruta optimizada generada: ${rutaFinal.length} puntos`);
     return rutaFinal;
 }
 
@@ -8343,11 +8345,12 @@ async function cargarFiltrosUniversales(unidad = null) {
         
         if (!coordsCentro || !coordsCentro.includes(',')) {
             resultsContainer.innerHTML = `<div class="result-card">⚠️ Coordenadas inválidas para el centro del mapa</div>`;
+            console.error('❌ Coordenadas del centro inválidas:', coordsCentro);
             return;
         }
         
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
-        console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
+        console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO} (${latCentro}, ${lngCentro})`);
 
         resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
             <p style="text-align: center; color: #666;">Buscando OS Pendientes en el área...</p></div>`;
@@ -8356,6 +8359,7 @@ async function cargarFiltrosUniversales(unidad = null) {
         let todasOSRegistradas = [];
         const BATCH_SIZE = 1000;
         let offset = 0;
+        let totalCargadas = 0;
 
         while (true) {
             const { data, error } = await supabaseClient
@@ -8365,43 +8369,109 @@ async function cargarFiltrosUniversales(unidad = null) {
                 .range(offset, offset + BATCH_SIZE - 1);
             
             if (error) {
-                console.error('Error en batch:', error);
+                console.error('❌ Error en batch:', error);
                 break;
             }
             if (!data || data.length === 0) break;
 
             todasOSRegistradas.push(...data);
+            totalCargadas += data.length;
+            console.log(`📊 Batch ${Math.floor(offset/BATCH_SIZE) + 1}: ${data.length} registros | Total: ${totalCargadas}`);
+            
             if (data.length < BATCH_SIZE) break;
             offset += BATCH_SIZE;
         }
 
-        console.log(`📊 Total de OS cargadas: ${todasOSRegistradas.length}`);
+        console.log(`✅ Total de OS cargadas de "OS Pendientes": ${todasOSRegistradas.length}`);
 
         // 📍 Filtrar solo las OS dentro del radio (sin aplicar reglas aún)
-        const osEnRadio = [];
-        for (const os of todasOSRegistradas) {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            if (!validarFormatoCoordenadas(coords)) continue;
+const osEnRadio = [];
+let osSinCoordenadas = 0;
+let osFueraRadio = 0;
+let osMismaQueCentro = 0;
 
-            const [lat, lng] = coords.split(',').map(Number);
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+for (const os of todasOSRegistradas) {
+    // ✅ USAR LA NUEVA FUNCIÓN
+    const coordsObj = extraerCoordenadas(os);
+    
+    if (!coordsObj) {
+        osSinCoordenadas++;
+        continue;
+    }
+    
+    const { latitud: lat, longitud: lng } = coordsObj;
+            
+    // ✅ Verificar coordenadas válidas
+    if (isNaN(lat) || isNaN(lng)) {
+        osSinCoordenadas++;
+        continue;
+    }
 
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                osEnRadio.push({ ...os, lat, lng, distancia });
-            }
-        }
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
-        // ✅ Incluir la OS de partida y aplicar reglas de negocio UNA SOLA VEZ
+    if (os.OSATMO === osCentro.OSATMO) {
+        osMismaQueCentro++;
+        continue;
+    }
+
+    if (distancia > radioKm) {
+        osFueraRadio++;
+        continue;
+    }
+
+    osEnRadio.push({ ...os, lat, lng, distancia });
+}
+
+console.log('📊 Estadísticas de filtrado por radio:');
+console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
+console.log(`   - OS sin coordenadas: ${osSinCoordenadas}`);
+console.log(`   - OS fuera de radio (${radioKm} km): ${osFueraRadio}`);
+console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
+console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
+
+        // ✅ Incluir la OS de partida y aplicar reglas de negocio
         const osParaOptimizar = [osCentro, ...osEnRadio];
-        const osConFiltros = osParaOptimizar.filter(os => {
+        
+        console.log(`📊 Total OS para optimizar (incluyendo centro): ${osParaOptimizar.length}`);
+
+        // ✅ Aplicar filtros de negocio con más detalle
+        let osConFiltros = [];
+        let osReguladas = 0;
+        let osDeudaAlta = 0;
+        let osPorFiltros = 0;
+        let osFiltradasOut = 0;
+
+        for (const os of osParaOptimizar) {
             const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
             const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
             const deuda = parseFloat(os.Deuda) || 0;
             const tieneDeudaAlta = deuda > 500;
-            return esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar);
-        });
+            const pasaFiltros = validarFiltrosOS(os, filtrosAplicar);
 
-        console.log(`✅ OS después de aplicar filtros: ${osConFiltros.length}`);
+            if (esRegulada) osReguladas++;
+            if (tieneDeudaAlta) osDeudaAlta++;
+            if (pasaFiltros) osPorFiltros++;
+
+            if (esRegulada || tieneDeudaAlta || pasaFiltros) {
+                osConFiltros.push(os);
+            } else {
+                osFiltradasOut++;
+            }
+        }
+
+        console.log('📊 Estadísticas de filtrado por reglas de negocio:');
+        console.log(`   - OS reguladas: ${osReguladas}`);
+        console.log(`   - OS con deuda > $500: ${osDeudaAlta}`);
+        console.log(`   - OS que pasan filtros personalizados: ${osPorFiltros}`);
+        console.log(`   - OS filtradas OUT: ${osFiltradasOut}`);
+        console.log(`   - ✅ OS después de aplicar filtros: ${osConFiltros.length}`);
+
+        // ✅ Si no hay OS después de filtros, mostrar advertencia pero continuar
+        if (osConFiltros.length === 0) {
+            console.warn('⚠️ No hay OS después de aplicar filtros. Mostrando todas las OS en radio sin filtros.');
+            alert('⚠️ No se encontraron OS que cumplan con los filtros aplicados. Mostrando todas las OS en el radio.');
+            osConFiltros = osParaOptimizar;
+        }
 
         // ✅ Optimizar la ruta
         let osOptimizadas;
@@ -8410,8 +8480,12 @@ async function cargarFiltrosUniversales(unidad = null) {
                 lat: latCentro,
                 lng: lngCentro
             });
+            
+            console.log(`✅ Ruta optimizada: ${osOptimizadas.length} puntos`);
         } catch (err) {
-            console.warn('⚠️ Falló la optimización. Mostrando sin ordenar.', err);
+            console.error('❌ Error en optimización:', err);
+            console.error('Stack trace:', err.stack);
+            console.warn('⚠️ Falló la optimización. Mostrando sin ordenar.');
             osOptimizadas = osConFiltros;
         }
 
@@ -8419,13 +8493,17 @@ async function cargarFiltrosUniversales(unidad = null) {
         osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
 
         // Generar mapa
+        console.log('🗺️ Generando mapa con Leaflet...');
         generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
 
     } catch (err) {
-        console.error('Error cargando mapa:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+        console.error('❌ Error cargando mapa:', err);
+        console.error('Stack trace:', err.stack);
+        resultsContainer.innerHTML = `<div class="result-card">❌ Error de conexión: ${err.message}</div>`;
     }
 }
+
+
 
 
 
@@ -8452,6 +8530,95 @@ function validarFormatoCoordenadas(coordenadas) {
     }
     
     return true;
+}
+
+
+/**
+ * Extrae coordenadas de un objeto OS buscando en múltiples campos posibles.
+ * @param {Object} os - Objeto de Orden de Servicio
+ * @returns {Object|null} - { latitud, longitud } o null si no hay coordenadas válidas
+ */
+function extraerCoordenadas(os) {
+    // ✅ Buscar en múltiples campos de coordenadas (case-insensitive)
+    const camposCoordenadas = [
+        'Coordenadas',      // Campo principal
+        'Coordendasgis',    // Campo GIS alternativo
+        'coordenadas',
+        'coordendasgis',
+        'Coordenada',
+        'coordenada',
+        'latitud_longitud',
+        'ubicacion'
+    ];
+    
+    let coordenadas = null;
+    let campoEncontrado = null;
+    
+    for (const campo of camposCoordenadas) {
+        if (os[campo]) {
+            coordenadas = os[campo];
+            campoEncontrado = campo;
+            console.log(`✅ Coordenadas encontradas en campo "${campo}":`, coordenadas);
+            break;
+        }
+    }
+    
+    // ✅ Si no se encontraron coordenadas, buscar en campos separados
+    if (!coordenadas && (os.latitud || os.latitude || os.Latitud)) {
+        const lat = os.latitud || os.latitude || os.Latitud;
+        const lng = os.longitud || os.longitude || os.Longitud;
+        
+        if (lat && lng) {
+            coordenadas = `${lat},${lng}`;
+            campoEncontrado = 'campos separados (lat/lng)';
+            console.log(`✅ Coordenadas separadas encontradas: ${coordenadas}`);
+        }
+    }
+    
+    if (!coordenadas) {
+        console.warn(`⚠️ OS ${os.OSATMO || os.OSATOMO || os.osatomo || 'SIN ID'} no tiene coordenadas en ningún campo`);
+        return null;
+    }
+    
+    // ✅ Parsear coordenadas (formato: "lat,lng" o "lng,lat")
+    const partes = coordenadas.toString().split(',').map(p => p.trim());
+    
+    if (partes.length !== 2) {
+        console.error(`❌ Formato de coordenadas inválido para OS ${os.OSATMO || 'SIN ID'}:`, coordenadas);
+        return null;
+    }
+    
+    // ✅ Determinar si es lat,lng o lng,lat
+    let lat, lng;
+    
+    const num1 = parseFloat(partes[0]);
+    const num2 = parseFloat(partes[1]);
+    
+    if (Math.abs(num1) <= 90 && Math.abs(num2) <= 180) {
+        // ✅ Formato: lat,lng
+        lat = num1;
+        lng = num2;
+    } else if (Math.abs(num2) <= 90 && Math.abs(num1) <= 180) {
+        // ✅ Formato: lng,lat
+        lat = num2;
+        lng = num1;
+    } else {
+        console.error(`❌ Coordenadas fuera de rango para OS ${os.OSATMO || 'SIN ID'}:`, coordenadas);
+        return null;
+    }
+    
+    // ✅ Verificar que las coordenadas sean de El Salvador (aproximadamente)
+    if (lat < 13 || lat > 14.5 || lng < -90 || lng > -87) {
+        console.warn(`⚠️ Coordenadas fuera de rango de El Salvador para OS ${os.OSATMO || 'SIN ID'}: (${lat}, ${lng})`);
+        // Opcional: return null; // Descomentar para filtrar coordenadas fuera de rango
+    }
+    
+    return { 
+        latitud: lat, 
+        longitud: lng,
+        campoOrigen: campoEncontrado,
+        coordenadasRaw: coordenadas
+    };
 }
 
 
