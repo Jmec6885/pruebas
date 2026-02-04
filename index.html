@@ -1017,12 +1017,12 @@ async function confirmarDescansoPersonalizadoATTF() {
 }
 
 function verificarHorarioPermitido(rol, userData = null) {
-    // ✅ Obtener fecha/hora de El Salvador
-    const fechaElSalvador = new Date();
-    const offsetElSalvador = -6 * 60; // UTC-6
-    const offsetLocal = fechaElSalvador.getTimezoneOffset();
+    // ✅ Obtener fecha/hora de El Salvador (UTC-6)
+    const ahora = new Date();
+    const offsetElSalvador = -6 * 60; // UTC-6 en minutos
+    const offsetLocal = ahora.getTimezoneOffset(); // Offset del navegador
     const diff = offsetElSalvador - offsetLocal;
-    const fechaSV = new Date(fechaElSalvador.getTime() + diff * 60 * 1000);
+    const fechaSV = new Date(ahora.getTime() + diff * 60 * 1000);
     
     const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
     const horaActual = fechaSV.getHours();
@@ -1080,149 +1080,108 @@ function verificarHorarioPermitido(rol, userData = null) {
     // ========================================
     // ✅ PRIORIDAD 2: Validar según rol (horario regular)
     // ========================================
-    const HORARIOS = {
-        'Administrador': { permitido: true },
-        'Supervisor': { permitido: true },
-        'Despacho': { permitido: true },
-        'ATFF': { permitido: true },
-        'Consulta': { permitido: true },
-        'Contratista': { permitido: true },
-        'Bodega': { permitido: true },
-        'ATTF': {
-            dias: [1, 2, 3, 4, 5, 6], // Lunes a Sábado
-            horarios: [
-                { inicio: 6, fin: 14, nombre: 'Turno 6am-2pm' },    // Turno 1
-                { inicio: 10, fin: 18, nombre: 'Turno 10am-6pm' },  // Turno 2
-                { inicio: 14, fin: 22, nombre: 'Turno 2pm-10pm' },  // Turno 3
-                { inicio: 18, fin: 24, nombre: 'Turno 6pm-2am' },   // Turno 4 (nocturno inicia hoy)
-                { inicio: 0, fin: 2, nombre: 'Turno 6pm-2am (cont.)' }, // Turno 4 (nocturno termina mañana)
-                { inicio: 22, fin: 24, nombre: 'Turno 10pm-6am' },  // Turno 5 (nocturno inicia hoy)
-                { inicio: 0, fin: 6, nombre: 'Turno 10pm-6am (cont.)' } // Turno 5 (nocturno termina mañana)
-            ]
-        },
-        'Poda': {
-            dias: [1, 2, 3, 4, 5, 6], // Lunes a Sábado
-            horarios: [
-                { inicio: 6, fin: 15, nombre: 'Turno Día' },
-                { inicio: 13, fin: 22, nombre: 'Turno Tarde' }
-            ]
-        }
-    };
     
-    const config = HORARIOS[rol];
-    if (!config) {
-        console.warn(`❌ Rol no configurado: ${rol}`);
-        return { permitido: false, mensaje: 'Rol no autorizado para acceso' };
-    }
-    
-    if (config.permitido === true) {
-        console.log(`✅ Rol ${rol} tiene acceso ilimitado`);
+    // 🔹 Roles con acceso ILIMITADO (todos los días, todas las horas)
+    const rolesIlimitados = ['Administrador', 'Supervisor', 'ATFF'];
+    if (rolesIlimitados.includes(rol)) {
+        console.log(`✅ Rol ${rol} tiene acceso ILIMITADO`);
         return { permitido: true };
     }
     
-    // Validar día de la semana
-    if (config.dias && !config.dias.includes(diaActual)) {
-        const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    // 🔹 Roles con acceso Lunes-Sábado, 6:00 AM - 6:00 PM
+    const rolesHorarioDiurno = ['Despacho', 'Consulta', 'Contratista', 'Lectura'];
+    if (rolesHorarioDiurno.includes(rol)) {
+        if (diaActual === 0) { // Domingo
+            return {
+                permitido: false,
+                mensaje: `El rol ${rol} no tiene acceso los domingos.\nAcceso permitido: Lunes a Sábado, 6:00 AM - 6:00 PM`
+            };
+        }
+        if (horaActual >= 6 && horaActual < 18) {
+            console.log(`✅ Acceso permitido para ${rol} (6:00 AM - 6:00 PM)`);
+            return { permitido: true };
+        }
         return {
             permitido: false,
-            mensaje: `Acceso permitido solo de Lunes a Sábado.\nHoy es ${diasSemana[diaActual]}`
+            mensaje: `Horario de acceso para ${rol}:\nLunes a Sábado, 6:00 AM - 6:00 PM\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
         };
     }
     
-    // Validar horario
-    const enHorario = config.horarios.some(h => {
-        if (h.inicio < h.fin) {
-            // Horario normal (no cruza medianoche)
-            return horaActual >= h.inicio && horaActual < h.fin;
-        } else {
-            // Horario que cruza medianoche (ej: 22:00 - 06:00)
-            return horaActual >= h.inicio || horaActual < h.fin;
+    // 🔹 Bodega: Lunes-Sábado 24/7, Domingo bloqueado
+    if (rol === 'Bodega') {
+        if (diaActual === 0) {
+            return {
+                permitido: false,
+                mensaje: 'El rol Bodega no tiene acceso los domingos.\nAcceso permitido: Lunes a Sábado, 24 horas'
+            };
         }
-    });
+        console.log('✅ Acceso permitido para Bodega (Lunes-Sábado 24/7)');
+        return { permitido: true };
+    }
     
-    if (!enHorario) {
-        const horariosTexto = config.horarios.map(h => 
-            h.inicio < h.fin 
-                ? `${String(h.inicio).padStart(2, '0')}:00 - ${String(h.fin).padStart(2, '0')}:00`
-                : `${String(h.inicio).padStart(2, '0')}:00 - ${String(h.fin).padStart(2, '0')}:00 (día siguiente)`
-        ).join('\n');
+    // 🔹 Poda: Lunes-Sábado, 5:00 AM - 10:00 PM
+    if (rol === 'Poda') {
+        if (diaActual === 0) {
+            return {
+                permitido: false,
+                mensaje: 'El rol Poda no tiene acceso los domingos.\nAcceso permitido: Lunes a Sábado, 5:00 AM - 10:00 PM'
+            };
+        }
+        if (horaActual >= 5 && horaActual < 22) {
+            console.log('✅ Acceso permitido para Poda (5:00 AM - 10:00 PM)');
+            return { permitido: true };
+        }
+        return {
+            permitido: false,
+            mensaje: `Horario de acceso para Poda:\nLunes a Sábado, 5:00 AM - 10:00 PM\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+        };
+    }
+    
+    // 🔹 ATTF: Turnos rotativos (6am-2pm, 10am-6pm, 2pm-10pm, 6pm-2am, 10pm-6am)
+    if (rol === 'ATTF') {
+        if (diaActual === 0) {
+            return {
+                permitido: false,
+                mensaje: 'El rol ATTF no tiene acceso los domingos.\nAcceso permitido: Lunes a Sábado en turnos programados'
+            };
+        }
+        
+        const turnosATTF = [
+            { inicio: 6, fin: 14, nombre: '6:00 AM - 2:00 PM' },
+            { inicio: 10, fin: 18, nombre: '10:00 AM - 6:00 PM' },
+            { inicio: 14, fin: 22, nombre: '2:00 PM - 10:00 PM' },
+            { inicio: 18, fin: 24, nombre: '6:00 PM - 2:00 AM' },
+            { inicio: 22, fin: 24, nombre: '10:00 PM - 6:00 AM' },
+            { inicio: 0, fin: 6, nombre: '10:00 PM - 6:00 AM (cont.)' }
+        ];
+        
+        const enTurno = turnosATTF.some(turno => {
+            if (turno.inicio < turno.fin) {
+                return horaActual >= turno.inicio && horaActual < turno.fin;
+            } else {
+                // Turno que cruza medianoche (ej: 22:00 - 06:00)
+                return horaActual >= turno.inicio || horaActual < turno.fin;
+            }
+        });
+        
+        if (enTurno) {
+            console.log('✅ Acceso permitido para ATTF (en turno activo)');
+            return { permitido: true };
+        }
+        
+        const turnosTexto = turnosATTF
+            .filter(t => t.inicio < t.fin)
+            .map(t => t.nombre)
+            .join('\n');
         
         return {
             permitido: false,
-            mensaje: `Horario de acceso para ${rol}:\n${horariosTexto}\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+            mensaje: `Turnos ATTF permitidos (Lunes a Sábado):\n${turnosTexto}\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
         };
     }
     
-    console.log(`✅ Acceso permitido para rol ${rol} en horario regular`);
-    return { permitido: true };
-}
-    
-    // 🎯 Contratista - Lunes-Sábado, 5 AM - 6 PM
-    if (rol === 'Contratista') {
-        if (diaActual === 0) {
-            return { permitido: false, mensaje: 'El rol Contratista no tiene acceso los domingos.' };
-        }
-        if (horaActual >= 5 && horaActual < 18) {
-            return { permitido: true };
-        }
-        return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
-    }
-    
-    // 🎯 Lectura - Lunes-Sábado, 5 AM - 6 PM
-    if (rol === 'Lectura') {
-        if (diaActual === 0) {
-            return { permitido: false, mensaje: 'El rol Lectura no tiene acceso los domingos.' };
-        }
-        if (horaActual >= 5 && horaActual < 18) {
-            return { permitido: true };
-        }
-        return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
-    }
-    
-    // 🎯 Consulta - Lunes-Sábado, 5 AM - 6 PM
-    if (rol === 'Consulta') {
-        if (diaActual === 0) {
-            return { permitido: false, mensaje: 'El rol Consulta no tiene acceso los domingos.' };
-        }
-        if (horaActual >= 5 && horaActual < 18) {
-            return { permitido: true };
-        }
-        return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
-    }
-
-    // 🆕 DESPACHO: Lunes-Sábado, 6 AM - 6 PM
-    if (rol === 'Despacho') {
-        if (diaActual === 0) {
-            return { permitido: false, mensaje: 'El rol Despacho no tiene acceso los domingos.' };
-        }
-        if (horaActual >= 6 && horaActual < 18) {
-            return { permitido: true };
-        }
-        return { permitido: false, mensaje: 'Su acceso está limitado de 6:00 AM a 6:00 PM.' };
-    }
-
-    // 🎯 Bodega - 24/7 (Lunes-Sábado, domingo bloqueado)
-    if (rol === 'Bodega') {
-        if (diaActual === 0) {
-            return { permitido: false, mensaje: 'El rol Bodega no tiene acceso los domingos.' };
-        }
-        return { permitido: true };
-    }
-    
-    // Poda: 5 AM - 6 PM
-    if (rol === 'Poda') {
-        if (horaActual >= 5 && horaActual < 18) {
-            return { permitido: true };
-        }
-        return { permitido: false, mensaje: 'Su acceso está limitado de 5:00 AM a 6:00 PM.' };
-    }
-    
-    // ATTF: Validación compleja por turnos
-    if (rol === 'ATTF') {
-        return { permitido: true };
-    }
-    
-    // Rol no reconocido
+    // 🔹 Rol no reconocido → permitir por defecto (o bloquear según política)
+    console.warn(`⚠️ Rol no configurado explícitamente: ${rol}. Permitiendo acceso por defecto.`);
     return { permitido: true };
 }
 
