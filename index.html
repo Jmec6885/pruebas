@@ -8429,49 +8429,56 @@ console.log(`   - OS fuera de radio (${radioKm} km): ${osFueraRadio}`);
 console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
 console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
 
-        // ✅ Incluir la OS de partida y aplicar reglas de negocio
-        const osParaOptimizar = [osCentro, ...osEnRadio];
-        
-        console.log(`📊 Total OS para optimizar (incluyendo centro): ${osParaOptimizar.length}`);
+        // ✅ Incluir la OS de partida SIEMPRE y aplicar reglas de negocio
+const osParaOptimizar = [osCentro, ...osEnRadio];
 
-        // ✅ Aplicar filtros de negocio con más detalle
-        let osConFiltros = [];
-        let osReguladas = 0;
-        let osDeudaAlta = 0;
-        let osPorFiltros = 0;
-        let osFiltradasOut = 0;
+console.log(`📊 Total OS para optimizar (incluyendo centro): ${osParaOptimizar.length}`);
 
-        for (const os of osParaOptimizar) {
-            const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-            const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-            const deuda = parseFloat(os.Deuda) || 0;
-            const tieneDeudaAlta = deuda > 500;
-            const pasaFiltros = validarFiltrosOS(os, filtrosAplicar);
+// ✅ Aplicar filtros de negocio con más detalle
+let osConFiltros = [];
+let osReguladas = 0;
+let osDeudaAlta = 0;
+let osPorFiltros = 0;
+let osFiltradasOut = 0;
 
-            if (esRegulada) osReguladas++;
-            if (tieneDeudaAlta) osDeudaAlta++;
-            if (pasaFiltros) osPorFiltros++;
+for (const os of osParaOptimizar) {
+    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+    const deuda = parseFloat(os.Deuda) || 0;
+    const tieneDeudaAlta = deuda > 500;
+    const pasaFiltros = validarFiltrosOS(os, filtrosAplicar);
 
-            if (esRegulada || tieneDeudaAlta || pasaFiltros) {
-                osConFiltros.push(os);
-            } else {
-                osFiltradasOut++;
-            }
-        }
+    if (esRegulada) osReguladas++;
+    if (tieneDeudaAlta) osDeudaAlta++;
+    if (pasaFiltros) osPorFiltros++;
 
-        console.log('📊 Estadísticas de filtrado por reglas de negocio:');
-        console.log(`   - OS reguladas: ${osReguladas}`);
-        console.log(`   - OS con deuda > $500: ${osDeudaAlta}`);
-        console.log(`   - OS que pasan filtros personalizados: ${osPorFiltros}`);
-        console.log(`   - OS filtradas OUT: ${osFiltradasOut}`);
-        console.log(`   - ✅ OS después de aplicar filtros: ${osConFiltros.length}`);
+    // ✅ SIEMPRE incluir la OS de partida (centro)
+    if (os.OSATMO === osCentro.OSATMO) {
+        osConFiltros.push(os);
+        continue;
+    }
 
-        // ✅ Si no hay OS después de filtros, mostrar advertencia pero continuar
-        if (osConFiltros.length === 0) {
-            console.warn('⚠️ No hay OS después de aplicar filtros. Mostrando todas las OS en radio sin filtros.');
-            alert('⚠️ No se encontraron OS que cumplan con los filtros aplicados. Mostrando todas las OS en el radio.');
-            osConFiltros = osParaOptimizar;
-        }
+    // ✅ Incluir si cumple AL MENOS UNA condición
+    if (esRegulada || tieneDeudaAlta || pasaFiltros) {
+        osConFiltros.push(os);
+    } else {
+        osFiltradasOut++;
+    }
+}
+
+console.log('📊 Estadísticas de filtrado por reglas de negocio:');
+console.log(`   - OS reguladas: ${osReguladas}`);
+console.log(`   - OS con deuda > $500: ${osDeudaAlta}`);
+console.log(`   - OS que pasan filtros personalizados: ${osPorFiltros}`);
+console.log(`   - OS filtradas OUT: ${osFiltradasOut}`);
+console.log(`   - ✅ OS después de aplicar filtros: ${osConFiltros.length}`);
+
+// ✅ Si no hay OS después de filtros (excepto el centro), mostrar advertencia
+if (osConFiltros.length <= 1) {
+    console.warn('⚠️ No hay OS después de aplicar filtros. Mostrando todas las OS en radio sin filtros.');
+    alert('⚠️ No se encontraron OS que cumplan con los filtros aplicados. Mostrando todas las OS en el radio.');
+    osConFiltros = osParaOptimizar;
+}
 
         // ✅ Optimizar la ruta
         let osOptimizadas;
@@ -8653,6 +8660,7 @@ function validarFiltrosOS(os, filtros) {
         tipologiasActivas: filtros.tipologias,
         tipologiaOS: os.Tipologia
     });
+    
     const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
     const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
     const deudaAmarillo = Boolean(filtros.deuda_amarillo);
@@ -8660,12 +8668,10 @@ function validarFiltrosOS(os, filtros) {
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // Si no hay filtros activos, NO mostrar nada (porque las excepciones ya se manejaron antes)
+    // ✅ CORRECCIÓN: Si no hay filtros activos, permitir TODAS las OS
     if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
-        return false; // ⚠️ Cambiado a false
+        return true; // ✅ Permitir todas las OS cuando no hay filtros
     }
-
-  
 
     // Filtro de deuda (solo para suspensiones)
     if (tieneFiltroDeuda) {
@@ -8819,6 +8825,17 @@ async function guardarFiltrosMapaGlobales() {
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const resultsContainer = document.getElementById('searchResults');
     
+    // ✅ LIMPIAR MAPA ANTERIOR si existe
+    if (window.mapaLeafletInstance) {
+        try {
+            window.mapaLeafletInstance.remove();
+            console.log('✅ Mapa anterior limpiado');
+        } catch (e) {
+            console.warn('⚠️ Error limpiando mapa anterior:', e);
+        }
+        window.mapaLeafletInstance = null;
+    }
+    
     // Contar por tipología
     const conteoPorTipologia = {};
     osEnRadio.forEach(os => {
@@ -8903,7 +8920,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
             
             <!-- 🆕 PANEL DE DETALLE -->
-<div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
+            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
                 <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
                     <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
                     <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
@@ -8913,22 +8930,27 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         </div>
     `;
     
-    // ✅ VERIFICAR QUE EL PANEL EXISTE ANTES DE INICIALIZAR MAPA
+    // ✅ INICIALIZAR MAPA UNA SOLA VEZ después de verificar el panel
     setTimeout(() => {
         const panel = document.getElementById('panelDetalleOS');
         if (panel) {
             console.log('✅ Panel de detalle encontrado');
-            inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+            try {
+                inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+            } catch (error) {
+                console.error('❌ Error inicializando mapa:', error);
+                resultsContainer.innerHTML += `<div class="result-card" style="background: #ffebee; border: 2px solid #f44336; margin-top: 15px;">
+                    <strong>❌ Error al generar el mapa:</strong><br>
+                    ${error.message}
+                </div>`;
+            }
         } else {
             console.error('❌ Panel de detalle NO encontrado');
+            resultsContainer.innerHTML += `<div class="result-card" style="background: #ffebee; border: 2px solid #f44336; margin-top: 15px;">
+                <strong>❌ Error: Panel de detalle no disponible</strong>
+            </div>`;
         }
-    }, 100);
-
-    
-    // Inicializar mapa Leaflet
-    setTimeout(() => {
-        inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
-    }, 100);
+    }, 150); // Pequeño delay para asegurar que el DOM esté listo
     
     // Guardar datos para exportar (si lo necesitas después)
     window.datosMapaExportar = osEnRadio;
@@ -10790,20 +10812,15 @@ function calcularDiasHabiles(fechaGen) {
 // 📅 CALCULAR DÍAS DESDE GENERACIÓN
 // ========================================
 function calcularDias(fechaGen) {
-    if (!fechaGen) return null;
-    
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); // Normalizar a medianoche
+    if (!fechaGen) return 999;
     
     const fechaGeneracion = new Date(fechaGen);
-    fechaGeneracion.setHours(0, 0, 0, 0);
+    const hoy = new Date();
     
-    // Diferencia en milisegundos
     const diffMs = hoy - fechaGeneracion;
     const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     
-    // +1 porque el día de generación cuenta como día 1
-    return diffDias + 1;
+    return diffDias;
 }
 
 	
@@ -10814,19 +10831,14 @@ function calcularDias(fechaGen) {
 // 📊 DETERMINAR RANGO POR DÍAS
 // ========================================
 function determinarRango(dias) {
-    // Si no es un número válido, se asume 'Sin datos'.
-    if (dias === null || dias === undefined || isNaN(dias)) return 'Sin datos';
-    
-    // La lógica secuencial es la más eficiente para rangos mutuamente excluyentes
-    if (dias <= 5) return '0-5';
-    if (dias <= 10) return '6-10';
-    if (dias <= 15) return '11-15';
-    if (dias <= 20) return '16-20';
-    if (dias <= 30) return '21-30';
-    if (dias <= 45) return '31-45';
-    if (dias <= 180) return '46-180';
-    
-    return '>180'; // Si es mayor a 180
+    if (dias >= 0 && dias <= 5) return '0-5';
+    if (dias >= 6 && dias <= 10) return '6-10';
+    if (dias >= 11 && dias <= 15) return '11-15';
+    if (dias >= 16 && dias <= 20) return '16-20';
+    if (dias >= 21 && dias <= 30) return '21-30';
+    if (dias >= 31 && dias <= 45) return '31-45';
+    if (dias >= 46 && dias <= 180) return '46-180';
+    return '>180';
 }
 
 
