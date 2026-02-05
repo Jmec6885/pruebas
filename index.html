@@ -6910,47 +6910,50 @@ function getHoraActualElSalvador() {
 verificarZonaHoraria();
 
 	function validarEstructuraAsignaciones(datos) {
-    // Validar que todas las filas tengan 3 columnas
-    for (let i = 0; i < datos.length; i++) {
-        const fila = datos[i];
-        
-        if (fila.length < 3) {
-            return {
-                valido: false,
-                mensaje: `Fila ${i + 2}: Se esperan 3 columnas (OSATOMO, Unidad, Estado), solo se encontraron ${fila.length}`
-            };
-        }
-        
-        // Validar que OSATOMO no esté vacío
-        if (!fila[0] || fila[0].toString().trim() === '') {
-            return {
-                valido: false,
-                mensaje: `Fila ${i + 2}: OSATOMO está vacío`
-            };
-        }
-        
-        // Validar que Unidad no esté vacía
-        if (!fila[1] || fila[1].toString().trim() === '') {
-            return {
-                valido: false,
-                mensaje: `Fila ${i + 2}: Unidad está vacía`
-            };
-        }
-        
-        // Validar formato de Unidad (CL-XXX-XXX o CL-XXX-PAC-XXX)
-        const unidad = fila[1].toString().trim();
-        // ✅ Acepta: CL-XXX-NNN, CL-XXX-PAC-NNN, CL-XXX-YYY-NNN
-const formatoValido = /^CL-[A-Z]{3}(?:-[A-Z]{3})?-(?:PAC-)?[0-9]{3}$/i.test(unidad);
-        
-        if (!formatoValido) {
-            return {
-                valido: false,
-                mensaje: `Fila ${i + 2}: Unidad "${unidad}" no tiene formato válido (ej: CL-OPC-001 o CL-OPC-PAC-001)`
-            };
-        }
+  // Validar que todas las filas tengan 3 columnas
+  for (let i = 0; i < datos.length; i++) {
+    const fila = datos[i];
+    if (fila.length < 3) {
+      return {
+        valido: false,
+        mensaje: `Fila ${i + 2}: Se esperan 3 columnas (OSATOMO, Unidad, Estado), solo se encontraron ${fila.length}`
+      };
     }
-    
-    return { valido: true };
+    // Validar que OSATOMO no esté vacío
+    if (!fila[0] || fila[0].toString().trim() === '') {
+      return {
+        valido: false,
+        mensaje: `Fila ${i + 2}: OSATOMO está vacío`
+      };
+    }
+    // Validar que Unidad no esté vacía
+    if (!fila[1] || fila[1].toString().trim() === '') {
+      return {
+        valido: false,
+        mensaje: `Fila ${i + 2}: Unidad está vacía`
+      };
+    }
+
+    const unidad = fila[1].toString().trim();
+
+    // ✅ EXCEPCIÓN ESPECIAL: CL-EYB-PAC-01 a CL-EYB-PAC-07 (1 o 2 dígitos)
+    const esExcepcionEYB = /^CL-EYB-PAC-0?[1-7]$/i.test(unidad);
+
+    // ✅ FORMATO GENERAL MEJORADO:
+    // - CL-XXX-NNN          → Ej: CL-OPC-001
+    // - CL-XXX-PAC-NNN      → Ej: CL-OPC-PAC-001
+    // - CL-XXX-YYY-NNN      → Ej: CL-SEM-NTE-001 (ahora permitido)
+    //   Donde NNN puede ser 1, 2 o 3 dígitos (01, 5, 123, etc.)
+    const formatoGeneral = /^CL-[A-Z]{3}(?:-[A-Z]{3})?-(?:PAC-)?[0-9]{1,3}$/i.test(unidad);
+
+    if (!esExcepcionEYB && !formatoGeneral) {
+      return {
+        valido: false,
+        mensaje: `Fila ${i + 2}: Unidad "${unidad}" no tiene formato válido.\n\nFormatos aceptados:\n• CL-XXX-NNN (ej: CL-OPC-001)\n• CL-XXX-PAC-NNN (ej: CL-OPC-PAC-001)\n• CL-XXX-YYY-NNN (ej: CL-SEM-NTE-001)\n• CL-EYB-PAC-01 a CL-EYB-PAC-07`
+      };
+    }
+  }
+  return { valido: true };
 }
 
 
