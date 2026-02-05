@@ -8425,11 +8425,13 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
     
     const tipNormalizada = tipologia.trim();
     
+    // Bloqueadas para todos los roles
     if (TIPOLOGIAS_PROHIBIDAS.TODAS.includes(tipNormalizada)) {
         console.log(`❌ Tipología bloqueada para todos: ${tipNormalizada}`);
         return false;
     }
     
+    // Bloqueadas solo para Contratista
     if (rol === 'Contratista' && TIPOLOGIAS_PROHIBIDAS.Contratista.includes(tipNormalizada)) {
         console.log(`❌ Tipología bloqueada para ${rol}: ${tipNormalizada}`);
         return false;
@@ -8437,6 +8439,14 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
     
     return true;
 }
+
+// ✅ Pruebas (opcional, fuera de la función)
+/*
+console.log('Función existe:', typeof tipologiaPermitidaParaRol);
+console.log('Test 1 (Contratista + prohibida):', tipologiaPermitidaParaRol('VERIFICACION FUNCIONAMIENTO DE MEDIDOR', 'Contratista')); // false
+console.log('Test 2 (Administrador + prohibida global):', tipologiaPermitidaParaRol('INST. MED/ACOM. M.T. CON MOD. RED', 'Administrador')); // false
+console.log('Test 3 (Contratista + permitida):', tipologiaPermitidaParaRol('CAMBIO DE MEDIDOR/ACOMETIDA B.T.', 'Contratista')); // true
+*/
 
 // ========================================
 // FUNCIÓN PRINCIPAL
@@ -8543,6 +8553,7 @@ console.log(`   - ❌ Sin coordenadas: ${osSinCoordenadas}`);
 console.log(`   - ❌ Fuera de radio (${radioKm} km): ${osFueraRadio}`);
 console.log(`   - ❌ Misma que centro: ${osMismaQueCentro}`);
 console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
+
 
         // ... resto del código (osParaOptimizar, filtros, optimización, etc.)
         
