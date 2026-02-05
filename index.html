@@ -8490,54 +8490,59 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
         console.log(`✅ Total de OS cargadas: ${todasOSRegistradas.length}`);
 
-        // 📍 Filtrar OS dentro del radio
-        const osEnRadio = [];
-        let osSinCoordenadas = 0;
-        let osFueraRadio = 0;
-        let osMismaQueCentro = 0;
-        let osTipologiaProhibida = 0;
+        // 📍 Filtrar OS dentro del radio Y tipologías prohibidas
+const osEnRadio = [];
+let osSinCoordenadas = 0;
+let osFueraRadio = 0;
+let osMismaQueCentro = 0;
+let osTipologiaProhibida = 0;
 
-        for (const os of todasOSRegistradas) {
-            // ✅ Filtrar tipologías prohibidas
-            if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
-                osTipologiaProhibida++;
-                continue;
-            }
-            
-            const coordsObj = extraerCoordenadas(os);
-            if (!coordsObj) {
-                osSinCoordenadas++;
-                continue;
-            }
-            
-            const { latitud: lat, longitud: lng } = coordsObj;
-            if (isNaN(lat) || isNaN(lng)) {
-                osSinCoordenadas++;
-                continue;
-            }
+for (const os of todasOSRegistradas) {
+    // ✅ 1. Filtrar tipologías prohibidas PRIMERO
+    if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
+        osTipologiaProhibida++;
+        continue;
+    }
+    
+    // ✅ 2. Validar coordenadas
+    const coordsObj = extraerCoordenadas(os);
+    if (!coordsObj) {
+        osSinCoordenadas++;
+        continue;
+    }
+    
+    const { latitud: lat, longitud: lng } = coordsObj;
+    if (isNaN(lat) || isNaN(lng)) {
+        osSinCoordenadas++;
+        continue;
+    }
 
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    // ✅ 3. Calcular distancia
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
-            if (os.OSATMO === osCentro.OSATMO) {
-                osMismaQueCentro++;
-                continue;
-            }
+    // ✅ 4. Saltar si es la misma OS del centro
+    if (os.OSATMO === osCentro.OSATMO) {
+        osMismaQueCentro++;
+        continue;
+    }
 
-            if (distancia > radioKm) {
-                osFueraRadio++;
-                continue;
-            }
+    // ✅ 5. Filtrar por radio
+    if (distancia > radioKm) {
+        osFueraRadio++;
+        continue;
+    }
 
-            osEnRadio.push({ ...os, lat, lng, distancia });
-        }
+    // ✅ 6. AGREGAR a osEnRadio (ya pasó todos los filtros)
+    osEnRadio.push({ ...os, lat, lng, distancia });
+}
 
-        console.log('📊 Estadísticas de filtrado por radio:');
-        console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
-        console.log(`   - OS tipología prohibida: ${osTipologiaProhibida}`);
-        console.log(`   - OS sin coordenadas: ${osSinCoordenadas}`);
-        console.log(`   - OS fuera de radio: ${osFueraRadio}`);
-        console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
-        console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
+console.log('📊 Estadísticas de filtrado:');
+console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
+console.log(`   - ❌ Tipología prohibida: ${osTipologiaProhibida}`);
+console.log(`   - ❌ Sin coordenadas: ${osSinCoordenadas}`);
+console.log(`   - ❌ Fuera de radio (${radioKm} km): ${osFueraRadio}`);
+console.log(`   - ❌ Misma que centro: ${osMismaQueCentro}`);
+console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
 
         // ... resto del código (osParaOptimizar, filtros, optimización, etc.)
         
@@ -8665,7 +8670,15 @@ console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
 console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
 
         // ✅ Incluir la OS de partida SIEMPRE y aplicar reglas de negocio
-const osParaOptimizar = [osCentro, ...osEnRadio];
+// ✅ Incluir la OS de partida SI su tipología está permitida
+let osParaOptimizar = [];
+
+if (tipologiaPermitidaParaRol(osCentro.Tipologia, currentUser.rol)) {
+    osParaOptimizar = [osCentro, ...osEnRadio];
+} else {
+    console.warn('⚠️ La OS de centro tiene tipología prohibida, no se incluye');
+    osParaOptimizar = osEnRadio;
+}
 
 console.log(`📊 Total OS para optimizar (incluyendo centro): ${osParaOptimizar.length}`);
 
