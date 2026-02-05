@@ -8456,11 +8456,13 @@ let osMismaQueCentro = 0;
 let osTipologiaProhibida = 0; // ✅ NUEVO
 
 for (const os of todasOSRegistradas) {
-    // ✅ NUEVO: Filtrar tipologías prohibidas ANTES de validar coordenadas
+    // ✅ FILTRAR TIPOLOGÍAS PROHIBIDAS PRIMERO
     if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
         osTipologiaProhibida++;
         continue;
     }
+    
+    // ✅ Resto del código sigue igual
     
     const coordsObj = extraerCoordenadas(os);
     
@@ -8491,6 +8493,13 @@ for (const os of todasOSRegistradas) {
     osEnRadio.push({ ...os, lat, lng, distancia });
 }
 
+console.log('📊 Estadísticas de filtrado por radio:');
+console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
+console.log(`   - OS tipología prohibida: ${osTipologiaProhibida}`); // ✅ NUEVO
+console.log(`   - OS sin coordenadas: ${osSinCoordenadas}`);
+console.log(`   - OS fuera de radio (${radioKm} km): ${osFueraRadio}`);
+console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
+console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
 console.log('📊 Estadísticas de filtrado por radio:');
 console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
 console.log(`   - OS tipología prohibida: ${osTipologiaProhibida}`); // ✅ NUEVO
