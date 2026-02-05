@@ -8651,29 +8651,40 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
 
 
 // ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (CON REGLAS DE EXCEPCIÓN)
+// ✅ VALIDAR SI OS CUMPLE FILTROS (CORREGIDO)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    // ✅ DEBUG: Ver qué filtros se están aplicando
+    // ✅ CORRECCIÓN 1: Validar que filtros exista
+    if (!filtros) {
+        console.warn('⚠️ No se recibieron filtros, permitiendo todas las OS');
+        return true;
+    }
+    
+    // ✅ CORRECCIÓN 2: Extraer correctamente los arrays
+    const rangos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
+    const tipologias = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
+    
+    // ✅ DEBUG: Ver qué se está validando
     console.log('🔍 Validando OS:', os.OSATMO, {
-        rangosActivos: filtros.rangos,
-        tipologiasActivas: filtros.tipologias,
+        rangosActivos: rangos,
+        tipologiasActivas: tipologias,
         tipologiaOS: os.Tipologia
     });
     
-    const rangos = Array.isArray(filtros.rangos) ? filtros.rangos : [];
-    const tipologias = Array.isArray(filtros.tipologias) ? filtros.tipologias : [];
     const deudaAmarillo = Boolean(filtros.deuda_amarillo);
     const deudaNaranja = Boolean(filtros.deuda_naranja);
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // ✅ CORRECCIÓN: Si no hay filtros activos, permitir TODAS las OS
-    if (rangos.length === 0 && tipologias.length === 0 && !tieneFiltroDeuda) {
-        return true; // ✅ Permitir todas las OS cuando no hay filtros
+    // ✅ CORRECCIÓN 3: Si NO hay ningún filtro activo, permitir TODO
+    if (!rangos && !tipologias && !tieneFiltroDeuda) {
+        console.log('✅ Sin filtros activos - Permitiendo OS:', os.OSATMO);
+        return true;
     }
 
-    // Filtro de deuda (solo para suspensiones)
+    // ========================================
+    // VALIDACIÓN POR DEUDA (prioridad)
+    // ========================================
     if (tieneFiltroDeuda) {
         const deuda = parseFloat(os.Deuda) || 0;
         const esSuspension = os.Tipologia && (
@@ -8681,34 +8692,73 @@ function validarFiltrosOS(os, filtros) {
             os.Tipologia.includes('SUSPENSION M.T.') ||
             os.Tipologia.includes('SUSPENSION TECNICA MANUAL')
         );
+        
         if (esSuspension) {
-            let cumple = false;
-            if (deudaAmarillo && deuda > 500) cumple = true;
-            if (deudaNaranja && deuda >= 100 && deuda <= 500) cumple = true;
-            if (deudaRosado && deuda >= 50 && deuda < 100) cumple = true;
-            if (!cumple) return false;
+            let cumpleDeuda = false;
+            if (deudaAmarillo && deuda > 500) cumpleDeuda = true;
+            if (deudaNaranja && deuda >= 100 && deuda <= 500) cumpleDeuda = true;
+            if (deudaRosado && deuda >= 50 && deuda < 100) cumpleDeuda = true;
+            
+            // ✅ Si tiene deuda pero no cumple rango → rechazar
+            if (!cumpleDeuda) {
+                console.log(`❌ Rechazada por deuda: ${os.OSATMO} (Deuda: $${deuda})`);
+                return false;
+            }
         }
     }
 
-    // Filtro de rango
-    if (rangos.length > 0) {
-        if (!os['Fecha Gen.']) return false;
+    // ========================================
+    // VALIDACIÓN POR RANGO
+    // ========================================
+    if (rangos) {
+        if (!os['Fecha Gen.']) {
+            console.log(`❌ Rechazada por falta de fecha: ${os.OSATMO}`);
+            return false;
+        }
+        
         const dias = calcularDias(os['Fecha Gen.']);
         const rangoOS = determinarRango(dias);
-        if (!rangos.includes(rangoOS)) return false;
+        
+        if (!rangos.includes(rangoOS)) {
+            console.log(`❌ Rechazada por rango: ${os.OSATMO} (Rango: ${rangoOS}, Permitidos: ${rangos.join(', ')})`);
+            return false;
+        }
     }
 
-    // Filtro de tipología
-    if (tipologias.length > 0) {
-        if (!os.Tipologia) return false;
+    // ========================================
+    // ✅ VALIDACIÓN POR TIPOLOGÍA (LA MÁS CRÍTICA)
+    // ========================================
+    if (tipologias) {
+        if (!os.Tipologia) {
+            console.log(`❌ Rechazada por falta de tipología: ${os.OSATMO}`);
+            return false;
+        }
+        
         const tipologiaOS = os.Tipologia.trim();
-        const coincide = tipologias.some(t => String(t).trim() === tipologiaOS);
-        if (!coincide) return false;
+        
+        // ✅ CORRECCIÓN 4: Comparación exacta (sin normalizar)
+        const coincide = tipologias.some(t => {
+            const tipFiltro = String(t).trim();
+            const match = tipFiltro === tipologiaOS;
+            
+            if (!match) {
+                console.log(`   ❌ NO coincide: "${tipologiaOS}" !== "${tipFiltro}"`);
+            } else {
+                console.log(`   ✅ COINCIDE: "${tipologiaOS}" === "${tipFiltro}"`);
+            }
+            
+            return match;
+        });
+        
+        if (!coincide) {
+            console.log(`❌ RECHAZADA - Tipología "${tipologiaOS}" no está en filtros:`, tipologias);
+            return false;
+        }
     }
 
+    console.log(`✅ ACEPTADA: ${os.OSATMO}`);
     return true;
 }
-
 
 
 // ========================================
