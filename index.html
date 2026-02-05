@@ -8420,21 +8420,16 @@ const TIPOLOGIAS_PROHIBIDAS = {
     ]
 };
 
-/**
- * Valida si una tipología está permitida para el rol actual
- */
 function tipologiaPermitidaParaRol(tipologia, rol) {
     if (!tipologia) return false;
     
     const tipNormalizada = tipologia.trim();
     
-    // ✅ Verificar prohibidas para TODOS
     if (TIPOLOGIAS_PROHIBIDAS.TODAS.includes(tipNormalizada)) {
         console.log(`❌ Tipología bloqueada para todos: ${tipNormalizada}`);
         return false;
     }
     
-    // ✅ Verificar prohibidas por rol específico
     if (rol === 'Contratista' && TIPOLOGIAS_PROHIBIDAS.Contratista.includes(tipNormalizada)) {
         console.log(`❌ Tipología bloqueada para ${rol}: ${tipNormalizada}`);
         return false;
@@ -8444,60 +8439,113 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
 }
 
 // ========================================
-// ✅ MODIFICAR cargarYMostrarMapa() - APLICAR FILTRO DE TIPOLOGÍAS PROHIBIDAS
+// FUNCIÓN PRINCIPAL
 // ========================================
-// Busca esta sección en tu código (línea ~8435):
+async function cargarYMostrarMapa(osCentro, unidadFiltro) {
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
+        <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
 
-// 📍 Filtrar solo las OS dentro del radio (sin aplicar reglas aún)
-const osEnRadio = [];
-let osSinCoordenadas = 0;
-let osFueraRadio = 0;
-let osMismaQueCentro = 0;
-let osTipologiaProhibida = 0; // ✅ NUEVO
+    try {
+        let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
+        console.log('📊 Filtros finales aplicados:', filtrosAplicar);
 
-for (const os of todasOSRegistradas) {
-    // ✅ FILTRAR TIPOLOGÍAS PROHIBIDAS PRIMERO
-    if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
-        osTipologiaProhibida++;
-        continue;
-    }
-    
-    const coordsObj = extraerCoordenadas(os);
-    
-    if (!coordsObj) {
-        osSinCoordenadas++;
-        continue;
-    }
-    
-    const { latitud: lat, longitud: lng } = coordsObj;
+        if (!filtrosAplicar) {
+            console.error('❌ Filtros no se cargaron correctamente');
+            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+        }
+
+        window.filtrosAplicados = filtrosAplicar;
+        window.osCentroActual = osCentro;
+        window.unidadFiltroActual = unidadFiltro;
+
+        const radioKm = filtrosAplicar.radio_km || 3;
+        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+        
+        if (!coordsCentro || !coordsCentro.includes(',')) {
+            resultsContainer.innerHTML = `<div class="result-card">⚠️ Coordenadas inválidas</div>`;
+            return;
+        }
+        
+        const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+        console.log(`🔍 Buscando OS en radio de ${radioKm} km desde ${osCentro.OSATMO}`);
+
+        // 📥 Cargar todas las OS Pendientes
+        let todasOSRegistradas = [];
+        const BATCH_SIZE = 1000;
+        let offset = 0;
+
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Deuda, Estado_ATOMO')
+                .in('Estado_ATOMO', ['Registrada', 'Asignada'])
+                .range(offset, offset + BATCH_SIZE - 1);
             
-    if (isNaN(lat) || isNaN(lng)) {
-        osSinCoordenadas++;
-        continue;
+            if (error || !data || data.length === 0) break;
+            todasOSRegistradas.push(...data);
+            if (data.length < BATCH_SIZE) break;
+            offset += BATCH_SIZE;
+        }
+
+        console.log(`✅ Total de OS cargadas: ${todasOSRegistradas.length}`);
+
+        // 📍 Filtrar OS dentro del radio
+        const osEnRadio = [];
+        let osSinCoordenadas = 0;
+        let osFueraRadio = 0;
+        let osMismaQueCentro = 0;
+        let osTipologiaProhibida = 0;
+
+        for (const os of todasOSRegistradas) {
+            // ✅ Filtrar tipologías prohibidas
+            if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
+                osTipologiaProhibida++;
+                continue;
+            }
+            
+            const coordsObj = extraerCoordenadas(os);
+            if (!coordsObj) {
+                osSinCoordenadas++;
+                continue;
+            }
+            
+            const { latitud: lat, longitud: lng } = coordsObj;
+            if (isNaN(lat) || isNaN(lng)) {
+                osSinCoordenadas++;
+                continue;
+            }
+
+            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+
+            if (os.OSATMO === osCentro.OSATMO) {
+                osMismaQueCentro++;
+                continue;
+            }
+
+            if (distancia > radioKm) {
+                osFueraRadio++;
+                continue;
+            }
+
+            osEnRadio.push({ ...os, lat, lng, distancia });
+        }
+
+        console.log('📊 Estadísticas de filtrado por radio:');
+        console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
+        console.log(`   - OS tipología prohibida: ${osTipologiaProhibida}`);
+        console.log(`   - OS sin coordenadas: ${osSinCoordenadas}`);
+        console.log(`   - OS fuera de radio: ${osFueraRadio}`);
+        console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
+        console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
+
+        // ... resto del código (osParaOptimizar, filtros, optimización, etc.)
+        
+    } catch (err) {
+        console.error('❌ Error:', err);
+        resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
-
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-
-    if (os.OSATMO === osCentro.OSATMO) {
-        osMismaQueCentro++;
-        continue;
-    }
-
-    if (distancia > radioKm) {
-        osFueraRadio++;
-        continue;
-    }
-
-    osEnRadio.push({ ...os, lat, lng, distancia });
 }
-
-console.log('📊 Estadísticas de filtrado por radio:');
-console.log(`   - Total OS cargadas: ${todasOSRegistradas.length}`);
-console.log(`   - OS tipología prohibida: ${osTipologiaProhibida}`);
-console.log(`   - OS sin coordenadas: ${osSinCoordenadas}`);
-console.log(`   - OS fuera de radio (${radioKm} km): ${osFueraRadio}`);
-console.log(`   - OS misma que centro: ${osMismaQueCentro}`);
-console.log(`   - ✅ OS dentro del radio: ${osEnRadio.length}`);
 
 
 
