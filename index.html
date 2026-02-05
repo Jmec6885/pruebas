@@ -8216,7 +8216,7 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
 
 // ========================================
-// 🔍 CARGAR FILTROS UNIVERSALES (CORREGIDO)
+// 🔍 CARGAR FILTROS UNIVERSALES (CORREGIDO CON DEBUG)
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
     const HOY = new Date().toISOString().split('T')[0];
@@ -8224,28 +8224,39 @@ async function cargarFiltrosUniversales(unidad = null) {
     console.log('🔍 Cargando filtros para:', { 
         usuario: currentUser.usuario, 
         unidad, 
-        rol: currentUser.rol 
+        rol: currentUser.rol,
+        fecha: HOY
     });
     
     let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
 
     try {
-        // 1️⃣ Filtros personales del usuario (Despacho)
+        // ========================================
+        // 1️⃣ FILTROS PERSONALES (Despacho)
+        // ========================================
         if (currentUser.rol === 'Despacho') {
-            let { data: filtrosHoy } = await supabaseClient
+            console.log('🔍 Buscando filtros personales de Despacho...');
+            
+            // Buscar con fecha de hoy
+            let { data: filtrosHoy, error: errorHoy } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .eq('usuario', currentUser.usuario)
                 .eq('fecha_vigencia', HOY)
                 .maybeSingle();
 
+            console.log('📊 Filtros de hoy (Despacho):', { data: filtrosHoy, error: errorHoy });
+
             if (!filtrosHoy) {
-                let { data: filtrosDefault } = await supabaseClient
+                // Buscar sin fecha (default)
+                let { data: filtrosDefault, error: errorDefault } = await supabaseClient
                     .from('filtros_mapa')
                     .select('*')
                     .eq('usuario', currentUser.usuario)
                     .is('fecha_vigencia', null)
                     .maybeSingle();
+
+                console.log('📊 Filtros default (Despacho):', { data: filtrosDefault, error: errorDefault });
                 filtrosHoy = filtrosDefault;
             }
 
@@ -8255,22 +8266,32 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
         }
 
-        // 2️⃣ Filtros por unidad
+        // ========================================
+        // 2️⃣ FILTROS POR UNIDAD
+        // ========================================
         if (unidad) {
-            let { data: filtrosUnidadHoy } = await supabaseClient
+            console.log(`🔍 Buscando filtros para unidad: ${unidad}`);
+            
+            // Buscar con fecha de hoy
+            let { data: filtrosUnidadHoy, error: errorUnidadHoy } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
                 .eq('Unidad', unidad)
                 .eq('fecha_programada', HOY)
                 .maybeSingle();
 
+            console.log('📊 Filtros de hoy (Unidad):', { data: filtrosUnidadHoy, error: errorUnidadHoy });
+
             if (!filtrosUnidadHoy) {
-                let { data: filtrosUnidadDefault } = await supabaseClient
+                // Buscar sin fecha (default)
+                let { data: filtrosUnidadDefault, error: errorUnidadDefault } = await supabaseClient
                     .from('filtros_por_unidad')
                     .select('*')
                     .eq('Unidad', unidad)
                     .is('fecha_programada', null)
                     .maybeSingle();
+
+                console.log('📊 Filtros default (Unidad):', { data: filtrosUnidadDefault, error: errorUnidadDefault });
                 filtrosUnidadHoy = filtrosUnidadDefault;
             }
 
@@ -8280,43 +8301,63 @@ async function cargarFiltrosUniversales(unidad = null) {
             }
         }
 
-        // 3️⃣ Filtros globales (Admin/Supervisor)
-        // ✅ CORRECCIÓN 1: Buscar primero con fecha de HOY
-        let { data: filtrosHoy, error: errorHoy } = await supabaseClient
+        // ========================================
+        // 3️⃣ FILTROS GLOBALES (Admin/Supervisor)
+        // ========================================
+        console.log('🔍 Buscando filtros globales...');
+        
+        // Buscar con fecha de hoy
+        let { data: filtrosGlobalesHoy, error: errorGlobalesHoy } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
             .eq('fecha_vigencia', HOY)
             .maybeSingle();
 
-        if (!errorHoy && filtrosHoy) {
-            console.log('✅ Usando filtro global para hoy:', filtrosHoy);
-            return filtrosHoy;
+        console.log('📊 Filtros globales de hoy:', { data: filtrosGlobalesHoy, error: errorGlobalesHoy });
+
+        if (filtrosGlobalesHoy) {
+            console.log('✅ Usando filtro global para hoy:', filtrosGlobalesHoy);
+            return filtrosGlobalesHoy;
         }
 
-        // ✅ CORRECCIÓN 2: Buscar filtro global por defecto (fecha_vigencia = NULL)
-        let { data: filtrosDefault, error: errorDefault } = await supabaseClient
+        // Buscar sin fecha (default)
+        let { data: filtrosGlobalesDefault, error: errorGlobalesDefault } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
             .is('fecha_vigencia', null)
-            .maybeSingle(); // ✅ Cambio: Usar maybeSingle() en vez de single()
+            .maybeSingle();
 
-        if (!errorDefault && filtrosDefault) {
-            console.log('✅ Usando filtro global por defecto:', filtrosDefault);
-            return filtrosDefault;
+        console.log('📊 Filtros globales default:', { 
+            data: filtrosGlobalesDefault, 
+            error: errorGlobalesDefault 
+        });
+
+        if (filtrosGlobalesDefault) {
+            console.log('✅ Usando filtro global por defecto:', filtrosGlobalesDefault);
+            
+            // ✅ CORRECCIÓN CRÍTICA: Verificar que tenga datos válidos
+            if (!filtrosGlobalesDefault.rangos && !filtrosGlobalesDefault.tipologias) {
+                console.warn('⚠️ Filtro global existe pero está vacío');
+            }
+            
+            return filtrosGlobalesDefault;
         }
 
-        // 4️⃣ Si no hay NADA, retornar valores por defecto
-        console.log('⚠️ Sin filtros configurados, usando defaults');
+        // ========================================
+        // 4️⃣ SI NO HAY NADA
+        // ========================================
+        console.error('❌ NO SE ENCONTRARON FILTROS EN NINGUNA TABLA');
+        console.log('📊 Retornando filtros por defecto:', filtros);
         return filtros;
         
     } catch (err) {
         console.error('❌ Error cargando filtros:', err);
+        console.error('Stack:', err.stack);
         return filtros;
     }
 }
-
 
 
 	async function cargarYMostrarMapa(osCentro, unidadFiltro) {
@@ -8328,6 +8369,10 @@ async function cargarFiltrosUniversales(unidad = null) {
         // ✅ Cargar filtros usando la función unificada
         let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
         console.log('📊 Filtros finales aplicados:', filtrosAplicar);
+console.log('🔍 DEBUG FILTROS CARGADOS:', filtrosAplicar);
+console.log('   - Rangos:', filtrosAplicar?.rangos);
+console.log('   - Tipologias:', filtrosAplicar?.tipologias);
+console.log('   - Radio:', filtrosAplicar?.radio_km);
 
         // ✅ Validar que haya filtros válidos
         if (!filtrosAplicar) {
