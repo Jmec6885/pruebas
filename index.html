@@ -2499,7 +2499,7 @@ if (rol === 'Contratista' || rol === 'Consulta') {
         const prohibido =
             action.includes("'usuarios'") ||           // Gestión de Usuarios
             action.includes("'detalle_os'") ||         // Detalle OS
-            action.includes("'cargar_asignaciones'"); ||  // Cargar Asignaciones
+            action.includes("'cargar_asignaciones'") ||  // Cargar Asignaciones
 	    action.includes("'mapa_rutas'");           // ← AGREGADO: Mapa de Rutas
         option.style.display = prohibido ? 'none' : 'block';
     });
