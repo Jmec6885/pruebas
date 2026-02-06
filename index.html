@@ -5255,14 +5255,15 @@ async function generarMapaUnidadConFiltros() {
         // ========================================
         // ✅ 3️⃣ Cargar OS asignadas a la unidad
         // ========================================
-        console.log('📥 Cargando OS asignadas para la unidad...');
-        
-        if (!window.osAsignadasKML || !Array.isArray(window.osAsignadasKML)) {
-            console.error('❌ window.osAsignadasKML no está definido');
-            throw new Error('No hay datos de OS asignadas. Por favor, recargue la página.');
-        }
-        
-        const osAsignadasUnidad = window.osKMLData || window.osAsignadasKML || [];
+        // ✅ CORRECTO
+console.log('📥 Cargando OS asignadas para la unidad...');
+
+const osAsignadasUnidad = window.osKMLData || window.osAsignadasKML || [];
+
+if (!osAsignadasUnidad || osAsignadasUnidad.length === 0) {
+    console.error('❌ No hay datos de OS cargados');
+    throw new Error('No hay datos de OS asignadas. Por favor, recargue la página.');
+}
         
         console.log(`✅ ${osAsignadasUnidad.length} OS asignadas encontradas para la unidad`);
         
