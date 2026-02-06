@@ -5451,20 +5451,38 @@ const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
         console.log('✅ ==========================================');
         
         // ========================================
-        // ✅ 7️⃣ Generar mapa con OS asignadas + OS filtradas en radio
         // ========================================
-        const osParaMapa = [...osAsignadasUnidad, ...osEnRadio];
-        
-        console.log('🗺️ ==========================================');
-        console.log('🗺️ GENERANDO MAPA');
-        console.log('🗺️ Total de OS para el mapa:', osParaMapa.length);
-        console.log('🗺️ OS asignadas:', osAsignadasUnidad.length);
-        console.log('🗺️ OS en radio filtradas:', osEnRadio.length);
-        console.log('🗺️ ==========================================');
-        
-        generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
-        
-    } catch (err) {
+// ✅ 7️⃣ Generar mapa con OS asignadas + OS filtradas en radio
+// ========================================
+
+// ✅ NORMALIZAR OS ASIGNADAS (agregar lat/lng)
+const osAsignadasNormalizadas = osAsignadasUnidad.map(os => {
+    const coords = os.Coordenadas || os.Coordendasgis;
+    if (!coords || !coords.includes(',')) return null;
+    
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    return {
+        ...os,
+        lat,
+        lng,
+        distancia: 0,
+        numeroOrden: 0
+    };
+}).filter(os => os !== null);
+
+const osParaMapa = [...osAsignadasNormalizadas, ...osEnRadio];
+
+console.log('🗺️ ==========================================');
+console.log('🗺️ GENERANDO MAPA');
+console.log('🗺️ Total de OS para el mapa:', osParaMapa.length);
+console.log('🗺️ OS asignadas normalizadas:', osAsignadasNormalizadas.length);
+console.log('🗺️ OS en radio filtradas:', osEnRadio.length);
+console.log('🗺️ ==========================================');
+
+generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
+
+} catch (err) {
+    // ... resto del código
         console.error('❌ ==========================================');
         console.error('❌ ERROR EN generarMapaUnidadConFiltros:');
         console.error('❌ Mensaje:', err.message);
