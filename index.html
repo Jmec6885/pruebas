@@ -5313,6 +5313,8 @@ async function generarMapaUnidadConFiltros() {
 }
 
 
+
+
 	
 	// ========================================
 // 📊 ACTUALIZAR RESUMEN UNIDAD KML
@@ -8875,15 +8877,11 @@ async function guardarFiltrosMapaGlobales() {
 
 
 
-	// ========================================
-// 2️⃣ AGREGAR BOTONES DE FILTRO POR COLOR EN generarMapaLeaflet()
+	
+
 // ========================================
-// Busca esta línea en tu función generarMapaLeaflet():
-// <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-//     <strong>Leyenda:</strong>
-
-// REEMPLÁZALA por esto:
-
+// 🗺️ GENERAR MAPA LEAFLET CON CÍRCULO Y CONTROL DE RADIO
+// ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const resultsContainer = document.getElementById('searchResults');
     
@@ -8906,10 +8904,29 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
         .sort((a, b) => b[1] - a[1]);
     
+    // ✅ Obtener radio actual desde filtrosAplicados o usar el parámetro
+    const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
+    
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header">
-                🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioKm} km)
+                🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioActual} km)
+            </div>
+            
+            <!-- ✅ CONTROL DE RADIO (NUEVO) -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #3b82f6;">
+                <strong>📍 Radio de Búsqueda:</strong>
+                <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+                    <input type="range" id="sliderRadioKm" min="1" max="20" value="${radioActual}" 
+                           style="flex: 1; height: 8px; border-radius: 4px; cursor: pointer;"
+                           oninput="actualizarRadioMapa(this.value)">
+                    <span id="valorRadioKm" style="font-weight: bold; color: #3b82f6; min-width: 60px; text-align: center;">
+                        ${radioActual} km
+                    </span>
+                </div>
+                <small style="color: #666; display: block; margin-top: 8px; font-size: 13px;">
+                    ⚠️ Cambiar el radio actualiza el mapa. Los filtros originales permanecen intactos.
+                </small>
             </div>
             
             <!-- ✅ LEYENDA CON BOTONES CLICKEABLES -->
@@ -8955,7 +8972,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
                 <strong>🔍 Filtros activos:</strong><br>
                 <span style="font-size: 14px; color: #666;">
-                    • Radio: <strong>${radioKm} km</strong><br>
+                    • Radio: <strong>${radioActual} km</strong><br>
                     ${window.filtrosAplicados.rangos ? `• Rangos: <strong>${window.filtrosAplicados.rangos.length}</strong><br>` : ''}
                     ${window.filtrosAplicados.tipologias ? `• Tipologías: <strong>${window.filtrosAplicados.tipologias.length}</strong>` : ''}
                 </span>
@@ -8992,7 +9009,8 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         if (panel) {
             console.log('✅ Panel de detalle encontrado');
             try {
-                inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+                // ✅ Pasar el radio actual a la función de inicialización
+                inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioActual);
             } catch (error) {
                 console.error('❌ Error inicializando mapa:', error);
             }
@@ -9001,6 +9019,60 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     
     window.datosMapaExportar = osEnRadio;
 }
+
+
+// ========================================
+// 🔄 ACTUALIZAR RADIO DEL MAPA DINÁMICAMENTE
+// ========================================
+function actualizarRadioMapa(nuevoRadio) {
+    const valorRadioKm = document.getElementById('valorRadioKm');
+    if (valorRadioKm) {
+        valorRadioKm.textContent = `${nuevoRadio} km`;
+    }
+    
+    console.log('📍 Radio actualizado a:', nuevoRadio, 'km');
+    
+    // ✅ Actualizar el mapa con el nuevo radio
+    if (window.mapaLeafletInstance && window.osCentroActual && window.osEnRadioActual) {
+        // Recalcular OS en radio con el nuevo radio
+        const osCentro = window.osCentroActual;
+        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+        const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+        
+        const osEnRadio = window.osEnRadioActual.filter(os => {
+            if (os.lat && os.lng) {
+                const distancia = calcularDistanciaKm(latCentro, lngCentro, os.lat, os.lng);
+                return distancia <= nuevoRadio;
+            }
+            return false;
+        });
+        
+        // ✅ Regenerar el mapa con el nuevo radio
+        window.mapaLeafletInstance.eachLayer(layer => {
+            if (layer instanceof L.Circle) {
+                layer.setRadius(nuevoRadio * 1000);
+                layer.unbindPopup();
+                layer.bindPopup(`Área de búsqueda: ${nuevoRadio} km de radio`);
+            }
+        });
+        
+        // ✅ Actualizar el título del mapa
+        const header = document.querySelector('.result-header');
+        if (header) {
+            header.innerHTML = `🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${nuevoRadio} km)`;
+        }
+        
+        // ✅ Actualizar el círculo si existe
+        if (window.circuloRadio) {
+            window.circuloRadio.setRadius(nuevoRadio * 1000);
+            window.circuloRadio.setPopupContent(`Área de búsqueda: ${nuevoRadio} km de radio`);
+        }
+        
+        console.log(`✅ Mapa actualizado con radio de ${nuevoRadio} km (${osEnRadio.length} OS en radio)`);
+    }
+}
+
+
 
 
 // ========================================
@@ -9228,7 +9300,7 @@ function buscarOSEnListado() {
 
 
 // ========================================
-// 🗺️ INICIALIZAR MAPA LEAFLET (COMPLETO CON FILTROS POR ESTADO)
+// 🗺️ INICIALIZAR MAPA LEAFLET (COMPLETO CON FILTROS POR ESTADO Y CÍRCULO DE RADIO)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const mapaDiv = document.getElementById('mapaLeaflet');
@@ -9251,6 +9323,30 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(mapa);
+
+    // ========================================
+    // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
+    // ========================================
+    const circuloRadio = L.circle([latCentro, lngCentro], {
+        radius: radioKm * 1000,  // Convertir km a metros
+        color: '#3b82f6',        // Azul
+        weight: 3,               // Grosor del borde
+        opacity: 0.8,            // Opacidad del borde
+        fillOpacity: 0.15,       // Opacidad del relleno
+        fillColor: '#3b82f6'     // Color del relleno
+    }).addTo(mapa)
+    .bindPopup(`
+        <div style="min-width: 200px;">
+            <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
+            <strong>Radio:</strong> ${radioKm} km<br>
+            <strong>OS en radio:</strong> ${osEnRadio.length}<br>
+            <small style="color: #666;">Círculo de búsqueda alrededor de la OS seleccionada</small>
+        </div>
+    `)
+    .openPopup();
+
+    // ✅ Guardar referencia al círculo para actualizarlo después
+    window.circuloRadio = circuloRadio;
 
     // ========================================
     // ✅ MARCADOR VERDE PARA LA OS DE REFERENCIA
@@ -9397,7 +9493,10 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // Ajustar vista
     mapa.fitBounds(bounds, { padding: [50, 50] });
 
-    console.log('✅ Mapa inicializado con numeración por cercanía');
+    // ✅ Añadir control de escala
+    L.control.scale().addTo(mapa);
+
+    console.log(`✅ Mapa inicializado con ${osEnRadio.length} marcadores y círculo de ${radioKm} km`);
     console.log('📊 Agrupación por estado:', {
         centro: window.markersPorEstado.centro.length,
         asignada: window.markersPorEstado.asignada.length,
@@ -9408,7 +9507,6 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         deuda_baja: window.markersPorEstado.deuda_baja.length
     });
 }
-
 
 
 
