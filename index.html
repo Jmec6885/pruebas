@@ -5388,42 +5388,41 @@ const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 }
             
             // Determinar estado de la OS
-            const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-            const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-            const deuda = parseFloat(os.Deuda) || 0;
-            // ✅ CORRECTO
+const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+const deuda = parseFloat(os.Deuda) || 0;
 const tieneDeudaAlta = deuda > 500;
+const fechaGen = new Date(os['Fecha Gen.']);
+const hoy = new Date();
+const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
 
-// Clasificar por color de deuda
+// ✅ Clasificar por color de deuda
 let esDeudaAmarillo = false, esDeudaNaranja = false, esDeudaRosado = false;
 if (deuda >= 100 && deuda < 300) esDeudaAmarillo = true;
 else if (deuda >= 300 && deuda < 500) esDeudaNaranja = true;
 else if (deuda >= 500) esDeudaRosado = true;
 
-// Verificar si pasa filtros de deuda guardados
-const pasaDeuda = !filtrosUnidadHoy.deuda_amarillo && !filtrosUnidadHoy.deuda_naranja && !filtrosUnidadHoy.deuda_rosado
+// ✅ Verificar si pasa filtros de deuda guardados (SIEMPRE definir pasaDeuda)
+const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
+const pasaDeuda = !hayFiltrosDeuda 
     ? true // Si no hay filtros de deuda, pasan todas
-    : (filtrosUnidadHoy.deuda_amarillo && esDeudaAmarillo) ||
-      (filtrosUnidadHoy.deuda_naranja && esDeudaNaranja) ||
-      (filtrosUnidadHoy.deuda_rosado && esDeudaRosado);
-            // ✅ CORRECTO (calcular días desde Fecha Gen.)
-const fechaGen = new Date(os['Fecha Gen.']);
-const hoy = new Date();
-const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
-            
-            // ✅ APLICAR FILTROS DE FORMA EXCLUSIVA
-            let pasaFiltro = true;
-            
-            // Si hay filtros de tipología definidos, validar
-            if (filtrosAplicar.tipologias && filtrosAplicar.tipologias.length > 0) {
-                pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
-            }
-            
-            // Si hay filtros de rangos definidos, validar
-            if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
-                const rangoActual = determinarRangoDias(diasVencimiento);
-                pasaFiltro = filtrosAplicar.rangos.includes(rangoActual);
-            }
+    : (filtrosAplicar.deuda_amarillo && esDeudaAmarillo) ||
+      (filtrosAplicar.deuda_naranja && esDeudaNaranja) ||
+      (filtrosAplicar.deuda_rosado && esDeudaRosado);
+
+// ✅ APLICAR FILTROS DE FORMA EXCLUSIVA
+let pasaFiltro = true;
+
+// Si hay filtros de tipología definidos, validar
+if (filtrosAplicar.tipologias && filtrosAplicar.tipologias.length > 0) {
+    pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
+}
+
+// Si hay filtros de rangos definidos, validar
+if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
+    const rangoActual = determinarRangoDias(diasVencimiento);
+    pasaFiltro = filtrosAplicar.rangos.includes(rangoActual);
+}
             
             // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
 if (esRegulada) {
