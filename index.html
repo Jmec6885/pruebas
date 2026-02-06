@@ -5351,35 +5351,44 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         console.log('🔍 ==========================================');
         
         const osEnRadio = [];
-        let contadorTotal = 0;
-        let contadorFiltradas = 0;
-        let contadorReguladas = 0;
-        let contadorDeudaAlta = 0;
-        let contadorSinFiltro = 0;
-        
-        osPendientes.forEach(os => {
-            contadorTotal++;
-            
-            // Validar coordenadas
-            const coords = os.Coordenadas || os.Coordendasgis;
-            if (!coords || !coords.includes(',')) {
-                return;
-            }
-            
-            // ✅ CORRECTO
-const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+let contadorTotal = 0;
+let contadorFiltradas = 0;
+let contadorReguladas = 0;
+let contadorDeudaAlta = 0;
+let contadorSinFiltro = 0;
 
-            
-             // ✅ DEBUG TEMPORAL
-    if (distancia <= radioKm && contadorTotal <= 5) {
-        console.log('🔍 DEBUG OS en radio:', {
-            OSATMO: os.OSATMO,
-            Tipologia: os.Tipologia,
-            distancia: distancia.toFixed(2) + ' km',
-            filtros_tipologias: filtrosAplicar.tipologias,
-            pasa_tipologia: filtrosAplicar.tipologias?.includes(os.Tipologia)
-        });
+// ✅ NUEVO DEBUG CRÍTICO
+console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
+let osEncontradas = 0;
+
+osPendientes.forEach((os, index) => {
+    contadorTotal++;
+    
+    // ✅ LOG CADA 100 OS
+    if (index % 100 === 0) {
+        console.log(`📊 Procesadas ${index} OS... (en radio: ${osEncontradas})`);
+    }
+    
+    // Validar coordenadas
+    const coords = os.Coordenadas || os.Coordendasgis;
+    if (!coords || !coords.includes(',')) {
+        return;
+    }
+    
+    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    
+    // ✅ DEBUG: Contar OS en radio
+    if (distancia <= radioKm) {
+        osEncontradas++;
+        if (osEncontradas <= 3) {
+            console.log(`🎯 OS EN RADIO #${osEncontradas}:`, {
+                OSATMO: os.OSATMO,
+                Unidad: os.Unidad,
+                Tipologia: os.Tipologia,
+                distancia: distancia.toFixed(2) + 'km'
+            });
+        }
     }
     
     // Excluir la OS centro y fuera del radio
