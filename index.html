@@ -2148,35 +2148,30 @@ async function loginPoda(userData) {
         return;
     }
     
-    // 2. Verificar si necesita configurar días de descanso
-    if (!userData.descanso_fecha_fin || userData.descanso_fecha_fin < fechaHoy) {
+    // 2. Verificar configuración completa de días de descanso
+    const tieneDescansoProgramado = userData.descanso_fecha_inicio && 
+                                    userData.descanso_fecha_fin && 
+                                    userData.descanso_fecha_fin >= fechaHoy;
+
+    if (!tieneDescansoProgramado) {
         console.log('🔧 Poda necesita configurar días de descanso');
         mostrarConfiguracionDescansoPoda();
         return;
     }
-    
-    // 2. Verificar configuración completa de días de descanso
-const tieneDescansoProgramado = userData.descanso_fecha_inicio && 
-                                userData.descanso_fecha_fin && 
-                                userData.descanso_fecha_fin >= fechaHoy;
 
-if (!tieneDescansoProgramado) {
-    console.log('🔧 Poda necesita configurar días de descanso');
-    mostrarConfiguracionDescansoPoda();
-    return;
+    // 3. ✅ TODO OK - Acceso al menú
+    document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
+    document.getElementById('userInfo').classList.remove('hidden');
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('tableSelectionSection').style.display = 'block';
+
+    mostrarTablasSegunRol();
+    iniciarVerificacionSesion();
+    guardarDatosOffline();
+
+    console.log('✅ Acceso concedido al menú Poda');
 }
 
-// 3. ✅ TODO OK - Acceso al menú
-document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
-document.getElementById('userInfo').classList.remove('hidden');
-document.getElementById('loginSection').style.display = 'none';
-document.getElementById('tableSelectionSection').style.display = 'block';
-
-mostrarTablasSegunRol();
-iniciarVerificacionSesion();
-guardarDatosOffline();
-
-console.log('✅ Acceso concedido al menú Poda');
 
 
 function mostrarConfiguracionDescansoPoda() {
