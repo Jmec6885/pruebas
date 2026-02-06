@@ -5364,125 +5364,66 @@ let osEncontradas = 0;
 osPendientes.forEach((os, index) => {
     contadorTotal++;
     
-    // ✅ LOG CADA 100 OS
     if (index % 100 === 0) {
-        console.log(`📊 Procesadas ${index} OS... (en radio: ${osEncontradas})`);
+        console.log(`📊 Procesadas ${index} OS...`);
     }
     
-    // Validar coordenadas
     const coords = os.Coordenadas || os.Coordendasgis;
-    if (!coords || !coords.includes(',')) {
-        return;
-    }
+    if (!coords || !coords.includes(',')) return;
     
     const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-
-// ✅ DEBUG: Contar OS en radio
-if (distancia <= radioKm) {
-    osEncontradas++;
-    if (osEncontradas <= 3) {
-        console.log(`🎯 OS EN RADIO #${osEncontradas}:`, {
-            OSATMO: os.OSATMO,
-            Unidad: os.Unidad,
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+    
+    if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) return;
+    
+    const unidadValida = os.Unidad && os.Unidad.trim() !== '' && !os.Unidad.includes('--') && os.Unidad !== 'SIN UNIDAD';
+    if (unidadValida && os.Unidad !== unidadSeleccionada) return;
+    
+    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+    const deuda = parseFloat(os.Deuda) || 0;
+    const tieneDeudaAlta = deuda > 500;
+    const fechaGen = new Date(os['Fecha Gen.']);
+    const hoy = new Date();
+    const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
+    
+    const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
+    const pasaDeuda = !hayFiltrosDeuda ? true : 
+        ((filtrosAplicar.deuda_amarillo && deuda >= 100 && deuda < 300) ||
+         (filtrosAplicar.deuda_naranja && deuda >= 300 && deuda < 500) ||
+         (filtrosAplicar.deuda_rosado && deuda >= 500));
+    
+    let pasaFiltro = true;
+    if (filtrosAplicar.tipologias?.length > 0) {
+        pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
+    }
+    if (pasaFiltro && filtrosAplicar.rangos?.length > 0) {
+        pasaFiltro = filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento));
+    }
+    
+    // Debug de OS específica
+    if (os.OSATMO === '11183226') {
+        console.log('🚨 OS 11183226:', {
             Tipologia: os.Tipologia,
-            distancia: distancia.toFixed(2) + 'km'
+            distancia: distancia.toFixed(2),
+            pasaTipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
+            diasVencimiento,
+            pasaRango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento)),
+            pasaDeuda,
+            INCLUIDA: esRegulada || (pasaFiltro && pasaDeuda)
         });
     }
-}
-
-// Excluir la OS centro y fuera del radio
-if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
-    return;
-}
-
-// ✅ NUEVO: Excluir OS de otras unidades
-// ✅ CORRECTO - Ignorar unidades con guiones
-const unidadValida = os.Unidad && 
-                     os.Unidad.trim() !== '' && 
-                     !os.Unidad.includes('--') &&
-                     os.Unidad !== 'SIN UNIDAD';
-
-if (unidadValida && os.Unidad !== unidadSeleccionada) {
-    if (osEncontradas <= 5) {
-        console.log('❌ RECHAZADA por unidad:', os.OSATMO, '| Unidad OS:', os.Unidad, '| Esperada:', unidadSeleccionada);
+    
+    if (esRegulada) {
+        contadorReguladas++;
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
+    } else if (pasaFiltro && pasaDeuda) {
+        contadorFiltradas++;
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
+    } else {
+        contadorSinFiltro++;
     }
-    return;
-}
-
-// ✅ LOG: OS que pasan validación de unidad
-if (osEncontradas <= 5) {
-    console.log('✅ PASA validación unidad:', os.OSATMO);
-}
-            
-            // Determinar estado de la OS
-const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-const deuda = parseFloat(os.Deuda) || 0;
-const tieneDeudaAlta = deuda > 500;
-const fechaGen = new Date(os['Fecha Gen.']);
-const hoy = new Date();
-const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
-
-// ✅ DEBUG PRIMERAS 5 OS
-if (osEncontradas <= 5) {
-    console.log(`🔍 ANÁLISIS OS ${os.OSATMO}:`, {
-        Tipo_de_OS: os.Tipo_de_OS,
-        esRegulada,
-        deuda,
-        tieneDeudaAlta,
-        diasVencimiento,
-        Tipologia: os.Tipologia,
-        tipologias_filtro: filtrosAplicar.tipologias
-    });
-    
-    // ✅ DEBUG PRIMERAS 5 OS
-if (osEncontradas <= 5) {
-    console.log(`🔍 ANÁLISIS OS ${os.OSATMO}:`, {
-        Tipo_de_OS: os.Tipo_de_OS,
-        esRegulada,
-        deuda,
-        tieneDeudaAlta,
-        diasVencimiento,
-        Tipologia: os.Tipologia,
-        tipologias_filtro: filtrosAplicar.tipologias
-    });
-    
-    // ✅ NUEVO: Debug de validación completa
-    const pasaTipologia = !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia);
-    const rangoActual = determinarRangoDias(diasVencimiento);
-    const pasaRango = !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(rangoActual);
-    
-    console.log(`📋 VALIDACIÓN OS ${os.OSATMO}:`, {
-        pasaTipologia,
-        pasaRango,
-        rangoActual,
-        rangos_filtro: filtrosAplicar.rangos,
-        SERÁ_INCLUIDA: esRegulada || pasaTipologia && pasaRango
-    });
-}
-
-// ✅ Clasificar por color de deuda
-let esDeudaAmarillo = false, esDeudaNaranja = false, esDeudaRosado = false;
-if (deuda >= 100 && deuda < 300) esDeudaAmarillo = true;
-else if (deuda >= 300 && deuda < 500) esDeudaNaranja = true;
-else if (deuda >= 500) esDeudaRosado = true;
-
-// ✅ Verificar si pasa filtros de deuda guardados (SIEMPRE definir pasaDeuda)
-const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
-const pasaDeuda = !hayFiltrosDeuda 
-    ? true // Si no hay filtros de deuda, pasan todas
-    : (filtrosAplicar.deuda_amarillo && esDeudaAmarillo) ||
-      (filtrosAplicar.deuda_naranja && esDeudaNaranja) ||
-      (filtrosAplicar.deuda_rosado && esDeudaRosado);
-
-// ✅ APLICAR FILTROS DE FORMA EXCLUSIVA
-let pasaFiltro = true;
-
-// Si hay filtros de tipología definidos, validar
-if (filtrosAplicar.tipologias && filtrosAplicar.tipologias.length > 0) {
-    pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
-}
+});
 
 // Si hay filtros de rangos definidos, validar
 if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
