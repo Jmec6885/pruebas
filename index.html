@@ -1019,10 +1019,8 @@ async function confirmarDescansoPersonalizadoATTF() {
 function verificarHorarioPermitido(rol, userData = null) {
     // ✅ Obtener fecha/hora de El Salvador (UTC-6)
     const ahora = new Date();
-    const offsetElSalvador = -6 * 60; // UTC-6 en minutos
-    const offsetLocal = ahora.getTimezoneOffset(); // Offset del navegador
-    const diff = offsetElSalvador - offsetLocal;
-    const fechaSV = new Date(ahora.getTime() + diff * 60 * 1000);
+const offsetElSalvador = -6; // UTC-6 en horas
+const fechaSV = new Date(ahora.toLocaleString("en-US", {timeZone: "America/El_Salvador"}));
     
     const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
     const horaActual = fechaSV.getHours();
@@ -1103,7 +1101,7 @@ function verificarHorarioPermitido(rol, userData = null) {
         }
         return {
             permitido: false,
-            mensaje: `Horario de acceso para ${rol}:\nLunes a Sábado, 6:00 AM - 6:00 PM\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+            mensaje: `Horario de acceso para ${rol}:\n...\n\nHora actual (El Salvador): ${String(fechaSV.getHours()).padStart(2, '0')}:${String(fechaSV.getMinutes()).padStart(2, '0')}`
         };
     }
     
@@ -1477,9 +1475,24 @@ async function loginATTF(userData) {
     }
     
     // 3. Verificar si tiene turno programado para HOY
-    
 if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
     console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
+    
+    // ✅ VALIDAR configuración completa (turno_manana O descanso)
+    const tieneDescansoActivo = userData.descanso_fecha_inicio && userData.descanso_fecha_fin;
+    const tieneTurnoManana = userData.turno_manana && userData.fecha_turno_manana;
+    
+    if (!tieneDescansoActivo && !tieneTurnoManana) {
+        console.log('⚠️ Configuración incompleta: falta turno mañana o descanso');
+        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+        
+        if (contadorTurnos >= 5) {
+            mostrarForzarDescansoATTF();
+        } else {
+            mostrarProgramarTurnoMañanaConDescanso(userData);
+        }
+        return;
+    }
     
     // Validar ventana horaria
     if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
@@ -1488,26 +1501,14 @@ if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
         return;
     }
     
-    // Verificar contador para determinar acción
-    const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-    
-    if (contadorTurnos >= 5) {
-        // Día 5: Forzar descanso automático
-        console.log('📅 Día 5: Descanso automático obligatorio');
-        mostrarForzarDescansoATTF();
-        return;
-    } else {
-        // Programar turno mañana + verificar descanso programado
-        console.log(`📊 Día ${contadorTurnos + 1}: Programar turno mañana`);
-        mostrarProgramarTurnoMañanaConDescanso(userData);
-        return;
-    }
+    // ✅ TODO OK - Acceder al menú
+    accederMenuATTF();
+    return;
 }
-    
-    // 4. Si llegó aquí, necesita configuración
-    console.log('⚠️ Sin turno programado, requiere configuración');
-    mostrarConfiguracionInicialATTF();
-}
+
+// 4. Si llegó aquí, necesita configuración inicial
+console.log('⚠️ Sin turno programado, requiere configuración');
+mostrarConfiguracionInicialATTF();
 
 
 
@@ -2154,18 +2155,28 @@ async function loginPoda(userData) {
         return;
     }
     
-    // 3. Acceso directo al menú
-    document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
-    document.getElementById('userInfo').classList.remove('hidden');
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('tableSelectionSection').style.display = 'block';
-    
-    mostrarTablasSegunRol();
-    iniciarVerificacionSesion();
-    guardarDatosOffline();
-    
-    console.log('✅ Acceso concedido al menú Poda');
+    // 2. Verificar configuración completa de días de descanso
+const tieneDescansoProgramado = userData.descanso_fecha_inicio && 
+                                userData.descanso_fecha_fin && 
+                                userData.descanso_fecha_fin >= fechaHoy;
+
+if (!tieneDescansoProgramado) {
+    console.log('🔧 Poda necesita configurar días de descanso');
+    mostrarConfiguracionDescansoPoda();
+    return;
 }
+
+// 3. ✅ TODO OK - Acceso al menú
+document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
+document.getElementById('userInfo').classList.remove('hidden');
+document.getElementById('loginSection').style.display = 'none';
+document.getElementById('tableSelectionSection').style.display = 'block';
+
+mostrarTablasSegunRol();
+iniciarVerificacionSesion();
+guardarDatosOffline();
+
+console.log('✅ Acceso concedido al menú Poda');
 
 
 function mostrarConfiguracionDescansoPoda() {
@@ -3086,14 +3097,14 @@ function iniciarVerificacionSesion() {
       const ahora = new Date();
       const diffMin = (ahora - ultima) / 1000 / 60;
 
-      if (diffMin > 45) {
+      if (diffMin > 120) { // ← Expira a las 2 horas (120 minutos)
         alert('Su sesión ha expirado por inactividad.');
         logout();
       }
     } catch (err) {
       console.error('Error verificando sesión:', err);
     }
-  }, 30000);
+  }, 60000);
 }
 
 async function renovarSesion() {
