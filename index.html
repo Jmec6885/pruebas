@@ -5354,26 +5354,27 @@ async function generarKMLAdminPorUnidad(tipo) {
 	
 
 // ========================================
-// 🗺️ GENERAR MAPA KML RUTA (CON BOTONES DE PUNTOS FIJOS)
+// 1️⃣ AGREGAR FILTRO DE TIPOLOGÍAS EN generarMapaKMLRuta()
 // ========================================
 function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
 
-    // ✅ Normalizar todos los registros a un campo común: osatomo
-    const osNormalizadas = osAsignadas.map(os => ({
-        ...os,
-        osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim()
-    })).filter(os => os.osatomo !== '');
+    // ✅ Normalizar y FILTRAR tipologías prohibidas
+    const osNormalizadas = osAsignadas
+        .map(os => ({
+            ...os,
+            osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim()
+        }))
+        .filter(os => os.osatomo !== '')
+        .filter(os => tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)); // ✅ NUEVO
 
     if (osNormalizadas.length === 0) {
-        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS con número válido para esta unidad</div>';
+        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas para tu unidad</div>';
         return;
     }
 
-    // Guardar globalmente
     window.osKMLData = osNormalizadas;
 
-    // Generar HTML del selector usando el campo normalizado
     let htmlSelector = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <h3>📍 Seleccionar Punto de Partida</h3>
@@ -5387,16 +5388,15 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                 </select>
             </div>
 
-            <!-- Botones para puntos fijos -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Ahuachapán', 13.924670, -89.842820)">
-                    📍 Ahuachapán (13.924670, -89.842820)
+                    📍 Ahuachapán
                 </button>
                 <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Sonsonate', 13.727937, -89.717790)">
-                    📍 Sonsonate (13.727937, -89.717790)
+                    📍 Sonsonate
                 </button>
                 <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Santa Ana', 13.9680, -89.6240)">
-                    📍 Santa Ana (13.9680, -89.6240)
+                    📍 Santa Ana
                 </button>
             </div>
 
@@ -5636,160 +5636,47 @@ if (todosLosPuntos.length === 0) {
 }
 
 
+// ========================================
+// 🔄 REEMPLAZAR mostrarMapaKMLConNumeracion()
+// ========================================
 function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
-    const resultsContainer = document.getElementById('searchResults');
+    const osCentro = todosLosPuntos[0]; // Primera OS es el centro
+    const osEnRadio = todosLosPuntos.slice(1); // El resto son las vecinas
+    const radioKm = 5; // Puedes ajustar esto
     
-    // Contar por tipología
-    const conteoPorTipologia = {};
-    todosLosPuntos.forEach(os => {
-        const tip = os.Tipologia || 'Sin tipología';
-        conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
-    });
-    
-    const tipologiasOrdenadas = Object.entries(conteoPorTipologia).sort((a, b) => b[1] - a[1]);
-    
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header">
-                🗺️ Ruta Optimizada - ${unidad} (${todosLosPuntos.length} puntos)
-            </div>
-            
-            <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-                <strong>Leyenda:</strong>
-                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
-                    <span>🟢 Punto de Partida (1)</span>
-                    <span>🔴 OS Reguladas</span>
-                    <span>🔵 OS No Reguladas</span>
-                </div>
-            </div>
-            
-            <!-- Resumen por tipología -->
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Totales por Tipología:</strong>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 10px;">
-                    ${tipologiasOrdenadas.map(([tip, count]) => `
-                        <div onclick="resaltarTipologiaEnMapaKML('${tip.replace(/'/g, "\\'")}')" 
-                             id="tipologia_kml_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
-                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer;">
-                            <strong style="color: #2196f3;">${count}</strong> - ${tip}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <!-- MAPA -->
-            <div id="mapaKMLRuta" style="width: 100%; height: 600px; border-radius: 12px; margin: 15px 0;"></div>
-            
-            <!-- 🆕 PANEL DE DETALLE -->
-            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
-                <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
-                </div>
-            </div>
-            
-            <!-- Botón Descargar KML -->
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="descargarKMLRutaNumerada()">
-                    📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Guardar datos globalmente
+    // Guardar datos globalmente para KML
     window.datosRutaKML = todosLosPuntos;
     
-    // Inicializar mapa
-    setTimeout(() => {
-        inicializarMapaKMLConNumeracion(todosLosPuntos, latCentro, lngCentro);
-    }, 100);
+    // ✅ USAR LA MISMA FUNCIÓN QUE MAPA DE RUTAS
+    generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
+    
+    // Agregar botón de descarga KML al final
+    const resultsContainer = document.getElementById('searchResults');
+    const descargaHTML = `
+        <div style="text-align: center; margin-top: 20px; padding: 20px; background: white; border-radius: 12px;">
+            <button class="btn btn-secondary" onclick="descargarKMLRutaNumerada()" 
+                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 18px; padding: 15px 40px;">
+                📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
+            </button>
+        </div>
+    `;
+    resultsContainer.innerHTML += descargaHTML;
 }
 
-function inicializarMapaKMLConNumeracion(todosLosPuntos, latCentro, lngCentro) {
-    if (window.mapaKMLRutaInstance) {
-        window.mapaKMLRutaInstance.remove();
-    }
-    
-    const mapa = L.map('mapaKMLRuta').setView([latCentro, lngCentro], 13);
-    window.mapaKMLRutaInstance = mapa;
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(mapa);
-    
-    window.markersPorTipologiaKML = {};
-    
-    todosLosPuntos.forEach(os => {
-        let color, labelEstado;
-        
-        if (os.numeroOrden === 1) {
-            // Punto de partida
-            color = '#4caf50';
-            labelEstado = '🟢 PUNTO DE PARTIDA';
-        } else if (os.esRegulada) {
-            color = '#f44336';
-            labelEstado = '🔴 REGULADA';
-        } else {
-            color = '#2196f3';
-            labelEstado = '🔵 NO REGULADA';
-        }
-        
-        // ✅ ICONO CON NÚMERO
-        const icono = L.divIcon({
-            className: 'custom-icon',
-            html: `
-                <div style="
-                    background: ${color}; 
-                    width: ${os.numeroOrden === 1 ? '32px' : '28px'}; 
-                    height: ${os.numeroOrden === 1 ? '32px' : '28px'}; 
-                    border-radius: 50%; 
-                    border: 3px solid white; 
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: bold;
-                    font-size: ${os.numeroOrden === 1 ? '15px' : '13px'};
-                    color: white;
-                    font-family: Arial, sans-serif;
-                ">
-                    ${os.numeroOrden}
-                </div>`,
-            iconSize: os.numeroOrden === 1 ? [32, 32] : [28, 28],
-            iconAnchor: os.numeroOrden === 1 ? [16, 16] : [14, 14]
-        });
-        
-        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-        
-        // Guardar referencia
-        const tipologia = os.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologiaKML[tipologia]) {
-            window.markersPorTipologiaKML[tipologia] = [];
-        }
-        window.markersPorTipologiaKML[tipologia].push(marker);
-        
-        // Click para mostrar detalle
-        marker.on('click', function() {
-            mostrarDetalleOSEnPanel(os, labelEstado);
-            mapa.setView([os.lat, os.lng], mapa.getZoom(), {
-                animate: true,
-                duration: 0.5
-            });
-        });
-    });
-    
-    // Ajustar vista
-    const bounds = L.latLngBounds();
-    todosLosPuntos.forEach(os => {
-        bounds.extend([os.lat, os.lng]);
-    });
-    mapa.fitBounds(bounds, { padding: [50, 50] });
-    
-    console.log('✅ Mapa KML Ruta inicializado con numeración');
-}
 
+
+
+
+
+
+// ========================================
+// 🔄 ELIMINAR inicializarMapaKMLConNumeracion()
+// ========================================
+// YA NO SE NECESITA - Ahora usa inicializarMapaLeaflet()
+
+// ========================================
+// 📥 MANTENER descargarKMLRutaNumerada() (sin cambios)
+// ========================================
 function descargarKMLRutaNumerada() {
     if (!window.datosRutaKML || window.datosRutaKML.length === 0) {
         alert('No hay datos para descargar');
@@ -5814,206 +5701,8 @@ function descargarKMLRutaNumerada() {
     console.log('✅ KML numerado descargado');
 }
 
-	
-// ========================================
-// 🎨 INICIALIZAR MAPA LEAFLET KML RUTA
-// ========================================
-function inicializarMapaKMLRuta(osConDatos, unidad) {
-    // Destruir mapa anterior si existe
-    if (window.mapaKMLRutaInstance) {
-        window.mapaKMLRutaInstance.remove();
-    }
-    
-    // Calcular centro geográfico
-    const latSum = osConDatos.reduce((sum, os) => sum + os.lat, 0);
-    const lngSum = osConDatos.reduce((sum, os) => sum + os.lng, 0);
-    const latCenter = latSum / osConDatos.length;
-    const lngCenter = lngSum / osConDatos.length;
-    
-    // Crear mapa
-    const mapa = L.map('mapaKMLRuta').setView([latCenter, lngCenter], 13);
-    window.mapaKMLRutaInstance = mapa;
-    
-    // Agregar capa de OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(mapa);
-    
-    // Iconos personalizados
-    const iconoRegulada = L.divIcon({
-        className: 'custom-icon',
-        html: '<div style="background: #f44336; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-    });
-    
-    const iconoNoRegulada = L.divIcon({
-        className: 'custom-icon',
-        html: '<div style="background: #2196f3; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-    });
-    
-    // 🆕 Guardar referencias de markers por tipología
-    window.markersPorTipologiaKML = {};
-    
-    // Agregar markers
-    osConDatos.forEach(os => {
-        const icono = os.esRegulada ? iconoRegulada : iconoNoRegulada;
-        const colorTexto = os.esRegulada ? '#f44336' : '#2196f3';
-        const labelEstado = os.esRegulada ? '🔴 REGULADA' : '🔵 NO REGULADA';
-        
-        const marker = L.marker([os.lat, os.lng], { icon: icono }).addTo(mapa);
-        
-        // 🆕 Guardar referencia por tipología
-        const tipologia = os.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologiaKML[tipologia]) {
-            window.markersPorTipologiaKML[tipologia] = [];
-        }
-        window.markersPorTipologiaKML[tipologia].push(marker);
-        
-        // Formatear comentario
-        const comentarioFormateado = os.Comentario 
-            ? formatearComentario(os.Comentario) 
-            : '<em style="color: #999;">Sin comentario</em>';
-        
-        // 🆕 AL HACER CLICK: Mostrar detalle abajo
-marker.on('click', function() {
-    mostrarDetalleOSEnPanel(os, labelEstado);
-    mapa.setView([os.lat, os.lng], mapa.getZoom(), {
-        animate: true,
-        duration: 0.5
-    });
-});
-});
-    
-    // Ajustar vista para mostrar todos los markers
-    const bounds = L.latLngBounds();
-    osConDatos.forEach(os => {
-        bounds.extend([os.lat, os.lng]);
-    });
-    mapa.fitBounds(bounds, { padding: [50, 50] });
-    
-    console.log(`✅ Mapa KML Ruta inicializado: ${osConDatos.length} OS de ${unidad}`);
-}
 
 
-// ========================================
-// 🎨 RESALTAR TIPOLOGÍA EN MAPA KML (CON TOGGLE)
-// ========================================
-function resaltarTipologiaEnMapaKML(tipologia) {
-    if (!window.markersPorTipologiaKML || !window.markersPorTipologiaKML[tipologia]) {
-        alert('No se encontraron markers para esta tipología');
-        return;
-    }
-    
-    const mapa = window.mapaKMLRutaInstance;
-    if (!mapa) {
-        alert('Mapa no inicializado');
-        return;
-    }
-    
-    // Verificar si esta tipología ya está filtrada
-    const yaFiltrado = window.tipologiaFiltradaKML === tipologia;
-    
-    if (yaFiltrado) {
-        // DESACTIVAR FILTRO: Mostrar TODOS
-        console.log('🔄 Mostrando TODOS los markers');
-        
-        Object.values(window.markersPorTipologiaKML).forEach(markersArray => {
-            markersArray.forEach(marker => {
-                if (!mapa.hasLayer(marker)) {
-                    mapa.addLayer(marker);
-                }
-                const icon = marker.getElement();
-                if (icon) {
-                    icon.style.animation = '';
-                    icon.style.transform = '';
-                }
-            });
-        });
-        
-        window.tipologiaFiltradaKML = null;
-        
-        // Reajustar vista
-        const allBounds = L.latLngBounds();
-        Object.values(window.markersPorTipologiaKML).forEach(markersArray => {
-            markersArray.forEach(marker => {
-                allBounds.extend(marker.getLatLng());
-            });
-        });
-        mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
-        
-        // Quitar resaltado visual
-        document.querySelectorAll('[id^="tipologia_kml_"]').forEach(div => {
-            div.style.background = '#f8f9fa';
-            div.style.transform = 'translateX(0)';
-        });
-        
-        console.log('✅ Filtro desactivado');
-        
-    } else {
-        // ACTIVAR FILTRO: Ocultar otros
-        console.log(`🔍 Filtrando por tipología: ${tipologia}`);
-        
-        const markersSeleccionados = window.markersPorTipologiaKML[tipologia];
-        
-        // Ocultar TODOS los markers
-        Object.entries(window.markersPorTipologiaKML).forEach(([tip, markersArray]) => {
-            markersArray.forEach(marker => {
-                if (tip !== tipologia) {
-                    mapa.removeLayer(marker);
-                }
-            });
-        });
-        
-        // Mostrar y resaltar SOLO los seleccionados
-        const bounds = L.latLngBounds();
-        
-        markersSeleccionados.forEach(marker => {
-            if (!mapa.hasLayer(marker)) {
-                mapa.addLayer(marker);
-            }
-            
-            bounds.extend(marker.getLatLng());
-            
-            const icon = marker.getElement();
-            if (icon) {
-                icon.style.animation = 'bounce 1s ease-in-out 3';
-                setTimeout(() => {
-                    icon.style.animation = '';
-                }, 3000);
-            }
-            
-            marker.openPopup();
-            setTimeout(() => {
-                marker.closePopup();
-            }, 2000);
-        });
-        
-        mapa.fitBounds(bounds, { 
-            padding: [50, 50],
-            maxZoom: 16
-        });
-        
-        window.tipologiaFiltradaKML = tipologia;
-        
-        // Resaltar visualmente el div seleccionado
-        document.querySelectorAll('[id^="tipologia_kml_"]').forEach(div => {
-            div.style.background = '#f8f9fa';
-            div.style.transform = 'translateX(0)';
-        });
-        
-        const divSeleccionado = document.getElementById(`tipologia_kml_${tipologia.replace(/[^a-zA-Z0-9]/g, '_')}`);
-        if (divSeleccionado) {
-            divSeleccionado.style.background = '#e3f2fd';
-            divSeleccionado.style.transform = 'translateX(5px)';
-        }
-        
-        console.log(`✅ Mostrando ${markersSeleccionados.length} markers de: ${tipologia}`);
-    }
-}
 
 
 
@@ -9129,12 +8818,17 @@ async function guardarFiltrosMapaGlobales() {
 
 
 	// ========================================
-// 🗺️ GENERAR MAPA CON LEAFLET (CON PANEL DE DETALLE)
+// 2️⃣ AGREGAR BOTONES DE FILTRO POR COLOR EN generarMapaLeaflet()
 // ========================================
+// Busca esta línea en tu función generarMapaLeaflet():
+// <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
+//     <strong>Leyenda:</strong>
+
+// REEMPLÁZALA por esto:
+
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // ✅ LIMPIAR MAPA ANTERIOR si existe
     if (window.mapaLeafletInstance) {
         try {
             window.mapaLeafletInstance.remove();
@@ -9145,7 +8839,6 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         window.mapaLeafletInstance = null;
     }
     
-    // Contar por tipología
     const conteoPorTipologia = {};
     osEnRadio.forEach(os => {
         const tip = os.Tipologia || 'Sin tipología';
@@ -9155,23 +8848,48 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
         .sort((a, b) => b[1] - a[1]);
     
-    // 🆕 NUEVO HTML SIN TABLA, SOLO CON PANEL DE DETALLE
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header">
                 🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioKm} km)
             </div>
             
+            <!-- ✅ LEYENDA CON BOTONES CLICKEABLES -->
             <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-                <strong>Leyenda:</strong>
+                <strong>Leyenda (Click para filtrar):</strong>
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
-                    <span>🟢 Tu OS (centro)</span>
-                    <span>🟠 OS Asignadas</span>
-                    <span>🔴 OS Reguladas</span>
-                    <span>🔵 OS No Reguladas</span>
-                    <span>🟡 Deuda Alta (>$500)</span>
-                    <span>🟠 Deuda Media ($100-$500)</span>
-                    <span>🌸 Deuda Baja ($50-$100)</span>
+                    <button onclick="filtrarPorEstado('centro')" 
+                            style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🟢 Tu OS (centro)
+                    </button>
+                    <button onclick="filtrarPorEstado('asignada')" 
+                            style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🟠 OS Asignadas
+                    </button>
+                    <button onclick="filtrarPorEstado('regulada')" 
+                            style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔴 OS Reguladas
+                    </button>
+                    <button onclick="filtrarPorEstado('no_regulada')" 
+                            style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔵 OS No Reguladas
+                    </button>
+                    <button onclick="filtrarPorEstado('deuda_alta')" 
+                            style="background: #fdd835; color: #333; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🟡 Deuda Alta (>$500)
+                    </button>
+                    <button onclick="filtrarPorEstado('deuda_media')" 
+                            style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🟠 Deuda Media ($100-$500)
+                    </button>
+                    <button onclick="filtrarPorEstado('deuda_baja')" 
+                            style="background: #f48fb1; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🌸 Deuda Baja ($50-$100)
+                    </button>
+                    <button onclick="filtrarPorEstado('todas')" 
+                            style="background: #9e9e9e; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔄 Ver Todas
+                    </button>
                 </div>
             </div>
             
@@ -9185,14 +8903,6 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                 </span>
             </div>` : ''}
             
-            <div style="text-align: center; margin: 15px 0;">
-                <button class="btn btn-danger" onclick="limpiarFiltrosMapaYRecargar()" 
-                        style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 12px 24px; font-size: 16px;">
-                    🗑️ Limpiar Filtros y Recargar
-                </button>
-            </div>
-            
-            <!-- Resumen por tipología (clickeable) -->
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
                 <strong>📊 Totales por Tipología (Click para resaltar):</strong>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 10px;">
@@ -9208,38 +8918,17 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                 </div>
             </div>
             
-            <!-- Buscador -->
-            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>🔍 Buscar OS:</strong>
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <input type="text" id="buscarEnListado" placeholder="Ingrese número de OS" 
-                           style="flex: 1; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px;">
-                    <button onclick="buscarOSEnMapa()" 
-                            style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔍 Buscar
-                    </button>
-                    <button onclick="recargarMapaConFiltrosActualizados()" 
-                            style="background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔄 Actualizar
-                    </button>
-                </div>
-            </div>
-            
-            <!-- MAPA -->
             <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
             
-            <!-- 🆕 PANEL DE DETALLE -->
             <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
                 <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
                     <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
                     <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
                 </div>
             </div>
-            
         </div>
     `;
     
-    // ✅ INICIALIZAR MAPA UNA SOLA VEZ después de verificar el panel
     setTimeout(() => {
         const panel = document.getElementById('panelDetalleOS');
         if (panel) {
@@ -9248,23 +8937,51 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                 inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
             } catch (error) {
                 console.error('❌ Error inicializando mapa:', error);
-                resultsContainer.innerHTML += `<div class="result-card" style="background: #ffebee; border: 2px solid #f44336; margin-top: 15px;">
-                    <strong>❌ Error al generar el mapa:</strong><br>
-                    ${error.message}
-                </div>`;
             }
-        } else {
-            console.error('❌ Panel de detalle NO encontrado');
-            resultsContainer.innerHTML += `<div class="result-card" style="background: #ffebee; border: 2px solid #f44336; margin-top: 15px;">
-                <strong>❌ Error: Panel de detalle no disponible</strong>
-            </div>`;
         }
-    }, 150); // Pequeño delay para asegurar que el DOM esté listo
+    }, 150);
     
-    // Guardar datos para exportar (si lo necesitas después)
     window.datosMapaExportar = osEnRadio;
 }
 
+
+// ========================================
+// 3️⃣ NUEVA FUNCIÓN: FILTRAR MAPA POR ESTADO
+// ========================================
+function filtrarPorEstado(estado) {
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa || !window.markersPorEstado) {
+        console.error('Mapa no inicializado');
+        return;
+    }
+
+    console.log(`🔍 Filtrando por estado: ${estado}`);
+
+    // Limpiar filtro anterior
+    window.estadoFiltrado = estado;
+
+    // Mostrar/ocultar markers según el estado
+    Object.entries(window.markersPorEstado).forEach(([key, markersArray]) => {
+        markersArray.forEach(marker => {
+            if (estado === 'todas' || key === estado) {
+                if (!mapa.hasLayer(marker)) {
+                    mapa.addLayer(marker);
+                }
+            } else {
+                mapa.removeLayer(marker);
+            }
+        });
+    });
+
+    // Ajustar vista si hay markers visibles
+    if (estado !== 'todas' && window.markersPorEstado[estado]) {
+        const bounds = L.latLngBounds();
+        window.markersPorEstado[estado].forEach(marker => {
+            bounds.extend(marker.getLatLng());
+        });
+        mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+}
 
 
 	// ========================================
@@ -9453,10 +9170,8 @@ function buscarOSEnListado() {
 
 
 // ========================================
-// 🗺️ INICIALIZAR MAPA LEAFLET (CORREGIDO - MARCADOR VERDE)
+// 🗺️ INICIALIZAR MAPA LEAFLET (COMPLETO CON FILTROS POR ESTADO)
 // ========================================
-// Busca la función inicializarMapaLeaflet() y reemplaza la sección de creación de marcadores
-
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const mapaDiv = document.getElementById('mapaLeaflet');
     
@@ -9513,12 +9228,25 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         `);
 
     // ========================================
-    // CREAR MARCADORES NUMERADOS PARA EL RESTO
+    // ✅ INICIALIZAR AGRUPACIONES
     // ========================================
     window.markersPorTipologia = {};
+    window.markersPorEstado = {
+        'centro': [markerCentro],
+        'asignada': [],
+        'regulada': [],
+        'no_regulada': [],
+        'deuda_alta': [],
+        'deuda_media': [],
+        'deuda_baja': []
+    };
+
     const bounds = L.latLngBounds();
     bounds.extend([latCentro, lngCentro]);
 
+    // ========================================
+    // CREAR MARCADORES NUMERADOS PARA EL RESTO
+    // ========================================
     osEnRadio.forEach((os, index) => {
         // ✅ Saltar la OS de referencia (ya tiene marcador verde)
         if (os.OSATMO === osCentro.OSATMO) {
@@ -9530,26 +9258,32 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         const deuda = parseFloat(os.Deuda) || 0;
         
         // Determinar estado y color
-        let colorFondo, labelEstado;
+        let colorFondo, labelEstado, estadoKey;
         
         if (deuda > 500) {
             colorFondo = '#fdd835'; // Amarillo
             labelEstado = 'DEUDA ALTA (>$500)';
+            estadoKey = 'deuda_alta';
         } else if (deuda >= 100 && deuda <= 500) {
             colorFondo = '#ff9800'; // Naranja
             labelEstado = 'DEUDA MEDIA ($100-$500)';
+            estadoKey = 'deuda_media';
         } else if (deuda >= 50 && deuda < 100) {
             colorFondo = '#f48fb1'; // Rosado
             labelEstado = 'DEUDA BAJA ($50-$100)';
+            estadoKey = 'deuda_baja';
         } else if (os.Estado_ATOMO === 'Asignada') {
             colorFondo = '#ff9800'; // Naranja
             labelEstado = 'OS ASIGNADA';
+            estadoKey = 'asignada';
         } else if (esRegulada) {
             colorFondo = '#f44336'; // Rojo
             labelEstado = 'OS REGULADA';
+            estadoKey = 'regulada';
         } else {
             colorFondo = '#2196f3'; // Azul
             labelEstado = 'OS NO REGULADA';
+            estadoKey = 'no_regulada';
         }
 
         // Crear icono numerado
@@ -9589,6 +9323,9 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                 </div>
             `);
 
+        // ✅ AGRUPAR POR ESTADO
+        window.markersPorEstado[estadoKey].push(marker);
+
         bounds.extend([os.lat, os.lng]);
 
         // Agrupar por tipología
@@ -9603,6 +9340,15 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     mapa.fitBounds(bounds, { padding: [50, 50] });
 
     console.log('✅ Mapa inicializado con numeración por cercanía');
+    console.log('📊 Agrupación por estado:', {
+        centro: window.markersPorEstado.centro.length,
+        asignada: window.markersPorEstado.asignada.length,
+        regulada: window.markersPorEstado.regulada.length,
+        no_regulada: window.markersPorEstado.no_regulada.length,
+        deuda_alta: window.markersPorEstado.deuda_alta.length,
+        deuda_media: window.markersPorEstado.deuda_media.length,
+        deuda_baja: window.markersPorEstado.deuda_baja.length
+    });
 }
 
 
