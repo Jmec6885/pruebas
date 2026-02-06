@@ -3070,16 +3070,16 @@ function iniciarVerificacionSesion() {
   setInterval(async () => {
     if (!currentUser) return;
     
-    // ✅ RENOVAR sesión automáticamente cada verificación
+    // ✅ RENOVAR sesión automáticamente
     await renovarSesion();
-    
+
     try {
       const { data, error } = await supabaseClient
         .from('usuarios')
         .select('sessionactiva, sessiontoken, ultimaconexion')
         .eq('id', currentUser.id)
         .single();
-        
+
       if (!data || !data.sessionactiva || data.sessiontoken !== currentUser.session_token) {
         if (data && data.sessiontoken && data.sessiontoken !== currentUser.session_token) {
           alert('Su sesión ha sido iniciada en otro dispositivo.');
@@ -3087,12 +3087,12 @@ function iniciarVerificacionSesion() {
         }
         return;
       }
-      
+
       const ultima = new Date(data.ultimaconexion);
       const ahora = new Date();
       const diffMin = (ahora - ultima) / 1000 / 60;
-      
-      if (diffMin > 120) { // ← 2 horas de inactividad
+
+      if (diffMin > 120) { // ← 2 horas
         alert('Su sesión ha expirado por inactividad.');
         logout();
       }
@@ -8131,12 +8131,30 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
     }
     
     // Bloqueadas solo para Contratista
-    if (rol === 'Contratista' && TIPOLOGIAS_PROHIBIDAS.Contratista.includes(tipNormalizada)) {
-        console.log(`❌ Tipología bloqueada para ${rol}: ${tipNormalizada}`);
-        return false;
-    }
-    
-    return true;
+    //---------------------------------------------
+//  🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO:
+//     ❌ usuarios
+//     ❌ Detalle OS
+//     ❌ Cargar Asignaciones
+//     ❌ Mapa de Rutas (solo Admin y Despacho)
+//     ✔ IPR (lo deben ver)
+//---------------------------------------------
+if (rol === 'Contratista' || rol === 'Consulta') {
+    tableOptions.forEach(option => {
+        const action = option.getAttribute('onclick') || '';
+
+        // ✅ Validar EXACTAMENTE los módulos prohibidos
+        const prohibido =
+            action.includes("'usuarios'") ||           // Gestión de Usuarios
+            action.includes("'detalle_os'") ||         // Detalle OS
+            action.includes("'cargar_asignaciones'") || // Cargar Asignaciones
+            action.includes("'mapa_rutas'");           // ← AGREGADO: Mapa de Rutas
+
+        option.style.display = prohibido ? 'none' : 'block';
+    });
+
+    console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle_os, cargar_asignaciones, mapa_rutas`);
+    return;
 }
 
 // ✅ Pruebas (opcional, fuera de la función)
