@@ -5397,7 +5397,13 @@ if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) 
 }
 
 // ✅ NUEVO: Excluir OS de otras unidades
-if (os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD') {
+// ✅ CORRECTO - Ignorar unidades con guiones
+const unidadValida = os.Unidad && 
+                     os.Unidad.trim() !== '' && 
+                     !os.Unidad.includes('--') &&
+                     os.Unidad !== 'SIN UNIDAD';
+
+if (unidadValida && os.Unidad !== unidadSeleccionada) {
     if (osEncontradas <= 5) {
         console.log('❌ RECHAZADA por unidad:', os.OSATMO, '| Unidad OS:', os.Unidad, '| Esperada:', unidadSeleccionada);
     }
