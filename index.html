@@ -1475,47 +1475,44 @@ async function loginATTF(userData) {
     }
     
     // 3. Verificar si tiene turno programado para HOY
-if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
-    console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
-    
-    // ✅ VALIDAR configuración completa (turno_manana O descanso)
-    const tieneDescansoActivo = userData.descanso_fecha_inicio && userData.descanso_fecha_fin;
-    const tieneTurnoManana = userData.turno_manana && userData.fecha_turno_manana;
-    
-    if (!tieneDescansoActivo && !tieneTurnoManana) {
-        console.log('⚠️ Configuración incompleta: falta turno mañana o descanso');
-        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
+        console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
         
-        if (contadorTurnos >= 5) {
-            mostrarForzarDescansoATTF();
-        } else {
-            mostrarProgramarTurnoMañanaConDescanso(userData);
+        // ✅ VALIDAR configuración completa (turno_manana O descanso)
+        const tieneDescansoActivo = userData.descanso_fecha_inicio && userData.descanso_fecha_fin;
+        const tieneTurnoManana = userData.turno_manana && userData.fecha_turno_manana;
+        
+        if (!tieneDescansoActivo && !tieneTurnoManana) {
+            console.log('⚠️ Configuración incompleta: falta turno mañana o descanso');
+            const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+            
+            if (contadorTurnos >= 5) {
+                mostrarForzarDescansoATTF();
+            } else {
+                mostrarProgramarTurnoMañanaConDescanso(userData);
+            }
+            return;
         }
+        
+        // Validar ventana horaria
+        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+            alert(`No estás en el horario de tu turno programado...`);
+            logout();
+            return;
+        }
+        
+        // ✅ TODO OK - Acceder al menú
+        accederMenuATTF();
         return;
     }
     
-    // Validar ventana horaria
-    if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-        alert(`No estás en el horario de tu turno programado...`);
-        logout();
-        return;
-    }
-    
-    // ✅ TODO OK - Acceder al menú
-    accederMenuATTF();
-    return;
-}
-
-// 4. Si llegó aquí, necesita configuración inicial
-console.log('⚠️ Sin turno programado, requiere configuración');
-mostrarConfiguracionInicialATTF();
-
-
-
+    // 4. Si llegó aquí, necesita configuración inicial
+    console.log('⚠️ Sin turno programado, requiere configuración');
+    mostrarConfiguracionInicialATTF();
+} // ← CIERRE DE loginATTF()
 
 function calcularDiasSinActividad(ultimaActividad) {
-    if (!ultimaActividad) return 999; // Sin registro previo
-    
+    if (!ultimaActividad) return 999; // Sin registro previo    
     const ahora = new Date();
     const ultima = new Date(ultimaActividad);
     const diffMs = ahora - ultima;
