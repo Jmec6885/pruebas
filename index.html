@@ -5383,15 +5383,29 @@ const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
     }
     
     // Excluir la OS centro y fuera del radio
-    if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
-        return;
-    }
+    if (os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD') {
+    return;
+}
             
             // Determinar estado de la OS
             const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
             const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
             const deuda = parseFloat(os.Deuda) || 0;
-            const tieneDeudaAlta = deuda > 500;
+            // ✅ CORRECTO
+const tieneDeudaAlta = deuda > 500;
+
+// Clasificar por color de deuda
+let esDeudaAmarillo = false, esDeudaNaranja = false, esDeudaRosado = false;
+if (deuda >= 100 && deuda < 300) esDeudaAmarillo = true;
+else if (deuda >= 300 && deuda < 500) esDeudaNaranja = true;
+else if (deuda >= 500) esDeudaRosado = true;
+
+// Verificar si pasa filtros de deuda guardados
+const pasaDeuda = !filtrosUnidadHoy.deuda_amarillo && !filtrosUnidadHoy.deuda_naranja && !filtrosUnidadHoy.deuda_rosado
+    ? true // Si no hay filtros de deuda, pasan todas
+    : (filtrosUnidadHoy.deuda_amarillo && esDeudaAmarillo) ||
+      (filtrosUnidadHoy.deuda_naranja && esDeudaNaranja) ||
+      (filtrosUnidadHoy.deuda_rosado && esDeudaRosado);
             // ✅ CORRECTO (calcular días desde Fecha Gen.)
 const fechaGen = new Date(os['Fecha Gen.']);
 const hoy = new Date();
@@ -5413,6 +5427,12 @@ const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
             
             // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
             if (esRegulada) {
+    contadorReguladas++;
+    osEnRadio.push({...});
+} else if (tieneDeudaAlta && pasaDeuda) { // ← AGREGAR pasaDeuda
+    contadorDeudaAlta++;
+    osEnRadio.push({...});
+} else if (pasaFiltro && pasaDeuda) { 
                 contadorReguladas++;
                 osEnRadio.push({
                     ...os,
