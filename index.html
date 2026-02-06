@@ -1342,27 +1342,27 @@ async function login() {
         
         // 2. Verificar bloqueo manual
         // 2. Verificar bloqueo (si razon_bloqueo tiene texto = está bloqueado)
-if (data.razon_bloqueo && data.razon_bloqueo.trim() !== '') {
-    alert(`🚫 Usuario bloqueado\n\nMotivo: ${data.razon_bloqueo}`);
-    return;
-}
+        if (data.razon_bloqueo && data.razon_bloqueo.trim() !== '') {
+            alert(`🚫 Usuario bloqueado\n\nMotivo: ${data.razon_bloqueo}`);
+            return;
+        }
         
         
         // 3. Verificar inactividad (bloquea automáticamente si >= 5 días)
-const checkInactividad = await verificarInactividad(data);
-if (checkInactividad.inactivo) {
-    // Asegurarse de que el bloqueo esté reflejado en BD
-    await supabaseClient
-        .from('usuarios')
-        .update({ 
-            bloqueado: true,
-            razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
-        })
-        .eq('id', data.id);
-    
-    alert(checkInactividad.mensaje);
-    return;
-}
+        const checkInactividad = await verificarInactividad(data);
+        if (checkInactividad.inactivo) {
+            // Asegurarse de que el bloqueo esté reflejado en BD
+            await supabaseClient
+                .from('usuarios')
+                .update({ 
+                    bloqueado: true,
+                    razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
+                })
+                .eq('id', data.id);
+            
+            alert(checkInactividad.mensaje);
+            return;
+        }
 
         // 4. Verificar horario permitido (validación básica por rol)
         const verificacion = verificarHorarioPermitido(data.rol, data);
@@ -1379,12 +1379,20 @@ if (checkInactividad.inactivo) {
                 sessionactiva: true,
                 sessiontoken: sessionToken,
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
-ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+                ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', data.id);
 
         currentUser = { ...data, session_token: sessionToken };
-guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_token
+        
+        // ✅ EJECUTAR LIMPIEZA AUTOMÁTICA PARA ADMINS/SUPERVISORES
+        if (data.rol === 'Administrador' || data.rol === 'Supervisor') {
+            setTimeout(() => {
+                limpiarFiltrosObsoletos();
+            }, 2000); // Esperar 2 segundos para no bloquear la carga inicial
+        }
+        
+        guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_token
         
         // 6. Actualizar timestamp de actividad
         await supabaseClient
@@ -4658,6 +4666,7 @@ function transformarUsuarioAUnidad(usuario) {
 // 📍 CARGAR INTERFAZ KML RUTA (CORREGIDA)
 // ==============================
 async function cargarInterfazKMLRuta() {
+await limpiarFiltrosObsoletos();
 renovarSesion(); // ← AGREGAR
 
     const searchGrid = document.getElementById('searchGrid');
@@ -5174,7 +5183,7 @@ async function borrarTodosFiltrosUnidades() {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA UNIDAD CON FILTROS
+// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO)
 // ========================================
 async function generarMapaUnidadConFiltros() {
     const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
@@ -5187,27 +5196,45 @@ async function generarMapaUnidadConFiltros() {
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
+    // ✅ Obtener fecha de HOY en formato YYYY-MM-DD
+    const HOY = new Date().toISOString().split('T')[0];
+    
     try {
-        const { data: filtrosUnidad } = await supabaseClient
+        // ========================================
+        // ✅ 1️⃣ Buscar SOLO filtros con fecha programada = HOY
+        // ========================================
+        let {  filtrosUnidadHoy, error: errorHoy } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
             .eq('Unidad', unidadSeleccionada)
+            .eq('fecha_programada', HOY)  // ✅ Solo buscar filtros de HOY
             .maybeSingle();
         
+        console.log('📊 Filtros para HOY:', {  filtrosUnidadHoy, error: errorHoy });
+        
+        // ========================================
+        // ✅ 2️⃣ Aplicar filtros SOLO si existen para HOY
+        // ========================================
         let filtrosAplicar;
-        if (filtrosUnidad) {
-            filtrosAplicar = filtrosUnidad;
+        
+        if (filtrosUnidadHoy) {
+            // ✅ Hay filtros para HOY → Aplicarlos
+            console.log('✅ Usando filtros programados para HOY:', filtrosUnidadHoy);
+            filtrosAplicar = filtrosUnidadHoy;
         } else {
-            const { data: filtrosGlobales } = await supabaseClient
-                .from('filtros_mapa')
-                .select('*')
-                .single();
+            // ❌ NO hay filtros para HOY → NO aplicar filtros (solo mostrar asignadas)
+            console.log('⚠️ NO hay filtros programados para HOY (' + HOY + ')');
+            console.log('ℹ️ Mostrando SOLO las OS asignadas sin filtrar');
             
-            filtrosAplicar = filtrosGlobales || { rangos: null, tipologias: null, radio_km: 3 };
+            // ✅ Sin filtros (mostrar todo lo asignado)
+            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         }
         
         window.filtrosAplicados = filtrosAplicar;
         
+        // ========================================
+        // ✅ 3️⃣ Continuar con el resto del código (sin cambios)
+        // ========================================
         const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
         
         if (osAsignadasUnidad.length === 0) {
@@ -5233,42 +5260,45 @@ async function generarMapaUnidadConFiltros() {
             return;
         }
         
+        const radioKm = filtrosAplicar.radio_km || 3;
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        const { data: osRegistradas } = await fetchAllFromTable(
+        const {  osRegistradas } = await fetchAllFromTable(
             'OS Pendientes',
             'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda'
         );
         
-        soloRegistradas.forEach(os => {
-    const coords = os.Coordenadas || os.Coordendasgis;
-    
-    if (!validarFormatoCoordenadas(coords)) return;
-    
-    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-    
-    if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-        // ✅ Usa una sola declaración de esRegulada
-        const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-const deuda = parseFloat(os.Deuda) || 0;
-const tieneDeudaAlta = deuda > 500;
-
-// ✅ Aplicar reglas de negocio completas
-if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
-    osEnRadio.push({
-        ...os,
-        lat,
-        lng,
-        distancia,
-        esRegulada,
-        tieneDeudaAlta
-    });
-}
-    }
-});
+        const osEnRadio = [];
+        
+        osRegistradas.forEach(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            
+            if (!validarFormatoCoordenadas(coords)) return;
+            
+            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+            
+            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
+                // ✅ Usa una sola declaración de esRegulada
+                const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+                const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+                const deuda = parseFloat(os.Deuda) || 0;
+                const tieneDeudaAlta = deuda > 500;
+                
+                // ✅ Aplicar reglas de negocio completas
+                if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
+                    osEnRadio.push({
+                        ...os,
+                        lat,
+                        lng,
+                        distancia,
+                        esRegulada,
+                        tieneDeudaAlta
+                    });
+                }
+            }
+        });
         
         osEnRadio.sort((a, b) => a.distancia - b.distancia);
         
@@ -5281,6 +5311,10 @@ if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
         resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
+
+
+📊 Filtros para HOY: {data: {id: X, Unidad: 'CLEYBPAC03', fecha_programada: '2026-02-07', ...}}
+✅ Usando filtros para unidad: CLEYBPAC03 {id: X, Unidad: 'CLEYBPAC03', ...}
 
 
 	
@@ -7383,6 +7417,28 @@ if (unidadesUnicas.length === 0) {
                     </span>
                 </div>
             </div>
+
+<!-- 🆕 BOTÓN DE LIMPIEZA DE FILTROS OBSOLETOS -->
+<div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 10px; border-left: 4px solid #ffc107;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <span style="font-size: 24px;">🧹</span>
+        <strong style="color: #e65100; font-size: 16px;">Limpieza de Filtros Obsoletos</strong>
+    </div>
+    <p style="color: #666; margin: 10px 0; font-size: 14px;">
+        <strong>💡 ¿Qué hace?</strong><br>
+        Elimina automáticamente los filtros con fecha programada anterior a 2 días atrás.<br>
+        Esto mantiene la base de datos limpia y evita acumulación de datos innecesarios.
+    </p>
+    <div style="text-align: center; margin-top: 15px;">
+        <button class="btn" onclick="limpiarFiltrosObsoletosConConfirmacion()" 
+            style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); width: 100%; padding: 12px; font-size: 16px;">
+            🗑️ Limpiar Filtros Obsoletos (2+ días)
+        </button>
+    </div>
+    <small style="display: block; margin-top: 10px; color: #666; font-size: 12px; text-align: center;">
+        ℹ️ También se ejecuta automáticamente al cargar KML Ruta
+    </small>
+</div>
 
 <!-- 🆕 CAMPO DE FECHA PARA GUARDAR FILTROS -->
 <div class="form-group" style="margin-top: 15px;">
@@ -12830,6 +12886,118 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
     }
 });
+
+// ========================================
+// 🧹 LIMPIAR FILTROS OBSOLETOS (Automático silencioso)
+// ========================================
+async function limpiarFiltrosObsoletos() {
+    try {
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+        
+        const {  filtrosViejos, error: errorSelect } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('id, Unidad, fecha_programada')
+            .lt('fecha_programada', fechaLimiteStr);
+        
+        if (errorSelect || !filtrosViejos || filtrosViejos.length === 0) {
+            console.log('✅ No hay filtros obsoletos para eliminar');
+            return;
+        }
+        
+        const { error: errorDelete } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .lt('fecha_programada', fechaLimiteStr);
+        
+        if (errorDelete) {
+            console.error('❌ Error eliminando filtros:', errorDelete);
+            return;
+        }
+        
+        console.log(`🗑️ ${filtrosViejos.length} filtro(s) obsoleto(s) eliminado(s)`);
+        
+    } catch (err) {
+        console.error('❌ Error en limpieza automática de filtros:', err);
+    }
+}
+
+// ========================================
+// 🗑️ LIMPIAR FILTROS OBSOLETOS (Con confirmación)
+// ========================================
+async function limpiarFiltrosObsoletosConConfirmacion() {
+    try {
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+        
+        const {  filtrosViejos, error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('id, Unidad, fecha_programada, configurado_por')
+            .lt('fecha_programada', fechaLimiteStr);
+        
+        if (error) {
+            console.error('❌ Error buscando filtros viejos:', error);
+            alert('❌ Error al buscar filtros obsoletos');
+            return;
+        }
+        
+        if (!filtrosViejos || filtrosViejos.length === 0) {
+            alert('✅ No hay filtros obsoletos para eliminar');
+            return;
+        }
+        
+        // Agrupar por fecha para mejor visualización
+        const resumen = filtrosViejos.reduce((acc, filtro) => {
+            const fecha = filtro.fecha_programada;
+            if (!acc[fecha]) acc[fecha] = { unidades: [], cantidad: 0 };
+            acc[fecha].unidades.push(filtro.Unidad);
+            acc[fecha].cantidad++;
+            return acc;
+        }, {});
+        
+        // Construir mensaje de confirmación
+        let mensaje = `🗑️ LIMPIEZA DE FILTROS OBSOLETOS\n\n`;
+        mensaje += `Se encontraron ${filtrosViejos.length} filtros con fecha programada anterior a ${fechaLimiteStr}:\n\n`;
+        
+        Object.entries(resumen).forEach(([fecha, data]) => {
+            mensaje += `📅 ${fecha}: ${data.cantidad} filtro(s)\n`;
+            if (data.unidades.length <= 5) {
+                mensaje += `   → ${data.unidades.join(', ')}\n`;
+            } else {
+                mensaje += `   → ${data.unidades.slice(0, 3).join(', ')}, y ${data.unidades.length - 3} más\n`;
+            }
+        });
+        
+        mensaje += `\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER\n`;
+        mensaje += `❌ ¿Deseas eliminar estos filtros obsoletos?\n\n`;
+        mensaje += `✅ SÍ - Eliminar ${filtrosViejos.length} filtros\n`;
+        mensaje += `❌ NO - Cancelar`;
+        
+        const confirmar = confirm(mensaje);
+        if (!confirmar) return;
+        
+        // Eliminar filtros
+        const { error: errorDelete } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .lt('fecha_programada', fechaLimiteStr);
+        
+        if (errorDelete) {
+            console.error('❌ Error eliminando filtros:', errorDelete);
+            alert('❌ Error al eliminar filtros obsoletos');
+            return;
+        }
+        
+        alert(`✅ ${filtrosViejos.length} filtro(s) obsoleto(s) eliminado(s) correctamente`);
+        console.log(`🗑️ ${filtrosViejos.length} filtros eliminados`);
+        
+    } catch (err) {
+        console.error('❌ Error en limpieza de filtros:', err);
+        alert('❌ Error de conexión');
+    }
+}
 
 
 </script>
