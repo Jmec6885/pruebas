@@ -9041,66 +9041,185 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
 }
 
 
-// ========================================
-// 🔄 ACTUALIZAR RADIO DEL MAPA DINÁMICAMENTE
-// ========================================
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
-    const valorRadioKm = document.getElementById('valorRadioKm');
-    if (valorRadioKm) {
-        valorRadioKm.textContent = `${nuevoRadio} km`;
+    // ✅ Convertir a número y validar
+    const radioNum = parseFloat(nuevoRadio);
+    if (isNaN(radioNum) || radioNum < 1 || radioNum > 20) {
+        console.error('❌ Radio inválido:', nuevoRadio);
+        return;
     }
     
-    console.log('📍 Radio actualizado a:', nuevoRadio, 'km');
+    // ✅ Actualizar UI
+    const valorRadioKm = document.getElementById('valorRadioKm');
+    const sliderRadioKm = document.getElementById('sliderRadioKm');
     
-    // ✅ Actualizar el mapa solo si es necesario
-    if (window.mapaLeafletInstance && window.osCentroActual && window.osEnRadioActual) {
-        // Recalcular OS en radio con el nuevo radio
-        const osCentro = window.osCentroActual;
-        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-        const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+    if (valorRadioKm) {
+        valorRadioKm.textContent = `${radioNum} km`;
+    }
+    
+    if (sliderRadioKm) {
+        sliderRadioKm.value = radioNum;
+    }
+    
+    console.log('📍 Radio actualizado a:', radioNum, 'km');
+    
+    // ✅ Solo actualizar el mapa si es necesario
+    if (actualizarAutomatico && 
+        window.mapaLeafletInstance && 
+        window.osCentroActual && 
+        window.osEnRadioActual) {
         
-        const osEnRadio = window.osEnRadioActual.filter(os => {
-            if (os.lat && os.lng) {
-                const distancia = calcularDistanciaKm(latCentro, lngCentro, os.lat, os.lng);
-                return distancia <= nuevoRadio;
+        try {
+            // ✅ Recalcular OS en radio con el nuevo radio
+            const osCentro = window.osCentroActual;
+            const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+            
+            if (!coordsCentro || !coordsCentro.includes(',')) {
+                console.error('❌ Coordenadas del centro inválidas:', coordsCentro);
+                return;
             }
-            return false;
-        });
-        
-        // ✅ Actualizar el título del mapa
-        const header = document.querySelector('.result-header');
-        if (header) {
-            header.innerHTML = `🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${nuevoRadio} km)`;
-        }
-        
-        // ✅ Actualizar el círculo si existe
-        if (window.circuloRadio) {
-            window.circuloRadio.setRadius(nuevoRadio * 1000);
-            window.circuloRadio.setPopupContent(`Área de búsqueda: ${nuevoRadio} km de radio`);
-        }
-        
-        // ✅ Actualizar los marcadores
-        if (actualizarAutomatico) {
-            // Eliminar todos los marcadores excepto el centro
+            
+            const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+            
+            const osEnRadio = window.osEnRadioActual.filter(os => {
+                if (os.lat && os.lng) {
+                    const distancia = calcularDistanciaKm(latCentro, lngCentro, os.lat, os.lng);
+                    return distancia <= radioNum;
+                }
+                return false;
+            });
+            
+            // ✅ Actualizar el título del mapa
+            const header = document.querySelector('.result-header');
+            if (header) {
+                header.innerHTML = `🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioNum} km)`;
+            }
+            
+            // ✅ Actualizar el círculo si existe
+            if (window.circuloRadio) {
+                window.circuloRadio.setRadius(radioNum * 1000);
+                window.circuloRadio.setPopupContent(`Área de búsqueda: ${radioNum} km de radio`);
+            }
+            
+            // ✅ Eliminar SOLO los marcadores que NO son el centro
             Object.values(window.markersPorEstado).forEach(markersArray => {
                 markersArray.forEach(marker => {
-                    if (marker !== window.markersPorEstado.centro[0]) {
+                    // ✅ Verificar si el marcador aún está en el mapa
+                    if (marker !== window.markersPorEstado.centro[0] && 
+                        window.mapaLeafletInstance.hasLayer(marker)) {
                         window.mapaLeafletInstance.removeLayer(marker);
                     }
                 });
             });
             
-            // Agregar nuevos marcadores
+            // ✅ Agregar nuevos marcadores
             osEnRadio.forEach(os => {
-                // Crear marcador (código similar al de inicializarMapaLeaflet)
-                // ... código para crear marcadores ...
+                // ✅ Determinar estado y color
+                const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+                const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+                const deuda = parseFloat(os.Deuda) || 0;
+                
+                let colorFondo, labelEstado, estadoKey;
+                
+                if (deuda > 500) {
+                    colorFondo = '#fdd835'; // Amarillo
+                    labelEstado = 'DEUDA ALTA (>$500)';
+                    estadoKey = 'deuda_alta';
+                } else if (deuda >= 100 && deuda <= 500) {
+                    colorFondo = '#ff9800'; // Naranja
+                    labelEstado = 'DEUDA MEDIA ($100-$500)';
+                    estadoKey = 'deuda_media';
+                } else if (deuda >= 50 && deuda < 100) {
+                    colorFondo = '#f48fb1'; // Rosado
+                    labelEstado = 'DEUDA BAJA ($50-$100)';
+                    estadoKey = 'deuda_baja';
+                } else if (os.Estado_ATOMO === 'Asignada') {
+                    colorFondo = '#ff9800'; // Naranja
+                    labelEstado = 'OS ASIGNADA';
+                    estadoKey = 'asignada';
+                } else if (esRegulada) {
+                    colorFondo = '#f44336'; // Rojo
+                    labelEstado = 'OS REGULADA';
+                    estadoKey = 'regulada';
+                } else {
+                    colorFondo = '#2196f3'; // Azul
+                    labelEstado = 'OS NO REGULADA';
+                    estadoKey = 'no_regulada';
+                }
+                
+                // ✅ Crear icono numerado
+                const icono = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="
+                        background: ${colorFondo};
+                        color: white;
+                        width: 35px;
+                        height: 35px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        border: 3px solid white;
+                    ">${os.numeroOrden || 'X'}</div>`,
+                    iconSize: [35, 35],
+                    iconAnchor: [17.5, 35]
+                });
+                
+                const marker = L.marker([os.lat, os.lng], { icon: icono })
+                    .addTo(window.mapaLeafletInstance)
+                    .bindPopup(`
+                        <div style="min-width: 250px;">
+                            <strong style="color: ${colorFondo};">#${os.numeroOrden || 'X'} - ${labelEstado}</strong><br>
+                            <strong>OS:</strong> ${os.OSATMO}<br>
+                            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                            ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
+                            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                            <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')" 
+                                    style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                                📋 Ver Detalle Completo
+                            </button>
+                        </div>
+                    `);
+                
+                // ✅ AGRUPAR POR ESTADO
+                window.markersPorEstado[estadoKey].push(marker);
+                
+                // Agrupar por tipología
+                const tip = os.Tipologia || 'Sin tipología';
+                if (!window.markersPorTipologia[tip]) {
+                    window.markersPorTipologia[tip] = [];
+                }
+                window.markersPorTipologia[tip].push(marker);
             });
             
-            console.log(`✅ Mapa actualizado con radio de ${nuevoRadio} km (${osEnRadio.length} OS en radio)`);
+            // ✅ Ajustar vista
+            const bounds = L.latLngBounds();
+            bounds.extend([latCentro, lngCentro]);
+            
+            osEnRadio.forEach(os => {
+                if (os.lat && os.lng) {
+                    bounds.extend([os.lat, os.lng]);
+                }
+            });
+            
+            if (bounds.isValid()) {
+                window.mapaLeafletInstance.fitBounds(bounds, { 
+                    padding: [50, 50], 
+                    maxZoom: 16 
+                });
+            }
+            
+            console.log(`✅ Mapa actualizado con radio de ${radioNum} km (${osEnRadio.length} OS en radio)`);
+            
+        } catch (error) {
+            console.error('❌ Error al actualizar el mapa:', error);
+            console.error('Stack:', error.stack);
         }
     }
 }
-
 
 
 // ========================================
@@ -9355,23 +9474,26 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // ========================================
     // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
     // ========================================
-    const circuloRadio = L.circle([latCentro, lngCentro], {
-        radius: radioKm * 1000,  // Convertir km a metros
-        color: '#3b82f6',        // Azul
-        weight: 3,               // Grosor del borde
-        opacity: 0.8,            // Opacidad del borde
-        fillOpacity: 0.15,       // Opacidad del relleno
-        fillColor: '#3b82f6'     // Color del relleno
+     const circuloRadio = L.circle([latCentro, lngCentro], {
+        radius: radioKm * 1000,
+        color: '#3b82f6',
+        weight: 3,
+        opacity: 0.8,
+        fillOpacity: 0.15,
+        fillColor: '#3b82f6'
     }).addTo(mapa)
     .bindPopup(`
         <div style="min-width: 200px;">
             <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
             <strong>Radio:</strong> ${radioKm} km<br>
-            <strong>OS en radio:</strong> ${osEnRadio.length}<br>
-            <small style="color: #666;">Círculo de búsqueda alrededor de la OS seleccionada</small>
+            <strong>OS en radio:</strong> ${osEnRadio.length}
         </div>
     `)
     .openPopup();
+
+    // ✅ Guardar referencia al círculo
+    window.circuloRadio = circuloRadio;
+
 
     // ✅ Guardar referencia al círculo para actualizarlo después
     window.circuloRadio = circuloRadio;
