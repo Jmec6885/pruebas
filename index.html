@@ -5589,33 +5589,45 @@ async function generarKMLAdminPorUnidad(tipo) {
 
 	
 
-// ========================================
-// 1️⃣ AGREGAR FILTRO DE TIPOLOGÍAS EN generarMapaKMLRuta()
-// ========================================
-function generarMapaKMLRuta(osAsignadas, unidad) {
+async function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
-
-    // ✅ Normalizar y FILTRAR tipologías prohibidas
+    
+    // Normalizar OS
     const osNormalizadas = osAsignadas
         .map(os => ({
             ...os,
-            osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim()
+            osatomo: (os.osatomo || os.OSATMO || '').toString().trim()
         }))
         .filter(os => os.osatomo !== '')
-        .filter(os => tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)); // ✅ NUEVO
-
+        .filter(os => tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol));
+    
     if (osNormalizadas.length === 0) {
-        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas para tu unidad</div>';
+        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas</div>';
         return;
     }
-
+    
     window.osKMLData = osNormalizadas;
-
-    let htmlSelector = `
+    
+    // ✅ CARGAR FILTROS GUARDADOS DE HOY
+    const HOY = new Date().toISOString().split('T')[0];
+    const { data: filtrosHoy } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidad)
+        .eq('fecha_programada', HOY)
+        .maybeSingle();
+    
+    const tieneFiltros = !!filtrosHoy;
+    const mensajeFiltros = tieneFiltros 
+        ? `✅ Filtros activos: ${filtrosHoy.tipologias?.length || 0} tipologías, ${filtrosHoy.rangos?.length || 0} rangos, radio ${filtrosHoy.radio_km}km`
+        : '⚠️ Sin filtros guardados para hoy';
+    
+    const htmlSelector = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <h3>📍 Seleccionar Punto de Partida</h3>
+            <h3>📍 KML Ruta - ${unidad}</h3>
+            
             <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">Punto de Partida:</label>
+                <label style="font-weight: 600;">Punto de Partida:</label>
                 <select id="selectPuntoPartidaKML" style="width: 100%; padding: 15px; border-radius: 12px; font-size: 16px;">
                     <option value="">-- Seleccione una OS --</option>
                     ${osNormalizadas.map(os => 
@@ -5623,7 +5635,24 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                     ).join('')}
                 </select>
             </div>
-
+            
+            <div style="background: ${tieneFiltros ? '#e8f5e9' : '#fff3cd'}; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Filtros Programados:</strong>
+                <p style="margin: 8px 0; color: #666;">${mensajeFiltros}</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarMapaKMLSoloAsignadas('${unidad}')" 
+                        style="background: #9e9e9e;">
+                    📋 Solo Asignadas (${osNormalizadas.length})
+                </button>
+                <button class="btn" onclick="generarMapaKMLConFiltrosGuardados('${unidad}')"
+                        style="${!tieneFiltros ? 'opacity: 0.5; cursor: not-allowed;' : ''}"
+                        ${!tieneFiltros ? 'disabled' : ''}>
+                    🎯 Aplicar Filtros
+                </button>
+            </div>
+            
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Ahuachapán', 13.924670, -89.842820)">
                     📍 Ahuachapán
@@ -5635,12 +5664,36 @@ function generarMapaKMLRuta(osAsignadas, unidad) {
                     📍 Santa Ana
                 </button>
             </div>
-
-            <button class="btn" onclick="generarMapaKMLConPuntoPartida('${unidad}')">🗺️ Generar Mapa</button>
         </div>
     `;
-
+    
     resultsContainer.innerHTML = htmlSelector;
+}
+
+
+// Solo asignadas (sin filtros)
+function generarMapaKMLSoloAsignadas(unidad) {
+    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
+    if (!osPartida) {
+        alert('⚠️ Seleccione un punto de partida');
+        return;
+    }
+    generarMapaKMLConPuntoPartida(unidad);
+}
+
+// Con filtros guardados
+async function generarMapaKMLConFiltrosGuardados(unidad) {
+    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
+    if (!osPartida) {
+        alert('⚠️ Seleccione un punto de partida');
+        return;
+    }
+    
+    // Guardar OS partida globalmente
+    window.osPartidaSeleccionada = osPartida;
+    
+    // Llamar a la función que aplica filtros
+    await generarMapaUnidadConFiltros();
 }
 
 
