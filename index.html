@@ -7991,7 +7991,7 @@ async function buscarYMostrarMapaUnidad(osSeleccionada) {
 
 
 // ========================================
-// 🔍 CARGAR FILTROS UNIVERSALES (CORREGIDO CON DEBUG)
+// 🔍 CARGAR FILTROS UNIVERSALES (CORREGIDO)
 // ========================================
 async function cargarFiltrosUniversales(unidad = null) {
     const HOY = new Date().toISOString().split('T')[0];
@@ -8007,7 +8007,7 @@ async function cargarFiltrosUniversales(unidad = null) {
 
     try {
         // ========================================
-        // 1️⃣ FILTROS PERSONALES (Despacho)
+        // ✅ 1️⃣ FILTROS PERSONALES (Despacho)
         // ========================================
         if (currentUser.rol === 'Despacho') {
             console.log('🔍 Buscando filtros personales de Despacho...');
@@ -8042,42 +8042,7 @@ async function cargarFiltrosUniversales(unidad = null) {
         }
 
         // ========================================
-        // 2️⃣ FILTROS POR UNIDAD
-        // ========================================
-        if (unidad) {
-            console.log(`🔍 Buscando filtros para unidad: ${unidad}`);
-            
-            // Buscar con fecha de hoy
-            let { data: filtrosUnidadHoy, error: errorUnidadHoy } = await supabaseClient
-                .from('filtros_por_unidad')
-                .select('*')
-                .eq('Unidad', unidad)
-                .eq('fecha_programada', HOY)
-                .maybeSingle();
-
-            console.log('📊 Filtros de hoy (Unidad):', { data: filtrosUnidadHoy, error: errorUnidadHoy });
-
-            if (!filtrosUnidadHoy) {
-                // Buscar sin fecha (default)
-                let { data: filtrosUnidadDefault, error: errorUnidadDefault } = await supabaseClient
-                    .from('filtros_por_unidad')
-                    .select('*')
-                    .eq('Unidad', unidad)
-                    .is('fecha_programada', null)
-                    .maybeSingle();
-
-                console.log('📊 Filtros default (Unidad):', { data: filtrosUnidadDefault, error: errorUnidadDefault });
-                filtrosUnidadHoy = filtrosUnidadDefault;
-            }
-
-            if (filtrosUnidadHoy) {
-                console.log('✅ Usando filtros por unidad:', unidad, filtrosUnidadHoy);
-                return filtrosUnidadHoy;
-            }
-        }
-
-        // ========================================
-        // 3️⃣ FILTROS GLOBALES (Admin/Supervisor)
+        // ✅ 2️⃣ FILTROS GLOBALES (Admin/Supervisor/otros)
         // ========================================
         console.log('🔍 Buscando filtros globales...');
         
@@ -8112,7 +8077,7 @@ async function cargarFiltrosUniversales(unidad = null) {
         if (filtrosGlobalesDefault) {
             console.log('✅ Usando filtro global por defecto:', filtrosGlobalesDefault);
             
-            // ✅ CORRECCIÓN CRÍTICA: Verificar que tenga datos válidos
+            // ✅ Verificar que tenga datos válidos
             if (!filtrosGlobalesDefault.rangos && !filtrosGlobalesDefault.tipologias) {
                 console.warn('⚠️ Filtro global existe pero está vacío');
             }
@@ -8121,7 +8086,7 @@ async function cargarFiltrosUniversales(unidad = null) {
         }
 
         // ========================================
-        // 4️⃣ SI NO HAY NADA
+        // ✅ 3️⃣ SI NO HAY NADA
         // ========================================
         console.error('❌ NO SE ENCONTRARON FILTROS EN NINGUNA TABLA');
         console.log('📊 Retornando filtros por defecto:', filtros);
