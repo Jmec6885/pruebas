@@ -5319,9 +5319,10 @@ if (!osCentro) {
         // ========================================
         console.log('📥 Cargando OS pendientes desde base de datos...');
         
-        const { data: osPendientes, error: errorPendientes } = await supabaseClient
-            .from('OS Pendientes')
-            .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda, "Días Vencimiento"');
+        // ✅ CORRECTO (sin "Días Vencimiento")
+const { data: osPendientes, error: errorPendientes } = await supabaseClient
+    .from('OS Pendientes')
+    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda');
         
         if (errorPendientes) {
             console.error('❌ Error cargando OS pendientes:', errorPendientes);
@@ -5371,7 +5372,10 @@ if (!osCentro) {
             const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
             const deuda = parseFloat(os.Deuda) || 0;
             const tieneDeudaAlta = deuda > 500;
-            const diasVencimiento = parseInt(os['Días Vencimiento']) || 0;
+            // ✅ CORRECTO (calcular días desde Fecha Gen.)
+const fechaGen = new Date(os['Fecha Gen.']);
+const hoy = new Date();
+const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
             
             // ✅ APLICAR FILTROS DE FORMA EXCLUSIVA
             let pasaFiltro = true;
