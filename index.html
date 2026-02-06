@@ -3070,16 +3070,16 @@ function iniciarVerificacionSesion() {
   setInterval(async () => {
     if (!currentUser) return;
     
-    // ✅ RENOVAR sesión automáticamente cada verificación
+    // ✅ RENOVAR sesión automáticamente
     await renovarSesion();
-    
+
     try {
       const { data, error } = await supabaseClient
         .from('usuarios')
         .select('sessionactiva, sessiontoken, ultimaconexion')
         .eq('id', currentUser.id)
         .single();
-        
+
       if (!data || !data.sessionactiva || data.sessiontoken !== currentUser.session_token) {
         if (data && data.sessiontoken && data.sessiontoken !== currentUser.session_token) {
           alert('Su sesión ha sido iniciada en otro dispositivo.');
@@ -3087,12 +3087,12 @@ function iniciarVerificacionSesion() {
         }
         return;
       }
-      
+
       const ultima = new Date(data.ultimaconexion);
       const ahora = new Date();
       const diffMin = (ahora - ultima) / 1000 / 60;
-      
-      if (diffMin > 120) { // ← 2 horas de inactividad
+
+      if (diffMin > 120) { // ← 2 horas
         alert('Su sesión ha expirado por inactividad.');
         logout();
       }
