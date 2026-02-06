@@ -5424,6 +5424,19 @@ const fechaGen = new Date(os['Fecha Gen.']);
 const hoy = new Date();
 const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
 
+// ✅ DEBUG PRIMERAS 5 OS
+if (osEncontradas <= 5) {
+    console.log(`🔍 ANÁLISIS OS ${os.OSATMO}:`, {
+        Tipo_de_OS: os.Tipo_de_OS,
+        esRegulada,
+        deuda,
+        tieneDeudaAlta,
+        diasVencimiento,
+        Tipologia: os.Tipologia,
+        tipologias_filtro: filtrosAplicar.tipologias
+    });
+}
+
 // ✅ Clasificar por color de deuda
 let esDeudaAmarillo = false, esDeudaNaranja = false, esDeudaRosado = false;
 if (deuda >= 100 && deuda < 300) esDeudaAmarillo = true;
