@@ -5067,8 +5067,15 @@ async function guardarFiltrosPorUnidad() {
     const unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
 
     // 4. 🆕 Obtener fecha programada
-    const fechaProgramadaInput = document.getElementById('fechaProgramadaFiltros');
-    const fechaProgramada = fechaProgramadaInput?.value || null;
+const fechaProgramadaInput = document.getElementById('fechaVigenciaFiltros'); // ← Cambiar aquí
+let fechaProgramada = fechaProgramadaInput?.value || null;
+
+// Si no se ingresó una fecha programada, usar la fecha actual
+if (!fechaProgramada) {
+  const hoy = new Date();
+  const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  fechaProgramada = fechaHoy;
+}
 
     // 5. Validaciones
     if (radioKm < 1 || radioKm > 20) {
