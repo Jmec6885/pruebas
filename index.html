@@ -3096,8 +3096,9 @@ function iniciarVerificacionSesion() {
       }
 
       const ultima = new Date(data.ultimaconexion);
-      const ahora = new Date();
-      const diffMin = (ahora - ultima) / 1000 / 60;
+const ahoraUTC = new Date();
+const ahora = new Date(ahoraUTC.toLocaleString("en-US", {timeZone: "America/El_Salvador"}));
+const diffMin = (ahora - ultima) / 1000 / 60;
       
       console.log(`📊 Última conexión: ${ultima.toLocaleTimeString()}`);
       console.log(`📊 Hora actual: ${ahora.toLocaleTimeString()}`);
@@ -3121,9 +3122,16 @@ function iniciarVerificacionSesion() {
 
 async function renovarSesion() {
   if (!currentUser) return;
+  
+  // ✅ Obtener hora actual de El Salvador (UTC-6)
+  const ahoraUTC = new Date();
+  const ahoraElSalvador = new Date(ahoraUTC.toLocaleString("en-US", {timeZone: "America/El_Salvador"}));
+  
+  console.log(`🔄 Renovando sesión: ${ahoraElSalvador.toISOString()}`);
+  
   await supabaseClient
     .from('usuarios')
-    .update({ ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()) })
+    .update({ ultimaconexion: ahoraElSalvador.toISOString() })
     .eq('id', currentUser.id);
 }
 
