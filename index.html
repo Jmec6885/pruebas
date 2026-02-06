@@ -5040,83 +5040,76 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 // 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO CON FECHA)
 // ========================================
 async function guardarFiltrosPorUnidad() {
-    // 🆕 Validación obligatoria para Despacho
+    // Validación para Despacho
     if (currentUser.rol === 'Despacho') {
         const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
         if (checkboxesUnidades.length === 0) {
-            alert('⚠️ Como Despachante, DEBES seleccionar al menos UNA unidad para guardar filtros');
+            alert('⚠️ Debes seleccionar al menos UNA unidad');
             return;
         }
     }
 
-    // 1. Recolección de filtros de la interfaz
-    const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
+    // ✅ SEPARAR correctamente rangos, tipologías y deuda
     const rangos = [];
     const tipologias = [];
     let deudaAmarillo = false, deudaNaranja = false, deudaRosado = false;
 
-    rangosCheckboxes.forEach(cb => {
+    // Solo checkboxes que NO sean de unidades
+    document.querySelectorAll('input[type="checkbox"][value]:not(.checkbox-unidad-filtro)').forEach(cb => {
         if (cb.checked && cb.value) {
             const valor = cb.value;
+            
+            // Rangos de distancia
             if (valor.includes('-') || valor.startsWith('>')) {
                 rangos.push(valor);
-            } else if (cb.id === 'deuda_amarillo') {
-                deudaAmarillo = true;
-            } else if (cb.id === 'deuda_naranja') {
-                deudaNaranja = true;
-            } else if (cb.id === 'deuda_rosado') {
-                deudaRosado = true;
-            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
+            }
+            // Deuda
+            else if (cb.id === 'deuda_amarillo') deudaAmarillo = true;
+            else if (cb.id === 'deuda_naranja') deudaNaranja = true;
+            else if (cb.id === 'deuda_rosado') deudaRosado = true;
+            // Tipologías
+            else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
                 tipologias.push(valor);
             }
         }
     });
 
-    // 2. Obtener radio
-    const radioKmElement = document.getElementById('radioKmUnidad');
-    const radioKm = radioKmElement ? parseInt(radioKmElement.value) : 3;
+    // Radio
+    const radioKm = parseInt(document.getElementById('radioKmUnidad')?.value || 3);
 
-    // 3. 🆕 Obtener unidades seleccionadas
-    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
-    const unidadesDestino = Array.from(checkboxesUnidades).map(cb => cb.value);
+    // Unidades destino
+    const unidadesDestino = Array.from(document.querySelectorAll('.checkbox-unidad-filtro:checked'))
+        .map(cb => cb.value);
 
-    // 4. 🆕 Obtener fecha programada
-const fechaProgramadaInput = document.getElementById('fechaVigenciaFiltros'); // ← Cambiar aquí
-let fechaProgramada = fechaProgramadaInput?.value || null;
+    // Fecha programada
+    let fechaProgramada = document.getElementById('fechaVigenciaFiltros')?.value;
+    if (!fechaProgramada) {
+        const hoy = new Date();
+        fechaProgramada = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    }
 
-// Si no se ingresó una fecha programada, usar la fecha actual
-if (!fechaProgramada) {
-  const hoy = new Date();
-  const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-  fechaProgramada = fechaHoy;
-}
-
-    // 5. Validaciones
+    // Validaciones
     if (radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
-
     if (unidadesDestino.length === 0) {
         alert('⚠️ Debe seleccionar al menos una unidad');
         return;
     }
 
-    // 6. Confirmar
-    const confirmar = confirm(
+    // Confirmar
+    if (!confirm(
         `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n` +
         `• Unidades: ${unidadesDestino.join(', ')}\n` +
         `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Todos'}\n` +
         `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
-        `• Deuda: Amarillo=${deudaAmarillo}, Naranja=${deudaNaranja}, Rosado=${deudaRosado}\n` +
         `• Radio: ${radioKm} km\n` +
-        `${fechaProgramada ? `• Fecha Programada: ${fechaProgramada}\n` : ''}`
-    );
-    if (!confirmar) return;
+        `• Fecha: ${fechaProgramada}`
+    )) return;
 
     try {
-        // 7. Preparar registros
-        const registrosAGuardar = unidadesDestino.map(unidad => ({
+        const registros = unidadesDestino.map(unidad => ({
             Unidad: unidad,
             rangos: rangos.length > 0 ? rangos : null,
             tipologias: tipologias.length > 0 ? tipologias : null,
@@ -5126,31 +5119,23 @@ if (!fechaProgramada) {
             radio_km: radioKm,
             fecha_actualizacion: new Date().toISOString(),
             configurado_por: currentUser.usuario,
-            fecha_programada: fechaProgramada // ✅ ¡AHORA SÍ ESTÁ DEFINIDA!
+            fecha_programada: fechaProgramada
         }));
 
-        // 8. Guardar en BD
         const { error } = await supabaseClient
             .from('filtros_por_unidad')
-            .upsert(registrosAGuardar, {
-                onConflict: '"Unidad", fecha_programada' // ✅ Usa la clave única compuesta
-            });
+            .upsert(registros, { onConflict: '"Unidad", fecha_programada' });
 
-        if (error) {
-            console.error('❌ Error Supabase:', error);
-            alert('❌ Error al guardar: ' + error.message);
-            return;
-        }
+        if (error) throw error;
 
-        alert('✅ Filtros guardados correctamente para las unidades seleccionadas');
-        console.log('✅ Filtros por unidad guardados:', unidadesDestino);
+        alert('✅ Filtros guardados correctamente');
+        console.log('✅ Guardados:', unidadesDestino);
 
     } catch (err) {
-        console.error('Error inesperado:', err);
-        alert('❌ Error de conexión');
+        console.error('❌ Error:', err);
+        alert('❌ Error: ' + err.message);
     }
 }
-
 
 
 // ========================================
@@ -8037,9 +8022,15 @@ async function guardarFiltrosMapa() {
     }
 
     // 1️⃣ Obtener rangos seleccionados
-    const rangosCheckboxes = document.querySelectorAll('input[type="checkbox"][value]');
-    const rangos = [];
-    const tipologias = [];
+   // ✅ CORRECCIÓN: Filtrar SOLO rangos válidos al guardar
+const rangosCheckboxes = document.querySelectorAll('.checkbox-rango-unidad:checked');
+const rangos = Array.from(rangosCheckboxes)
+  .map(cb => cb.value)
+  .filter(valor => 
+    // ✅ SOLO aceptar rangos válidos
+    (valor.includes('-') || valor.startsWith('>')) && 
+    !valor.includes('CL-') // Excluir unidades
+  );
 
     rangosCheckboxes.forEach(cb => {
         if (cb.checked && cb.value) {
