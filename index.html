@@ -5426,49 +5426,42 @@ const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
             }
             
             // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
-            if (esRegulada) {
+if (esRegulada) {
     contadorReguladas++;
-    osEnRadio.push({...});
-} else if (tieneDeudaAlta && pasaDeuda) { // ← AGREGAR pasaDeuda
+    osEnRadio.push({
+        ...os,
+        lat,
+        lng,
+        distancia,
+        esRegulada: true,
+        tieneDeudaAlta: false,
+        numeroOrden: osEnRadio.length + 1
+    });
+} else if (tieneDeudaAlta && pasaDeuda) {
     contadorDeudaAlta++;
-    osEnRadio.push({...});
-} else if (pasaFiltro && pasaDeuda) { 
-                contadorReguladas++;
-                osEnRadio.push({
-                    ...os,
-                    lat,
-                    lng,
-                    distancia,
-                    esRegulada: true,
-                    tieneDeudaAlta: false,
-                    numeroOrden: osEnRadio.length + 1
-                });
-            } else if (tieneDeudaAlta) {
-                contadorDeudaAlta++;
-                osEnRadio.push({
-                    ...os,
-                    lat,
-                    lng,
-                    distancia,
-                    esRegulada: false,
-                    tieneDeudaAlta: true,
-                    numeroOrden: osEnRadio.length + 1
-                });
-            } else if (pasaFiltro) {
-                contadorFiltradas++;
-                osEnRadio.push({
-                    ...os,
-                    lat,
-                    lng,
-                    distancia,
-                    esRegulada: false,
-                    tieneDeudaAlta: false,
-                    numeroOrden: osEnRadio.length + 1
-                });
-            } else {
-                contadorSinFiltro++;
-            }
-        });
+    osEnRadio.push({
+        ...os,
+        lat,
+        lng,
+        distancia,
+        esRegulada: false,
+        tieneDeudaAlta: true,
+        numeroOrden: osEnRadio.length + 1
+    });
+} else if (pasaFiltro && pasaDeuda) {
+    contadorFiltradas++;
+    osEnRadio.push({
+        ...os,
+        lat,
+        lng,
+        distancia,
+        esRegulada: false,
+        tieneDeudaAlta: false,
+        numeroOrden: osEnRadio.length + 1
+    });
+} else {
+    contadorSinFiltro++;
+}
         
         console.log('✅ ==========================================');
         console.log('✅ RESULTADO DE FILTRADO:');
