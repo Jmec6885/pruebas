@@ -5304,8 +5304,15 @@ if (!osCentro) {
         }
         
         const radioKm = filtrosAplicar.radio_km || 3;
-        const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-        const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+        // ✅ CORRECTO
+const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
+if (!coordsCentro || !coordsCentro.includes(',')) {
+    throw new Error('OS centro sin coordenadas válidas');
+}
+const partes = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+const [latCentro, lngCentro] = partes.length === 2 ? partes : [partes[1], partes[0]];
+
+console.log('🔍 Coordenadas parseadas:', { coordsCentro, latCentro, lngCentro });
         
         console.log('✅ ==========================================');
         console.log('✅ DATOS DEL CENTRO:');
