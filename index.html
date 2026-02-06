@@ -3067,8 +3067,15 @@ function generarKMLString(ubicaciones) {
 
 
 function iniciarVerificacionSesion() {
+  let contadorVerificaciones = 0; // ← Contador de verificaciones
+  
   setInterval(async () => {
     if (!currentUser) return;
+    
+    contadorVerificaciones++;
+    const tiempoTranscurrido = (contadorVerificaciones * 60) / 60; // En minutos
+    
+    console.log(`🕐 Verificación #${contadorVerificaciones} (${tiempoTranscurrido.toFixed(1)} min transcurridos)`);
     
     // ✅ RENOVAR sesión automáticamente
     await renovarSesion();
@@ -3091,16 +3098,25 @@ function iniciarVerificacionSesion() {
       const ultima = new Date(data.ultimaconexion);
       const ahora = new Date();
       const diffMin = (ahora - ultima) / 1000 / 60;
+      
+      console.log(`📊 Última conexión: ${ultima.toLocaleTimeString()}`);
+      console.log(`📊 Hora actual: ${ahora.toLocaleTimeString()}`);
+      console.log(`📊 Diferencia: ${diffMin.toFixed(2)} minutos`);
+      console.log(`📊 Límite configurado: 120 minutos`);
 
-      if (diffMin > 120) { // ← 2 horas
+      if (diffMin > 120) {
+        console.log(`❌ SESIÓN EXPIRADA: ${diffMin.toFixed(2)} > 120 minutos`);
         alert('Su sesión ha expirado por inactividad.');
         logout();
+      } else {
+        console.log(`✅ Sesión activa (${(120 - diffMin).toFixed(2)} min restantes)`);
       }
     } catch (err) {
       console.error('Error verificando sesión:', err);
     }
   }, 60000); // ← Cada 60 segundos
 }
+
 
 
 async function renovarSesion() {
