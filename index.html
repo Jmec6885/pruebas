@@ -4666,6 +4666,11 @@ function transformarUsuarioAUnidad(usuario) {
 // 📍 CARGAR INTERFAZ KML RUTA (CORREGIDA)
 // ==============================
 async function cargarInterfazKMLRuta() {
+    console.log('🚀 ==========================================');
+    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
+    console.log('🚀 Rol del usuario:', currentUser?.rol);
+    console.log('🚀 Usuario:', currentUser?.usuario);
+    console.log('🚀 ==========================================');
 await limpiarFiltrosObsoletos();
 renovarSesion(); // ← AGREGAR
 
@@ -5179,16 +5184,26 @@ async function borrarTodosFiltrosUnidades() {
     }
 }
 
-
+// ✅ ANTES DE LLAMAR A LA FUNCIÓN
+console.log('▶️ ==========================================');
+console.log('▶️ LLAMANDO A: generarMapaUnidadConFiltros');
+console.log('▶️ Estado actual de variables:');
+console.log('▶️ window.osAsignadasKML:', window.osAsignadasKML);
+console.log('▶️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+console.log('▶️ ==========================================');
 
 
 // ========================================
-// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO)
-// ========================================
-// ========================================
-// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO PARA CONTRATISTA)
+// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO - VERSIÓN FINAL)
 // ========================================
 async function generarMapaUnidadConFiltros() {
+    console.log('🗺️ ==========================================');
+    console.log('🗺️ EJECUTANDO: generarMapaUnidadConFiltros');
+    console.log('🗺️ window.osAsignadasKML:', window.osAsignadasKML);
+    console.log('🗺️ window.osAsignadasKML existe:', !!window.osAsignadasKML);
+    console.log('🗺️ window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
+    console.log('🗺️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+    console.log('🗺️ ==========================================');
     const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
     
     if (!unidadSeleccionada) {
@@ -5201,7 +5216,11 @@ async function generarMapaUnidadConFiltros() {
     
     // ✅ Obtener fecha de HOY en formato YYYY-MM-DD
     const HOY = new Date().toISOString().split('T')[0];
-    console.log('🔍 Generando mapa para unidad:', unidadSeleccionada, '| Fecha:', HOY);
+    console.log('🔍 ==========================================');
+    console.log('🔍 GENERANDO MAPA CON FILTROS');
+    console.log('🔍 Unidad:', unidadSeleccionada);
+    console.log('🔍 Fecha de hoy:', HOY);
+    console.log('🔍 ==========================================');
     
     try {
         // ========================================
@@ -5214,7 +5233,20 @@ async function generarMapaUnidadConFiltros() {
             .eq('fecha_programada', HOY)
             .maybeSingle();
         
-        console.log('📊 Filtros encontrados para HOY:', filtrosUnidadHoy ? 'SÍ' : 'NO', '| Datos:', filtrosUnidadHoy);
+        console.log('📊 ==========================================');
+        console.log('📊 RESULTADO BÚSQUEDA DE FILTROS:');
+        console.log('📊 ¿Hay filtros para HOY?', filtrosUnidadHoy ? '✅ SÍ' : '❌ NO');
+        if (filtrosUnidadHoy) {
+            console.log('📊 Filtros encontrados:', {
+                id: filtrosUnidadHoy.id,
+                unidad: filtrosUnidadHoy.Unidad,
+                fecha: filtrosUnidadHoy.fecha_programada,
+                rangos: filtrosUnidadHoy.rangos,
+                tipologias: filtrosUnidadHoy.tipologias,
+                radio: filtrosUnidadHoy.radio_km
+            });
+        }
+        console.log('📊 ==========================================');
         
         // ========================================
         // ✅ 2️⃣ Determinar qué filtros aplicar
@@ -5222,16 +5254,15 @@ async function generarMapaUnidadConFiltros() {
         let filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         
         if (filtrosUnidadHoy) {
-            console.log('✅ USANDO FILTROS PROGRAMADOS PARA HOY:', {
-                unidad: filtrosUnidadHoy.Unidad,
-                fecha: filtrosUnidadHoy.fecha_programada,
-                rangos: filtrosUnidadHoy.rangos,
-                tipologias: filtrosUnidadHoy.tipologias,
-                radio: filtrosUnidadHoy.radio_km
-            });
+            console.log('✅ ==========================================');
+            console.log('✅ USANDO FILTROS PROGRAMADOS PARA HOY');
+            console.log('✅ ==========================================');
             filtrosAplicar = filtrosUnidadHoy;
         } else {
-            console.warn('⚠️ NO hay filtros programados para HOY. Usando valores por defecto (radio=3km, sin filtros de tipología/rangos)');
+            console.warn('⚠️ ==========================================');
+            console.warn('⚠️ NO HAY FILTROS PROGRAMADOS PARA HOY');
+            console.warn('⚠️ Usando valores por defecto (radio=3km, sin filtros)');
+            console.warn('⚠️ ==========================================');
         }
         
         window.filtrosAplicados = filtrosAplicar;
@@ -5239,7 +5270,16 @@ async function generarMapaUnidadConFiltros() {
         // ========================================
         // ✅ 3️⃣ Cargar OS asignadas a la unidad
         // ========================================
+        console.log('📥 Cargando OS asignadas para la unidad...');
+        
+        if (!window.osAsignadasKML || !Array.isArray(window.osAsignadasKML)) {
+            console.error('❌ window.osAsignadasKML no está definido');
+            throw new Error('No hay datos de OS asignadas. Por favor, recargue la página.');
+        }
+        
         const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+        
+        console.log(`✅ ${osAsignadasUnidad.length} OS asignadas encontradas para la unidad`);
         
         if (osAsignadasUnidad.length === 0) {
             resultsContainer.innerHTML = `
@@ -5253,12 +5293,15 @@ async function generarMapaUnidadConFiltros() {
         // ========================================
         // ✅ 4️⃣ Encontrar OS centro (primera OS asignada con coordenadas)
         // ========================================
+        console.log('📍 Buscando OS centro con coordenadas...');
+        
         const osCentro = osAsignadasUnidad.find(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             return coords && coords.includes(',');
         });
         
         if (!osCentro) {
+            console.error('❌ No se encontró OS centro con coordenadas');
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd;">
                     <div class="result-header">⚠️ Sin coordenadas</div>
@@ -5271,36 +5314,64 @@ async function generarMapaUnidadConFiltros() {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        console.log('📍 Centro de búsqueda:', { lat: latCentro, lng: lngCentro, radio: radioKm + ' km' });
+        console.log('✅ ==========================================');
+        console.log('✅ DATOS DEL CENTRO:');
+        console.log('✅ OS Centro:', osCentro.OSATMO);
+        console.log('✅ Coordenadas:', latCentro, lngCentro);
+        console.log('✅ Radio de búsqueda:', radioKm, 'km');
+        console.log('✅ ==========================================');
         
         // ========================================
-        // ✅ 5️⃣ Cargar TODAS las OS pendientes (sin filtrar aún)
+        // ✅ 5️⃣ Cargar TODAS las OS pendientes
         // ========================================
-        const { data: osPendientes } = await fetchAllFromTable(
-            'OS Pendientes',
-            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda, "Días Vencimiento"'
-        );
+        console.log('📥 Cargando OS pendientes desde base de datos...');
         
-        console.log('📥 OS Pendientes cargadas:', osPendientes.length);
+        const { data: osPendientes, error: errorPendientes } = await supabaseClient
+            .from('OS Pendientes')
+            .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda, "Días Vencimiento"');
+        
+        if (errorPendientes) {
+            console.error('❌ Error cargando OS pendientes:', errorPendientes);
+            throw new Error('Error al cargar OS pendientes: ' + errorPendientes.message);
+        }
+        
+        console.log(`✅ ${osPendientes.length} OS pendientes cargadas`);
         
         // ========================================
         // ✅ 6️⃣ FILTRAR OS EN RADIO CON LOS FILTROS APLICADOS
         // ========================================
+        console.log('🔍 ==========================================');
+        console.log('🔍 APLICANDO FILTROS A OS EN RADIO');
+        console.log('🔍 Filtros activos:', {
+            tipologias: filtrosAplicar.tipologias,
+            rangos: filtrosAplicar.rangos,
+            radio: radioKm + ' km'
+        });
+        console.log('🔍 ==========================================');
+        
         const osEnRadio = [];
+        let contadorTotal = 0;
         let contadorFiltradas = 0;
         let contadorReguladas = 0;
         let contadorDeudaAlta = 0;
+        let contadorSinFiltro = 0;
         
         osPendientes.forEach(os => {
+            contadorTotal++;
+            
             // Validar coordenadas
             const coords = os.Coordenadas || os.Coordendasgis;
-            if (!validarFormatoCoordenadas(coords)) return;
+            if (!coords || !coords.includes(',')) {
+                return;
+            }
             
-            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+            const [lng, lat] = coords.split(',').map(c => parseFloat(c.trim()));
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
             
             // Excluir la OS centro y fuera del radio
-            if (distancia > radioKm || os.OSATMO === osCentro.OSATMO) return;
+            if (distancia > radioKm || os.OSATMO === osCentro.OSATMO) {
+                return;
+            }
             
             // Determinar estado de la OS
             const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
@@ -5309,7 +5380,7 @@ async function generarMapaUnidadConFiltros() {
             const tieneDeudaAlta = deuda > 500;
             const diasVencimiento = parseInt(os['Días Vencimiento']) || 0;
             
-            // ✅ APLICAR FILTROS DE FORMA EXCLUSIVA (SOLO si hay filtros definidos)
+            // ✅ APLICAR FILTROS DE FORMA EXCLUSIVA
             let pasaFiltro = true;
             
             // Si hay filtros de tipología definidos, validar
@@ -5324,41 +5395,86 @@ async function generarMapaUnidadConFiltros() {
             }
             
             // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
-            if (esRegulada || tieneDeudaAlta || pasaFiltro) {
-                if (esRegulada) contadorReguladas++;
-                if (tieneDeudaAlta) contadorDeudaAlta++;
-                if (pasaFiltro && !esRegulada && !tieneDeudaAlta) contadorFiltradas++;
-                
+            if (esRegulada) {
+                contadorReguladas++;
                 osEnRadio.push({
                     ...os,
                     lat,
                     lng,
                     distancia,
-                    esRegulada,
-                    tieneDeudaAlta,
+                    esRegulada: true,
+                    tieneDeudaAlta: false,
                     numeroOrden: osEnRadio.length + 1
                 });
+            } else if (tieneDeudaAlta) {
+                contadorDeudaAlta++;
+                osEnRadio.push({
+                    ...os,
+                    lat,
+                    lng,
+                    distancia,
+                    esRegulada: false,
+                    tieneDeudaAlta: true,
+                    numeroOrden: osEnRadio.length + 1
+                });
+            } else if (pasaFiltro) {
+                contadorFiltradas++;
+                osEnRadio.push({
+                    ...os,
+                    lat,
+                    lng,
+                    distancia,
+                    esRegulada: false,
+                    tieneDeudaAlta: false,
+                    numeroOrden: osEnRadio.length + 1
+                });
+            } else {
+                contadorSinFiltro++;
             }
         });
         
+        console.log('✅ ==========================================');
+        console.log('✅ RESULTADO DE FILTRADO:');
+        console.log('✅ Total OS procesadas:', contadorTotal);
         console.log('✅ OS en radio filtradas:', {
             total: osEnRadio.length,
             por_filtros: contadorFiltradas,
             reguladas: contadorReguladas,
             deuda_alta: contadorDeudaAlta,
+            excluidas: contadorSinFiltro,
             radio_aplicado: radioKm + ' km'
         });
+        console.log('✅ ==========================================');
         
         // ========================================
         // ✅ 7️⃣ Generar mapa con OS asignadas + OS filtradas en radio
         // ========================================
         const osParaMapa = [...osAsignadasUnidad, ...osEnRadio];
+        
+        console.log('🗺️ ==========================================');
+        console.log('🗺️ GENERANDO MAPA');
+        console.log('🗺️ Total de OS para el mapa:', osParaMapa.length);
+        console.log('🗺️ OS asignadas:', osAsignadasUnidad.length);
+        console.log('🗺️ OS en radio filtradas:', osEnRadio.length);
+        console.log('🗺️ ==========================================');
+        
         generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
         
     } catch (err) {
-        console.error('❌ Error en generarMapaUnidadConFiltros:', err);
-        console.error('Stack:', err.stack);
-        resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${err.message || 'Error desconocido'}</div>`;
+        console.error('❌ ==========================================');
+        console.error('❌ ERROR EN generarMapaUnidadConFiltros:');
+        console.error('❌ Mensaje:', err.message);
+        console.error('❌ Stack:', err.stack);
+        console.error('❌ ==========================================');
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fee;">
+                <div class="result-header">❌ Error</div>
+                <p style="color: #c53030;">${err.message || 'Error desconocido'}</p>
+                <p style="color: #777; font-size: 12px; margin-top: 10px;">
+                    💡 Verifique la consola para más detalles.
+                </p>
+            </div>
+        `;
     }
 }
 
@@ -5376,7 +5492,6 @@ function determinarRangoDias(dias) {
     if (dias > 180) return '>180';
     return null;
 }
-
 
 	
 	// ========================================
@@ -5707,8 +5822,19 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
 // 📍 GENERAR RUTA DESDE UN PUNTO FIJO (CORREGIDO Y COMPATIBLE)
 // ========================================
 function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
+    console.log('🚨 ==========================================');
+    console.log('🚨 EJECUTANDO: generarRutaDesdePuntoFijo');
+    console.log('🚨 Parámetros recibidos:', { puntoNombre, puntoLat, puntoLng });
+    console.log('🚨 window.osAsignadasKML:', window.osAsignadasKML);
+    console.log('🚨 window.osAsignadasKML existe:', !!window.osAsignadasKML);
+    console.log('🚨 window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
+    console.log('🚨 window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+    console.log('🚨 window.unidadActivaMapaRutas:', window.unidadActivaMapaRutas);
+    console.log('🚨 ==========================================');
+    
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    
     
     try {
         // ✅ VALIDAR QUE EXISTAN LOS DATOS
@@ -8334,6 +8460,15 @@ console.log('Test 3 (Contratista + permitida):', tipologiaPermitidaParaRol('CAMB
 // FUNCIÓN PRINCIPAL
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
+    console.log('🗺️ ==========================================');
+    console.log('🗺️ EJECUTANDO: cargarYMostrarMapa');
+    console.log('🗺️ window.osAsignadasKML:', window.osAsignadasKML);
+    console.log('🗺️ window.osAsignadasKML existe:', !!window.osAsignadasKML);
+    console.log('🗺️ window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
+    console.log('🗺️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+    console.log('🗺️ OS Centro:', osCentro);
+    console.log('🗺️ Unidad Filtro:', unidadFiltro);
+    console.log('🗺️ ==========================================');
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = `<div class="result-card"><div class="loading" style="display: block; margin: 20px auto;"></div>
         <p style="text-align: center; color: #666;">Cargando mapa y calculando OS cercanas...</p></div>`;
