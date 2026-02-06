@@ -5382,7 +5382,6 @@ osPendientes.forEach((os, index) => {
     const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
     const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
     const deuda = parseFloat(os.Deuda) || 0;
-    const tieneDeudaAlta = deuda > 500;
     const fechaGen = new Date(os['Fecha Gen.']);
     const hoy = new Date();
     const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
@@ -5401,11 +5400,9 @@ osPendientes.forEach((os, index) => {
         pasaFiltro = filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento));
     }
     
-    // Debug de OS específica
     if (os.OSATMO === '11183226') {
         console.log('🚨 OS 11183226:', {
             Tipologia: os.Tipologia,
-            distancia: distancia.toFixed(2),
             pasaTipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
             diasVencimiento,
             pasaRango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento)),
@@ -5425,98 +5422,13 @@ osPendientes.forEach((os, index) => {
     }
 });
 
-// Si hay filtros de rangos definidos, validar
-if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
-    const rangoActual = determinarRangoDias(diasVencimiento);
-    pasaFiltro = filtrosAplicar.rangos.includes(rangoActual);
-}
-
-// ✅ DEBUG DETALLADO (agregar después de calcular pasaFiltro)
-if (distancia <= radioKm && contadorTotal <= 10) {
-    console.log(`🔍 DEBUG OS #${contadorTotal}:`, {
-        OSATMO: os.OSATMO,
-        distancia: distancia.toFixed(2) + 'km',
-        
-        // Validación de unidad
-        Unidad_OS: os.Unidad,
-        Unidad_Esperada: unidadSeleccionada,
-        es_otra_unidad: os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD',
-        
-        // Tipología
-        Tipologia_OS: os.Tipologia,
-        Tipologias_Filtro: filtrosAplicar.tipologias,
-        pasa_tipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
-        
-        // Rangos
-        dias_vencimiento: diasVencimiento,
-        rango_calculado: determinarRangoDias(diasVencimiento),
-        Rangos_Filtro: filtrosAplicar.rangos,
-        pasa_rango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento)),
-        
-        // Deuda
-        deuda: deuda,
-        es_regulada: esRegulada,
-        tiene_deuda_alta: tieneDeudaAlta,
-        pasa_deuda: pasaDeuda,
-        
-        // Resultado final
-        PASA_FILTRO: pasaFiltro,
-        SERÁ_INCLUIDA: esRegulada || (tieneDeudaAlta && pasaDeuda) || (pasaFiltro && pasaDeuda)
-    });
-}
-
-// ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
-if (esRegulada) {
-    contadorReguladas++;
-    osEnRadio.push({
-        ...os,
-        lat,
-        lng,
-        distancia,
-        esRegulada: true,
-        tieneDeudaAlta: false,
-        numeroOrden: osEnRadio.length + 1
-    });
-} else if (pasaFiltro && pasaDeuda) {
-    contadorFiltradas++;
-    osEnRadio.push({
-        ...os,
-        lat,
-        lng,
-        distancia,
-        esRegulada: false,
-        tieneDeudaAlta: false,
-        numeroOrden: osEnRadio.length + 1
-    });
-} else {
-    contadorSinFiltro++;
-}
-
-// ✅ Al final del forEach, ANTES de cerrarlo
-if (os.OSATMO === '11183226') {
-    console.log('🚨 ENCONTRADA OS 11183226:', {
-        OSATMO: os.OSATMO,
-        Tipologia: os.Tipologia,
-        distancia: distancia?.toFixed(2) + 'km',
-        pasaTipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
-        diasVencimiento,
-        rangoActual: determinarRangoDias(diasVencimiento),
-        pasaRango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento))
-    });
-}
-
-}); // ✅ CIERRA EL forEach AQUÍ       
-        console.log('✅ ==========================================');
-        console.log('✅ RESULTADO DE FILTRADO:');
-        console.log('✅ Total OS procesadas:', contadorTotal);
-        console.log('✅ OS en radio filtradas:', {
-            total: osEnRadio.length,
-            por_filtros: contadorFiltradas,
-            reguladas: contadorReguladas,
-            deuda_alta: contadorDeudaAlta,
-            excluidas: contadorSinFiltro,
-            radio_aplicado: radioKm + ' km'
-        });
+console.log('✅ RESULTADO DE FILTRADO:', {
+    total: osEnRadio.length,
+    por_filtros: contadorFiltradas,
+    reguladas: contadorReguladas,
+    deuda_alta: contadorDeudaAlta,
+    excluidas: contadorSinFiltro
+});
         console.log('✅ ==========================================');
         
         // ========================================
