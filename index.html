@@ -5366,8 +5366,9 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
                 return;
             }
             
-            const [lng, lat] = coords.split(',').map(c => parseFloat(c.trim()));
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+            // ✅ CORRECTO
+const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
 
             
              // ✅ DEBUG TEMPORAL
