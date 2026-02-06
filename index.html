@@ -5423,8 +5423,42 @@ if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
     const rangoActual = determinarRangoDias(diasVencimiento);
     pasaFiltro = filtrosAplicar.rangos.includes(rangoActual);
 }
-            
-            // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
+
+// ✅ DEBUG DETALLADO (agregar después de calcular pasaFiltro)
+if (distancia <= radioKm && contadorTotal <= 10) {
+    console.log(`🔍 DEBUG OS #${contadorTotal}:`, {
+        OSATMO: os.OSATMO,
+        distancia: distancia.toFixed(2) + 'km',
+        
+        // Validación de unidad
+        Unidad_OS: os.Unidad,
+        Unidad_Esperada: unidadSeleccionada,
+        es_otra_unidad: os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD',
+        
+        // Tipología
+        Tipologia_OS: os.Tipologia,
+        Tipologias_Filtro: filtrosAplicar.tipologias,
+        pasa_tipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
+        
+        // Rangos
+        dias_vencimiento: diasVencimiento,
+        rango_calculado: determinarRangoDias(diasVencimiento),
+        Rangos_Filtro: filtrosAplicar.rangos,
+        pasa_rango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento)),
+        
+        // Deuda
+        deuda: deuda,
+        es_regulada: esRegulada,
+        tiene_deuda_alta: tieneDeudaAlta,
+        pasa_deuda: pasaDeuda,
+        
+        // Resultado final
+        PASA_FILTRO: pasaFiltro,
+        SERÁ_INCLUIDA: esRegulada || (tieneDeudaAlta && pasaDeuda) || (pasaFiltro && pasaDeuda)
+    });
+}
+
+// ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
 if (esRegulada) {
     contadorReguladas++;
     osEnRadio.push({
