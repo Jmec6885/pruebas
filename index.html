@@ -4576,44 +4576,44 @@ async function buscar(campo, tipo) {
 // ========================================
 function transformarUsuarioAUnidad(usuario) {
     if (!usuario) return usuario;
-    
+
     // 🆕 Lista de usuarios que NO se transforman
     const usuariosSinTransformar = [
         'admin',
         'jmec6885',
         'bodega001',
-	'bodega002',
+        'bodega002',
         'bodega',
-	'DonHector',
-	'DonRivas',
-	'Prueba1',
-	'Prueba2',
-	'Ledy.S',
-	'Hector.H',
-	'Immer.T',
-	'Moises.T',
-	'Diego.G',
+        'DonHector',
+        'DonRivas',
+        'Prueba1',
+        'Prueba2',
+        'Ledy.S',
+        'Hector.H',
+        'Immer.T',
+        'Moises.T',
+        'Diego.G',
         'supervisor'
     ];
-    
+
     // Verificar si es un usuario especial (sin transformar)
     if (usuariosSinTransformar.includes(usuario.toLowerCase())) {
         console.log(`✅ Usuario sin transformación: ${usuario}`);
         return usuario;
     }
-    
-    // 🔄 Transformación para formato CLxxxPACnnn → CL-xxx-PAC-nnn
-    // Ejemplo: CLOPCPAC001 → CL-OPC-PAC-001
-    if (usuario.length >= 11) {
-        const transformado = usuario.slice(0, 2) + '-' + 
-                            usuario.slice(2, 5) + '-' + 
-                            usuario.slice(5, 8) + '-' + 
-                            usuario.slice(8);
-        
+
+    // 🔄 NUEVA LÓGICA: Detectar patrón CLXXXPAC### (con 1 o más dígitos al final)
+    const regex = /^CL([A-Z]{3})PAC(\d+)$/i;
+    const match = usuario.match(regex);
+
+    if (match) {
+        const codigoUnidad = match[1];   // Ej: "EYB"
+        const numero = match[2];         // Ej: "01", "7", "102", etc.
+        const transformado = `CL-${codigoUnidad}-PAC-${numero}`;
         console.log(`✅ Usuario transformado: ${usuario} → ${transformado}`);
         return transformado;
     }
-    
+
     // Si no cumple ninguna condición, retornar sin cambios
     console.log(`ℹ️ Usuario sin transformación (formato no reconocido): ${usuario}`);
     return usuario;
