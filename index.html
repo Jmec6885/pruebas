@@ -5536,17 +5536,6 @@ if (esRegulada) {
         tieneDeudaAlta: false,
         numeroOrden: osEnRadio.length + 1
     });
-} else if (tieneDeudaAlta && pasaDeuda) {
-    contadorDeudaAlta++;
-    osEnRadio.push({
-        ...os,
-        lat,
-        lng,
-        distancia,
-        esRegulada: false,
-        tieneDeudaAlta: true,
-        numeroOrden: osEnRadio.length + 1
-    });
 } else if (pasaFiltro && pasaDeuda) {
     contadorFiltradas++;
     osEnRadio.push({
@@ -5558,10 +5547,24 @@ if (esRegulada) {
         tieneDeudaAlta: false,
         numeroOrden: osEnRadio.length + 1
     });
- } else {
-            contadorSinFiltro++;
-        }
-    }); // ✅ CIERRA EL forEach AQUÍ        
+} else {
+    contadorSinFiltro++;
+}
+
+// ✅ Al final del forEach, ANTES de cerrarlo
+if (os.OSATMO === '11183226') {
+    console.log('🚨 ENCONTRADA OS 11183226:', {
+        OSATMO: os.OSATMO,
+        Tipologia: os.Tipologia,
+        distancia: distancia?.toFixed(2) + 'km',
+        pasaTipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
+        diasVencimiento,
+        rangoActual: determinarRangoDias(diasVencimiento),
+        pasaRango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento))
+    });
+}
+
+}); // ✅ CIERRA EL forEach AQUÍ       
         console.log('✅ ==========================================');
         console.log('✅ RESULTADO DE FILTRADO:');
         console.log('✅ Total OS procesadas:', contadorTotal);
