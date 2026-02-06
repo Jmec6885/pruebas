@@ -5436,6 +5436,18 @@ if (osEncontradas <= 5) {
         tipologias_filtro: filtrosAplicar.tipologias
     });
     
+    // ✅ DEBUG PRIMERAS 5 OS
+if (osEncontradas <= 5) {
+    console.log(`🔍 ANÁLISIS OS ${os.OSATMO}:`, {
+        Tipo_de_OS: os.Tipo_de_OS,
+        esRegulada,
+        deuda,
+        tieneDeudaAlta,
+        diasVencimiento,
+        Tipologia: os.Tipologia,
+        tipologias_filtro: filtrosAplicar.tipologias
+    });
+    
     // ✅ NUEVO: Debug de validación completa
     const pasaTipologia = !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia);
     const rangoActual = determinarRangoDias(diasVencimiento);
