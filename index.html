@@ -5368,11 +5368,23 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
             
             const [lng, lat] = coords.split(',').map(c => parseFloat(c.trim()));
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+
             
-            // Excluir la OS centro y fuera del radio
-           if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
-                return;
-            }
+             // ✅ DEBUG TEMPORAL
+    if (distancia <= radioKm && contadorTotal <= 5) {
+        console.log('🔍 DEBUG OS en radio:', {
+            OSATMO: os.OSATMO,
+            Tipologia: os.Tipologia,
+            distancia: distancia.toFixed(2) + ' km',
+            filtros_tipologias: filtrosAplicar.tipologias,
+            pasa_tipologia: filtrosAplicar.tipologias?.includes(os.Tipologia)
+        });
+    }
+    
+    // Excluir la OS centro y fuera del radio
+    if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
+        return;
+    }
             
             // Determinar estado de la OS
             const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
