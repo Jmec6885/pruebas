@@ -5435,6 +5435,19 @@ if (osEncontradas <= 5) {
         Tipologia: os.Tipologia,
         tipologias_filtro: filtrosAplicar.tipologias
     });
+    
+    // ✅ NUEVO: Debug de validación completa
+    const pasaTipologia = !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia);
+    const rangoActual = determinarRangoDias(diasVencimiento);
+    const pasaRango = !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(rangoActual);
+    
+    console.log(`📋 VALIDACIÓN OS ${os.OSATMO}:`, {
+        pasaTipologia,
+        pasaRango,
+        rangoActual,
+        rangos_filtro: filtrosAplicar.rangos,
+        SERÁ_INCLUIDA: esRegulada || pasaTipologia && pasaRango
+    });
 }
 
 // ✅ Clasificar por color de deuda
