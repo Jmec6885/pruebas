@@ -5189,7 +5189,7 @@ async function generarMapaUnidadConFiltros() {
     console.log('🗺️ window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
     console.log('🗺️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
     console.log('🗺️ ==========================================');
-    const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
+    const unidadSeleccionada = transformarUsuarioAUnidad(currentUser.usuario);
     
     if (!unidadSeleccionada) {
         alert('⚠️ Por favor seleccione una unidad');
@@ -5262,7 +5262,7 @@ async function generarMapaUnidadConFiltros() {
             throw new Error('No hay datos de OS asignadas. Por favor, recargue la página.');
         }
         
-        const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
+        const osAsignadasUnidad = window.osKMLData || window.osAsignadasKML || [];
         
         console.log(`✅ ${osAsignadasUnidad.length} OS asignadas encontradas para la unidad`);
         
@@ -5280,10 +5280,16 @@ async function generarMapaUnidadConFiltros() {
         // ========================================
         console.log('📍 Buscando OS centro con coordenadas...');
         
-        const osCentro = osAsignadasUnidad.find(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            return coords && coords.includes(',');
-        });
+        let osCentro;
+if (window.osPartidaSeleccionada) {
+    osCentro = osAsignadasUnidad.find(os => os.osatomo === window.osPartidaSeleccionada);
+}
+if (!osCentro) {
+    osCentro = osAsignadasUnidad.find(os => {
+        const coords = os.Coordenadas || os.Coordendasgis;
+        return coords && coords.includes(',');
+    });
+
         
         if (!osCentro) {
             console.error('❌ No se encontró OS centro con coordenadas');
@@ -5301,7 +5307,7 @@ async function generarMapaUnidadConFiltros() {
         
         console.log('✅ ==========================================');
         console.log('✅ DATOS DEL CENTRO:');
-        console.log('✅ OS Centro:', osCentro.OSATMO);
+        console.log('✅ OS Centro:', osCentro.osatomo || osCentro.OSATMO);
         console.log('✅ Coordenadas:', latCentro, lngCentro);
         console.log('✅ Radio de búsqueda:', radioKm, 'km');
         console.log('✅ ==========================================');
@@ -5354,7 +5360,7 @@ async function generarMapaUnidadConFiltros() {
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
             
             // Excluir la OS centro y fuera del radio
-            if (distancia > radioKm || os.OSATMO === osCentro.OSATMO) {
+           if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
                 return;
             }
             
@@ -5462,6 +5468,9 @@ async function generarMapaUnidadConFiltros() {
         `;
     }
 }
+
+
+
 
 // ========================================
 // 🔍 DETERMINAR RANGO DE DÍAS (para validar filtros de rangos)
