@@ -5185,6 +5185,9 @@ async function borrarTodosFiltrosUnidades() {
 // ========================================
 // 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO)
 // ========================================
+// ========================================
+// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO PARA CONTRATISTA)
+// ========================================
 async function generarMapaUnidadConFiltros() {
     const unidadSeleccionada = document.getElementById('selectUnidadParaMapa').value;
     
@@ -5198,42 +5201,43 @@ async function generarMapaUnidadConFiltros() {
     
     // ✅ Obtener fecha de HOY en formato YYYY-MM-DD
     const HOY = new Date().toISOString().split('T')[0];
+    console.log('🔍 Generando mapa para unidad:', unidadSeleccionada, '| Fecha:', HOY);
     
     try {
         // ========================================
-        // ✅ 1️⃣ Buscar SOLO filtros con fecha programada = HOY
+        // ✅ 1️⃣ Buscar filtros SOLO para HOY (fecha_programada = HOY)
         // ========================================
-        let {  filtrosUnidadHoy, error: errorHoy } = await supabaseClient
+        let { data: filtrosUnidadHoy, error: errorHoy } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
             .eq('Unidad', unidadSeleccionada)
-            .eq('fecha_programada', HOY)  // ✅ Solo buscar filtros de HOY
+            .eq('fecha_programada', HOY)
             .maybeSingle();
         
-        console.log('📊 Filtros para HOY:', {  filtrosUnidadHoy, error: errorHoy });
+        console.log('📊 Filtros encontrados para HOY:', filtrosUnidadHoy ? 'SÍ' : 'NO', '| Datos:', filtrosUnidadHoy);
         
         // ========================================
-        // ✅ 2️⃣ Aplicar filtros SOLO si existen para HOY
+        // ✅ 2️⃣ Determinar qué filtros aplicar
         // ========================================
-        let filtrosAplicar;
+        let filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         
         if (filtrosUnidadHoy) {
-            // ✅ Hay filtros para HOY → Aplicarlos
-            console.log('✅ Usando filtros programados para HOY:', filtrosUnidadHoy);
+            console.log('✅ USANDO FILTROS PROGRAMADOS PARA HOY:', {
+                unidad: filtrosUnidadHoy.Unidad,
+                fecha: filtrosUnidadHoy.fecha_programada,
+                rangos: filtrosUnidadHoy.rangos,
+                tipologias: filtrosUnidadHoy.tipologias,
+                radio: filtrosUnidadHoy.radio_km
+            });
             filtrosAplicar = filtrosUnidadHoy;
         } else {
-            // ❌ NO hay filtros para HOY → NO aplicar filtros (solo mostrar asignadas)
-            console.log('⚠️ NO hay filtros programados para HOY (' + HOY + ')');
-            console.log('ℹ️ Mostrando SOLO las OS asignadas sin filtrar');
-            
-            // ✅ Sin filtros (mostrar todo lo asignado)
-            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+            console.warn('⚠️ NO hay filtros programados para HOY. Usando valores por defecto (radio=3km, sin filtros de tipología/rangos)');
         }
         
         window.filtrosAplicados = filtrosAplicar;
         
         // ========================================
-        // ✅ 3️⃣ Continuar con el resto del código (sin cambios)
+        // ✅ 3️⃣ Cargar OS asignadas a la unidad
         // ========================================
         const osAsignadasUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
         
@@ -5246,6 +5250,9 @@ async function generarMapaUnidadConFiltros() {
             return;
         }
         
+        // ========================================
+        // ✅ 4️⃣ Encontrar OS centro (primera OS asignada con coordenadas)
+        // ========================================
         const osCentro = osAsignadasUnidad.find(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             return coords && coords.includes(',');
@@ -5264,55 +5271,111 @@ async function generarMapaUnidadConFiltros() {
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         const [latCentro, lngCentro] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
         
-        const {  osRegistradas } = await fetchAllFromTable(
+        console.log('📍 Centro de búsqueda:', { lat: latCentro, lng: lngCentro, radio: radioKm + ' km' });
+        
+        // ========================================
+        // ✅ 5️⃣ Cargar TODAS las OS pendientes (sin filtrar aún)
+        // ========================================
+        const { data: osPendientes } = await fetchAllFromTable(
             'OS Pendientes',
-            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda'
+            'OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda, "Días Vencimiento"'
         );
         
-        const osEnRadio = [];
+        console.log('📥 OS Pendientes cargadas:', osPendientes.length);
         
-        osRegistradas.forEach(os => {
+        // ========================================
+        // ✅ 6️⃣ FILTRAR OS EN RADIO CON LOS FILTROS APLICADOS
+        // ========================================
+        const osEnRadio = [];
+        let contadorFiltradas = 0;
+        let contadorReguladas = 0;
+        let contadorDeudaAlta = 0;
+        
+        osPendientes.forEach(os => {
+            // Validar coordenadas
             const coords = os.Coordenadas || os.Coordendasgis;
-            
             if (!validarFormatoCoordenadas(coords)) return;
             
             const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
             const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
             
-            if (distancia <= radioKm && os.OSATMO !== osCentro.OSATMO) {
-                // ✅ Usa una sola declaración de esRegulada
-                const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-                const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-                const deuda = parseFloat(os.Deuda) || 0;
-                const tieneDeudaAlta = deuda > 500;
+            // Excluir la OS centro y fuera del radio
+            if (distancia > radioKm || os.OSATMO === osCentro.OSATMO) return;
+            
+            // Determinar estado de la OS
+            const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+            const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+            const deuda = parseFloat(os.Deuda) || 0;
+            const tieneDeudaAlta = deuda > 500;
+            const diasVencimiento = parseInt(os['Días Vencimiento']) || 0;
+            
+            // ✅ APLICAR FILTROS DE FORMA EXCLUSIVA (SOLO si hay filtros definidos)
+            let pasaFiltro = true;
+            
+            // Si hay filtros de tipología definidos, validar
+            if (filtrosAplicar.tipologias && filtrosAplicar.tipologias.length > 0) {
+                pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
+            }
+            
+            // Si hay filtros de rangos definidos, validar
+            if (pasaFiltro && filtrosAplicar.rangos && filtrosAplicar.rangos.length > 0) {
+                const rangoActual = determinarRangoDias(diasVencimiento);
+                pasaFiltro = filtrosAplicar.rangos.includes(rangoActual);
+            }
+            
+            // ✅ INCLUIR SI: es regulada, tiene deuda alta, O pasa los filtros
+            if (esRegulada || tieneDeudaAlta || pasaFiltro) {
+                if (esRegulada) contadorReguladas++;
+                if (tieneDeudaAlta) contadorDeudaAlta++;
+                if (pasaFiltro && !esRegulada && !tieneDeudaAlta) contadorFiltradas++;
                 
-                // ✅ Aplicar reglas de negocio completas
-                if (esRegulada || tieneDeudaAlta || validarFiltrosOS(os, filtrosAplicar)) {
-                    osEnRadio.push({
-                        ...os,
-                        lat,
-                        lng,
-                        distancia,
-                        esRegulada,
-                        tieneDeudaAlta
-                    });
-                }
+                osEnRadio.push({
+                    ...os,
+                    lat,
+                    lng,
+                    distancia,
+                    esRegulada,
+                    tieneDeudaAlta,
+                    numeroOrden: osEnRadio.length + 1
+                });
             }
         });
         
-        osEnRadio.sort((a, b) => a.distancia - b.distancia);
+        console.log('✅ OS en radio filtradas:', {
+            total: osEnRadio.length,
+            por_filtros: contadorFiltradas,
+            reguladas: contadorReguladas,
+            deuda_alta: contadorDeudaAlta,
+            radio_aplicado: radioKm + ' km'
+        });
         
+        // ========================================
+        // ✅ 7️⃣ Generar mapa con OS asignadas + OS filtradas en radio
+        // ========================================
         const osParaMapa = [...osAsignadasUnidad, ...osEnRadio];
-        
         generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
         
     } catch (err) {
-        console.error('Error:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
+        console.error('❌ Error en generarMapaUnidadConFiltros:', err);
+        console.error('Stack:', err.stack);
+        resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${err.message || 'Error desconocido'}</div>`;
     }
 }
 
-
+// ========================================
+// 🔍 DETERMINAR RANGO DE DÍAS (para validar filtros de rangos)
+// ========================================
+function determinarRangoDias(dias) {
+    if (dias >= 0 && dias <= 5) return '0-5';
+    if (dias >= 6 && dias <= 10) return '6-10';
+    if (dias >= 11 && dias <= 15) return '11-15';
+    if (dias >= 16 && dias <= 20) return '16-20';
+    if (dias >= 21 && dias <= 30) return '21-30';
+    if (dias >= 31 && dias <= 45) return '31-45';
+    if (dias >= 46 && dias <= 180) return '46-180';
+    if (dias > 180) return '>180';
+    return null;
+}
 
 
 	
@@ -5641,32 +5704,88 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
 
 
 // ========================================
-// 📍 GENERAR RUTA DESDE UN PUNTO FIJO (Ej: Centro de Ahuachapán, Sonsonate)
+// 📍 GENERAR RUTA DESDE UN PUNTO FIJO (CORREGIDO Y COMPATIBLE)
 // ========================================
 function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    
     try {
-        // 1. Obtener todas las OS Pendientes
-        const osData = window.osAsignadasKML.filter(os => os.Unidad === window.unidadActivaMapaRutas); // O usa la variable global que tengas
-        if (!osData || osData.length === 0) {
-            throw new Error('No hay OS asignadas para la unidad.');
+        // ✅ VALIDAR QUE EXISTAN LOS DATOS
+        if (!window.osAsignadasKML || !Array.isArray(window.osAsignadasKML)) {
+            console.error('❌ window.osAsignadasKML no está definido o no es un array');
+            throw new Error('No hay datos de OS asignadas cargados. Por favor, recargue la página.');
         }
-
-        // 2. Aplicar el algoritmo con el punto fijo
-        const rutaOptimizada = optimizarRutaVecinoCercano(osData, '', { lat: puntoLat, lng: puntoLng });
-
-        // 3. Mostrar el mapa con la ruta optimizada
+        
+        if (window.osAsignadasKML.length === 0) {
+            console.warn('⚠️ No hay OS asignadas cargadas');
+            throw new Error('No hay OS asignadas disponibles.');
+        }
+        
+        console.log(`📍 Generando ruta desde punto fijo: ${puntoNombre} (${puntoLat}, ${puntoLng})`);
+        
+        // ✅ OBTENER LA UNIDAD ACTIVA (si existe)
+        const unidadActiva = window.unidadActivaMapaRutas || 
+                            (window.osAsignadasKML[0] && window.osAsignadasKML[0].Unidad);
+        
+        console.log(`📊 Unidad activa detectada: ${unidadActiva || 'TODAS'}`);
+        
+        // ✅ FILTRAR OS POR UNIDAD (si hay unidad activa)
+        let osData = window.osAsignadasKML;
+        if (unidadActiva) {
+            osData = window.osAsignadasKML.filter(os => os.Unidad === unidadActiva);
+            console.log(`✅ ${osData.length} OS filtradas para unidad: ${unidadActiva}`);
+        }
+        
+        if (!osData || osData.length === 0) {
+            console.warn('⚠️ No hay OS para la unidad activa');
+            osData = window.osAsignadasKML; // Usar todas si no hay para la unidad
+        }
+        
+        // ✅ FILTRAR SOLO OS CON COORDENADAS VÁLIDAS
+        const osConCoordenadas = osData.filter(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            return coords && coords.includes(',');
+        });
+        
+        if (osConCoordenadas.length === 0) {
+            console.error('❌ No hay OS con coordenadas válidas');
+            throw new Error('No hay OS con coordenadas válidas para generar la ruta.');
+        }
+        
+        console.log(`✅ ${osConCoordenadas.length} OS con coordenadas válidas encontradas`);
+        
+        // ✅ APLICAR ALGORITMO DE OPTIMIZACIÓN
+        const rutaOptimizada = optimizarRutaVecinoCercano(osConCoordenadas, '', { 
+            lat: puntoLat, 
+            lng: puntoLng 
+        });
+        
+        console.log(`✅ Ruta optimizada generada: ${rutaOptimizada.length} puntos`);
+        
+        // ✅ MOSTRAR MAPA CON LA RUTA
         mostrarMapaKMLConNumeracion(rutaOptimizada, puntoNombre, puntoLat, puntoLng);
+        
     } catch (err) {
-        console.error('Error generando ruta desde punto fijo:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error al generar la ruta</div>';
+        console.error('❌ Error generando ruta desde punto fijo:', err);
+        console.error('Stack:', err.stack);
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fff3cd;">
+                <div class="result-header">⚠️ Error</div>
+                <p style="color: #666;">${err.message || 'Error desconocido al generar la ruta'}</p>
+                <p style="color: #999; font-size: 12px; margin-top: 10px;">
+                    💡 Consejo: Asegúrese de que las OS estén cargadas correctamente.
+                </p>
+            </div>
+        `;
     }
 }
 
 
-// REEMPLAZAR función generarMapaKMLConPuntoPartida
 
+// ========================================
+// 🗺️ GENERAR MAPA KML CON PUNTO DE PARTIDA (CORREGIDO)
+// ========================================
 function generarMapaKMLConPuntoPartida(unidad) {
     const osPartida = document.getElementById('selectPuntoPartidaKML').value;
     
@@ -5675,39 +5794,53 @@ function generarMapaKMLConPuntoPartida(unidad) {
         return;
     }
     
+    // ✅ VALIDAR DATOS
     const osData = window.osKMLData;
-    if (!osData) {
-        alert('❌ Error: Datos no disponibles');
+    if (!osData || !Array.isArray(osData)) {
+        console.error('❌ window.osKMLData no está definido o no es un array');
+        alert('❌ Error: Datos no disponibles. Por favor, recargue la página.');
         return;
     }
-
-
-	// 🆕 NORMALIZACIÓN CRÍTICA: Aseguramos que la propiedad clave siempre sea 'osatomo'
-// Esto previene errores de inconsistencia de mayúsculas/minúsculas.
-const osDataNormalizada = osData.map(os => ({
-    ...os,
-    // Usa el valor de 'osatomo' si existe, si no, usa el valor de 'OSATMO'.
-    osatomo: os.osatomo || os.OSATMO || '' 
-}));
-
-
+    
+    if (osData.length === 0) {
+        console.warn('⚠️ No hay datos en window.osKMLData');
+        alert('⚠️ No hay datos disponibles para generar el mapa.');
+        return;
+    }
+    
+    console.log(`📍 Generando mapa con punto de partida: ${osPartida}`);
+    
+    // 🆕 NORMALIZACIÓN CRÍTICA: Aseguramos que la propiedad clave siempre sea 'osatomo'
+    const osDataNormalizada = osData.map(os => ({
+        ...os,
+        osatomo: os.osatomo || os.OSATMO || '' 
+    }));
+    
+    console.log(`✅ ${osDataNormalizada.length} OS normalizadas`);
+    
     // 🆕 LLAMADA AL ALGORITMO OPTIMIZADO con los datos normalizados
-const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
-
-if (todosLosPuntos.length === 0) {
-    // Si la función de optimización falla, mostramos el mensaje de alerta.
-    alert('❌ Error al optimizar la ruta. Verifique las coordenadas o el punto de partida.');
-    return;
-}
+    const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
+    
+    if (todosLosPuntos.length === 0) {
+        console.error('❌ La optimización de ruta no devolvió puntos');
+        alert('❌ Error al optimizar la ruta. Verifique las coordenadas o el punto de partida.');
+        return;
+    }
     
     const osCentro = todosLosPuntos[0]; // El centro es el primer punto en la ruta optimizada
     
     console.log(`✅ Ruta Optimizada (Vecino Cercano) generada: ${todosLosPuntos.length} puntos numerados`);
     
+    // ✅ VALIDAR COORDENADAS DEL CENTRO
+    if (!osCentro || !osCentro.lat || !osCentro.lng) {
+        console.error('❌ Coordenadas del centro inválidas:', osCentro);
+        alert('❌ Error: Coordenadas del punto de partida inválidas.');
+        return;
+    }
+    
     // Generar HTML del mapa
     mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, osCentro.lat, osCentro.lng);
 }
-
 
 // ========================================
 // 🔄 REEMPLAZAR mostrarMapaKMLConNumeracion()
