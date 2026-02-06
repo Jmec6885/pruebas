@@ -5376,24 +5376,37 @@ osPendientes.forEach((os, index) => {
     }
     
     const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-    
-    // ✅ DEBUG: Contar OS en radio
-    if (distancia <= radioKm) {
-        osEncontradas++;
-        if (osEncontradas <= 3) {
-            console.log(`🎯 OS EN RADIO #${osEncontradas}:`, {
-                OSATMO: os.OSATMO,
-                Unidad: os.Unidad,
-                Tipologia: os.Tipologia,
-                distancia: distancia.toFixed(2) + 'km'
-            });
-        }
+const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
+
+// ✅ DEBUG: Contar OS en radio
+if (distancia <= radioKm) {
+    osEncontradas++;
+    if (osEncontradas <= 3) {
+        console.log(`🎯 OS EN RADIO #${osEncontradas}:`, {
+            OSATMO: os.OSATMO,
+            Unidad: os.Unidad,
+            Tipologia: os.Tipologia,
+            distancia: distancia.toFixed(2) + 'km'
+        });
     }
-    
-    // Excluir la OS centro y fuera del radio
-    if (os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD') {
+}
+
+// Excluir la OS centro y fuera del radio
+if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) {
     return;
+}
+
+// ✅ NUEVO: Excluir OS de otras unidades
+if (os.Unidad && os.Unidad !== unidadSeleccionada && os.Unidad !== 'SIN UNIDAD') {
+    if (osEncontradas <= 5) {
+        console.log('❌ RECHAZADA por unidad:', os.OSATMO, '| Unidad OS:', os.Unidad, '| Esperada:', unidadSeleccionada);
+    }
+    return;
+}
+
+// ✅ LOG: OS que pasan validación de unidad
+if (osEncontradas <= 5) {
+    console.log('✅ PASA validación unidad:', os.OSATMO);
 }
             
             // Determinar estado de la OS
