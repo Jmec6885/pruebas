@@ -9208,87 +9208,46 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     // ✅ Obtener radio actual desde filtrosAplicados o usar el parámetro
     const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
     
+    // ⚠️ ATENCIÓN: Todo el HTML debe empezar con esta comilla invertida `
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header">
                 🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioActual} km)
             </div>
             
-            <!-- ✅ CONTROL DE RADIO (NUEVO) -->
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #3b82f6;">
                 <strong>📍 Radio de Búsqueda:</strong>
                 <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
                     <input type="range" id="sliderRadioKm" min="1" max="20" value="${radioActual}" 
                            style="flex: 1; height: 8px; border-radius: 4px; cursor: pointer;"
-                           oninput="actualizarRadioMapa(this.value)">
+                           oninput="document.getElementById('valorRadioKm').innerText = this.value + ' km'">
                     <span id="valorRadioKm" style="font-weight: bold; color: #3b82f6; min-width: 60px; text-align: center;">
                         ${radioActual} km
                     </span>
+                    <button onclick="actualizarRadioMapa(document.getElementById('sliderRadioKm').value, false)" 
+                            style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        🔁 Actualizar
+                    </button>
                 </div>
                 <small style="color: #666; display: block; margin-top: 8px; font-size: 13px;">
                     ⚠️ Cambiar el radio actualiza el mapa. Los filtros originales permanecen intactos.
                 </small>
             </div>
             
-            <!-- ✅ LEYENDA CON BOTONES CLICKEABLES -->
             <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
                 <strong>Leyenda (Click para filtrar):</strong>
-                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
-                    <button onclick="filtrarPorEstado('centro')" 
-                            style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🟢 Tu OS (centro)
-                    </button>
-                    <button onclick="filtrarPorEstado('asignada')" 
-                            style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🟠 OS Asignadas
-                    </button>
-                    <button onclick="filtrarPorEstado('regulada')" 
-                            style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔴 OS Reguladas
-                    </button>
-                    <button onclick="filtrarPorEstado('no_regulada')" 
-                            style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔵 OS No Reguladas
-                    </button>
-                    <button onclick="filtrarPorEstado('deuda_alta')" 
-                            style="background: #fdd835; color: #333; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🟡 Deuda Alta (>$500)
-                    </button>
-                    <button onclick="filtrarPorEstado('deuda_media')" 
-                            style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🟠 Deuda Media ($100-$500)
-                    </button>
-                    <button onclick="filtrarPorEstado('deuda_baja')" 
-                            style="background: #f48fb1; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🌸 Deuda Baja ($50-$100)
-                    </button>
-                    <button onclick="filtrarPorEstado('todas')" 
-                            style="background: #9e9e9e; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔄 Ver Todas
-                    </button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
+                    <button onclick="filtrarPorEstado('centro')" style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟢 Tu OS (centro)</button>
+                    <button onclick="filtrarPorEstado('asignada')" style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟠 OS Asignadas</button>
+                    <button onclick="filtrarPorEstado('regulada')" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔴 OS Reguladas</button>
+                    <button onclick="filtrarPorEstado('no_regulada')" style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔵 OS No Reguladas</button>
+                    <button onclick="filtrarPorEstado('deuda_alta')" style="background: #fdd835; color: #333; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟡 Deuda Alta (>$500)</button>
+                    <button onclick="filtrarPorEstado('deuda_media')" style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟠 Deuda Media</button>
+                    <button onclick="filtrarPorEstado('deuda_baja')" style="background: #f48fb1; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🌸 Deuda Baja</button>
+                    <button onclick="filtrarPorEstado('todas')" style="background: #9e9e9e; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔄 Ver Todas</button>
                 </div>
             </div>
 
-// ✅ AÑADIR BOTÓN DE ACTUALIZACIÓN
-<div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #3b82f6;">
-    <strong>📍 Radio de Búsqueda:</strong>
-    <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-        <input type="range" id="sliderRadioKm" min="1" max="20" value="${radioActual}" 
-               style="flex: 1; height: 8px; border-radius: 4px; cursor: pointer;"
-               oninput="actualizarRadioMapa(this.value, true)">
-        <span id="valorRadioKm" style="font-weight: bold; color: #3b82f6; min-width: 60px; text-align: center;">
-            ${radioActual} km
-        </span>
-        <button onclick="actualizarRadioMapa(document.getElementById('sliderRadioKm').value, false)" 
-                style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-            🔁 Actualizar
-        </button>
-    </div>
-    <small style="color: #666; display: block; margin-top: 8px; font-size: 13px;">
-        ⚠️ Cambiar el radio actualiza el mapa. Los filtros originales permanecen intactos.
-    </small>
-</div>
-            
             ${window.filtrosAplicados ? `
             <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
                 <strong>🔍 Filtros activos:</strong><br>
@@ -9306,15 +9265,15 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                         <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')" 
                              id="tipologia_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
                              style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
-                             onmouseover="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#e3f2fd'; this.style.transform='translateX(5px)' }"
-                             onmouseout="if(window.tipologiaFiltrada !== '${tip}') { this.style.background='#f8f9fa'; this.style.transform='translateX(0)' }">
+                             onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(5px)'"
+                             onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)'">
                             <strong style="color: #2196f3;">${count}</strong> - ${tip}
                         </div>
                     `).join('')}
                 </div>
             </div>
             
-            <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0;"></div>
+            <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0; border: 1px solid #ccc;"></div>
             
             <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
                 <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
@@ -9323,14 +9282,14 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                 </div>
             </div>
         </div>
-    `;
-    
+    `; // ⚠️ AQUÍ TERMINA RECIÉN EL INNERHTML
+
+    // ✅ EJECUCIÓN DEL MAPA DESPUÉS DE CARGAR EL HTML
     setTimeout(() => {
         const panel = document.getElementById('panelDetalleOS');
         if (panel) {
-            console.log('✅ Panel de detalle encontrado');
+            console.log('✅ Panel de detalle listo');
             try {
-                // ✅ Pasar el radio actual a la función de inicialización
                 inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioActual);
             } catch (error) {
                 console.error('❌ Error inicializando mapa:', error);
@@ -9340,7 +9299,6 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     
     window.datosMapaExportar = osEnRadio;
 }
-
 
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
     // ✅ Convertir a número y validar
