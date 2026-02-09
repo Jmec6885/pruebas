@@ -8525,15 +8525,15 @@ async function cargarFiltrosUniversales(unidad = null) {
         modo: esGestionAdmin ? 'GESTIÓN (Admin/Despacho)' : 'EJECUCIÓN (Unidad)'
     });
     
-    let filtros = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
+    // Objeto por defecto (Fallback)
+    let filtrosDefault = { rangos: null, tipologias: null, radio_km: 3, fecha_vigencia: null };
 
     try {
         // ==========================================================
-        // ✅ PASO 0: FILTROS POR UNIDAD (Solo para el Técnico en KML Ruta)
-        // Si NO es Admin/Despacho, buscamos OBLIGATORIAMENTE en filtros_por_unidad
+        // ✅ PASO 0: FILTROS POR UNIDAD (Solo para Técnicos en campo)
         // ==========================================================
         if (unidad && !esGestionAdmin) {
-            console.log(`📡 Modo Ejecución: Buscando filtros específicos para la unidad: ${unidad}`);
+            console.log(`📡 Modo Ejecución: Buscando filtros específicos para: ${unidad}`);
             let { data: filtrosUnidad } = await supabaseClient
                 .from('filtros_por_unidad')
                 .select('*')
@@ -8541,88 +8541,80 @@ async function cargarFiltrosUniversales(unidad = null) {
                 .maybeSingle();
 
             if (filtrosUnidad) {
-                console.log('✅ ¡ENCONTRADO! Usando filtros programados para la Unidad:', filtrosUnidad);
+                console.log('✅ ¡ENCONTRADO! Usando filtros de la Unidad:', filtrosUnidad);
                 return {
                     ...filtrosUnidad,
                     rangos: filtrosUnidad.rangos || filtrosUnidad.Rangos,
                     tipologias: filtrosUnidad.tipologias || filtrosUnidad.Tipologias
                 };
             }
-            console.log(`ℹ️ La unidad ${unidad} no tiene filtros asignados, pasará a filtros globales.`);
+            console.log(`ℹ️ La unidad ${unidad} no tiene filtros específicos.`);
         }
 
         // ==========================================================
-        // ✅ PASO 1: FILTROS DE ESTRATEGIA (Mapa de Rutas - Admin/Despacho)
-        // Si llegamos aquí es porque eres Admin O la unidad no tiene filtros propios
+        // ✅ PASO 1: FILTROS DEL USUARIO ACTUAL (Admin/Despacho)
+        // Buscamos lo que el usuario logueado guardó personalmente
         // ==========================================================
-        
-        // A. Intentar filtros personales del Despachador logueado
-        if (currentUser.rol === 'Despacho') {
-            console.log('🔍 Buscando filtros personales de Despacho en filtros_mapa...');
-            let { data: filtrosHoy } = await supabaseClient
+        if (esGestionAdmin) {
+            console.log(`🔍 Buscando filtros personales de ${currentUser.rol}: ${currentUser.usuario}`);
+            
+            let { data: filtrosPersonales } = await supabaseClient
                 .from('filtros_mapa')
                 .select('*')
                 .eq('usuario', currentUser.usuario)
-                .eq('fecha_vigencia', HOY)
+                .order('fecha_actualizacion', { ascending: false }) // Siempre el último guardado
+                .limit(1)
                 .maybeSingle();
 
-            if (!filtrosHoy) {
-                let { data: filtrosDefault } = await supabaseClient
-                    .from('filtros_mapa')
-                    .select('*')
-                    .eq('usuario', currentUser.usuario)
-                    .is('fecha_vigencia', null)
-                    .maybeSingle();
-                filtrosHoy = filtrosDefault;
-            }
-
-            if (filtrosHoy) {
-                console.log('✅ Usando filtros personales de Despacho:', filtrosHoy);
-                return filtrosHoy;
+            if (filtrosPersonales) {
+                console.log(`✅ ¡ENCONTRADO! Usando tus filtros (${currentUser.usuario}):`, filtrosPersonales);
+                return filtrosPersonales;
             }
         }
 
-        // B. Intentar Filtros Globales (La estrategia general del Admin)
-        console.log('🔍 Buscando estrategia GLOBAL en filtros_mapa...');
+        // ==========================================================
+        // ✅ PASO 2: ESTRATEGIA GLOBAL (Respaldo del Sistema)
+        // Si el usuario no ha guardado nada, usamos la estrategia general (usuario null)
+        // ==========================================================
+        console.log('🔍 Buscando estrategia GLOBAL (usuario: null)...');
         
-        // Global de hoy
-        let { data: filtrosGlobalesHoy } = await supabaseClient
+        // Intentar Global de Hoy
+        let { data: globalHoy } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
             .eq('fecha_vigencia', HOY)
             .maybeSingle();
 
-        if (filtrosGlobalesHoy) {
-            console.log('✅ Usando estrategia global de HOY:', filtrosGlobalesHoy);
-            return filtrosGlobalesHoy;
+        if (globalHoy) {
+            console.log('✅ Usando estrategia global de HOY');
+            return globalHoy;
         }
 
-        // Global por defecto (El de siempre)
-        let { data: filtrosGlobalesDefault } = await supabaseClient
+        // Intentar Global por Defecto
+        let { data: globalDefault } = await supabaseClient
             .from('filtros_mapa')
             .select('*')
             .is('usuario', null)
             .is('fecha_vigencia', null)
             .maybeSingle();
 
-        if (filtrosGlobalesDefault) {
-            console.log('✅ Usando estrategia global POR DEFECTO:', filtrosGlobalesDefault);
-            return filtrosGlobalesDefault;
+        if (globalDefault) {
+            console.log('✅ Usando estrategia global POR DEFECTO');
+            return globalDefault;
         }
 
         // ========================================
-        // ✅ PASO 2: FALLBACK FINAL
+        // ✅ PASO 3: FALLBACK FINAL
         // ========================================
-        console.warn('⚠️ No se encontró ninguna configuración aplicable.');
-        return filtros;
+        console.warn('⚠️ No se encontró ninguna configuración aplicable. Usando valores limpios.');
+        return filtrosDefault;
         
     } catch (err) {
         console.error('❌ Error crítico en cargarFiltrosUniversales:', err);
-        return filtros;
+        return filtrosDefault;
     }
 }
-
 
 
 		// ========================================
