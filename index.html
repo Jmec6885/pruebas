@@ -4777,8 +4777,8 @@ if (osAsignadasAMiUnidad.length === 0) {
 
 // ✅ Paso 2: Filtrar OS Pendientes usando esa lista exacta
 const osParaMapa = osCompletas.filter(os =>
-    osAsignadasAMiUnidad.includes(String(os.OSATMO).trim())
-);
+                osAsignadasAMiUnidad.includes(String(os.OSATMO).trim())
+            );
 
             if (!osParaMapa || osParaMapa.length === 0) {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
@@ -4787,18 +4787,15 @@ const osParaMapa = osCompletas.filter(os =>
 
             console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
 
-// ✅ LLAMAR A LA FUNCIÓN CORRECTA (con interfaz de botones)
-generarMapaKMLRuta(osParaMapa, miUnidad);
-                // si quieres que muestre el dropdown usamos la funcion que creamos abajo
-                generarInterfazUnidadMapaRutas({}, osParaMapa);
-            } else {
-                searchGrid.innerHTML = `<div class="result-card">⚠️ Interfaz de mapa no disponible</div>`;
-            }
-            return;
+            // ✅ LLAMAR A LA FUNCIÓN CORRECTA (con interfaz de botones)
+            generarMapaKMLRuta(osParaMapa, miUnidad);
+
+            return; // Finaliza la ejecución para este rol
         }
 
         // Otros roles: sin acceso
         searchGrid.innerHTML = `<div class="result-card">⚠️ Tu rol (${rol}) no tiene acceso a esta función</div>`;
+
     } catch (err) {
         console.error('Error cargando KML Ruta:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
