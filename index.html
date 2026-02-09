@@ -5424,20 +5424,25 @@ osPendientes.forEach((os) => {
             const deuda = parseFloat(os.Comentario?.match(/\$(\d+(\.\d+)?)/)?.[1] || 0);
             const esDeudaAlta = deuda > 500;
 
-            // 6. Aplicar Filtros Estrictos de la Tabla
-            let cumpleFiltros = false;
-            if (filtrosUnidadHoy) {
-                const tipOk = (filtrosUnidadHoy.tipologias || []).includes((os.Tipologia || "").trim());
-                const rangoOk = (filtrosUnidadHoy.rangos || []).includes(determinarRangoDias(os['Fecha Gen.']));
-                
-                // IMPORTANTE: Para entrar por filtro debe cumplir AMBOS (Tipología Y Rango)
-                cumpleFiltros = tipOk && rangoOk;
-            }
+            // 6. Aplicar Filtros Estrictos
+let cumpleFiltros = false;
 
-           // REGLA FINAL: Si cumple los filtros de la tabla O es una prioridad (Regulada/Deuda Alta)
+// SOLO si se encontró el registro de hoy en Supabase
+if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
+    const tipOS = (os.Tipologia || "").trim();
+    const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+    
+    const tipOk = filtrosUnidadHoy.tipologias.includes(tipOS);
+    const rangoOk = filtrosUnidadHoy.rangos.includes(rangoOS);
+    
+    // Si la OS no coincide con lo programado para hoy, cumpleFiltros será FALSE
+    cumpleFiltros = tipOk && rangoOk;
+}
+
+// REGLA DE ORO: 
             if (cumpleFiltros || esRegulada || esDeudaAlta) {
                 
-                // Actualizamos los contadores para el log final
+                // 1. PRIMERO: Actualizamos los contadores (Fuera del objeto)
                 if (esRegulada) {
                     contadorReguladas++;
                 } else if (esDeudaAlta) {
@@ -5446,6 +5451,7 @@ osPendientes.forEach((os) => {
                     contadorFiltradas++;
                 }
 
+                // 2. SEGUNDO: Agregamos a la lista
                 osEnRadio.push({
                     ...os,
                     lat: coords.lat,
@@ -5454,12 +5460,12 @@ osPendientes.forEach((os) => {
                     esExtra: true,
                     estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
                 });
+
             } else {
                 // Si no cumple nada, contamos como rechazada por filtro
                 contadorSinFiltro++;
             }
         }); // Aquí cierra el forEach
-
         
 
 console.log('✅ ==========================================');
@@ -5690,20 +5696,30 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas; 
     
-    // ✅ CARGAR FILTROS GUARDADOS DE HOY
-    const HOY = new Date().toISOString().split('T')[0];
-    const { data: filtrosHoy } = await supabaseClient
+    // ✅ Forzar fecha local de El Salvador
+    const HOY = new Date().toLocaleDateString('en-CA'); 
+    console.log('📅 Buscando filtros en DB para:', HOY, 'Unidad:', unidad);
+
+    // 1. Buscamos el filtro (Corregido: usamos "unidad" que viene por parámetro)
+    let { data: filtrosUnidadHoy } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
-        .eq('Unidad', unidad)
+        .eq('Unidad', unidad) 
         .eq('fecha_programada', HOY)
         .maybeSingle();
-    
-    const tieneFiltros = !!filtrosHoy;
+
+    // 2. Determinar estado de filtros
+    const tieneFiltros = !!filtrosUnidadHoy;
     const mensajeFiltros = tieneFiltros 
-        ? `✅ Filtros activos: ${filtrosHoy.tipologias?.length || 0} tipologías, ${filtrosHoy.rangos?.length || 0} rangos, radio ${filtrosHoy.radio_km}km`
-        : '⚠️ Sin filtros guardados para hoy (Se usará radio 3km por defecto)';
+        ? `✅ Filtros activos: ${filtrosUnidadHoy.tipologias?.length || 0} tipologías, ${filtrosUnidadHoy.rangos?.length || 0} rangos, radio ${filtrosUnidadHoy.radio_km}km`
+        : '⚠️ Sin filtros programados para hoy (Solo se mostrarán Reguladas/Deuda Alta)';
+
+    console.log(mensajeFiltros);
+
+    // 3. Guardar globalmente para que "generarMapaUnidadConFiltros" lo encuentre
+    window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
     
+    // Generar el HTML
     const htmlSelector = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <h3>📍 KML Ruta - ${unidad}</h3>
@@ -5750,10 +5766,8 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     `;
     
     resultsContainer.innerHTML = htmlSelector;
-
-    console.log("✅ Interfaz generada y window.osAsignadasKML cargado");
+    console.log("✅ Interfaz generada y filtros preparados");
 }
-
 
 // Solo asignadas (sin filtros)
 function generarMapaKMLSoloAsignadas(unidad) {
