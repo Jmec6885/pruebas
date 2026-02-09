@@ -5417,20 +5417,26 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         return; 
     }
 
-    // --- D. FILTROS DE TABLA (Tipologia y Rango) ---
+    // --- D. APLICACIÓN DE FILTROS DE TABLA (CON DEBUG) ---
     let cumpleFiltrosTabla = false;
-    let detalleFiltro = "";
 
     if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+        // Normalizamos tanto la OS como los filtros
         const tipOS_Norm = normalizarTexto(os.Tipologia);
         const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
         const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
 
-        const tipOk = tipologiasFiltro.includes(tipOS_Norm);
+        // CAMBIO CRÍTICO: Usamos includes para que si el filtro dice "INSTALACION" 
+        // y la OS dice "INSTALACION DE MEDIDOR", sea VÁLIDO.
+        const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
         const rangoOk = rangosFiltro.includes(rangoOS);
         
         cumpleFiltrosTabla = tipOk && rangoOk;
-        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk}]`;
+
+        // Si la orden está cerca pero falló el filtro, te dirá por qué en consola
+        if (!cumpleFiltrosTabla && dist <= radioConfigurado && esLibre && !esDuplicada) {
+             console.log(`❌ OS ${os.OSATMO} rechazada: Tipologia("${tipOS_Norm}") Match=${tipOk} | Rango("${rangoOS}") Match=${rangoOk}`);
+        }
     }
 
     // --- E. DECISIÓN FINAL: EL "PASE VIP" ---
