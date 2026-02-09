@@ -5389,7 +5389,7 @@ let contadorUnidadInvalida = 0;
 let contadorDuplicados = 0;
 let contadorSinCoordenadas = 0;
 
-// 1. Antes de empezar el loop, inicializa el diagnóstico
+// 1. Inicializar diagnóstico de rangos encontrados en el radio de 3km
 const diagnosticoRangos = {}; 
 
 osPendientes.forEach((os) => {
@@ -5405,87 +5405,92 @@ osPendientes.forEach((os) => {
         return; 
     }
 
-    // --- B. FILTROS DE PROPIEDAD Y DUPLICADOS ---
+    // --- B. CÁLCULO DE DATOS PARA AUDITORÍA ---
     const u = (os.Unidad || "").trim().toUpperCase();
-    const esMina = u === unidadSeleccionada.toUpperCase();
     const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
-    
-    if (!esMina && !esLibre) { contadorUnidadInvalida++; return; }
-    if (osatmosAsignados.has(String(os.OSATMO).trim())) { contadorDuplicados++; return; }
-
-    // --- C. DETERMINAR RANGO DE DÍAS (Para diagnóstico) ---
     const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+    
+    // Guardar en diagnóstico solo si está en radio
     diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    // --- D. PRIORIDADES (Pasan directo) ---
     const tipoOS = (os.Tipo_de_OS || "").toUpperCase();
     const esRegulada = tipoOS.includes("REGULADA") && !tipoOS.includes("NO REGULADA");
     const deuda = parseFloat(os.Deuda || 0);
     const esDeudaAlta = deuda > 500;
 
-    // --- E. FILTROS DE TABLA (Tipología y Rango) ---
-    let cumpleFiltros = false;
+    // --- C. APLICACIÓN DE FILTROS GLOBALES ---
+    let cumpleFiltrosTabla = false;
+    let detalleFiltro = ""; // Para el log
     
     if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
         const tipOS = (os.Tipologia || "").toString().trim().toUpperCase();
         const tipologiasFiltro = filtrosUnidadHoy.tipologias.map(t => t.trim().toUpperCase());
         const rangosFiltro = filtrosUnidadHoy.rangos.map(r => r.trim());
 
-        // Validación Flexible (Parentesis/Recortes)
-        const tipOk = tipologiasFiltro.some(tFiltro => 
-            tipOS.includes(tFiltro) || tFiltro.includes(tipOS)
-        );
-        
-        // Validación Rango
+        const tipOk = tipologiasFiltro.some(tFiltro => tipOS.includes(tFiltro) || tFiltro.includes(tipOS));
         const rangoOk = rangosFiltro.includes(rangoOS);
         
-        cumpleFiltros = tipOk && rangoOk;
+        cumpleFiltrosTabla = tipOk && rangoOk;
+        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
     }
 
-    // --- F. DECISIÓN FINAL (Mapa de Rutas - Lo Pendiente) ---
-    
-    // Nueva condición: Si está LIBRE y en RADIO, la queremos ver aunque el filtro de días sea estricto
-    const esPendienteLibre = esLibre && dist <= radioConfigurado;
+    // --- D. DECISIÓN FINAL CON LOGS DE AUDITORÍA ---
+    const esPrioridad = esRegulada || esDeudaAlta;
+    const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
 
-    if (cumpleFiltros || esRegulada || esDeudaAlta || esPendienteLibre) {
-        
+    if (esLibre && !esDuplicada && (cumpleFiltrosTabla || esPrioridad)) {
+        // ✅ SE INCLUYE EN EL MAPA
         let estadoFinal = 'no_regulada';
-        
+        let motivo = esRegulada ? "REGULADA" : (esDeudaAlta ? "DEUDA > 500" : "FILTRO TABLA");
+
         if (esRegulada) {
             estadoFinal = 'regulada';
             contadorReguladas++;
         } else if (esDeudaAlta) {
             estadoFinal = 'deuda_alta';
             contadorDeudaAlta++;
-        } else if (cumpleFiltros) {
-            // Cumple el filtro específico (Tipología + Rango) definido por el Admin
-            contadorFiltradas++;
         } else {
-            // Es una pendiente que está en radio pero fuera de los filtros específicos de tabla
-            estadoFinal = 'pendiente_libre'; 
-            contadorFiltradas++; 
+            contadorFiltradas++;
         }
 
         osEnRadio.push({
             ...os,
-            lat: coords.lat, 
-            lng: coords.lng,
-            distancia: dist, 
-            esExtra: true,
+            lat: coords.lat, lng: coords.lng,
+            distancia: dist, esExtra: true,
             estadoMapa: estadoFinal
         });
+
+        // Opcional: Log de éxito para las primeras 5
+        if (osEnRadio.length <= 5) {
+            console.log(`✅ OS ${os.OSATMO} agregada por: ${motivo}`);
+        }
+
     } else {
-        contadorSinFiltro++; 
+        // ❌ NO APLICA (Log de razón específica)
+        let razonLog = "";
+        if (!esLibre) razonLog = `YA ASIGNADA A: ${u}`;
+        else if (esDuplicada) razonLog = "YA ESTÁ EN TU LISTA (DUPLICADA)";
+        else razonLog = `NO CUMPLE REGLAS ${detalleFiltro}`;
+
+        // Solo mostramos logs de las que están cerca para no saturar
+        if (contadorSinFiltro < 15) {
+            console.warn(`⚠️ OS ${os.OSATMO} rechazada: ${razonLog}`);
+        }
+
+        if (!esLibre) contadorUnidadInvalida++;
+        else if (esDuplicada) contadorDuplicados++;
+        else contadorSinFiltro++;
     }
 });
 
-// ✅ 2. LOG DE DIAGNÓSTICO (Fuera del forEach)
-console.log('📊 --- ANÁLISIS DE RANGOS EN RADIO ---');
+// ✅ LOG DE RESULTADOS FINAL
+console.log('📊 --- RESUMEN DE PROCESAMIENTO ---');
 console.table(diagnosticoRangos); 
-console.log('📋 Filtros activos del Admin:', {
-    tipologias: filtrosUnidadHoy?.tipologias || 'Todas',
-    rangos: filtrosUnidadHoy?.rangos || 'Todos'
+console.log('📋 Filtros aplicados:', {
+    rangos: filtrosUnidadHoy?.rangos,
+    tipologias: filtrosUnidadHoy?.tipologias?.length + " cargadas"
 });
+console.log('🚀 Total final en mapa:', osEnRadio.length);
 
 
 console.log('✅ ==========================================');
