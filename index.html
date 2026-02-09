@@ -5419,20 +5419,27 @@ osPendientes.forEach((os) => {
     const esDeudaAlta = deuda > 500;
 
     // --- C. APLICACIÓN DE FILTROS GLOBALES ---
-    let cumpleFiltrosTabla = false;
-    let detalleFiltro = ""; // Para el log
-    
-    if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
-        const tipOS = (os.Tipologia || "").toString().trim().toUpperCase();
-        const tipologiasFiltro = filtrosUnidadHoy.tipologias.map(t => t.trim().toUpperCase());
-        const rangosFiltro = filtrosUnidadHoy.rangos.map(r => r.trim());
+let cumpleFiltrosTabla = false;
+let detalleFiltro = "";
 
-        const tipOk = tipologiasFiltro.some(tFiltro => tipOS.includes(tFiltro) || tFiltro.includes(tipOS));
-        const rangoOk = rangosFiltro.includes(rangoOS);
-        
-        cumpleFiltrosTabla = tipOk && rangoOk;
-        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
-    }
+// ✅ CAMBIO 1: Usar filtrosAplicar (NO filtrosUnidadHoy)
+if (filtrosAplicar && filtrosAplicar.tipologias && filtrosAplicar.rangos) {
+    const tipOS = (os.Tipologia || "").toString().trim();
+    const tipologiasFiltro = filtrosAplicar.tipologias.map(t => t.trim());
+    const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+
+    // ✅ CAMBIO 2: Comparación exacta (sin includes que causa falsos positivos)
+    const tipOk = tipologiasFiltro.some(tFiltro => {
+        const filtroNorm = tFiltro.toUpperCase();
+        const osNorm = tipOS.toUpperCase();
+        return filtroNorm === osNorm;
+    });
+    const rangoOk = rangosFiltro.includes(rangoOS);
+    
+    cumpleFiltrosTabla = tipOk && rangoOk;
+    detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
+}
+
 
     // --- D. DECISIÓN FINAL (SOLO PENDIENTES) ---
 
@@ -8711,63 +8718,72 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         console.log(`✅ Total OS en Base de Datos: ${todasOSRegistradas.length}`);
 
         // 4. FILTRADO LÓGICO Y GEOGRÁFICO
-        const osEnRadio = [];
-        let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, mismaOS: 0, prohibidas: 0 };
+const osEnRadio = [];
+let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, mismaOS: 0 };
 
-        for (const os of todasOSRegistradas) {
-            // A. Saltar si es la misma OS del centro
-            if (os.OSATMO === osCentro.OSATMO) { stats.mismaOS++; continue; }
+for (const os of osPendientes) {
+    // A. Saltar si es la misma OS del centro
+    if (os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) { 
+        stats.mismaOS++; 
+        continue; 
+    }
 
-            // B. 🛡️ FILTRO DE DISPONIBILIDAD (EL MURO)
-            const u = (os.Unidad || "").trim().toUpperCase();
-            // Verificamos si ya está en la tabla de asignadas (usando el array global que ya manejas)
-            const yaEstaEnAsignadas = window.osAsignadasKML?.some(a => 
-                String(a.osatomo || a.OSATMO).trim() === String(os.OSATMO).trim()
-            );
-            const tieneDuenio = (u !== "" && u !== "SIN UNIDAD" && !u.includes("---"));
+    // B. FILTRO DE DISPONIBILIDAD
+    const u = (os.Unidad || "").trim().toUpperCase();
+    const yaEstaEnAsignadas = osatmosAsignados.has(String(os.OSATOMO).trim());
+    const tieneDuenio = (u !== "" && u !== "SIN UNIDAD" && !u.includes("---"));
 
-            // Si es vista de Despacho y la OS ya está "ocupada", se oculta
-            if (!incluirAsignadas && (tieneDuenio || yaEstaEnAsignadas)) {
-                stats.asignadasOcultas++;
-                continue; 
-            }
+    // Excluir si ya está asignada o tiene dueño
+    if (tieneDuenio || yaEstaEnAsignadas) {
+        stats.asignadasOcultas++;
+        continue; 
+    }
 
-            // C. Filtrar tipologías prohibidas por rol
-            if (!tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol)) {
-                stats.prohibidas++;
-                continue;
-            }
+    // C. Validar Coordenadas y Radio
+    const coordsObj = extraerCoordenadas(os);
+    if (!coordsObj || isNaN(coordsObj.latitud)) { 
+        stats.sinCoords++; 
+        continue; 
+    }
 
-            // D. Validar Coordenadas y Radio
-            const coordsObj = extraerCoordenadas(os);
-            if (!coordsObj || isNaN(coordsObj.latitud)) { stats.sinCoords++; continue; }
+    const distancia = calcularDistanciaKm(latCentro, lngCentro, coordsObj.latitud, coordsObj.longitud);
+    if (distancia > radioKm) { 
+        stats.fueraRadio++; 
+        continue; 
+    }
 
-            const distancia = calcularDistanciaKm(latCentro, lngCentro, coordsObj.latitud, coordsObj.longitud);
-            if (distancia > radioKm) { stats.fueraRadio++; continue; }
+    // Agregar a pre-selección
+    osEnRadio.push({ 
+        ...os, 
+        lat: coordsObj.latitud, 
+        lng: coordsObj.longitud, 
+        distancia 
+    });
+}
 
-            // Agregamos a pre-selección
-            osEnRadio.push({ ...os, lat: coordsObj.latitud, lng: coordsObj.longitud, distancia });
-        }
+// 5. APLICAR REGLAS DE NEGOCIO
+let osConFiltros = [];
+for (const os of osEnRadio) {
+    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+    const montoDeuda = parseFloat(os.Deuda || 0);
+    const tieneDeudaAlta = montoDeuda > 500;
+    const pasaFiltrosTabla = validarFiltrosOS(os, filtrosAplicar);
 
-        // 5. APLICAR REGLAS DE NEGOCIO (PRIORIDADES Y FILTROS)
-        let osConFiltros = [];
-        for (const os of osEnRadio) {
-            const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-            const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-            const montoDeuda = parseFloat(os.Deuda || 0);
-            const tieneDeudaAlta = montoDeuda > 550; // ✅ Mejora: Umbral solicitado
-            const pasaFiltrosTabla = validarFiltrosOS(os, filtrosAplicar);
+    // Incluir si: Regulada O Deuda Alta O Pasa Filtros
+    if (esRegulada || tieneDeudaAlta || pasaFiltrosTabla) {
+        osConFiltros.push(os);
+    }
+}
 
-            // Se muestra si es Regulada O Deuda Alta O cumple los filtros del Admin
-            if (esRegulada || tieneDeudaAlta || pasaFiltrosTabla) {
-                osConFiltros.push(os);
-            }
-        }
+console.log('📊 RESUMEN FILTRADO:', {
+    ...stats,
+    validasParaNegocio: osConFiltros.length
+});
 
-        console.log('📊 RESUMEN FILTRADO:', {
-            ...stats,
-            validasParaNegocio: osConFiltros.length
-        });
+// Asignar a osEnRadio para el resto del código
+const osEnRadioFinal = osConFiltros;
+
 
         // 6. OPTIMIZACIÓN Y GENERACIÓN DEL MAPA
         // Siempre incluimos la OS de partida (centro) si el rol lo permite
