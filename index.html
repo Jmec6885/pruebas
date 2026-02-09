@@ -4877,6 +4877,25 @@ function toggleSeccionTipologiasUnidad() {
 }
 
 
+	// 🔍 FUNCIÓN PARA EXTRAER LATITUD Y LONGITUD DE CUALQUIER CAMPO
+function parsearCoordenadas(coordString) {
+    if (!coordString || typeof coordString !== 'string' || !coordString.includes(',')) {
+        return null;
+    }
+    
+    try {
+        const partes = coordString.split(',').map(c => parseFloat(c.trim()));
+        // Manejar formatos [lat, lng] o [lng, lat] si fuera necesario, 
+        // pero aquí asumimos estándar: latitud primero.
+        if (isNaN(partes[0]) || isNaN(partes[1])) return null;
+        
+        return { lat: partes[0], lng: partes[1] };
+    } catch (e) {
+        return null;
+    }
+}
+
+
 // ========================================
 // 📋 CARGAR TIPOLOGÍAS PARA FILTROS UNIDAD
 // ========================================
