@@ -5402,91 +5402,61 @@ let contadorDuplicados = 0;
 let contadorSinCoordenadas = 0;
 
 osPendientes.forEach((os) => {
-    contadorTotal++; // 🚩 SUMAR SIEMPRE AL INICIO
+    contadorTotal++;
 
-    // 1. Validar coordenadas
+    // 1. Coordenadas
     const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    if (!coords) {
-        contadorSinCoordenadas++; // 🚩 SUMAR SI NO TIENE
-        return;
-    }
+    if (!coords) { contadorSinCoordenadas++; return; }
 
-    // 2. Calcular distancia y validar radio
+    // 2. Radio
     const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
     const radioMax = filtrosUnidadHoy ? filtrosUnidadHoy.radio_km : 3;
-    if (dist > radioMax) {
-        contadorFueraRadio++; // 🚩 SUMAR SI ESTÁ FUERA
-        return;
-    }
+    if (dist > radioMax) { contadorFueraRadio++; return; }
 
-    // 3. Validar Disponibilidad
+    // 3. Unidad
     const u = (os.Unidad || "").trim();
     const disponible = !u || u === "" || u.includes("--") || u === "SIN UNIDAD" || u === unidadSeleccionada;
-    if (!disponible) {
-        contadorUnidadInvalida++; // 🚩 SUMAR SI ES DE OTRA UNIDAD
-        return;
-    }
+    if (!disponible) { contadorUnidadInvalida++; return; }
 
-    // 4. Excluir Duplicados
-    if (osatmosAsignados.has(String(os.OSATMO).trim())) {
-        contadorDuplicados++; // 🚩 SUMAR SI YA LA TIENES ASIGNADA
-        return;
-    }
+    // 4. Duplicados
+    if (osatmosAsignados.has(String(os.OSATMO).trim())) { contadorDuplicados++; return; }
 
-            // 5. Definir Prioridades Especiales
-            const esRegulada = (os.Tipo_de_OS || "").toUpperCase().includes("REGULADA");
-            const deuda = parseFloat(os.Comentario?.match(/\$(\d+(\.\d+)?)/)?.[1] || 0);
-            const esDeudaAlta = deuda > 500;
-
-            // 6. Aplicar Filtros Estrictos
-let cumpleFiltros = false;
-
-// SOLO si se encontró el registro de hoy en Supabase
-if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
-    const tipOS = (os.Tipologia || "").trim();
-    const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+    // 5. Prioridades Reales (Ojo aquí: Validamos que el texto sea exacto)
+    const tipoOS = (os.Tipo_de_OS || "").toUpperCase();
+    const esRegulada = tipoOS.includes("REGULADA") && !tipoOS.includes("NO REGULADA");
     
-    const tipOk = filtrosUnidadHoy.tipologias.includes(tipOS);
-    const rangoOk = filtrosUnidadHoy.rangos.includes(rangoOS);
-    
-    // Si la OS no coincide con lo programado para hoy, cumpleFiltros será FALSE
-    cumpleFiltros = tipOk && rangoOk;
-}
+    const deuda = parseFloat(os.Deuda || os.Comentario?.match(/\$(\d+(\.\d+)?)/)?.[1] || 0);
+    const esDeudaAlta = deuda > 500;
 
-// REGLA DE ORO: 
-            // 1. Si cumple los filtros de la tabla (Tipología + Rango)
-            // 2. O si es una OS Regulada (Prioridad)
-            // 3. O si tiene Deuda Alta (>$500)
-            if (cumpleFiltros || esRegulada || esDeudaAlta) {
-                
-                // ✅ Actualizamos contadores específicos para el reporte
-                if (esRegulada) {
-                    contadorReguladas++;
-                } else if (esDeudaAlta) {
-                    contadorDeudaAlta++;
-                } else {
-                    // Estas son las que entraron estrictamente por los filtros de la tabla
-                    contadorFiltradas++; 
-                }
-
-                // ✅ Agregamos a la lista final del mapa
-                osEnRadio.push({
-                    ...os,
-                    lat: coords.lat,
-                    lng: coords.lng,
-                    distancia: dist,
-                    esExtra: true,
-                    // 'no_regulada' se refiere a las que entraron por filtro normal
-                    estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
-                });
-
-            } else {
-                // ✅ Si llegó aquí, es porque NO es regulada, NO es deuda alta
-                // y NO coincide con las tipologías/rangos de hoy.
-                contadorSinFiltro++;
-            }
-        }); // Cierre del forEach
+    // 6. Filtros de Tabla
+    let cumpleFiltros = false;
+    if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
+        const tipOk = filtrosUnidadHoy.tipologias.includes((os.Tipologia || "").trim());
+        const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+        const rangoOk = filtrosUnidadHoy.rangos.includes(rangoOS);
         
+        cumpleFiltros = tipOk && rangoOk;
+    }
+
+    // --- DECISIÓN FINAL ---
+    if (cumpleFiltros || esRegulada || esDeudaAlta) {
+        if (esRegulada) contadorReguladas++;
+        else if (esDeudaAlta) contadorDeudaAlta++;
+        else contadorFiltradas++; // <--- ESTO DEBERÍA SUBIR AHORA
+
+        osEnRadio.push({
+            ...os,
+            lat: coords.lat,
+            lng: coords.lng,
+            distancia: dist,
+            esExtra: true,
+            estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
+        });
+    } else {
+        // ✅ SI NO CUMPLE NADA, SE CIERRA LA PUERTA
+        contadorSinFiltro++; 
+    }
+});        
 
 console.log('✅ ==========================================');
 console.log('✅ RESULTADO FINAL:');
@@ -7093,11 +7063,24 @@ function formatearFechaCompletaElSalvador(fecha) {
 
 // ========================================
 // 🆕 FUNCIÓN PARA OBTENER SOLO LA FECHA DE HOY (El Salvador)
+// ✅ MEJORADA: Ahora es más robusta y utiliza tus formateadores
 // ========================================
 function getFechaHoyElSalvador() {
-    const fechaElSalvador = getFechaElSalvador();
-    return formatearFechaElSalvador(fechaElSalvador);
+    try {
+        const fechaElSalvador = getFechaElSalvador(); // Tu función de offset UTC-6
+        
+        // Usamos tu formateador para asegurar el formato YYYY-MM-DD
+        const fechaFormateada = formatearFechaElSalvador(fechaElSalvador);
+        
+        console.log('🕒 Sincronización SV:', fechaFormateada);
+        return fechaFormateada;
+    } catch (error) {
+        console.error("❌ Error en getFechaHoyElSalvador, usando respaldo local:", error);
+        // Respaldo por si falla la función de offset
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/El_Salvador' });
+    }
 }
+
 
 // ========================================
 // 🆕 FUNCIÓN PARA OBTENER HORA ACTUAL (El Salvador)
