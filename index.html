@@ -4787,11 +4787,13 @@ const osParaMapa = osCompletas.filter(os =>
 
             console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
 
-            // ✅ LLAMAR A LA FUNCIÓN CORRECTA (con interfaz de botones)
+            // 📢 CRÍTICO: Guardamos las asignadas en window para que el filtro sepa qué EXCLUIR
+            window.osAsignadasKML = osParaMapa; 
+
+            // ✅ LLAMAR A LA FUNCIÓN CORRECTA
             generarMapaKMLRuta(osParaMapa, miUnidad);
 
-            return; // Finaliza la ejecución para este rol
-        }
+            return
 
         // Otros roles: sin acceso
         searchGrid.innerHTML = `<div class="result-card">⚠️ Tu rol (${rol}) no tiene acceso a esta función</div>`;
@@ -5393,28 +5395,23 @@ osPendientes.forEach((os, index) => {
     
     // ✅ REGLA 3: Validar UNIDAD
     const unidadOS = os.Unidad?.trim();
-    const esUnidadValida = 
+    const esUnidadDisponible = 
         !unidadOS || 
         unidadOS === '' || 
         unidadOS.includes('--') || 
-        unidadOS === 'SIN UNIDAD' || 
-        unidadOS === unidadSeleccionada;
-    
-    if (!esUnidadValida) {
+        unidadOS === 'SIN UNIDAD';
+        
+    const esMiPropiaUnidad = unidadOS === unidadSeleccionada;
+
+    if (!esUnidadDisponible && !esMiPropiaUnidad) {
         contadorUnidadInvalida++;
-        if (contadorUnidadInvalida <= 3) {
-            console.log(`❌ Unidad inválida: ${os.OSATMO} | Unidad: "${unidadOS}"`);
-        }
-        return;
+        return; // Saltamos esta OS porque ya la tiene OTRA unidad
     }
     
-    // ✅ REGLA 4: Excluir si está en os_asignadas
+    // ✅ REGLA: Excluir si YA está asignada (usando el Set que creamos)
     if (osatmosAsignados.has(String(os.OSATMO).trim())) {
         contadorDuplicados++;
-        if (contadorDuplicados <= 3) {
-            console.log(`🔁 Duplicado excluido: ${os.OSATMO}`);
-        }
-        return;
+        return; // No la mostramos como "disponible" porque ya es una de mis "asignadas"
     }
     
     const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
