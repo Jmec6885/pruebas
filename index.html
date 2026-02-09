@@ -8221,110 +8221,90 @@ function toggleTodasTipologias() {
 
 
 // ========================================
-// 💾 GUARDAR FILTROS (SUSTITUYE LOS ANTERIORES)
+// 💾 GUARDAR FILTROS (ADMIN GLOBAL)
 // ========================================
 async function guardarFiltrosMapa() {
-    if (currentUser.rol !== 'Administrador') {
+    // 🔒 VALIDAR PERMISOS
+    if (!currentUser || currentUser.rol !== 'Administrador') {
         alert('⚠️ Solo administradores pueden modificar filtros');
         return;
     }
 
-    // 1️⃣ Obtener rangos seleccionados
-   // ✅ CORRECCIÓN: Filtrar SOLO rangos válidos al guardar
-const rangosCheckboxes = document.querySelectorAll('.checkbox-rango-unidad:checked');
-const rangos = Array.from(rangosCheckboxes)
-  .map(cb => cb.value)
-  .filter(valor => 
-    // ✅ SOLO aceptar rangos válidos
-    (valor.includes('-') || valor.startsWith('>')) && 
-    !valor.includes('CL-') // Excluir unidades
-  );
+    // 1️⃣ Obtener elementos seleccionados
+    const checkboxes = document.querySelectorAll('.checkbox-rango-unidad:checked');
+    const rangos = [];
+    const tipologias = []; // ✅ Corregido: Inicializado correctamente
 
-    rangosCheckboxes.forEach(cb => {
-        if (cb.checked && cb.value) {
-            const valor = cb.value;
-            // Detectar si es rango o tipología
-            if (valor.includes('-') || valor.startsWith('>')) {
+    checkboxes.forEach(cb => {
+        const valor = cb.value;
+        if (valor) {
+            // ✅ FILTRADO: Si tiene guion o empieza con > es RANGO, si no es TIPOLOGÍA
+            // Excluimos explícitamente valores de unidades que empiecen con 'CL-'
+            if ((valor.includes('-') || valor.startsWith('>')) && !valor.includes('CL-')) {
                 rangos.push(valor);
-            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
+            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id) && !valor.includes('CL-')) {
                 tipologias.push(valor);
             }
         }
     });
 
     // 2️⃣ Obtener radio
-    const radioKm = parseInt(document.getElementById('radioKm').value);
+    const radioKmInput = document.getElementById('radioKm');
+    const radioKm = radioKmInput ? parseInt(radioKmInput.value) : 3;
 
     // 3️⃣ Validaciones
-    if (radioKm < 1 || radioKm > 20) {
+    if (isNaN(radioKm) || radioKm < 1 || radioKm > 20) {
         alert('⚠️ El radio debe estar entre 1 y 20 km');
         return;
     }
 
     // 4️⃣ Confirmación
     const confirmar = confirm(
-        `¿SUSTITUIR configuración de filtros?\n\n` +
-        `📊 NUEVOS VALORES:\n` +
+        `¿SUSTITUIR configuración global?\n\n` +
         `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
-        `• Tipologías: ${tipologias.length} seleccionada(s)\n` +
+        `• Tipologías: ${tipologias.length} seleccionadas\n` +
         `• Radio: ${radioKm} km\n\n` +
-        `⚠️ Esto REEMPLAZARÁ los filtros actuales para TODAS las unidades.\n\n` +
-        `✅ SÍ - Guardar nuevos filtros\n` +
-        `❌ NO - Cancelar`
+        `✅ SÍ - Guardar | ❌ NO - Cancelar`
     );
-
     if (!confirmar) return;
 
     try {
-        // ✅ CAMBIO CLAVE: Guardar arrays o NULL (no arrays vacíos)
         const rangosAGuardar = rangos.length > 0 ? rangos : null;
         const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
         
-        console.log('💾 Guardando filtros:', {
+        // 🕵️ LOG DE AUDITORÍA: Ver qué estamos enviando
+        console.log("📡 [DEBUG] Enviando a Supabase:", {
+            id: 1,
+            usuario: currentUser.usuario,
             rangos: rangosAGuardar,
-            tipologias: tipologiasAGuardar,
-            radioKm: radioKm
+            tipologias: tipologiasAGuardar
         });
 
-        const { error } = await supabaseClient
+        // 5️⃣ ACTUALIZACIÓN (Usamos UPSERT para asegurar que se cree si no existe)
+        const { data, error } = await supabaseClient
             .from('filtros_mapa')
-            .update({
+            .upsert({
+                id: 1, 
+                usuario: currentUser.usuario, // ✅ Ahora guarda quién lo hizo
                 rangos: rangosAGuardar,
                 tipologias: tipologiasAGuardar,
                 radio_km: radioKm,
                 fecha_actualizacion: new Date().toISOString()
-            })
-            .eq('id', 1);
+            }, { onConflict: 'id' })
+            .select();
 
         if (error) {
-            console.error('❌ Error guardando:', error);
+            console.error('❌ Error DB:', error.message);
             alert('❌ Error al guardar: ' + error.message);
             return;
         }
 
-        // ✅ Verificar qué se guardó
-        const { data: verificar } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .eq('id', 1)
-            .single();
+        console.log('✅ Respuesta de BD:', data);
 
-        console.log('✅ Filtros guardados en BD:', verificar);
-
-        // 6️⃣ Mensaje de éxito
-        alert(
-            `✅ Filtros actualizados correctamente\n\n` +
-            `📊 NUEVA CONFIGURACIÓN:\n` +
-            `• Rangos: ${rangos.length}\n` +
-            `• Tipologías: ${tipologias.length}\n` +
-            `• Radio: ${radioKm} km\n\n` +
-            `Las unidades verán los cambios de inmediato.`
-        );
-
-        console.log('✅ Filtros guardados:', { rangos, tipologias, radioKm });
+        alert(`✅ Filtros globales actualizados por ${currentUser.usuario}`);
 
     } catch (err) {
-        console.error('Error guardando filtros:', err);
+        console.error('🚨 Error crítico:', err);
         alert('❌ Error de conexión');
     }
 }
