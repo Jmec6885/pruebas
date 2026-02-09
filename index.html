@@ -5360,133 +5360,123 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         console.log('🔍 Filtros activos:', {
             tipologias: filtrosAplicar.tipologias,
             rangos: filtrosAplicar.rangos,
-            radio: radioConfigurado + ' km' // 👈 Cambiado de radioKm a radioConfigurado
+            radio: radioConfigurado + ' km'
         });
 
         console.log('🔍 ==========================================');
         
         const osEnRadio = [];
-let contadorTotal = 0;
-let contadorFiltradas = 0;
-let contadorReguladas = 0;
-let contadorDeudaAlta = 0;
-let contadorSinFiltro = 0;
+        const osatmosAsignados = new Set(
+            osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
+        );
 
-// ✅ NUEVO DEBUG CRÍTICO
-console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
-let osEncontradas = 0;
+        // Inicialización de contadores (SOLO UNA VEZ)
+        let contadorTotal = 0, contadorFiltradas = 0, contadorReguladas = 0, contadorDeudaAlta = 0;
+        let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
+        let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
+        const diagnosticoRangos = {}; 
 
-// ✅ 1. Preparación de variables y Set para exclusión de duplicados
-const osatmosAsignados = new Set(
-    osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
-);
+        console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
+        console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
+        console.log(`📋 Unidad seleccionada: ${unidadSeleccionada}`);
 
-console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
-console.log(`📋 Unidad seleccionada: ${unidadSeleccionada}`);
+        // Función de normalización blindada
+        const normalizarTexto = (t) => (t || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 
-// Inicialización de contadores
-let contadorTotal = 0, contadorFiltradas = 0, contadorReguladas = 0, contadorDeudaAlta = 0;
-let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
-let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
-const diagnosticoRangos = {}; 
+        // ✅ Bucle de procesamiento
+        osPendientes.forEach((os) => {
+            contadorTotal++;
 
-// Función de normalización blindada (elimina tildes, espacios y fuerza mayúsculas)
-const normalizarTexto = (t) => (t || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+            // --- A. FILTROS BASE (Coordenadas y Radio) ---
+            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+            if (!coords) { contadorSinCoordenadas++; return; }
 
-// ✅ 2. Bucle principal de procesamiento
-osPendientes.forEach((os) => {
-    contadorTotal++;
+            const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+            if (dist > radioConfigurado) { 
+                contadorFueraRadio++; 
+                return; 
+            }
 
-    // --- A. FILTROS BASE (Coordenadas y Radio) ---
-    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    if (!coords) { contadorSinCoordenadas++; return; }
+            // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS ---
+            const u = (os.Unidad || "").trim().toUpperCase();
+            const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
+            const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
+            const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+            
+            diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    if (dist > radioConfigurado) { 
-        contadorFueraRadio++; 
-        return; 
-    }
+            const tipoOS_Texto = (os.Tipo_de_OS || "").toUpperCase();
+            const esRegulada = tipoOS_Texto.includes("REGULADA") && !tipoOS_Texto.includes("NO REGULADA");
+            const deuda = parseFloat(os.Deuda || 0);
+            const esDeudaAlta = deuda > 500;
 
-    // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS ---
-    const u = (os.Unidad || "").trim().toUpperCase();
-    const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
-    const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
-    const rangoOS = determinarRangoDias(os['Fecha Gen.']);
-    
-    // Diagnóstico de lo que hay en radio
-    diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
+            // --- C. BLOQUEO DE SEGURIDAD (Disponibilidad) ---
+            if (!esLibre || esDuplicada) {
+                if (!esLibre) contadorUnidadInvalida++;
+                else contadorDuplicados++;
+                return; 
+            }
 
-    const tipoOS_Texto = (os.Tipo_de_OS || "").toUpperCase();
-    const esRegulada = tipoOS_Texto.includes("REGULADA") && !tipoOS_Texto.includes("NO REGULADA");
-    const deuda = parseFloat(os.Deuda || 0);
-    const esDeudaAlta = deuda > 500;
+            // --- D. APLICACIÓN DE FILTROS DE TABLA (NORMALIZADOS) ---
+            let cumpleFiltrosTabla = false;
+            let detalleFiltro = "Sin Filtros Activos";
 
-    // --- C. BLOQUEO DE SEGURIDAD (Disponibilidad) ---
-    if (!esLibre || esDuplicada) {
-        if (!esLibre) contadorUnidadInvalida++;
-        else contadorDuplicados++;
-        return; 
-    }
+            if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+                const tipOS_Norm = normalizarTexto(os.Tipologia);
+                const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
+                const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
 
-    // --- D. APLICACIÓN DE FILTROS DE TABLA (NORMALIZADOS) ---
-    let cumpleFiltrosTabla = false;
-    let detalleFiltro = "Sin Filtros Activos";
+                const tipOk = tipologiasFiltro.includes(tipOS_Norm);
+                const rangoOk = rangosFiltro.includes(rangoOS);
+                
+                cumpleFiltrosTabla = tipOk && rangoOk;
+                detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
+            }
 
-    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
-        const tipOS_Norm = normalizarTexto(os.Tipologia);
-        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
-        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+            // --- E. DECISIÓN FINAL (Prioridad o Filtros) ---
+            const esPrioridad = esRegulada || esDeudaAlta;
 
-        const tipOk = tipologiasFiltro.includes(tipOS_Norm);
-        const rangoOk = rangosFiltro.includes(rangoOS);
-        
-        cumpleFiltrosTabla = tipOk && rangoOk;
-        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
-    }
+            if (cumpleFiltrosTabla || esPrioridad) {
+                let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
 
-    // --- E. DECISIÓN FINAL (Prioridad o Filtros) ---
-    const esPrioridad = esRegulada || esDeudaAlta;
+                if (esRegulada) contadorReguladas++;
+                else if (esDeudaAlta) contadorDeudaAlta++;
+                else contadorFiltradas++;
 
-    if (cumpleFiltrosTabla || esPrioridad) {
-        let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
-
-        if (esRegulada) contadorReguladas++;
-        else if (esDeudaAlta) contadorDeudaAlta++;
-        else contadorFiltradas++;
-
-        osEnRadio.push({
-            ...os,
-            lat: coords.lat, 
-            lng: coords.lng,
-            distancia: dist, 
-            esExtra: true,
-            estadoMapa: estadoFinal 
+                osEnRadio.push({
+                    ...os,
+                    lat: coords.lat, 
+                    lng: coords.lng,
+                    distancia: dist, 
+                    esExtra: true,
+                    estadoMapa: estadoFinal 
+                });
+            } else {
+                if (contadorSinFiltro < 15) {
+                    console.warn(`⚠️ OS ${os.OSATMO} LIBRE fuera de filtros: ${detalleFiltro}`);
+                }
+                contadorSinFiltro++;
+            }
         });
-    } else {
-        if (contadorSinFiltro < 15) {
-            console.warn(`⚠️ OS ${os.OSATMO} LIBRE fuera de filtros: ${detalleFiltro}`);
-        }
-        contadorSinFiltro++;
-    }
-});
 
-// ✅ 3. LOG DE RESULTADOS FINAL
-console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
-console.table(diagnosticoRangos); 
-console.log('✅ RESULTADO FINAL:');
-console.log('✅ Total procesadas:', contadorTotal);
-console.log('✅ Fuera de radio:', contadorFueraRadio);
-console.log('✅ Unidad ocupada/Duplicada:', (contadorUnidadInvalida + contadorDuplicados));
-console.log('✅ INCLUIDAS:', {
-    total: osEnRadio.length,
-    reguladas: contadorReguladas,
-    deuda_alta: contadorDeudaAlta,
-    por_filtros: contadorFiltradas
-});
-console.log('✅ Rechazadas por filtros:', contadorSinFiltro);
-console.log('✅ ==========================================');
+        // ✅ LOG DE RESULTADOS FINAL
+        console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
+        console.table(diagnosticoRangos); 
+        console.log('✅ RESULTADO FINAL:');
+        console.log('✅ Total procesadas:', contadorTotal);
+        console.log('✅ Fuera de radio:', contadorFueraRadio);
+        console.log('✅ Unidad ocupada/Duplicada:', (contadorUnidadInvalida + contadorDuplicados));
+        console.log('✅ INCLUIDAS:', {
+            total: osEnRadio.length,
+            reguladas: contadorReguladas,
+            deuda_alta: contadorDeudaAlta,
+            por_filtros: contadorFiltradas
+        });
+        console.log('✅ Rechazadas por filtros:', contadorSinFiltro);
+        console.log('✅ ==========================================');
+
+
         
-        // ========================================
         // ========================================
 // ✅ 7️⃣ Generar mapa con OS asignadas + OS filtradas en radio
 // ========================================
