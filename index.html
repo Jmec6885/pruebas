@@ -7084,88 +7084,86 @@ async function cargarInterfazIPR() {
 }
 
 // ========================================
-// 🕐 FUNCIÓN PARA OBTENER FECHA/HORA DE EL SALVADOR
+// 1️⃣ FUNCIÓN MAESTRA: Obtener objeto Date de El Salvador
 // ========================================
 function getFechaElSalvador() {
-    // El Salvador está en UTC-6
+    // Usamos el locale para obtener un string exacto de la zona horaria y convertirlo en objeto
     const ahora = new Date();
-    const offsetElSalvador = -6 * 60; // UTC-6 en minutos
-    const offsetLocal = ahora.getTimezoneOffset(); // Offset del navegador
-    const diff = offsetElSalvador - offsetLocal;
-    
-    const fechaElSalvador = new Date(ahora.getTime() + diff * 60 * 1000);
-    return fechaElSalvador;
+    const strFecha = ahora.toLocaleString("en-US", { timeZone: "America/El_Salvador" });
+    return new Date(strFecha);
 }
 
 // ========================================
-// 📅 FUNCIÓN PARA FORMATEAR FECHA (YYYY-MM-DD)
+// 2️⃣ FUNCIÓN: Formatear fecha simple (YYYY-MM-DD)
 // ========================================
 function formatearFechaElSalvador(fecha) {
-    const año = fecha.getFullYear();
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    return `${año}-${mes}-${dia}`;
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/El_Salvador',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(fecha);
 }
 
 // ========================================
-// ⏰ FUNCIÓN PARA FORMATEAR FECHA COMPLETA (YYYY-MM-DDTHH:mm:ss)
+// 3️⃣ FUNCIÓN: Formatear fecha completa (YYYY-MM-DDTHH:mm:ss)
 // ========================================
 function formatearFechaCompletaElSalvador(fecha) {
-    const año = fecha.getFullYear();
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    const hora = String(fecha.getHours()).padStart(2, '0');
-    const minuto = String(fecha.getMinutes()).padStart(2, '0');
-    const segundo = String(fecha.getSeconds()).padStart(2, '0');
-    return `${año}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
+    const opciones = {
+        timeZone: 'America/El_Salvador',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    };
+    const f = new Intl.DateTimeFormat('en-CA', opciones).formatToParts(fecha);
+    const p = {};
+    f.forEach(({type, value}) => p[type] = value);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
 }
 
 // ========================================
-// 🆕 FUNCIÓN PARA OBTENER SOLO LA FECHA DE HOY (El Salvador)
-// ✅ MEJORADA: Ahora es más robusta y utiliza tus formateadores
+// 4️⃣ FUNCIÓN: Obtener solo el String de HOY (YYYY-MM-DD)
 // ========================================
 function getFechaHoyElSalvador() {
     try {
-        const fechaElSalvador = getFechaElSalvador(); // Tu función de offset UTC-6
-        
-        // Usamos tu formateador para asegurar el formato YYYY-MM-DD
-        const fechaFormateada = formatearFechaElSalvador(fechaElSalvador);
-        
-        console.log('🕒 Sincronización SV:', fechaFormateada);
-        return fechaFormateada;
+        const hoy = formatearFechaElSalvador(new Date());
+        console.log('🕒 Sincronización SV:', hoy);
+        return hoy;
     } catch (error) {
-        console.error("❌ Error en getFechaHoyElSalvador, usando respaldo local:", error);
-        // Respaldo por si falla la función de offset
+        console.error("❌ Error en getFechaHoyElSalvador:", error);
         return new Date().toLocaleDateString('en-CA', { timeZone: 'America/El_Salvador' });
     }
 }
 
-
 // ========================================
-// 🆕 FUNCIÓN PARA OBTENER HORA ACTUAL (El Salvador)
+// 5️⃣ FUNCIÓN: Obtener HORA ACTUAL detallada
 // ========================================
 function getHoraActualElSalvador() {
-    const fechaElSalvador = getFechaElSalvador();
+    const fechaSV = getFechaElSalvador();
     return {
-        hora: fechaElSalvador.getHours(),
-        minuto: fechaElSalvador.getMinutes(),
-        segundo: fechaElSalvador.getSeconds()
+        hora: fechaSV.getHours(),
+        minuto: fechaSV.getMinutes(),
+        segundo: fechaSV.getSeconds()
     };
 }
 
-		function verificarZonaHoraria() {
+// ========================================
+// 6️⃣ FUNCIÓN: Verificación en Consola
+// ========================================
+function verificarZonaHoraria() {
     const fechaUTC = new Date();
     const fechaSV = getFechaElSalvador();
     
     console.log('=== VERIFICACIÓN DE ZONA HORARIA ===');
     console.log('Fecha UTC:', fechaUTC.toISOString());
-    console.log('Fecha El Salvador:', formatearFechaCompletaElSalvador(fechaSV));
-    console.log('Diferencia esperada: 6 horas (UTC-6)');
+    console.log('Fecha El Salvador:', formatearFechaCompletaElSalvador(new Date()));
+    console.log('Diferencia: Forzada a America/El_Salvador (UTC-6)');
     console.log('=====================================');
 }
 
-// Llamar al inicio
+// Ejecución inmediata para validar
 verificarZonaHoraria();
+
 
 	function validarEstructuraAsignaciones(datos) {
   // Validar que todas las filas tengan 3 columnas
