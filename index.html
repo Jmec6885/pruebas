@@ -4786,11 +4786,9 @@ const osParaMapa = osCompletas.filter(os =>
             }
 
             console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
-            // generar interfaz específica para unidad
-            if (typeof generarMapaKMLRuta === 'function') {
-                // si ya tienes una función llamada generarMapaKMLRuta que toma (osParaMapa, miUnidad)
-                generarMapaKMLRuta(osParaMapa, miUnidad);
-            } else if (typeof generarInterfazUnidadMapaRutas === 'function') {
+
+// ✅ LLAMAR A LA FUNCIÓN CORRECTA (con interfaz de botones)
+generarMapaKMLRuta(osParaMapa, miUnidad);
                 // si quieres que muestre el dropdown usamos la funcion que creamos abajo
                 generarInterfazUnidadMapaRutas({}, osParaMapa);
             } else {
