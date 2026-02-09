@@ -8659,7 +8659,7 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
 }
 
 // ========================================
-// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CONSOLIDADA)
+// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CONSOLIDADA Y LIMPIA)
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8669,16 +8669,13 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             <p style="text-align: center; color: #666;">Cargando mapa y aplicando filtros de despacho...</p>
         </div>`;
 
-    // 🚩 1. DETERMINAR MODO DE VISTA (ADMIN vs TÉCNICO)
-    // Si el rol es Admin o Despacho, NO queremos ver lo que ya está asignado.
     const esAdminODespacho = (currentUser.rol === 'Administrador' || currentUser.rol === 'Despacho');
     const incluirAsignadas = !esAdminODespacho;
 
     console.log('🗺️ --- INICIANDO PROCESAMIENTO DE MAPA ---');
-    console.log(`👤 Rol: ${currentUser.rol} | 🛡️ Incluir Asignadas: ${incluirAsignadas}`);
 
     try {
-        // 2. CARGAR FILTROS UNIVERSALES
+        // 1. CARGAR FILTROS UNIVERSALES
         let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
         if (!filtrosAplicar) {
             console.warn('⚠️ Filtros no encontrados, usando valores por defecto');
@@ -8689,7 +8686,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         window.osCentroActual = osCentro;
         const radioKm = filtrosAplicar.radio_km || 3;
 
-        // Validar Coordenadas del Punto de Partida
+        // 2. Validar Coordenadas del Punto de Partida
         const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
         if (!coordsCentro || !coordsCentro.includes(',')) {
             resultsContainer.innerHTML = `<div class="result-card">⚠️ OS Inicial ${osCentro.OSATMO} no tiene coordenadas válidas</div>`;
@@ -8717,98 +8714,78 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
         console.log(`✅ Total OS en Base de Datos: ${todasOSRegistradas.length}`);
 
-        // 4. FILTRADO LÓGICO Y GEOGRÁFICO
-const osEnRadio = [];
-let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, mismaOS: 0 };
+        // 🚩 4. FILTRADO LÓGICO, GEOGRÁFICO Y DE NEGOCIO (TODO EN UNO)
+        const osEnRadioFinal = [];
+        let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, mismaOS: 0, porFiltros: 0 };
 
-for (const os of osPendientes) {
-    // A. Saltar si es la misma OS del centro
-    if (os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) { 
-        stats.mismaOS++; 
-        continue; 
-    }
+        for (const os of todasOSRegistradas) { 
+            
+            // A. Saltar si es la misma OS del centro
+            if (String(os.OSATMO) === String(osCentro.OSATMO)) { 
+                stats.mismaOS++; 
+                continue; 
+            }
 
-    // B. FILTRO DE DISPONIBILIDAD
-    const u = (os.Unidad || "").trim().toUpperCase();
-    const yaEstaEnAsignadas = osatmosAsignados.has(String(os.OSATOMO).trim());
-    const tieneDuenio = (u !== "" && u !== "SIN UNIDAD" && !u.includes("---"));
+            // B. FILTRO DE DISPONIBILIDAD
+            const u = (os.Unidad || "").trim().toUpperCase();
+            const yaEstaEnAsignadas = typeof osatmosAsignados !== 'undefined' && osatmosAsignados.has(String(os.OSATMO).trim());
+            const tieneDuenio = (u !== "" && u !== "SIN UNIDAD" && !u.includes("---"));
 
-    // Excluir si ya está asignada o tiene dueño
-    if (tieneDuenio || yaEstaEnAsignadas) {
-        stats.asignadasOcultas++;
-        continue; 
-    }
+            if (tieneDuenio || yaEstaEnAsignadas) {
+                stats.asignadasOcultas++;
+                continue; 
+            }
 
-    // C. Validar Coordenadas y Radio
-    const coordsObj = extraerCoordenadas(os);
-    if (!coordsObj || isNaN(coordsObj.latitud)) { 
-        stats.sinCoords++; 
-        continue; 
-    }
+            // C. Validar Coordenadas y Radio
+            const coordsObj = extraerCoordenadas(os);
+            if (!coordsObj || isNaN(coordsObj.latitud)) { 
+                stats.sinCoords++; 
+                continue; 
+            }
 
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, coordsObj.latitud, coordsObj.longitud);
-    if (distancia > radioKm) { 
-        stats.fueraRadio++; 
-        continue; 
-    }
+            const distancia = calcularDistanciaKm(latCentro, lngCentro, coordsObj.latitud, coordsObj.longitud);
+            if (distancia > radioKm) { 
+                stats.fueraRadio++; 
+                continue; 
+            }
 
-    // Agregar a pre-selección
-    osEnRadio.push({ 
-        ...os, 
-        lat: coordsObj.latitud, 
-        lng: coordsObj.longitud, 
-        distancia 
-    });
-}
-
-// 5. APLICAR REGLAS DE NEGOCIO
-let osConFiltros = [];
-for (const os of osEnRadio) {
-    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-    const montoDeuda = parseFloat(os.Deuda || 0);
-    const tieneDeudaAlta = montoDeuda > 500;
-    const pasaFiltrosTabla = validarFiltrosOS(os, filtrosAplicar);
-
-    // Incluir si: Regulada O Deuda Alta O Pasa Filtros
-    if (esRegulada || tieneDeudaAlta || pasaFiltrosTabla) {
-        osConFiltros.push(os);
-    }
-}
-
-console.log('📊 RESUMEN FILTRADO:', {
-    ...stats,
-    validasParaNegocio: osConFiltros.length
-});
-
-// Asignar a osEnRadio para el resto del código
-const osEnRadioFinal = osConFiltros;
-
-
-        // 6. OPTIMIZACIÓN Y GENERACIÓN DEL MAPA
-        // Siempre incluimos la OS de partida (centro) si el rol lo permite
-        let osFinales = [];
-        if (tipologiaPermitidaParaRol(osCentro.Tipologia, currentUser.rol)) {
-            osFinales = [osCentro, ...osConFiltros];
-        } else {
-            osFinales = osConFiltros;
+            // D. VALIDACIÓN DE NEGOCIO (Función Blindada)
+            // validarFiltrosOS ya decide si entra por Regulada, Deuda o Filtros de Tabla
+            if (validarFiltrosOS(os, filtrosAplicar)) {
+                osEnRadioFinal.push({ 
+                    ...os, 
+                    lat: coordsObj.latitud, 
+                    lng: coordsObj.longitud, 
+                    distancia 
+                });
+                stats.porFiltros++;
+            }
         }
 
-        if (osFinales.length <= 1 && osConFiltros.length === 0) {
+        console.log('📊 RESUMEN FINAL DE FILTRADO:', stats);
+
+        // 5. OPTIMIZACIÓN Y GENERACIÓN DEL MAPA
+        let osFinales = [];
+
+        // Incluimos la OS de partida (centro)
+        if (tipologiaPermitidaParaRol(osCentro.Tipologia, currentUser.rol)) {
+            osFinales = [osCentro, ...osEnRadioFinal];
+        } else {
+            osFinales = osEnRadioFinal;
+        }
+
+        if (osEnRadioFinal.length === 0) {
             console.warn('⚠️ No hay OS adicionales que cumplan los filtros.');
             alert('ℹ️ No hay otras órdenes pendientes libres en este radio con los filtros actuales.');
         }
 
-        // Optimizar ruta por cercanía
+        // Optimizar ruta
         const osOptimizadas = optimizarRutaVecinoCercano(osFinales, osCentro.OSATMO, { 
             lat: latCentro, 
             lng: lngCentro 
         });
 
-        // Asignar orden numérico
-        osOptimizadas.forEach((os, i) => os.numeroOrden = i + 1);
-
-        // Renderizar en el mapa (Leaflet)
+        // Dibujar mapa
         generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
 
     } catch (err) {
