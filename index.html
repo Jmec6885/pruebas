@@ -5173,9 +5173,8 @@ console.log('▶️ window.osAsignadasKML longitud:', window.osAsignadasKML ? wi
 console.log('▶️ ==========================================');
 
 
-// ========================================
-// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO - VERSIÓN FINAL)
-// ========================================
+
+
 // ========================================
 // 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO - VERSIÓN FINAL)
 // ========================================
@@ -5219,31 +5218,27 @@ async function generarMapaUnidadConFiltros() {
     const HOY = new Date().toISOString().split('T')[0];
     
     try {
-        // ========================================
-        // ✅ 1️⃣ Buscar filtros SOLO para HOY (fecha_programada = HOY)
-        // ========================================
-        let { data: filtrosUnidadHoy, error: errorHoy } = await supabaseClient
-            .from('filtros_por_unidad')
-            .select('*')
-            .eq('Unidad', unidadSeleccionada)
-            .eq('fecha_programada', HOY)
-            .maybeSingle();
-        
-        console.log('📊 ==========================================');
-        console.log('📊 RESULTADO BÚSQUEDA DE FILTROS:');
-        console.log('📊 ¿Hay filtros para HOY?', filtrosUnidadHoy ? '✅ SÍ' : '❌ NO');
-        if (filtrosUnidadHoy) {
-            console.log('📊 Filtros encontrados:', {
-                id: filtrosUnidadHoy.id,
-                unidad: filtrosUnidadHoy.Unidad,
-                fecha: filtrosUnidadHoy.fecha_programada,
-                rangos: filtrosUnidadHoy.rangos,
-                tipologias: filtrosUnidadHoy.tipologias,
-                radio: filtrosUnidadHoy.radio_km
-            });
-        }
-        console.log('📊 ==========================================');
-        
+        // ✅ 1️⃣ Buscar filtros SOLO para HOY
+const HOY = new Date().toISOString().split('T')[0]; // Esto dará '2026-02-08' según tu log
+
+let { data: filtrosUnidadHoy, error: errorHoy } = await supabaseClient
+    .from('filtros_por_unidad')
+    .select('*')
+    .eq('Unidad', unidadSeleccionada)
+    .eq('fecha_programada', HOY) // Forzamos que la fecha sea estrictamente HOY
+    .maybeSingle();
+
+// 💡 DEBUG TÁCTICO: Si no encuentra, intentamos buscar el registro con NULL por si acaso
+if (!filtrosUnidadHoy) {
+    console.warn('⚠️ No se halló filtro con fecha hoy, buscando filtro base (null)...');
+    let { data: filtroBase } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidadSeleccionada)
+        .is('fecha_programada', null)
+        .maybeSingle();
+    filtrosUnidadHoy = filtroBase;
+}
         // ========================================
         // ✅ 2️⃣ Determinar qué filtros aplicar
         // ========================================
@@ -5385,103 +5380,66 @@ let contadorUnidadInvalida = 0;
 let contadorDuplicados = 0;
 let contadorSinCoordenadas = 0;
 
-osPendientes.forEach((os, index) => {
-    contadorTotal++;
-    
-    if (index % 100 === 0) {
-        console.log(`📊 Procesadas ${index}/${osPendientes.length} OS... (Incluidas: ${osEnRadio.length})`);
-    }
-    
-    const coords = os.Coordenadas || os.Coordendasgis;
-    if (!coords || !coords.includes(',')) {
-        contadorSinCoordenadas++;
-        return;
-    }
-    
-    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
-    
-    if (distancia > radioKm) {
-        contadorFueraRadio++;
-        return;
-    }
-    if (os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) return;
-    
-    // ✅ REGLA 3: Validar UNIDAD
-    const unidadOS = os.Unidad?.trim();
-    const esUnidadDisponible = 
-        !unidadOS || 
-        unidadOS === '' || 
-        unidadOS.includes('--') || 
-        unidadOS === 'SIN UNIDAD';
-        
-    const esMiPropiaUnidad = unidadOS === unidadSeleccionada;
+osPendientes.forEach((os) => {
+            // 1. Validar coordenadas
+            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+            if (!coords) return;
 
-    if (!esUnidadDisponible && !esMiPropiaUnidad) {
-        contadorUnidadInvalida++;
-        return; // Saltamos esta OS porque ya la tiene OTRA unidad
-    }
-    
-    // ✅ REGLA: Excluir si YA está asignada (usando el Set que creamos)
-    if (osatmosAsignados.has(String(os.OSATMO).trim())) {
-        contadorDuplicados++;
-        return; // No la mostramos como "disponible" porque ya es una de mis "asignadas"
-    }
-    
-    const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-    const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-    const deuda = parseFloat(os.Deuda) || 0;
-    const tieneDeudaAlta = deuda > 500;
-    
-    // ✅ REGLA 5: Reguladas y deuda alta SIEMPRE
-    if (esRegulada) {
-        contadorReguladas++;
-        if (contadorReguladas <= 3) {
-            console.log(`✅ REGULADA: ${os.OSATMO} | Dist: ${distancia.toFixed(2)}km`);
-        }
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
-        return;
-    }
-    
-    if (tieneDeudaAlta) {
-        contadorDeudaAlta++;
-        if (contadorDeudaAlta <= 3) {
-            console.log(`💰 DEUDA ALTA: ${os.OSATMO} | $${deuda}`);
-        }
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false, tieneDeudaAlta: true, numeroOrden: osEnRadio.length + 1 });
-        return;
-    }
-    
-    // ✅ Filtros SOLO para NO reguladas Y deuda ≤ $500
-    const fechaGen = new Date(os['Fecha Gen.']);
-    const hoy = new Date();
-    const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
-    
-    let pasaFiltro = true;
-    
-    if (filtrosAplicar.tipologias?.length > 0) {
-        pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
-    }
-    
-    if (pasaFiltro && filtrosAplicar.rangos?.length > 0) {
-        pasaFiltro = filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento));
-    }
-    
-    const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
-    const pasaDeuda = !hayFiltrosDeuda ? true : 
-        ((filtrosAplicar.deuda_amarillo && deuda >= 100 && deuda < 300) ||
-         (filtrosAplicar.deuda_naranja && deuda >= 300 && deuda < 500));
-    
-    if (pasaFiltro && pasaDeuda) {
-        contadorFiltradas++;
-        if (contadorFiltradas <= 3) {
-            console.log(`✅ FILTRADA: ${os.OSATMO} | "${os.Tipologia}"`);
-        }
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
-    } else {
-        contadorSinFiltro++;
-    }
-});
+            // 2. Calcular distancia y validar radio
+            const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+            const radioMax = filtrosUnidadHoy ? filtrosUnidadHoy.radio_km : 3;
+            if (dist > radioMax) return;
+
+            // 3. Validar Disponibilidad (Unidad vacía o Mi Unidad)
+            const u = (os.Unidad || "").trim();
+            const disponible = !u || u === "" || u.includes("--") || u === "SIN UNIDAD" || u === unidadSeleccionada;
+            if (!disponible) return;
+
+            // 4. Excluir Duplicados
+            if (osatmosAsignados.has(String(os.OSATMO).trim())) return;
+
+            // 5. Definir Prioridades Especiales
+            const esRegulada = (os.Tipo_de_OS || "").toUpperCase().includes("REGULADA");
+            const deuda = parseFloat(os.Comentario?.match(/\$(\d+(\.\d+)?)/)?.[1] || 0);
+            const esDeudaAlta = deuda > 500;
+
+            // 6. Aplicar Filtros Estrictos de la Tabla
+            let cumpleFiltros = false;
+            if (filtrosUnidadHoy) {
+                const tipOk = (filtrosUnidadHoy.tipologias || []).includes((os.Tipologia || "").trim());
+                const rangoOk = (filtrosUnidadHoy.rangos || []).includes(determinarRangoDias(os['Fecha Gen.']));
+                
+                // IMPORTANTE: Para entrar por filtro debe cumplir AMBOS (Tipología Y Rango)
+                cumpleFiltros = tipOk && rangoOk;
+            }
+
+           // REGLA FINAL: Si cumple los filtros de la tabla O es una prioridad (Regulada/Deuda Alta)
+            if (cumpleFiltros || esRegulada || esDeudaAlta) {
+                
+                // Actualizamos los contadores para el log final
+                if (esRegulada) {
+                    contadorReguladas++;
+                } else if (esDeudaAlta) {
+                    contadorDeudaAlta++;
+                } else {
+                    contadorFiltradas++;
+                }
+
+                osEnRadio.push({
+                    ...os,
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    distancia: dist,
+                    esExtra: true,
+                    estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
+                });
+            } else {
+                // Si no cumple nada, contamos como rechazada por filtro
+                contadorSinFiltro++;
+            }
+        }); // Aquí cierra el forEach
+
+        
 
 console.log('✅ ==========================================');
 console.log('✅ RESULTADO FINAL:');
