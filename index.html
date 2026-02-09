@@ -5438,59 +5438,75 @@ osPendientes.forEach((os) => {
     const esPrioridad = esRegulada || esDeudaAlta;
     const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
 
-    if (esLibre && !esDuplicada && (cumpleFiltrosTabla || esPrioridad)) {
-        // ✅ SE INCLUYE EN EL MAPA
-        let estadoFinal = 'no_regulada';
-        let motivo = esRegulada ? "REGULADA" : (esDeudaAlta ? "DEUDA > 500" : "FILTRO TABLA");
+    // REGLA CLAVE: Para Mapa de Rutas solo queremos lo LIBRE y NO DUPLICADO
+    if (esLibre && !esDuplicada) {
+        
+        // Dentro de lo libre, verificamos si pasa los filtros del Admin o es prioridad
+        if (cumpleFiltrosTabla || esPrioridad) {
+            
+            // ✅ SE INCLUYE EN EL MAPA
+            let estadoFinal = 'no_regulada';
+            let motivo = esRegulada ? "PRIORIDAD: REGULADA" : (esDeudaAlta ? "PRIORIDAD: DEUDA > 500" : "FILTRO GLOBAL OK");
 
-        if (esRegulada) {
-            estadoFinal = 'regulada';
-            contadorReguladas++;
-        } else if (esDeudaAlta) {
-            estadoFinal = 'deuda_alta';
-            contadorDeudaAlta++;
+            if (esRegulada) {
+                estadoFinal = 'regulada';
+                contadorReguladas++;
+            } else if (esDeudaAlta) {
+                estadoFinal = 'deuda_alta';
+                contadorDeudaAlta++;
+            } else {
+                contadorFiltradas++;
+            }
+
+            osEnRadio.push({
+                ...os,
+                lat: coords.lat, 
+                lng: coords.lng,
+                distancia: dist, 
+                esExtra: true,
+                estadoMapa: estadoFinal
+            });
+
+            // Log de éxito (primeras 5 para confirmar que el motor arranca bien)
+            if (osEnRadio.length <= 5) {
+                console.log(`✅ OS ${os.OSATMO} INCLUIDA por: ${motivo}`);
+            }
+
         } else {
-            contadorFiltradas++;
-        }
-
-        osEnRadio.push({
-            ...os,
-            lat: coords.lat, lng: coords.lng,
-            distancia: dist, esExtra: true,
-            estadoMapa: estadoFinal
-        });
-
-        // Opcional: Log de éxito para las primeras 5
-        if (osEnRadio.length <= 5) {
-            console.log(`✅ OS ${os.OSATMO} agregada por: ${motivo}`);
+            // ❌ RECHAZADA POR REGLAS DE NEGOCIO (Es libre pero no cumple días/tipología)
+            if (contadorSinFiltro < 15) {
+                console.warn(`⚠️ OS ${os.OSATMO} DESCARTADA: Está LIBRE pero no cumple filtros ${detalleFiltro}`);
+            }
+            contadorSinFiltro++;
         }
 
     } else {
-        // ❌ NO APLICA (Log de razón específica)
+        // 🚫 EXCLUIDA POR PROPIEDAD O DUPLICIDAD
         let razonLog = "";
-        if (!esLibre) razonLog = `YA ASIGNADA A: ${u}`;
-        else if (esDuplicada) razonLog = "YA ESTÁ EN TU LISTA (DUPLICADA)";
-        else razonLog = `NO CUMPLE REGLAS ${detalleFiltro}`;
-
-        // Solo mostramos logs de las que están cerca para no saturar
-        if (contadorSinFiltro < 15) {
-            console.warn(`⚠️ OS ${os.OSATMO} rechazada: ${razonLog}`);
+        if (!esLibre) {
+            razonLog = `YA TIENE DUEÑO (Unidad: ${u})`;
+            contadorUnidadInvalida++;
+        } else if (esDuplicada) {
+            razonLog = "YA ASIGNADA A TU LISTA (DUPLICADA)";
+            contadorDuplicados++;
         }
 
-        if (!esLibre) contadorUnidadInvalida++;
-        else if (esDuplicada) contadorDuplicados++;
-        else contadorSinFiltro++;
+        // Solo mostramos los primeros 10 para ver por qué el mapa no muestra lo que esperabas
+        if (contadorUnidadInvalida < 10 && !esLibre) {
+            console.error(`🚫 OS ${os.OSATMO} OCULTA: ${razonLog}`);
+        }
     }
 });
 
-// ✅ LOG DE RESULTADOS FINAL
-console.log('📊 --- RESUMEN DE PROCESAMIENTO ---');
+// ✅ LOG DE RESULTADOS FINAL (Para control del Despacho)
+console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
 console.table(diagnosticoRangos); 
-console.log('📋 Filtros aplicados:', {
-    rangos: filtrosUnidadHoy?.rangos,
-    tipologias: filtrosUnidadHoy?.tipologias?.length + " cargadas"
+console.log('📋 Parámetros de búsqueda:', {
+    radio: radioConfigurado + " km",
+    rangos_permitidos: filtrosUnidadHoy?.rangos || "No definidos",
+    tipologias_activas: filtrosUnidadHoy?.tipologias?.length || 0
 });
-console.log('🚀 Total final en mapa:', osEnRadio.length);
+console.log('🚀 TOTAL DE ÓRDENES PENDIENTES EN MAPA:', osEnRadio.length);
 
 
 console.log('✅ ==========================================');
