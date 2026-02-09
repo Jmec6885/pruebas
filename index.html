@@ -9121,35 +9121,41 @@ async function guardarFiltrosMapaGlobales() {
                     tipologias: tipologiasAGuardar,
                     radio_km: radioKm,
                     fecha_actualizacion: new Date().toISOString(),
-                    fecha_vigencia: fechaVigencia // ✅ NUEVO CAMPO
+                    fecha_vigencia: fechaVigencia 
                 }, {
                     onConflict: 'usuario'
                 });
+
             if (error) {
                 alert('❌ Error: ' + error.message);
                 return;
             }
             alert('✅ Tus filtros personales fueron guardados correctamente');
             console.log(`✅ Filtros de ${currentUser.usuario} guardados`);
+
         } else {
-            // ✅ ADMIN: Actualizar filtro global (id=1, usuario=NULL)
+            // ✅ ADMIN: Actualizar filtro global pero registrando QUIÉN lo hizo
+            // Usamos upsert para que si el id: 1 existe, lo actualice
             const { error } = await supabaseClient
                 .from('filtros_mapa')
-                .update({
+                .upsert({
+                    id: 1, // Mantenemos el ID 1 para que sea el filtro maestro
+                    usuario: currentUser.usuario, // 👈 Ahora registra tu usuario
                     rangos: rangosAGuardar,
                     tipologias: tipologiasAGuardar,
                     radio_km: radioKm,
                     fecha_actualizacion: new Date().toISOString(),
-                    fecha_vigencia: fechaVigencia // ✅ NUEVO CAMPO
-                })
-                .eq('id', 1)
-                .is('usuario', null);
+                    fecha_vigencia: fechaVigencia
+                }, {
+                    onConflict: 'id'
+                });
+
             if (error) {
                 alert('❌ Error: ' + error.message);
                 return;
             }
-            alert('✅ Filtros globales actualizados');
-            console.log('✅ Filtros globales guardados');
+            alert('✅ Filtros globales actualizados por ' + currentUser.usuario);
+            console.log('✅ Filtros globales guardados por:', currentUser.usuario);
         }
     } catch (err) {
         console.error('Error:', err);
