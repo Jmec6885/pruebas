@@ -5402,22 +5402,36 @@ let contadorDuplicados = 0;
 let contadorSinCoordenadas = 0;
 
 osPendientes.forEach((os) => {
-            // 1. Validar coordenadas
-            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-            if (!coords) return;
+    contadorTotal++; // 🚩 SUMAR SIEMPRE AL INICIO
 
-            // 2. Calcular distancia y validar radio
-            const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-            const radioMax = filtrosUnidadHoy ? filtrosUnidadHoy.radio_km : 3;
-            if (dist > radioMax) return;
+    // 1. Validar coordenadas
+    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+    if (!coords) {
+        contadorSinCoordenadas++; // 🚩 SUMAR SI NO TIENE
+        return;
+    }
 
-            // 3. Validar Disponibilidad (Unidad vacía o Mi Unidad)
-            const u = (os.Unidad || "").trim();
-            const disponible = !u || u === "" || u.includes("--") || u === "SIN UNIDAD" || u === unidadSeleccionada;
-            if (!disponible) return;
+    // 2. Calcular distancia y validar radio
+    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+    const radioMax = filtrosUnidadHoy ? filtrosUnidadHoy.radio_km : 3;
+    if (dist > radioMax) {
+        contadorFueraRadio++; // 🚩 SUMAR SI ESTÁ FUERA
+        return;
+    }
 
-            // 4. Excluir Duplicados
-            if (osatmosAsignados.has(String(os.OSATMO).trim())) return;
+    // 3. Validar Disponibilidad
+    const u = (os.Unidad || "").trim();
+    const disponible = !u || u === "" || u.includes("--") || u === "SIN UNIDAD" || u === unidadSeleccionada;
+    if (!disponible) {
+        contadorUnidadInvalida++; // 🚩 SUMAR SI ES DE OTRA UNIDAD
+        return;
+    }
+
+    // 4. Excluir Duplicados
+    if (osatmosAsignados.has(String(os.OSATMO).trim())) {
+        contadorDuplicados++; // 🚩 SUMAR SI YA LA TIENES ASIGNADA
+        return;
+    }
 
             // 5. Definir Prioridades Especiales
             const esRegulada = (os.Tipo_de_OS || "").toUpperCase().includes("REGULADA");
@@ -5440,32 +5454,38 @@ if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) 
 }
 
 // REGLA DE ORO: 
+            // 1. Si cumple los filtros de la tabla (Tipología + Rango)
+            // 2. O si es una OS Regulada (Prioridad)
+            // 3. O si tiene Deuda Alta (>$500)
             if (cumpleFiltros || esRegulada || esDeudaAlta) {
                 
-                // 1. PRIMERO: Actualizamos los contadores (Fuera del objeto)
+                // ✅ Actualizamos contadores específicos para el reporte
                 if (esRegulada) {
                     contadorReguladas++;
                 } else if (esDeudaAlta) {
                     contadorDeudaAlta++;
                 } else {
-                    contadorFiltradas++;
+                    // Estas son las que entraron estrictamente por los filtros de la tabla
+                    contadorFiltradas++; 
                 }
 
-                // 2. SEGUNDO: Agregamos a la lista
+                // ✅ Agregamos a la lista final del mapa
                 osEnRadio.push({
                     ...os,
                     lat: coords.lat,
                     lng: coords.lng,
                     distancia: dist,
                     esExtra: true,
+                    // 'no_regulada' se refiere a las que entraron por filtro normal
                     estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
                 });
 
             } else {
-                // Si no cumple nada, contamos como rechazada por filtro
+                // ✅ Si llegó aquí, es porque NO es regulada, NO es deuda alta
+                // y NO coincide con las tipologías/rangos de hoy.
                 contadorSinFiltro++;
             }
-        }); // Aquí cierra el forEach
+        }); // Cierre del forEach
         
 
 console.log('✅ ==========================================');
@@ -5696,9 +5716,9 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas; 
     
-    // ✅ Forzar fecha local de El Salvador
-    const HOY = new Date().toLocaleDateString('en-CA'); 
-    console.log('📅 Buscando filtros en DB para:', HOY, 'Unidad:', unidad);
+    // ✅ CAMBIO 1: Fecha local estricta (Evita saltar al día 9 por error UTC)
+const HOY = new Date().toLocaleDateString('en-CA'); 
+console.log('📅 Buscando filtros para fecha local:', HOY);
 
     // 1. Buscamos el filtro (Corregido: usamos "unidad" que viene por parámetro)
     let { data: filtrosUnidadHoy } = await supabaseClient
