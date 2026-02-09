@@ -8900,11 +8900,10 @@ function parsearCoordenadas(coordString) {
 // ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION ESTRICTA SINCRO)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    // 1. Validar existencia de filtros
-    // CAMBIO: Si no hay filtros, NO permitimos nada (salvo reguladas que se evalúan abajo)
+    // 1. Validar existencia de filtros (Si no existen, no mostramos nada extra)
     if (!filtros) return false;
 
-    // 2. Extraer arrays y configurar banderas
+    // 2. Extraer criterios seleccionados (Tipologías y Rangos)
     const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
     const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
     
@@ -8913,21 +8912,25 @@ function validarFiltrosOS(os, filtros) {
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    const normalizarTexto = (texto) => {
+    // Helper para normalizar textos y comparar sin errores
+    const normalizar = (texto) => {
         return (texto || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
     };
 
-    // --- 🛡️ 3. PRIORIDAD: REGLAS DE NEGOCIO (REGULADAS) ---
-    // Esta puerta siempre está abierta
+    // --- 🛡️ 3. PRIORIDAD: REGULADAS (PUERTA ABIERTA) ---
+    // Si es regulada, pasa directo (Ej: Reclamación por consumo)
     const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
-    if (tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no')) {
-        return true; // Pasa directo (Reclamaciones, etc.)
+    const esRegulada = tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no');
+    
+    if (esRegulada) {
+        console.log(`✅ OS ${os.OSATMO} pasa por ser REGULADA`);
+        return true; 
     }
 
-    // --- 4. VALIDACIÓN POR DEUDA ---
+    // --- 🛡️ 4. VALIDACIÓN POR DEUDA (SOLO SUSPENSIONES) ---
     if (tieneFiltroDeuda) {
         const deuda = parseFloat(os.Deuda) || 0;
-        const tipOS = normalizarTexto(os.Tipologia);
+        const tipOS = normalizar(os.Tipologia);
         const esSuspension = tipOS.includes('SUSPENSION');
 
         if (esSuspension) {
@@ -8936,31 +8939,34 @@ function validarFiltrosOS(os, filtros) {
             if (deudaNaranja && deuda >= 100 && deuda <= 500) cumpleDeuda = true;
             if (deudaRosado && deuda >= 50 && deuda < 100) cumpleDeuda = true;
 
-            if (cumpleDeuda) return true; 
+            if (cumpleDeuda) {
+                console.log(`✅ OS ${os.OSATMO} pasa por filtro de DEUDA`);
+                return true; 
+            }
         }
     }
 
-    // --- 5. VALIDACIÓN COMBINADA (TIPOLOGÍA + RANGO) ---
-    // CAMBIO CRÍTICO: Si no hay filtros de tabla seleccionados, NO pasa nada más.
-    if (!rangosActivos && !tipologiasActivas) {
-        return false; // Aquí es donde "Mantenimiento" muere si no hay filtros.
+    // --- 🛡️ 5. FILTRO DE TABLA (TIPOLOGÍA + RANGO) ---
+    // Si llegamos aquí y no has seleccionado nada en el panel de filtros, NO pasa nada.
+    if (!tipologiasActivas && !rangosActivos) {
+        return false; 
     }
 
-    // A. Check de Tipología (Estricto)
-    let tipOk = false; 
+    // A. Check de Tipología: Solo si está en tus 4 (o las que elijas)
+    let tipOk = false;
     if (tipologiasActivas) {
-        const tipOS_Limpia = normalizarTexto(os.Tipologia);
-        // Usamos includes para mayor flexibilidad pero dentro de la lista permitida
-        tipOk = tipologiasActivas.some(t => tipOS_Limpia.includes(normalizarTexto(t)));
+        const tipOS_Limpia = normalizar(os.Tipologia);
+        tipOk = tipologiasActivas.some(t => tipOS_Limpia.includes(normalizar(t)));
         
-        if (!tipOk) return false; // Si no está en el filtro, fuera.
+        if (!tipOk) {
+            // Aquí es donde "Mantenimiento de medidor" rebotará si no lo elegiste
+            return false; 
+        }
     } else {
-        // Si no hay tipologías en el filtro pero sí rangos, 
-        // podrías decidir si pasa o no. Lo ideal es que tipOk sea true si no hay filtro de tipología.
-        tipOk = true; 
+        tipOk = true; // Si no hay filtro de tipo pero sí de rango, permitimos
     }
 
-    // B. Check de Rango (Estricto)
+    // B. Check de Rango
     let rangoOk = false;
     if (rangosActivos) {
         if (!os['Fecha Gen.']) return false;
@@ -8971,10 +8977,13 @@ function validarFiltrosOS(os, filtros) {
 
         if (!rangoOk) return false;
     } else {
-        rangoOk = true; // Si no hay filtro de rango, pasa por defecto si tipOk es true.
+        rangoOk = true; // Si no hay filtro de rango, pasa si la tipología fue correcta
     }
 
-    return tipOk && rangoOk;
+    const resultado = tipOk && rangoOk;
+    if (resultado) console.log(`✅ OS ${os.OSATMO} pasa por FILTROS DE TABLA`);
+    
+    return resultado;
 }
 
 // ========================================
