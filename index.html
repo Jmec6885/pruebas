@@ -4784,13 +4784,13 @@ renovarSesion(); // ← AGREGAR
 
             console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
 
-            // 📢 CRÍTICO: Guardamos las asignadas en window para que el filtro sepa qué EXCLUIR
+            // ==========================================================
+            // 🔥 ESTA ES LA LÍNEA QUE FALTA PARA QUE EL BOTÓN FUNCIONE 🔥
             window.osAsignadasKML = osParaMapa; 
+            // ==========================================================
 
-            // ✅ LLAMAR A LA FUNCIÓN CORRECTA
             generarMapaKMLRuta(osParaMapa, miUnidad);
-
-            return; // <--- Cierra correctamente la lógica del contratista
+            return; 
         }
 
         // Otros roles: sin acceso
