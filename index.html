@@ -5434,69 +5434,54 @@ osPendientes.forEach((os) => {
         detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
     }
 
-    // --- D. DECISIÓN FINAL CON LOGS DE AUDITORÍA ---
-    const esPrioridad = esRegulada || esDeudaAlta;
+    // --- D. DECISIÓN FINAL (SOLO PENDIENTES) ---
+
+    // 1. Bloqueo de seguridad: Si ya tiene dueño, se va del Mapa de Rutas
+    const u = (os.Unidad || "").trim().toUpperCase();
+    const esRealmentePendiente = !u || u === "" || u === "SIN UNIDAD" || u.includes("---");
     const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
 
-    // REGLA CLAVE: Para Mapa de Rutas solo queremos lo LIBRE y NO DUPLICADO
-    if (esLibre && !esDuplicada) {
+    if (!esRealmentePendiente || esDuplicada) {
+        let razonLog = !esRealmentePendiente ? `YA TIENE DUEÑO (${u})` : "DUPLICADA";
         
-        // Dentro de lo libre, verificamos si pasa los filtros del Admin o es prioridad
-        if (cumpleFiltrosTabla || esPrioridad) {
-            
-            // ✅ SE INCLUYE EN EL MAPA
-            let estadoFinal = 'no_regulada';
-            let motivo = esRegulada ? "PRIORIDAD: REGULADA" : (esDeudaAlta ? "PRIORIDAD: DEUDA > 500" : "FILTRO GLOBAL OK");
-
-            if (esRegulada) {
-                estadoFinal = 'regulada';
-                contadorReguladas++;
-            } else if (esDeudaAlta) {
-                estadoFinal = 'deuda_alta';
-                contadorDeudaAlta++;
-            } else {
-                contadorFiltradas++;
-            }
-
-            osEnRadio.push({
-                ...os,
-                lat: coords.lat, 
-                lng: coords.lng,
-                distancia: dist, 
-                esExtra: true,
-                estadoMapa: estadoFinal
-            });
-
-            // Log de éxito (primeras 5 para confirmar que el motor arranca bien)
-            if (osEnRadio.length <= 5) {
-                console.log(`✅ OS ${os.OSATMO} INCLUIDA por: ${motivo}`);
-            }
-
-        } else {
-            // ❌ RECHAZADA POR REGLAS DE NEGOCIO (Es libre pero no cumple días/tipología)
-            if (contadorSinFiltro < 15) {
-                console.warn(`⚠️ OS ${os.OSATMO} DESCARTADA: Está LIBRE pero no cumple filtros ${detalleFiltro}`);
-            }
-            contadorSinFiltro++;
-        }
-
-    } else {
-        // 🚫 EXCLUIDA POR PROPIEDAD O DUPLICIDAD
-        let razonLog = "";
-        if (!esLibre) {
-            razonLog = `YA TIENE DUEÑO (Unidad: ${u})`;
-            contadorUnidadInvalida++;
-        } else if (esDuplicada) {
-            razonLog = "YA ASIGNADA A TU LISTA (DUPLICADA)";
-            contadorDuplicados++;
-        }
-
-        // Solo mostramos los primeros 10 para ver por qué el mapa no muestra lo que esperabas
-        if (contadorUnidadInvalida < 10 && !esLibre) {
+        if (contadorUnidadInvalida < 10 && dist <= radioConfigurado) {
             console.error(`🚫 OS ${os.OSATMO} OCULTA: ${razonLog}`);
         }
+        
+        if (!esRealmentePendiente) contadorUnidadInvalida++;
+        else contadorDuplicados++;
+        
+        return; // Salida inmediata: No entra al mapa de rutas
     }
-});
+
+    // 2. Filtros de Negocio: Si llegamos aquí, la OS está 100% LIBRE
+    const esPrioridad = esRegulada || esDeudaAlta;
+
+    if (cumpleFiltrosTabla || esPrioridad) {
+        // ✅ SE INCLUYE EN EL MAPA
+        let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
+
+        if (esRegulada) contadorReguladas++;
+        else if (esDeudaAlta) contadorDeudaAlta++;
+        else contadorFiltradas++;
+
+        osEnRadio.push({
+            ...os,
+            lat: coords.lat, 
+            lng: coords.lng,
+            distancia: dist, 
+            esExtra: true,
+            estadoMapa: estadoFinal 
+        });
+
+    } else {
+        // ❌ RECHAZADA POR RANGO/TIPOLOGÍA
+        if (contadorSinFiltro < 15 && dist <= radioConfigurado) {
+            console.warn(`⚠️ OS ${os.OSATMO} LIBRE pero fuera de filtros: ${detalleFiltro}`);
+        }
+        contadorSinFiltro++;
+    }
+}); // <--- AQUÍ CIERRA EL osPendientes.forEach
 
 // ✅ LOG DE RESULTADOS FINAL (Para control del Despacho)
 console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
