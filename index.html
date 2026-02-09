@@ -5385,79 +5385,78 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
 
         // ✅ Bucle de procesamiento
         osPendientes.forEach((os) => {
-            contadorTotal++;
+    contadorTotal++;
 
-            // --- A. FILTROS BASE (Coordenadas y Radio) ---
-            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-            if (!coords) { contadorSinCoordenadas++; return; }
+    // --- A. FILTROS BASE (Sin cambios) ---
+    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+    if (!coords) { contadorSinCoordenadas++; return; }
 
-            const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-            if (dist > radioConfigurado) { 
-                contadorFueraRadio++; 
-                return; 
-            }
+    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-            // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS ---
-            const u = (os.Unidad || "").trim().toUpperCase();
-            const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
-            const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
-            const rangoOS = determinarRangoDias(os['Fecha Gen.']);
-            
-            diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
+    // --- B. EXTRACCIÓN CON NOMBRES EXACTOS DE TU SQL ---
+    const u = (os.Unidad || "").trim().toUpperCase();
+    const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
+    const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
+    const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+    
+    diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-            const tipoOS_Texto = (os.Tipo_de_OS || "").toUpperCase();
-            const esRegulada = tipoOS_Texto.includes("REGULADA") && !tipoOS_Texto.includes("NO REGULADA");
-            const deuda = parseFloat(os.Deuda || 0);
-            const esDeudaAlta = deuda > 500;
+    // Validación de Prioridades según tus columnas SQL
+    const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
+    const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
+    
+    // Forzamos conversión a número para numeric(10,2)
+    const valorDeuda = parseFloat(os.Deuda || 0);
+    const esDeudaAlta = valorDeuda > 500;
 
-            // --- C. BLOQUEO DE SEGURIDAD (Disponibilidad) ---
-            if (!esLibre || esDuplicada) {
-                if (!esLibre) contadorUnidadInvalida++;
-                else contadorDuplicados++;
-                return; 
-            }
+    // --- C. BLOQUEO DE DISPONIBILIDAD ---
+    if (!esLibre || esDuplicada) {
+        if (!esLibre) contadorUnidadInvalida++;
+        else contadorDuplicados++;
+        return; 
+    }
 
-            // --- D. APLICACIÓN DE FILTROS DE TABLA (NORMALIZADOS) ---
-            let cumpleFiltrosTabla = false;
-            let detalleFiltro = "Sin Filtros Activos";
+    // --- D. FILTROS DE TABLA (Tipologia y Rango) ---
+    let cumpleFiltrosTabla = false;
+    let detalleFiltro = "";
 
-            if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
-                const tipOS_Norm = normalizarTexto(os.Tipologia);
-                const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
-                const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+        const tipOS_Norm = normalizarTexto(os.Tipologia);
+        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
+        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
 
-                const tipOk = tipologiasFiltro.includes(tipOS_Norm);
-                const rangoOk = rangosFiltro.includes(rangoOS);
-                
-                cumpleFiltrosTabla = tipOk && rangoOk;
-                detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
-            }
+        const tipOk = tipologiasFiltro.includes(tipOS_Norm);
+        const rangoOk = rangosFiltro.includes(rangoOS);
+        
+        cumpleFiltrosTabla = tipOk && rangoOk;
+        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk}]`;
+    }
 
-            // --- E. DECISIÓN FINAL (Prioridad o Filtros) ---
-            const esPrioridad = true;
+    // --- E. DECISIÓN FINAL: EL "PASE VIP" ---
+    // Si es Regulada o Deuda Alta, entra aunque no cumpla Tipología/Rango
+    const esPrioridad = esRegulada || esDeudaAlta;
 
-            if (cumpleFiltrosTabla || esPrioridad) {
-                let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
+    if (esPrioridad || cumpleFiltrosTabla) {
+        // Asignamos el color/estado según la prioridad real
+        let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
 
-                if (esRegulada) contadorReguladas++;
-                else if (esDeudaAlta) contadorDeudaAlta++;
-                else contadorFiltradas++;
+        if (esRegulada) contadorReguladas++;
+        else if (esDeudaAlta) contadorDeudaAlta++;
+        else contadorFiltradas++;
 
-                osEnRadio.push({
-                    ...os,
-                    lat: coords.lat, 
-                    lng: coords.lng,
-                    distancia: dist, 
-                    esExtra: true,
-                    estadoMapa: estadoFinal 
-                });
-            } else {
-                if (contadorSinFiltro < 15) {
-                    console.warn(`⚠️ OS ${os.OSATMO} LIBRE fuera de filtros: ${detalleFiltro}`);
-                }
-                contadorSinFiltro++;
-            }
+        osEnRadio.push({
+            ...os,
+            lat: coords.lat, 
+            lng: coords.lng,
+            distancia: dist, 
+            esExtra: true,
+            estadoMapa: estadoFinal 
         });
+    } else {
+        contadorSinFiltro++;
+    }
+});
 
         // ✅ LOG DE RESULTADOS FINAL
         console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
