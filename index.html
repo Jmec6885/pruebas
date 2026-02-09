@@ -8897,14 +8897,12 @@ function parsearCoordenadas(coordString) {
 
 
 // ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION BLINDADA)
+// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION ESTRICTA SINCRO)
 // ========================================
 function validarFiltrosOS(os, filtros) {
     // 1. Validar existencia de filtros
-    if (!filtros) {
-        console.warn('⚠️ No se recibieron filtros, permitiendo todas las OS');
-        return true;
-    }
+    // CAMBIO: Si no hay filtros, NO permitimos nada (salvo reguladas que se evalúan abajo)
+    if (!filtros) return false;
 
     // 2. Extraer arrays y configurar banderas
     const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
@@ -8915,27 +8913,18 @@ function validarFiltrosOS(os, filtros) {
     const deudaRosado = Boolean(filtros.deuda_rosado);
     const tieneFiltroDeuda = deudaAmarillo || deudaNaranja || deudaRosado;
 
-    // Función interna para limpiar texto (Mayúsculas, Sin Espacios, Sin Tildes)
     const normalizarTexto = (texto) => {
-        return (texto || "")
-            .toString()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "") // Elimina tildes
-            .trim()
-            .toUpperCase();
+        return (texto || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
     };
 
-    // --- 🛡️ LOG DE AUDITORÍA INICIAL ---
-    console.log(`--- 🔍 PROCESANDO OS: ${os.OSATMO} ---`);
-
-    // 3. PRIORIDAD: REGLAS DE NEGOCIO (REGULADAS)
+    // --- 🛡️ 3. PRIORIDAD: REGLAS DE NEGOCIO (REGULADAS) ---
+    // Esta puerta siempre está abierta
     const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
     if (tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no')) {
-        console.log(`   ✅ PASA DIRECTO: Es orden REGULADA`);
-        return true;
+        return true; // Pasa directo (Reclamaciones, etc.)
     }
 
-    // 4. VALIDACIÓN POR DEUDA (Si aplica, se acepta de inmediato)
+    // --- 4. VALIDACIÓN POR DEUDA ---
     if (tieneFiltroDeuda) {
         const deuda = parseFloat(os.Deuda) || 0;
         const tipOS = normalizarTexto(os.Tipologia);
@@ -8947,52 +8936,45 @@ function validarFiltrosOS(os, filtros) {
             if (deudaNaranja && deuda >= 100 && deuda <= 500) cumpleDeuda = true;
             if (deudaRosado && deuda >= 50 && deuda < 100) cumpleDeuda = true;
 
-            if (cumpleDeuda) {
-                console.log(`   ✅ PASA POR DEUDA: $${deuda} (Tipología: ${tipOS})`);
-                return true; 
-            }
+            if (cumpleDeuda) return true; 
         }
     }
 
-    // 5. VALIDACIÓN COMBINADA (TIPOLOGÍA + RANGO)
-    // Si no hay filtros de tabla, y no pasó por deuda/regulada, permitimos según lo que haya
+    // --- 5. VALIDACIÓN COMBINADA (TIPOLOGÍA + RANGO) ---
+    // CAMBIO CRÍTICO: Si no hay filtros de tabla seleccionados, NO pasa nada más.
     if (!rangosActivos && !tipologiasActivas) {
-        console.log(`   ✅ PASA: No hay filtros de tabla activos.`);
-        return true;
+        return false; // Aquí es donde "Mantenimiento" muere si no hay filtros.
     }
 
-    // A. Check de Tipología
-    let tipOk = true;
+    // A. Check de Tipología (Estricto)
+    let tipOk = false; 
     if (tipologiasActivas) {
         const tipOS_Limpia = normalizarTexto(os.Tipologia);
-        tipOk = tipologiasActivas.some(t => normalizarTexto(t) === tipOS_Limpia);
+        // Usamos includes para mayor flexibilidad pero dentro de la lista permitida
+        tipOk = tipologiasActivas.some(t => tipOS_Limpia.includes(normalizarTexto(t)));
         
-        if (!tipOk) {
-            console.log(`   ❌ RECHAZADA TIPOLOGÍA: "${tipOS_Limpia}" no está en lista permitida.`);
-            return false;
-        }
+        if (!tipOk) return false; // Si no está en el filtro, fuera.
+    } else {
+        // Si no hay tipologías en el filtro pero sí rangos, 
+        // podrías decidir si pasa o no. Lo ideal es que tipOk sea true si no hay filtro de tipología.
+        tipOk = true; 
     }
 
-    // B. Check de Rango
-    let rangoOk = true;
+    // B. Check de Rango (Estricto)
+    let rangoOk = false;
     if (rangosActivos) {
-        if (!os['Fecha Gen.']) {
-            console.log(`   ❌ RECHAZADA: No tiene Fecha Gen.`);
-            return false;
-        }
+        if (!os['Fecha Gen.']) return false;
+        
         const dias = calcularDias(os['Fecha Gen.']);
         const miRango = determinarRango(dias);
         rangoOk = rangosActivos.includes(miRango);
 
-        if (!rangoOk) {
-            console.log(`   ❌ RECHAZADA RANGO: OS es "${miRango}", permitidos: [${rangosActivos.join(', ')}]`);
-            return false;
-        }
+        if (!rangoOk) return false;
+    } else {
+        rangoOk = true; // Si no hay filtro de rango, pasa por defecto si tipOk es true.
     }
 
-    // Si llegó aquí y tipOk y rangoOk son true
-    console.log(`   ✅ PASA: Cumple Filtros de Tabla (Tipología y Rango).`);
-    return true;
+    return tipOk && rangoOk;
 }
 
 // ========================================
