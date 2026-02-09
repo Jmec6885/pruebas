@@ -9093,74 +9093,87 @@ async function guardarFiltrosMapaGlobales() {
     }
 
     // 5️⃣ Confirmar acción
-    const esDespacho = currentUser.rol === 'Despacho';
-    const confirmar = confirm(
-        `¿${esDespacho ? 'Guardar TUS filtros personales' : 'SUSTITUIR filtros globales'}?\n` +
-        `📊 VALORES:\n` +
-        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
-        `• Tipologías: ${tipologias.length}\n` +
-        `• Radio: ${radioKm} km\n` +
-        `${fechaVigencia ? `• Fecha de Vigencia: ${fechaVigencia}\n` : ''}` +
-        `${esDespacho ? 'Solo TÚ verás estos filtros' : '⚠️ Esto afectará a TODOS los usuarios'}\n\n` +
-        `✅ SÍ - Guardar\n❌ NO - Cancelar`
-    );
-    if (!confirmar) return;
+const esDespacho = currentUser.rol === 'Despacho';
+const confirmar = confirm(
+    `¿${esDespacho ? 'Guardar TUS filtros personales' : 'SUSTITUIR filtros globales'}?\n` +
+    `📊 VALORES:\n` +
+    `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
+    `• Tipologías: ${tipologias.length}\n` +
+    `• Radio: ${radioKm} km\n` +
+    `${fechaVigencia ? `• Fecha de Vigencia: ${fechaVigencia}\n` : ''}` +
+    `${esDespacho ? 'Solo TÚ verás estos filtros' : '⚠️ Esto afectará a TODOS los usuarios'}\n\n` +
+    `✅ SÍ - Guardar\n❌ NO - Cancelar`
+);
+if (!confirmar) return;
 
-    try {
-        const rangosAGuardar = rangos.length > 0 ? rangos : null;
-        const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
+try {
+    const rangosAGuardar = rangos.length > 0 ? rangos : null;
+    const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
+    
+    // 🕵️ LOG DE AUDITORÍA PRE-ENVÍO: Verificamos qué tiene el objeto currentUser
+    console.log("🔍 [DEBUG] Verificando sesión antes de guardar:", {
+        usuarioActual: currentUser.usuario,
+        rolActual: currentUser.rol,
+        objetoCompleto: currentUser
+    });
 
-        // 🆕 LÓGICA SEPARADA POR ROL
-        if (esDespacho) {
-            // ✅ DESPACHO: Guardar con su usuario específico
-            const { error } = await supabaseClient
-                .from('filtros_mapa')
-                .upsert({
-                    usuario: currentUser.usuario,
-                    rangos: rangosAGuardar,
-                    tipologias: tipologiasAGuardar,
-                    radio_km: radioKm,
-                    fecha_actualizacion: new Date().toISOString(),
-                    fecha_vigencia: fechaVigencia 
-                }, {
-                    onConflict: 'usuario'
-                });
+    // 🆕 LÓGICA SEPARADA POR ROL
+    if (esDespacho) {
+        const payloadDespacho = {
+            usuario: currentUser.usuario, // Si esto es null, aquí lo verás en la consola
+            rangos: rangosAGuardar,
+            tipologias: tipologiasAGuardar,
+            radio_km: radioKm,
+            fecha_actualizacion: new Date().toISOString(),
+            fecha_vigencia: fechaVigencia 
+        };
 
-            if (error) {
-                alert('❌ Error: ' + error.message);
-                return;
-            }
-            alert('✅ Tus filtros personales fueron guardados correctamente');
-            console.log(`✅ Filtros de ${currentUser.usuario} guardados`);
+        console.log("📡 [DEBUG] Enviando Filtro DESPACHO:", payloadDespacho);
 
-        } else {
-            // ✅ ADMIN: Actualizar filtro global pero registrando QUIÉN lo hizo
-            // Usamos upsert para que si el id: 1 existe, lo actualice
-            const { error } = await supabaseClient
-                .from('filtros_mapa')
-                .upsert({
-                    id: 1, // Mantenemos el ID 1 para que sea el filtro maestro
-                    usuario: currentUser.usuario, // 👈 Ahora registra tu usuario
-                    rangos: rangosAGuardar,
-                    tipologias: tipologiasAGuardar,
-                    radio_km: radioKm,
-                    fecha_actualizacion: new Date().toISOString(),
-                    fecha_vigencia: fechaVigencia
-                }, {
-                    onConflict: 'id'
-                });
+        const { data, error } = await supabaseClient
+            .from('filtros_mapa')
+            .upsert(payloadDespacho, { onConflict: 'usuario' })
+            .select(); // Forzamos retorno de datos para validar
 
-            if (error) {
-                alert('❌ Error: ' + error.message);
-                return;
-            }
-            alert('✅ Filtros globales actualizados por ' + currentUser.usuario);
-            console.log('✅ Filtros globales guardados por:', currentUser.usuario);
+        if (error) {
+            console.error("❌ [ERROR DB - Despacho]:", error.message);
+            alert('❌ Error: ' + error.message);
+            return;
         }
-    } catch (err) {
-        console.error('Error:', err);
-        alert('❌ Error de conexión');
+        
+        console.log("✅ [SUCCESS DB]:", data);
+        alert('✅ Tus filtros personales fueron guardados correctamente');
+
+    } else {
+        const payloadAdmin = {
+            id: 1, 
+            usuario: currentUser.usuario, 
+            rangos: rangosAGuardar,
+            tipologias: tipologiasAGuardar,
+            radio_km: radioKm,
+            fecha_actualizacion: new Date().toISOString(),
+            fecha_vigencia: fechaVigencia
+        };
+
+        console.log("📡 [DEBUG] Enviando Filtro ADMIN (Global):", payloadAdmin);
+
+        const { data, error } = await supabaseClient
+            .from('filtros_mapa')
+            .upsert(payloadAdmin, { onConflict: 'id' })
+            .select();
+
+        if (error) {
+            console.error("❌ [ERROR DB - Admin]:", error.message);
+            alert('❌ Error: ' + error.message);
+            return;
+        }
+
+        console.log("✅ [SUCCESS DB]:", data);
+        alert(`✅ Filtros globales actualizados por ${currentUser.usuario || 'USUARIO DESCONOCIDO'}`);
     }
+} catch (err) {
+    console.error('🚨 [ERROR CRÍTICO]:', err);
+    alert('❌ Error de conexión o ejecución');
 }
 
 
