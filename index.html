@@ -5239,38 +5239,32 @@ async function generarMapaUnidadConFiltros() {
     const HOY = new Date().toISOString().split('T')[0];
     
     try {
-       // ✅ 1️⃣ Buscar filtros SOLO para HOY (Sincronizado con El Salvador)
-const HOY = getFechaHoyElSalvador(); 
-console.log('📅 Consultando filtros para fecha local:', HOY);
+       // ✅ 1️⃣ Buscar filtros (Sincronizado con El Salvador)
+        const HOY = getFechaHoyElSalvador(); 
+        console.log('📅 Consultando filtros para fecha local:', HOY);
 
-let { data: filtrosUnidadHoy } = await supabaseClient
-    .from('filtros_por_unidad')
-    .select('*')
-    .eq('Unidad', unidadSeleccionada)
-    .eq('fecha_programada', HOY) 
-    .maybeSingle();
+        let { data: filtrosUnidadHoy } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidadSeleccionada)
+            .eq('fecha_programada', HOY) 
+            .maybeSingle();
 
-// 💡 Si no hay filtro para hoy, buscamos el "filtro base" (null)
-if (!filtrosUnidadHoy) {
-    console.warn(`⚠️ No se halló filtro para ${HOY}, buscando filtro base (null)...`);
-    let { data: filtroBase } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadSeleccionada)
-        .is('fecha_programada', null)
-        .maybeSingle();
-    
-    filtrosUnidadHoy = filtroBase;
-}
+        if (!filtrosUnidadHoy) {
+            console.warn(`⚠️ Buscando filtro base (null) para ${unidadSeleccionada}...`);
+            let { data: filtroBase } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadSeleccionada)
+                .is('fecha_programada', null)
+                .maybeSingle();
+            filtrosUnidadHoy = filtroBase;
+        }
 
-// ✅ Guardar en window. 
-// Si no hay NADA en DB, el radio por defecto es 3.
-// Si filtrosUnidadHoy existe pero radio_km viene vacío, también usamos 3.
-window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
-
-// Definimos la variable de radio que usaremos en el loop
-const radioMaximo = window.filtrosAplicados.radio_km || 3;
-console.log(`🎯 Radio configurado: ${radioMaximo} km`);
+        // ✅ VARIABLE CRÍTICA: Definir radioConfigurado aquí para que el forEach la vea
+        window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+        const radioConfigurado = window.filtrosAplicados.radio_km || 3; 
+        console.log(`🎯 Radio configurado: ${radioConfigurado} km`);
 
 
         // ========================================
@@ -5316,51 +5310,34 @@ if (!osAsignadasUnidad || osAsignadasUnidad.length === 0) {
             return;
         }
         
-        // ========================================
-        // ✅ 4️⃣ Encontrar OS centro (primera OS asignada con coordenadas)
-        // ========================================
+        // ✅ 4️⃣ Encontrar OS centro
         console.log('📍 Buscando OS centro con coordenadas...');
         
         let osCentro;
-if (window.osPartidaSeleccionada) {
-    osCentro = osAsignadasUnidad.find(os => os.osatomo === window.osPartidaSeleccionada);
-}
-if (!osCentro) {
-    osCentro = osAsignadasUnidad.find(os => {
-        const coords = os.Coordenadas || os.Coordendasgis;
-        return coords && coords.includes(',');
-    });
-}  // ✅ AGREGAR ESTA LLAVE
-
+        if (window.osPartidaSeleccionada) {
+            osCentro = osAsignadasUnidad.find(os => os.osatomo === window.osPartidaSeleccionada);
+        }
+        
+        if (!osCentro) {
+            osCentro = osAsignadasUnidad.find(os => {
+                const coords = os.Coordenadas || os.Coordendasgis;
+                return coords && coords.includes(',');
+            });
+        }
         
         if (!osCentro) {
             console.error('❌ No se encontró OS centro con coordenadas');
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd;">
-                    <div class="result-header">⚠️ Sin coordenadas</div>
-                    <p style="text-align: center; color: #666;">Las OS no tienen coordenadas válidas</p>
-                </div>`;
+            resultsContainer.innerHTML = `<div class="result-card" style="background: #fff3cd;">⚠️ No hay OS base con coordenadas</div>`;
             return;
         }
-        
-        const radioKm = filtrosAplicar.radio_km || 3;
-        // ✅ CORRECTO
-const coordsCentro = osCentro.Coordenadas || osCentro.Coordendasgis;
-if (!coordsCentro || !coordsCentro.includes(',')) {
-    throw new Error('OS centro sin coordenadas válidas');
-}
-const partes = coordsCentro.split(',').map(c => parseFloat(c.trim()));
-const [latCentro, lngCentro] = partes.length === 2 ? partes : [partes[1], partes[0]];
 
-console.log('🔍 Coordenadas parseadas:', { coordsCentro, latCentro, lngCentro });
-        
-        console.log('✅ ==========================================');
-        console.log('✅ DATOS DEL CENTRO:');
-        console.log('✅ OS Centro:', osCentro.osatomo || osCentro.OSATMO);
-        console.log('✅ Coordenadas:', latCentro, lngCentro);
-        console.log('✅ Radio de búsqueda:', radioKm, 'km');
-        console.log('✅ ==========================================');
-        
+        // --- AÑADE ESTO PARA DEFINIR LAT Y LNG ---
+        const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
+        const partes = coordsTexto.split(',').map(c => parseFloat(c.trim()));
+        const latCentro = partes[0];
+        const lngCentro = partes[1];
+
+
         // ========================================
         // ✅ 5️⃣ Cargar TODAS las OS pendientes
         // ========================================
@@ -5378,16 +5355,14 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         
         console.log(`✅ ${osPendientes.length} OS pendientes cargadas`);
         
-        // ========================================
-        // ✅ 6️⃣ FILTRAR OS EN RADIO CON LOS FILTROS APLICADOS
-        // ========================================
-        console.log('🔍 ==========================================');
+        // ✅ 6️⃣ FILTRAR OS EN RADIO
         console.log('🔍 APLICANDO FILTROS A OS EN RADIO');
         console.log('🔍 Filtros activos:', {
             tipologias: filtrosAplicar.tipologias,
             rangos: filtrosAplicar.rangos,
-            radio: radioKm + ' km'
+            radio: radioConfigurado + ' km' // 👈 Cambiado de radioKm a radioConfigurado
         });
+
         console.log('🔍 ==========================================');
         
         const osEnRadio = [];
@@ -5418,17 +5393,16 @@ osPendientes.forEach((os) => {
     contadorTotal++;
 
     // 1. Coordenadas
-    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    if (!coords) { contadorSinCoordenadas++; return; }
+        const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+        if (!coords) { contadorSinCoordenadas++; return; }
 
-    // 2. Radio (Aquí es donde daba el error)
-    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    
-    // ✅ Ahora radioConfigurado SÍ existe porque se definió arriba
-    if (dist > radioConfigurado) { 
-        contadorFueraRadio++; 
-        return; 
-    }
+        // 2. Radio (USANDO EL NOMBRE CORRECTO)
+        const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+        
+        if (dist > radioConfigurado) { // 👈 Debe decir radioConfigurado
+            contadorFueraRadio++; 
+            return; 
+        }
 
     // 3. 🛡️ FILTRO DE PROPIEDAD (La parte crítica que mencionas)
     const u = (os.Unidad || "").trim().toUpperCase();
@@ -5533,7 +5507,7 @@ console.log('🗺️ OS asignadas normalizadas:', osAsignadasNormalizadas.length
 console.log('🗺️ OS en radio filtradas:', osEnRadio.length);
 console.log('🗺️ ==========================================');
 
-generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioKm);
+generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioConfigurado);
 
 } catch (err) {
     // ... resto del código
