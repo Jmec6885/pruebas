@@ -5434,7 +5434,7 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
             }
 
             // --- E. DECISIÓN FINAL (Prioridad o Filtros) ---
-            const esPrioridad = esRegulada || esDeudaAlta;
+            const esPrioridad = true;
 
             if (cumpleFiltrosTabla || esPrioridad) {
                 let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
