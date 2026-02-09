@@ -5738,13 +5738,13 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Ahuachapán', 13.924670, -89.842820)">
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Ahuachapán', 13.924670, -89.842820)">
                     📍 Ahuachapán
                 </button>
-                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Sonsonate', 13.727937, -89.717790)">
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Sonsonate', 13.727937, -89.717790)">
                     📍 Sonsonate
                 </button>
-                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Centro de Santa Ana', 13.9680, -89.6240)">
+                <button class="btn btn-secondary" onclick="generarRutaDesdePuntoFijo('Santa Ana', 13.9680, -89.6240)">
                     📍 Santa Ana
                 </button>
             </div>
@@ -5753,7 +5753,6 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     
     resultsContainer.innerHTML = htmlSelector;
 }
-
 
 // Solo asignadas (sin filtros)
 function generarMapaKMLSoloAsignadas(unidad) {
@@ -5773,10 +5772,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
         return;
     }
     
-    // Guardar OS partida globalmente
     window.osPartidaSeleccionada = osPartida;
-    
-    // Llamar a la función que aplica filtros
     await generarMapaUnidadConFiltros();
 }
 
