@@ -5697,6 +5697,9 @@ async function generarKMLAdminPorUnidad(tipo) {
 async function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     
+    // ✅ CORRECCIÓN 1: Definir unidadSeleccionada para que Supabase la reconozca
+    const unidadSeleccionada = unidad; 
+
     // Normalizar OS
     const osNormalizadas = osAsignadas
         .map(os => ({
@@ -5711,42 +5714,44 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         return;
     }
     
-    // 📢 ESTO ES LO QUE EL FILTRO NECESITA LEER
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas; 
     
-    // ✅ CAMBIO 1: Fecha local estricta (Evita saltar al día 9 por error UTC)
-const HOY = new Date().toLocaleDateString('en-CA'); 
-console.log('📅 Buscando filtros para fecha local:', HOY);
+    // ✅ CAMBIO 2: Fecha local (usando tu método seguro)
+    const HOY = getFechaHoyElSalvador(); 
+    console.log('📅 Buscando filtros para fecha local:', HOY);
 
     // 1. Buscamos el filtro
-let { data: filtrosUnidadHoy } = await supabaseClient
-    .from('filtros_por_unidad')
-    .select('*')
-    .eq('Unidad', unidadSeleccionada)
-    .eq('fecha_programada', HOY) 
-    .maybeSingle();
-
-// 2. Si no hay, buscamos el base
-if (!filtrosUnidadHoy) {
-    let { data: filtroBase } = await supabaseClient
+    let { data: filtrosUnidadHoy } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
         .eq('Unidad', unidadSeleccionada)
-        .is('fecha_programada', null)
+        .eq('fecha_programada', HOY) 
         .maybeSingle();
-    filtrosUnidadHoy = filtroBase;
-}
 
-// ✅ AQUÍ ESTÁ LA CLAVE: Definir la variable ANTES del forEach
-// Usamos window.filtrosAplicados para asegurar que exista
-window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+    // 2. Si no hay, buscamos el base
+    if (!filtrosUnidadHoy) {
+        console.log("🔍 Buscando filtro base (null) para:", unidadSeleccionada);
+        let { data: filtroBase } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidadSeleccionada)
+            .is('fecha_programada', null)
+            .maybeSingle();
+        filtrosUnidadHoy = filtroBase;
+    }
 
-// Definimos la constante que el forEach va a buscar
-const radioConfigurado = window.filtrosAplicados.radio_km || 3; 
+    // ✅ Guardar filtros para que generarMapaUnidadConFiltros() los use
+    window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+    const radioConfigurado = window.filtrosAplicados.radio_km || 3; 
 
-console.log(`🎯 Radio configurado correctamente: ${radioConfigurado} km`);
+    // ✅ CORRECCIÓN 3: Definir variables para el HTML
+    const tieneFiltros = !!filtrosUnidadHoy;
+    const mensajeFiltros = tieneFiltros 
+        ? `${filtrosUnidadHoy.tipologias.length} tipologías, ${filtrosUnidadHoy.rangos.length} rangos, radio ${radioConfigurado}km`
+        : "Solo se mostrarán Reguladas/Deuda Alta (Sin filtros programados)";
 
+    console.log(`🎯 Radio configurado correctamente: ${radioConfigurado} km`);
     
     // Generar el HTML
     const htmlSelector = `
@@ -5797,6 +5802,7 @@ console.log(`🎯 Radio configurado correctamente: ${radioConfigurado} km`);
     resultsContainer.innerHTML = htmlSelector;
     console.log("✅ Interfaz generada y filtros preparados");
 }
+
 
 // Solo asignadas (sin filtros)
 function generarMapaKMLSoloAsignadas(unidad) {
