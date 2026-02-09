@@ -5176,14 +5176,24 @@ console.log('▶️ ==========================================');
 // ========================================
 // 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO - VERSIÓN FINAL)
 // ========================================
+// ========================================
+// 🗺️ GENERAR MAPA UNIDAD CON FILTROS (CORREGIDO - VERSIÓN FINAL)
+// ========================================
 async function generarMapaUnidadConFiltros() {
     console.log('🗺️ ==========================================');
     console.log('🗺️ EJECUTANDO: generarMapaUnidadConFiltros');
+    
+    // ✅ PASO 1: RESCATE DE DATOS (Si la variable principal falla, buscamos en la alternativa)
+    if (!window.osAsignadasKML && window.osKMLData) {
+        console.warn('⚠️ window.osAsignadasKML era undefined, rescatando desde window.osKMLData');
+        window.osAsignadasKML = window.osKMLData;
+    }
+
     console.log('🗺️ window.osAsignadasKML:', window.osAsignadasKML);
     console.log('🗺️ window.osAsignadasKML existe:', !!window.osAsignadasKML);
-    console.log('🗺️ window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
     console.log('🗺️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
     console.log('🗺️ ==========================================');
+
     const unidadSeleccionada = transformarUsuarioAUnidad(currentUser.usuario);
     
     if (!unidadSeleccionada) {
@@ -5191,16 +5201,22 @@ async function generarMapaUnidadConFiltros() {
         return;
     }
     
+    // ✅ PASO 2: VALIDACIÓN CRÍTICA DE DATOS ANTES DE SEGUIR
+    if (!window.osAsignadasKML || window.osAsignadasKML.length === 0) {
+        console.error('❌ ERROR: No hay órdenes base cargadas en memoria.');
+        const resultsContainer = document.getElementById('searchResults');
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fff3cd; border-left: 5px solid #ffc107;">
+                <div class="result-header">⚠️ Acción requerida</div>
+                <p style="text-align: center; color: #666;">Primero debe cargar la interfaz de <b>KML Ruta</b> para obtener sus órdenes asignadas antes de aplicar filtros.</p>
+            </div>`;
+        return;
+    }
+
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
-    // ✅ Obtener fecha de HOY en formato YYYY-MM-DD
     const HOY = new Date().toISOString().split('T')[0];
-    console.log('🔍 ==========================================');
-    console.log('🔍 GENERANDO MAPA CON FILTROS');
-    console.log('🔍 Unidad:', unidadSeleccionada);
-    console.log('🔍 Fecha de hoy:', HOY);
-    console.log('🔍 ==========================================');
     
     try {
         // ========================================
