@@ -4854,6 +4854,8 @@ function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
     window.osAsignadasKML = osAsignadas;
 }
 
+	
+
 // ========================================
 // 📊 ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
 // ========================================
@@ -9029,24 +9031,28 @@ function extraerCoordenadas(os) {
 
 
 
-// ========================================
-// 📐 CALCULAR DISTANCIA ENTRE DOS PUNTOS (Haversine)
-// ========================================
+// 1. Tu función original (No la toques)
 function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radio de la Tierra en km
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
               Math.sin(dLon/2) * Math.sin(dLon/2);
-    
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distancia = R * c;
-    
-    return parseFloat(distancia.toFixed(2));
+    return parseFloat((R * c).toFixed(2));
 }
 
+// 2. EL ALIAS (Esto es lo que evita que el mapa falle)
+const calcularDistancia = calcularDistanciaKm;
+
+// 3. El parseador de coordenadas (Indispensable)
+function parsearCoordenadas(coordString) {
+    if (!coordString || typeof coordString !== 'string' || !coordString.includes(',')) return null;
+    const partes = coordString.split(',').map(c => parseFloat(c.trim()));
+    if (isNaN(partes[0]) || isNaN(partes[1])) return null;
+    return { lat: partes[0], lng: partes[1] };
+}
 
 
 // ========================================
