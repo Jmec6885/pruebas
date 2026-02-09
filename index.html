@@ -13471,7 +13471,8 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
         fechaLimite.setDate(fechaLimite.getDate() - 2);
         const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
         
-        const {  filtrosViejos, error } = await supabaseClient
+        // ✅ CORRECCIÓN: Se usa { data, error } porque Supabase devuelve 'data'
+        const { data: filtrosViejos, error } = await supabaseClient
             .from('filtros_por_unidad')
             .select('id, Unidad, fecha_programada, configurado_por')
             .lt('fecha_programada', fechaLimiteStr);
@@ -13498,7 +13499,7 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
         
         // Construir mensaje de confirmación
         let mensaje = `🗑️ LIMPIEZA DE FILTROS OBSOLETOS\n\n`;
-        mensaje += `Se encontraron ${filtrosViejos.length} filtros con fecha programada anterior a ${fechaLimiteStr}:\n\n`;
+        mensaje += `Se encontraron ${filtrosViejos.length} filtros anteriores a ${fechaLimiteStr}:\n\n`;
         
         Object.entries(resumen).forEach(([fecha, data]) => {
             mensaje += `📅 ${fecha}: ${data.cantidad} filtro(s)\n`;
@@ -13510,13 +13511,11 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
         });
         
         mensaje += `\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER\n`;
-        mensaje += `❌ ¿Deseas eliminar estos filtros obsoletos?\n\n`;
-        mensaje += `✅ SÍ - Eliminar ${filtrosViejos.length} filtros\n`;
-        mensaje += `❌ NO - Cancelar`;
+        mensaje += `¿Deseas eliminar estos ${filtrosViejos.length} filtros obsoletos?`;
         
         const confirmar = confirm(mensaje);
         if (!confirmar) return;
-        
+
         // Eliminar filtros
         const { error: errorDelete } = await supabaseClient
             .from('filtros_por_unidad')
@@ -13529,15 +13528,13 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
             return;
         }
         
-        alert(`✅ ${filtrosViejos.length} filtro(s) obsoleto(s) eliminado(s) correctamente`);
-        console.log(`🗑️ ${filtrosViejos.length} filtros eliminados`);
+        alert(`✅ ${filtrosViejos.length} filtro(s) eliminado(s) correctamente`);
         
     } catch (err) {
         console.error('❌ Error en limpieza de filtros:', err);
-        alert('❌ Error de conexión');
+        alert('❌ Error inesperado en la aplicación');
     }
 }
-
 
 </script>
 </body>
