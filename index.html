@@ -5417,13 +5417,18 @@ let contadorSinCoordenadas = 0;
 osPendientes.forEach((os) => {
     contadorTotal++;
 
-    // 1. Coordenadas (Si no tiene, no se puede mapear)
+    // 1. Coordenadas
     const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
     if (!coords) { contadorSinCoordenadas++; return; }
 
-    // 2. Radio Dinámico (Configurado en Supabase)
+    // 2. Radio (Aquí es donde daba el error)
     const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
+    
+    // ✅ Ahora radioConfigurado SÍ existe porque se definió arriba
+    if (dist > radioConfigurado) { 
+        contadorFueraRadio++; 
+        return; 
+    }
 
     // 3. 🛡️ FILTRO DE PROPIEDAD (La parte crítica que mencionas)
     const u = (os.Unidad || "").trim().toUpperCase();
@@ -5714,24 +5719,34 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
 const HOY = new Date().toLocaleDateString('en-CA'); 
 console.log('📅 Buscando filtros para fecha local:', HOY);
 
-    // 1. Buscamos el filtro (Corregido: usamos "unidad" que viene por parámetro)
-    let { data: filtrosUnidadHoy } = await supabaseClient
+    // 1. Buscamos el filtro
+let { data: filtrosUnidadHoy } = await supabaseClient
+    .from('filtros_por_unidad')
+    .select('*')
+    .eq('Unidad', unidadSeleccionada)
+    .eq('fecha_programada', HOY) 
+    .maybeSingle();
+
+// 2. Si no hay, buscamos el base
+if (!filtrosUnidadHoy) {
+    let { data: filtroBase } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
-        .eq('Unidad', unidad) 
-        .eq('fecha_programada', HOY)
+        .eq('Unidad', unidadSeleccionada)
+        .is('fecha_programada', null)
         .maybeSingle();
+    filtrosUnidadHoy = filtroBase;
+}
 
-    // 2. Determinar estado de filtros
-    const tieneFiltros = !!filtrosUnidadHoy;
-    const mensajeFiltros = tieneFiltros 
-        ? `✅ Filtros activos: ${filtrosUnidadHoy.tipologias?.length || 0} tipologías, ${filtrosUnidadHoy.rangos?.length || 0} rangos, radio ${filtrosUnidadHoy.radio_km}km`
-        : '⚠️ Sin filtros programados para hoy (Solo se mostrarán Reguladas/Deuda Alta)';
+// ✅ AQUÍ ESTÁ LA CLAVE: Definir la variable ANTES del forEach
+// Usamos window.filtrosAplicados para asegurar que exista
+window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
 
-    console.log(mensajeFiltros);
+// Definimos la constante que el forEach va a buscar
+const radioConfigurado = window.filtrosAplicados.radio_km || 3; 
 
-    // 3. Guardar globalmente para que "generarMapaUnidadConFiltros" lo encuentre
-    window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+console.log(`🎯 Radio configurado correctamente: ${radioConfigurado} km`);
+
     
     // Generar el HTML
     const htmlSelector = `
