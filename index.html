@@ -5436,19 +5436,20 @@ osPendientes.forEach((os) => {
 
     // --- D. DECISIÓN FINAL (SOLO PENDIENTES) ---
 
-    // 1. Bloqueo de seguridad: Si ya tiene dueño, se va del Mapa de Rutas
-    const u = (os.Unidad || "").trim().toUpperCase();
-    const esRealmentePendiente = !u || u === "" || u === "SIN UNIDAD" || u.includes("---");
+    // 1. Bloqueo de seguridad:
+    // NOTA: 'u', 'esLibre' y 'rangoOS' ya vienen declarados de la parte de arriba (Sección B/C)
+    // Solo necesitamos verificar la duplicidad aquí.
     const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
 
-    if (!esRealmentePendiente || esDuplicada) {
-        let razonLog = !esRealmentePendiente ? `YA TIENE DUEÑO (${u})` : "DUPLICADA";
+    // Usamos 'esLibre' que ya calculaste arriba
+    if (!esLibre || esDuplicada) {
+        let razonLog = !esLibre ? `YA TIENE DUEÑO (${u})` : "DUPLICADA";
         
         if (contadorUnidadInvalida < 10 && dist <= radioConfigurado) {
             console.error(`🚫 OS ${os.OSATMO} OCULTA: ${razonLog}`);
         }
         
-        if (!esRealmentePendiente) contadorUnidadInvalida++;
+        if (!esLibre) contadorUnidadInvalida++;
         else contadorDuplicados++;
         
         return; // Salida inmediata: No entra al mapa de rutas
@@ -5477,13 +5478,14 @@ osPendientes.forEach((os) => {
     } else {
         // ❌ RECHAZADA POR RANGO/TIPOLOGÍA
         if (contadorSinFiltro < 15 && dist <= radioConfigurado) {
+            // detalleFiltro también viene de la sección D de arriba
             console.warn(`⚠️ OS ${os.OSATMO} LIBRE pero fuera de filtros: ${detalleFiltro}`);
         }
         contadorSinFiltro++;
     }
-}); // <--- AQUÍ CIERRA EL osPendientes.forEach
+}); // Cierre del forEach
 
-// ✅ LOG DE RESULTADOS FINAL (Para control del Despacho)
+// ✅ LOG DE RESULTADOS FINAL
 console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
 console.table(diagnosticoRangos); 
 console.log('📋 Parámetros de búsqueda:', {
