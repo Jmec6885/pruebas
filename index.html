@@ -5376,7 +5376,7 @@ let contadorSinFiltro = 0;
 console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
 let osEncontradas = 0;
 
-// ✅ Lista de OSATMO asignados (para excluir duplicados)
+// ✅ 1. Preparación de variables y Set para exclusión de duplicados
 const osatmosAsignados = new Set(
     osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
 );
@@ -5384,14 +5384,16 @@ const osatmosAsignados = new Set(
 console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
 console.log(`📋 Unidad seleccionada: ${unidadSeleccionada}`);
 
-let contadorFueraRadio = 0;
-let contadorUnidadInvalida = 0;
-let contadorDuplicados = 0;
-let contadorSinCoordenadas = 0;
-
-// 1. Inicializar diagnóstico de rangos encontrados en el radio de 3km
+// Inicialización de contadores
+let contadorTotal = 0, contadorFiltradas = 0, contadorReguladas = 0, contadorDeudaAlta = 0;
+let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
+let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
 const diagnosticoRangos = {}; 
 
+// Función de normalización blindada (elimina tildes, espacios y fuerza mayúsculas)
+const normalizarTexto = (t) => (t || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+
+// ✅ 2. Bucle principal de procesamiento
 osPendientes.forEach((os) => {
     contadorTotal++;
 
@@ -5405,68 +5407,47 @@ osPendientes.forEach((os) => {
         return; 
     }
 
-    // --- B. CÁLCULO DE DATOS PARA AUDITORÍA ---
+    // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS ---
     const u = (os.Unidad || "").trim().toUpperCase();
     const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
+    const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
     const rangoOS = determinarRangoDias(os['Fecha Gen.']);
     
-    // Guardar en diagnóstico solo si está en radio
+    // Diagnóstico de lo que hay en radio
     diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    const tipoOS = (os.Tipo_de_OS || "").toUpperCase();
-    const esRegulada = tipoOS.includes("REGULADA") && !tipoOS.includes("NO REGULADA");
+    const tipoOS_Texto = (os.Tipo_de_OS || "").toUpperCase();
+    const esRegulada = tipoOS_Texto.includes("REGULADA") && !tipoOS_Texto.includes("NO REGULADA");
     const deuda = parseFloat(os.Deuda || 0);
     const esDeudaAlta = deuda > 500;
 
-    // --- C. APLICACIÓN DE FILTROS GLOBALES ---
-let cumpleFiltrosTabla = false;
-let detalleFiltro = "";
-
-// ✅ CAMBIO 1: Usar filtrosAplicar (NO filtrosUnidadHoy)
-if (filtrosAplicar && filtrosAplicar.tipologias && filtrosAplicar.rangos) {
-    const tipOS = (os.Tipologia || "").toString().trim();
-    const tipologiasFiltro = filtrosAplicar.tipologias.map(t => t.trim());
-    const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
-
-    // ✅ CAMBIO 2: Comparación exacta (sin includes que causa falsos positivos)
-    const tipOk = tipologiasFiltro.some(tFiltro => {
-        const filtroNorm = tFiltro.toUpperCase();
-        const osNorm = tipOS.toUpperCase();
-        return filtroNorm === osNorm;
-    });
-    const rangoOk = rangosFiltro.includes(rangoOS);
-    
-    cumpleFiltrosTabla = tipOk && rangoOk;
-    detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
-}
-
-
-    // --- D. DECISIÓN FINAL (SOLO PENDIENTES) ---
-
-    // 1. Bloqueo de seguridad:
-    // NOTA: 'u', 'esLibre' y 'rangoOS' ya vienen declarados de la parte de arriba (Sección B/C)
-    // Solo necesitamos verificar la duplicidad aquí.
-    const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
-
-    // Usamos 'esLibre' que ya calculaste arriba
+    // --- C. BLOQUEO DE SEGURIDAD (Disponibilidad) ---
     if (!esLibre || esDuplicada) {
-        let razonLog = !esLibre ? `YA TIENE DUEÑO (${u})` : "DUPLICADA";
-        
-        if (contadorUnidadInvalida < 10 && dist <= radioConfigurado) {
-            console.error(`🚫 OS ${os.OSATMO} OCULTA: ${razonLog}`);
-        }
-        
         if (!esLibre) contadorUnidadInvalida++;
         else contadorDuplicados++;
-        
-        return; // Salida inmediata: No entra al mapa de rutas
+        return; 
     }
 
-    // 2. Filtros de Negocio: Si llegamos aquí, la OS está 100% LIBRE
+    // --- D. APLICACIÓN DE FILTROS DE TABLA (NORMALIZADOS) ---
+    let cumpleFiltrosTabla = false;
+    let detalleFiltro = "Sin Filtros Activos";
+
+    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+        const tipOS_Norm = normalizarTexto(os.Tipologia);
+        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
+        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+
+        const tipOk = tipologiasFiltro.includes(tipOS_Norm);
+        const rangoOk = rangosFiltro.includes(rangoOS);
+        
+        cumpleFiltrosTabla = tipOk && rangoOk;
+        detalleFiltro = `[TipOk: ${tipOk}, RangoOk: ${rangoOk} (${rangoOS})]`;
+    }
+
+    // --- E. DECISIÓN FINAL (Prioridad o Filtros) ---
     const esPrioridad = esRegulada || esDeudaAlta;
 
     if (cumpleFiltrosTabla || esPrioridad) {
-        // ✅ SE INCLUYE EN EL MAPA
         let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
 
         if (esRegulada) contadorReguladas++;
@@ -5481,35 +5462,21 @@ if (filtrosAplicar && filtrosAplicar.tipologias && filtrosAplicar.rangos) {
             esExtra: true,
             estadoMapa: estadoFinal 
         });
-
     } else {
-        // ❌ RECHAZADA POR RANGO/TIPOLOGÍA
-        if (contadorSinFiltro < 15 && dist <= radioConfigurado) {
-            // detalleFiltro también viene de la sección D de arriba
-            console.warn(`⚠️ OS ${os.OSATMO} LIBRE pero fuera de filtros: ${detalleFiltro}`);
+        if (contadorSinFiltro < 15) {
+            console.warn(`⚠️ OS ${os.OSATMO} LIBRE fuera de filtros: ${detalleFiltro}`);
         }
         contadorSinFiltro++;
     }
-}); // Cierre del forEach
+});
 
-// ✅ LOG DE RESULTADOS FINAL
+// ✅ 3. LOG DE RESULTADOS FINAL
 console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
 console.table(diagnosticoRangos); 
-console.log('📋 Parámetros de búsqueda:', {
-    radio: radioConfigurado + " km",
-    rangos_permitidos: filtrosUnidadHoy?.rangos || "No definidos",
-    tipologias_activas: filtrosUnidadHoy?.tipologias?.length || 0
-});
-console.log('🚀 TOTAL DE ÓRDENES PENDIENTES EN MAPA:', osEnRadio.length);
-
-
-console.log('✅ ==========================================');
 console.log('✅ RESULTADO FINAL:');
 console.log('✅ Total procesadas:', contadorTotal);
-console.log('✅ Sin coordenadas:', contadorSinCoordenadas);
 console.log('✅ Fuera de radio:', contadorFueraRadio);
-console.log('✅ Unidad inválida:', contadorUnidadInvalida);
-console.log('✅ Duplicados excluidos:', contadorDuplicados);
+console.log('✅ Unidad ocupada/Duplicada:', (contadorUnidadInvalida + contadorDuplicados));
 console.log('✅ INCLUIDAS:', {
     total: osEnRadio.length,
     reguladas: contadorReguladas,
@@ -5518,7 +5485,6 @@ console.log('✅ INCLUIDAS:', {
 });
 console.log('✅ Rechazadas por filtros:', contadorSinFiltro);
 console.log('✅ ==========================================');
-
         
         // ========================================
         // ========================================
