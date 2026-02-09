@@ -5239,27 +5239,40 @@ async function generarMapaUnidadConFiltros() {
     const HOY = new Date().toISOString().split('T')[0];
     
     try {
-        // ✅ 1️⃣ Buscar filtros SOLO para HOY
-const HOY = new Date().toISOString().split('T')[0]; // Esto dará '2026-02-08' según tu log
+       // ✅ 1️⃣ Buscar filtros SOLO para HOY (Sincronizado con El Salvador)
+const HOY = getFechaHoyElSalvador(); 
+console.log('📅 Consultando filtros para fecha local:', HOY);
 
-let { data: filtrosUnidadHoy, error: errorHoy } = await supabaseClient
+let { data: filtrosUnidadHoy } = await supabaseClient
     .from('filtros_por_unidad')
     .select('*')
     .eq('Unidad', unidadSeleccionada)
-    .eq('fecha_programada', HOY) // Forzamos que la fecha sea estrictamente HOY
+    .eq('fecha_programada', HOY) 
     .maybeSingle();
 
-// 💡 DEBUG TÁCTICO: Si no encuentra, intentamos buscar el registro con NULL por si acaso
+// 💡 Si no hay filtro para hoy, buscamos el "filtro base" (null)
 if (!filtrosUnidadHoy) {
-    console.warn('⚠️ No se halló filtro con fecha hoy, buscando filtro base (null)...');
+    console.warn(`⚠️ No se halló filtro para ${HOY}, buscando filtro base (null)...`);
     let { data: filtroBase } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
         .eq('Unidad', unidadSeleccionada)
         .is('fecha_programada', null)
         .maybeSingle();
+    
     filtrosUnidadHoy = filtroBase;
 }
+
+// ✅ Guardar en window. 
+// Si no hay NADA en DB, el radio por defecto es 3.
+// Si filtrosUnidadHoy existe pero radio_km viene vacío, también usamos 3.
+window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+
+// Definimos la variable de radio que usaremos en el loop
+const radioMaximo = window.filtrosAplicados.radio_km || 3;
+console.log(`🎯 Radio configurado: ${radioMaximo} km`);
+
+
         // ========================================
         // ✅ 2️⃣ Determinar qué filtros aplicar
         // ========================================
@@ -5409,9 +5422,13 @@ osPendientes.forEach((os) => {
     if (!coords) { contadorSinCoordenadas++; return; }
 
     // 2. Radio
-    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    const radioMax = filtrosUnidadHoy ? filtrosUnidadHoy.radio_km : 3;
-    if (dist > radioMax) { contadorFueraRadio++; return; }
+const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+
+// ✅ Usamos radioMaximo que ya tiene el valor de la DB o el 3 de respaldo
+if (dist > radioMaximo) { 
+    contadorFueraRadio++; 
+    return; 
+}
 
     // 3. Unidad
     const u = (os.Unidad || "").trim();
