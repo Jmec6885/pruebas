@@ -5387,14 +5387,14 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         osPendientes.forEach((os) => {
     contadorTotal++;
 
-    // --- A. FILTROS BASE (Sin cambios) ---
+    // --- A. FILTROS BASE (Coordenadas y Radio) ---
     const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
     if (!coords) { contadorSinCoordenadas++; return; }
 
     const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
     if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-    // --- B. EXTRACCIÓN CON NOMBRES EXACTOS DE TU SQL ---
+    // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD ---
     const u = (os.Unidad || "").trim().toUpperCase();
     const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
     const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
@@ -5402,54 +5402,50 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
     
     diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    // Validación de Prioridades según tus columnas SQL
+    // --- C. DETERMINACIÓN DE PRIORIDADES (PUERTA A: INDEPENDIENTE) ---
     const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
     const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
-    
-    // Forzamos conversión a número para numeric(10,2)
     const valorDeuda = parseFloat(os.Deuda || 0);
     const esDeudaAlta = valorDeuda > 500;
+    
+    const esPrioridad = esRegulada || esDeudaAlta;
 
-    // --- C. BLOQUEO DE DISPONIBILIDAD ---
+    // --- D. FILTROS DE TABLA (PUERTA B: SOLO SI EXISTEN FILTROS) ---
+    let cumpleFiltrosTabla = false;
+
+    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+        const tipOS_Norm = normalizarTexto(os.Tipologia);
+        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
+        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+
+        const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
+        const rangoOk = rangosFiltro.includes(rangoOS);
+        
+        cumpleFiltrosTabla = tipOk && rangoOk;
+    }
+
+    // --- E. DECISIÓN FINAL (USO DE OPERADOR "OR" PARA NO BLOQUEAR) ---
+    // Paso 1: Filtro de seguridad (Debe estar libre y no estar ya asignada)
     if (!esLibre || esDuplicada) {
         if (!esLibre) contadorUnidadInvalida++;
         else contadorDuplicados++;
         return; 
     }
 
-    // --- D. APLICACIÓN DE FILTROS DE TABLA (CON DEBUG) ---
-    let cumpleFiltrosTabla = false;
-
-    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
-        // Normalizamos tanto la OS como los filtros
-        const tipOS_Norm = normalizarTexto(os.Tipologia);
-        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
-        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
-
-        // CAMBIO CRÍTICO: Usamos includes para que si el filtro dice "INSTALACION" 
-        // y la OS dice "INSTALACION DE MEDIDOR", sea VÁLIDO.
-        const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
-        const rangoOk = rangosFiltro.includes(rangoOS);
-        
-        cumpleFiltrosTabla = tipOk && rangoOk;
-
-        // Si la orden está cerca pero falló el filtro, te dirá por qué en consola
-        if (!cumpleFiltrosTabla && dist <= radioConfigurado && esLibre && !esDuplicada) {
-             console.log(`❌ OS ${os.OSATMO} rechazada: Tipologia("${tipOS_Norm}") Match=${tipOk} | Rango("${rangoOS}") Match=${rangoOk}`);
-        }
-    }
-
-    // --- E. DECISIÓN FINAL: EL "PASE VIP" ---
-    // Si es Regulada o Deuda Alta, entra aunque no cumpla Tipología/Rango
-    const esPrioridad = esRegulada || esDeudaAlta;
-
+    // Paso 2: El "O" (Si pasa por Puerta A [Prioridad] O por Puerta B [Filtros])
     if (esPrioridad || cumpleFiltrosTabla) {
-        // Asignamos el color/estado según la prioridad real
-        let estadoFinal = esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada');
-
-        if (esRegulada) contadorReguladas++;
-        else if (esDeudaAlta) contadorDeudaAlta++;
-        else contadorFiltradas++;
+        
+        // Definimos el estado para el color (Prioridad sobre lo normal)
+        let estadoFinal = 'no_regulada'; 
+        if (esRegulada) {
+            estadoFinal = 'regulada';
+            contadorReguladas++;
+        } else if (esDeudaAlta) {
+            estadoFinal = 'deuda_alta';
+            contadorDeudaAlta++;
+        } else {
+            contadorFiltradas++;
+        }
 
         osEnRadio.push({
             ...os,
@@ -5457,9 +5453,11 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
             lng: coords.lng,
             distancia: dist, 
             esExtra: true,
-            estadoMapa: estadoFinal 
+            // IMPORTANTE: Cambiamos estadoMapa por 'estado' para que Leaflet lo reconozca
+            estado: estadoFinal 
         });
     } else {
+        // Aquí caen las órdenes que están en el radio pero no son prioridad ni cumplen el filtro
         contadorSinFiltro++;
     }
 });
