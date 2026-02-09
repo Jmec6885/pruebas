@@ -5417,39 +5417,46 @@ let contadorSinCoordenadas = 0;
 osPendientes.forEach((os) => {
     contadorTotal++;
 
-    // 1. Coordenadas
+    // 1. Coordenadas (Si no tiene, no se puede mapear)
     const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
     if (!coords) { contadorSinCoordenadas++; return; }
 
-    // 2. Radio
-const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+    // 2. Radio Dinámico (Configurado en Supabase)
+    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-// ✅ Usamos radioMaximo que ya tiene el valor de la DB o el 3 de respaldo
-if (dist > radioMaximo) { 
-    contadorFueraRadio++; 
-    return; 
-}
+    // 3. 🛡️ FILTRO DE PROPIEDAD (La parte crítica que mencionas)
+    const u = (os.Unidad || "").trim().toUpperCase();
+    
+    // Es "Disponible" si: está vacía, tiene guiones, dice SIN UNIDAD o es MI unidad
+    const esMina = u === unidadSeleccionada.toUpperCase();
+    const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
 
-    // 3. Unidad
-    const u = (os.Unidad || "").trim();
-    const disponible = !u || u === "" || u.includes("--") || u === "SIN UNIDAD" || u === unidadSeleccionada;
-    if (!disponible) { contadorUnidadInvalida++; return; }
+    if (!esMina && !esLibre) {
+        // Si tiene dueña y no soy yo, se descarta silenciosamente
+        contadorUnidadInvalida++; 
+        return; 
+    }
 
-    // 4. Duplicados
-    if (osatmosAsignados.has(String(os.OSATMO).trim())) { contadorDuplicados++; return; }
+    // 4. Evitar duplicados con las que ya tengo cargadas en mi lista principal
+    if (osatmosAsignados.has(String(os.OSATMO).trim())) { 
+        contadorDuplicados++; 
+        return; 
+    }
 
-    // 5. Prioridades Reales (Ojo aquí: Validamos que el texto sea exacto)
+    // 5. Prioridades (Reguladas y Deuda Alta pasan siempre)
     const tipoOS = (os.Tipo_de_OS || "").toUpperCase();
     const esRegulada = tipoOS.includes("REGULADA") && !tipoOS.includes("NO REGULADA");
-    
-    const deuda = parseFloat(os.Deuda || os.Comentario?.match(/\$(\d+(\.\d+)?)/)?.[1] || 0);
+    const deuda = parseFloat(os.Deuda || 0);
     const esDeudaAlta = deuda > 500;
 
-    // 6. Filtros de Tabla
+    // 6. Filtros de Tabla (Tipología y Rango)
     let cumpleFiltros = false;
     if (filtrosUnidadHoy && filtrosUnidadHoy.tipologias && filtrosUnidadHoy.rangos) {
-        const tipOk = filtrosUnidadHoy.tipologias.includes((os.Tipologia || "").trim());
+        const tipOS = (os.Tipologia || "").trim();
         const rangoOS = determinarRangoDias(os['Fecha Gen.']);
+        
+        const tipOk = filtrosUnidadHoy.tipologias.includes(tipOS);
         const rangoOk = filtrosUnidadHoy.rangos.includes(rangoOS);
         
         cumpleFiltros = tipOk && rangoOk;
@@ -5459,7 +5466,7 @@ if (dist > radioMaximo) {
     if (cumpleFiltros || esRegulada || esDeudaAlta) {
         if (esRegulada) contadorReguladas++;
         else if (esDeudaAlta) contadorDeudaAlta++;
-        else contadorFiltradas++; // <--- ESTO DEBERÍA SUBIR AHORA
+        else contadorFiltradas++;
 
         osEnRadio.push({
             ...os,
@@ -5470,10 +5477,10 @@ if (dist > radioMaximo) {
             estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
         });
     } else {
-        // ✅ SI NO CUMPLE NADA, SE CIERRA LA PUERTA
         contadorSinFiltro++; 
     }
-});        
+});
+    
 
 console.log('✅ ==========================================');
 console.log('✅ RESULTADO FINAL:');
