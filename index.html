@@ -5440,24 +5440,39 @@ osPendientes.forEach((os) => {
         const rangoOk = rangosFiltro.includes(rangoOS);
         
         cumpleFiltros = tipOk && rangoOk;
-
-        // Log de ayuda si la orden está en el radio pero no pasa
-        if (!cumpleFiltros && contadorSinFiltro < 3) {
-            console.log(`🔍 OS ${os.OSATMO} analizada: TipOk=${tipOk} ("${tipOS}"), RangoOk=${rangoOk} ("${rangoOS}")`);
-        }
     }
 
-    // --- F. DECISIÓN FINAL ---
-    if (cumpleFiltros || esRegulada || esDeudaAlta) {
-        if (esRegulada) contadorReguladas++;
-        else if (esDeudaAlta) contadorDeudaAlta++;
-        else contadorFiltradas++;
+    // --- F. DECISIÓN FINAL (Mapa de Rutas - Lo Pendiente) ---
+    
+    // Nueva condición: Si está LIBRE y en RADIO, la queremos ver aunque el filtro de días sea estricto
+    const esPendienteLibre = esLibre && dist <= radioConfigurado;
+
+    if (cumpleFiltros || esRegulada || esDeudaAlta || esPendienteLibre) {
+        
+        let estadoFinal = 'no_regulada';
+        
+        if (esRegulada) {
+            estadoFinal = 'regulada';
+            contadorReguladas++;
+        } else if (esDeudaAlta) {
+            estadoFinal = 'deuda_alta';
+            contadorDeudaAlta++;
+        } else if (cumpleFiltros) {
+            // Cumple el filtro específico (Tipología + Rango) definido por el Admin
+            contadorFiltradas++;
+        } else {
+            // Es una pendiente que está en radio pero fuera de los filtros específicos de tabla
+            estadoFinal = 'pendiente_libre'; 
+            contadorFiltradas++; 
+        }
 
         osEnRadio.push({
             ...os,
-            lat: coords.lat, lng: coords.lng,
-            distancia: dist, esExtra: true,
-            estadoMapa: esRegulada ? 'regulada' : (esDeudaAlta ? 'deuda_alta' : 'no_regulada')
+            lat: coords.lat, 
+            lng: coords.lng,
+            distancia: dist, 
+            esExtra: true,
+            estadoMapa: estadoFinal
         });
     } else {
         contadorSinFiltro++; 
@@ -5468,9 +5483,10 @@ osPendientes.forEach((os) => {
 console.log('📊 --- ANÁLISIS DE RANGOS EN RADIO ---');
 console.table(diagnosticoRangos); 
 console.log('📋 Filtros activos del Admin:', {
-    tipologias: filtrosUnidadHoy.tipologias,
-    rangos: filtrosUnidadHoy.rangos
-});    
+    tipologias: filtrosUnidadHoy?.tipologias || 'Todas',
+    rangos: filtrosUnidadHoy?.rangos || 'Todos'
+});
+
 
 console.log('✅ ==========================================');
 console.log('✅ RESULTADO FINAL:');
