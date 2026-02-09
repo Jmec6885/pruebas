@@ -5361,75 +5361,138 @@ let contadorSinFiltro = 0;
 console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
 let osEncontradas = 0;
 
+// ✅ Lista de OSATMO asignados (para excluir duplicados)
+const osatmosAsignados = new Set(
+    osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
+);
+
+console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
+console.log(`📋 Unidad seleccionada: ${unidadSeleccionada}`);
+
+let contadorFueraRadio = 0;
+let contadorUnidadInvalida = 0;
+let contadorDuplicados = 0;
+let contadorSinCoordenadas = 0;
+
 osPendientes.forEach((os, index) => {
     contadorTotal++;
     
     if (index % 100 === 0) {
-        console.log(`📊 Procesadas ${index} OS...`);
+        console.log(`📊 Procesadas ${index}/${osPendientes.length} OS... (Incluidas: ${osEnRadio.length})`);
     }
     
     const coords = os.Coordenadas || os.Coordendasgis;
-    if (!coords || !coords.includes(',')) return;
+    if (!coords || !coords.includes(',')) {
+        contadorSinCoordenadas++;
+        return;
+    }
     
     const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
     const distancia = calcularDistanciaKm(latCentro, lngCentro, lat, lng);
     
-    if (distancia > radioKm || os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) return;
+    if (distancia > radioKm) {
+        contadorFueraRadio++;
+        return;
+    }
+    if (os.OSATMO === (osCentro.osatomo || osCentro.OSATMO)) return;
     
-    const unidadValida = os.Unidad && os.Unidad.trim() !== '' && !os.Unidad.includes('--') && os.Unidad !== 'SIN UNIDAD';
-    if (unidadValida && os.Unidad !== unidadSeleccionada) return;
+    // ✅ REGLA 3: Validar UNIDAD
+    const unidadOS = os.Unidad?.trim();
+    const esUnidadValida = 
+        !unidadOS || 
+        unidadOS === '' || 
+        unidadOS.includes('--') || 
+        unidadOS === 'SIN UNIDAD' || 
+        unidadOS === unidadSeleccionada;
+    
+    if (!esUnidadValida) {
+        contadorUnidadInvalida++;
+        if (contadorUnidadInvalida <= 3) {
+            console.log(`❌ Unidad inválida: ${os.OSATMO} | Unidad: "${unidadOS}"`);
+        }
+        return;
+    }
+    
+    // ✅ REGLA 4: Excluir si está en os_asignadas
+    if (osatmosAsignados.has(String(os.OSATMO).trim())) {
+        contadorDuplicados++;
+        if (contadorDuplicados <= 3) {
+            console.log(`🔁 Duplicado excluido: ${os.OSATMO}`);
+        }
+        return;
+    }
     
     const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
     const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
     const deuda = parseFloat(os.Deuda) || 0;
+    const tieneDeudaAlta = deuda > 500;
+    
+    // ✅ REGLA 5: Reguladas y deuda alta SIEMPRE
+    if (esRegulada) {
+        contadorReguladas++;
+        if (contadorReguladas <= 3) {
+            console.log(`✅ REGULADA: ${os.OSATMO} | Dist: ${distancia.toFixed(2)}km`);
+        }
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
+        return;
+    }
+    
+    if (tieneDeudaAlta) {
+        contadorDeudaAlta++;
+        if (contadorDeudaAlta <= 3) {
+            console.log(`💰 DEUDA ALTA: ${os.OSATMO} | $${deuda}`);
+        }
+        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false, tieneDeudaAlta: true, numeroOrden: osEnRadio.length + 1 });
+        return;
+    }
+    
+    // ✅ Filtros SOLO para NO reguladas Y deuda ≤ $500
     const fechaGen = new Date(os['Fecha Gen.']);
     const hoy = new Date();
     const diasVencimiento = Math.floor((hoy - fechaGen) / (1000 * 60 * 60 * 24));
     
-    const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
-    const pasaDeuda = !hayFiltrosDeuda ? true : 
-        ((filtrosAplicar.deuda_amarillo && deuda >= 100 && deuda < 300) ||
-         (filtrosAplicar.deuda_naranja && deuda >= 300 && deuda < 500) ||
-         (filtrosAplicar.deuda_rosado && deuda >= 500));
-    
     let pasaFiltro = true;
+    
     if (filtrosAplicar.tipologias?.length > 0) {
         pasaFiltro = filtrosAplicar.tipologias.includes(os.Tipologia);
     }
+    
     if (pasaFiltro && filtrosAplicar.rangos?.length > 0) {
         pasaFiltro = filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento));
     }
     
-    if (os.OSATMO === '11183226') {
-        console.log('🚨 OS 11183226:', {
-            Tipologia: os.Tipologia,
-            pasaTipologia: !filtrosAplicar.tipologias?.length || filtrosAplicar.tipologias.includes(os.Tipologia),
-            diasVencimiento,
-            pasaRango: !filtrosAplicar.rangos?.length || filtrosAplicar.rangos.includes(determinarRangoDias(diasVencimiento)),
-            pasaDeuda,
-            INCLUIDA: esRegulada || (pasaFiltro && pasaDeuda)
-        });
-    }
+    const hayFiltrosDeuda = filtrosAplicar.deuda_amarillo || filtrosAplicar.deuda_naranja || filtrosAplicar.deuda_rosado;
+    const pasaDeuda = !hayFiltrosDeuda ? true : 
+        ((filtrosAplicar.deuda_amarillo && deuda >= 100 && deuda < 300) ||
+         (filtrosAplicar.deuda_naranja && deuda >= 300 && deuda < 500));
     
-    if (esRegulada) {
-        contadorReguladas++;
-        osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: true, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
-    } else if (pasaFiltro && pasaDeuda) {
+    if (pasaFiltro && pasaDeuda) {
         contadorFiltradas++;
+        if (contadorFiltradas <= 3) {
+            console.log(`✅ FILTRADA: ${os.OSATMO} | "${os.Tipologia}"`);
+        }
         osEnRadio.push({ ...os, lat, lng, distancia, esRegulada: false, tieneDeudaAlta: false, numeroOrden: osEnRadio.length + 1 });
     } else {
         contadorSinFiltro++;
     }
 });
 
-console.log('✅ RESULTADO DE FILTRADO:', {
+console.log('✅ ==========================================');
+console.log('✅ RESULTADO FINAL:');
+console.log('✅ Total procesadas:', contadorTotal);
+console.log('✅ Sin coordenadas:', contadorSinCoordenadas);
+console.log('✅ Fuera de radio:', contadorFueraRadio);
+console.log('✅ Unidad inválida:', contadorUnidadInvalida);
+console.log('✅ Duplicados excluidos:', contadorDuplicados);
+console.log('✅ INCLUIDAS:', {
     total: osEnRadio.length,
-    por_filtros: contadorFiltradas,
     reguladas: contadorReguladas,
     deuda_alta: contadorDeudaAlta,
-    excluidas: contadorSinFiltro
+    por_filtros: contadorFiltradas
 });
-        console.log('✅ ==========================================');
+console.log('✅ Rechazadas por filtros:', contadorSinFiltro);
+console.log('✅ ==========================================');
+
         
         // ========================================
         // ========================================
