@@ -4741,7 +4741,7 @@ renovarSesion(); // ← AGREGAR
 
         console.log(`✅ ${unidadesUnicas.length} unidades encontradas y ${osCompletas.length} OS cargadas`);
 
-        // LOGICA POR ROLES
+       // LOGICA POR ROLES
         const rol = currentUser && currentUser.rol;
         if (!rol) {
             searchGrid.innerHTML = `<div class="result-card">❌ Usuario no identificado</div>`;
@@ -4750,8 +4750,6 @@ renovarSesion(); // ← AGREGAR
 
         // Admin / Supervisor / Despacho -> interfaz admin (selector de unidad)
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
-            // llamar a la interfaz admin (asegúrate de tener esta función)
-            // pasar unidadesUnicas y osCompletas
             if (typeof generarInterfazAdminKMLRuta === 'function') {
                 generarInterfazAdminKMLRuta(unidadesUnicas, osCompletas);
             } else {
@@ -4764,19 +4762,18 @@ renovarSesion(); // ← AGREGAR
         // Consulta / Contratista -> mostrar solo OS de su unidad
         if (rol === 'Consulta' || rol === 'Contratista') {
             const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
-            // ✅ Paso 1: Obtener lista de OSATMO asignadas a la unidad del usuario
-const osAsignadasAMiUnidad = asignaciones
-    .filter(a => a.Unidad === miUnidad)
-    .map(a => String(a.osatomo).trim())
-    .filter(x => x);
+            
+            const osAsignadasAMiUnidad = asignaciones
+                .filter(a => a.Unidad === miUnidad)
+                .map(a => String(a.osatomo).trim())
+                .filter(x => x);
 
-if (osAsignadasAMiUnidad.length === 0) {
-    searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
-    return;
-}
+            if (osAsignadasAMiUnidad.length === 0) {
+                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
+                return;
+            }
 
-// ✅ Paso 2: Filtrar OS Pendientes usando esa lista exacta
-const osParaMapa = osCompletas.filter(os =>
+            const osParaMapa = osCompletas.filter(os =>
                 osAsignadasAMiUnidad.includes(String(os.OSATMO).trim())
             );
 
@@ -4793,12 +4790,13 @@ const osParaMapa = osCompletas.filter(os =>
             // ✅ LLAMAR A LA FUNCIÓN CORRECTA
             generarMapaKMLRuta(osParaMapa, miUnidad);
 
-            return
+            return; // <--- Cierra correctamente la lógica del contratista
+        }
 
         // Otros roles: sin acceso
         searchGrid.innerHTML = `<div class="result-card">⚠️ Tu rol (${rol}) no tiene acceso a esta función</div>`;
 
-    } catch (err) {
+    } catch (err) { // <--- Ahora el catch ya no tendrá error porque la llave anterior cerró el try
         console.error('Error cargando KML Ruta:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
