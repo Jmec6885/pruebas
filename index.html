@@ -6222,9 +6222,15 @@ async function cargarInterfazDetalleOS() {
         // Generar y mostrar las tablas
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: white; padding: 30px;">
-                <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-                    📡 UNICOM - Por Condición
-                </h2>
+        
+        <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
+            📋 TABLA 1: Tipología de OS vs Rangos de Días
+        </h2>
+        ${generarTablaTipologiaVsRango(osPendientes)}
+
+        <h2 style="color: #26c6da; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+            📡 UNICOM - Por Condición
+        </h2>
                 ${generarTablaUnicomPorCondicion(osPendientes)}
 
                 <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
@@ -6273,6 +6279,71 @@ async function cargarInterfazDetalleOS() {
         console.error('Error cargando Detalle OS:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
+}
+
+
+function generarTablaTipologiaVsRango(osFiltradas) {
+    const rangos = ['0-3', '4-7', '8-15', '16-30', '31-60', '61-90', '90+'];
+    const matriz = {};
+    const totalesVerticales = {};
+    rangos.forEach(r => totalesVerticales[r] = 0);
+    let granTotal = 0;
+    
+    osFiltradas.forEach(os => {
+        const tipo = os.Tipologia || 'SIN CLASIFICAR';
+        const rango = os.RangoDias || '0-3'; 
+        
+        if (!matriz[tipo]) {
+            matriz[tipo] = {};
+            rangos.forEach(r => matriz[tipo][r] = 0);
+            matriz[tipo].total = 0;
+        }
+        
+        if (matriz[tipo][rango] !== undefined) {
+            matriz[tipo][rango]++;
+            matriz[tipo].total++;
+            totalesVerticales[rango]++;
+            granTotal++;
+        }
+    });
+
+    let tablaHtml = `
+        <div style="overflow-x: auto; margin-top: 15px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <thead>
+                    <tr style="background: #444; color: white;">
+                        <th style="padding: 10px; text-align: left; border: 1px solid #555;">Tipología</th>
+                        ${rangos.map(r => `<th style="padding: 10px; text-align: center; border: 1px solid #555;">${r}</th>`).join('')}
+                        <th style="padding: 10px; text-align: center; border: 1px solid #555; background: #ff9800;">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    Object.keys(matriz).sort().forEach(tipo => {
+        tablaHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background: #fdfdfd;">${tipo}</td>
+                ${rangos.map(r => {
+                    const v = matriz[tipo][r];
+                    return `<td style="padding: 8px; text-align: center; border: 1px solid #ddd; ${v > 0 ? 'font-weight: bold;' : 'color: #ccc;'}">${v}</td>`;
+                }).join('')}
+                <td style="padding: 8px; text-align: center; border: 1px solid #ddd; background: #fff8e1; font-weight: 900;">${matriz[tipo].total}</td>
+            </tr>`;
+    });
+
+    // Fila final de TOTALES
+    tablaHtml += `
+                <tr style="background: #eee; font-weight: bold;">
+                    <td style="padding: 10px; border: 1px solid #ddd;">TOTALES POR RANGO</td>
+                    ${rangos.map(r => `<td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${totalesVerticales[r]}</td>`).join('')}
+                    <td style="padding: 10px; text-align: center; border: 1px solid #ddd; background: #ff9800; color: white;">${granTotal}</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+    return tablaHtml;
 }
 
 
@@ -6458,10 +6529,15 @@ function limpiarFiltroUnidad() {
 
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: white; padding: 30px;">
+                
+                <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
+                    📋 RESUMEN INICIAL: Tipología de OS vs Rangos de Días
+                </h2>
+                ${generarTablaTipologiaVsRango(osPendientes)}
 
-            <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-                📡 UNICOM - Por Condición
-            </h2>
+                <h2 style="color: #26c6da; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+                    📡 UNICOM - Por Condición
+                </h2>
             ${generarTablaUnicomPorCondicion(osPendientes)}
 
             <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
@@ -6514,140 +6590,101 @@ function limpiarFiltroUnidad() {
 
 
  	// ========================================
-// 📦 CARGAR INTERFAZ IPR
+// 📦 CARGAR INTERFAZ IPR (CORREGIDA)
 // ========================================
 async function cargarInterfazIPR() {
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
- 
-    // Limpiar automáticamente registros viejos (30+ días)
-    await limpiarRegistrosViejosIPR();
- 
-    // Lista de causas de retiro
-    const causasRetiro = [
-        'Medidor con humedad/agua interna',
-        'Cambio de CAB a CAT',
-        'Casos por solicitud/ Campaña (SIGET)',
-        'Codigo de error',
-        'Irregularidad en el medidor',
-        'Medidor con dificultades de lectura',
-        'Medidor quebrado',
-        'Medidor quemado',
-        'Medidor con partes oxidadas',
-        'Medidor destruido',
-        'Fuera de limites de exactitud',
-        'Medidor con insectos/animales/partes de animales',
-        'Retiro/levantamiento de medidor',
-        'Provisionales/Abandonados',
-        'Testigos/En serie',
-        'Retiro por cambio de tecnología',
-        'Retiro por proyecto Subterraneo',
-        'Retiro de medidor con desperfecto identificado',
-        'Retiro de medidor por disposicion de seguridad',
-        'Por solicitud del cliente',
-        'Medidor incompatible/inadecuado con el servicio',
-        'Cambio a sistema blindado',
-        'MD parado no registra consumo',
-        'MD con pantalla apagada',
-        'MD con digitos borrosos',
-        'MD Dañado',
-        'MD con agua interna',
-        'MEDIDOR FUERA DE ESTANDAR',
-        'MD con pintura en pantalla',
-        'MD con pantalla amarilla',
-        'MD con borneras sobadas',
-        'MD Desprogramado',
-        'MD con bornera derretida'
-    ];
- 
-    searchGrid.innerHTML = `
-        <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; border-left: 4px solid #4caf50;">
-            <h3 style="margin: 0 0 15px 0; color: #2e7d32;">📦 Registro de Retiro de Medidores</h3>
-            <p style="margin: 0; color: #666;">Ingrese el medidor para buscar información automática</p>
-        </div>
- 
-        <div style="background: white; padding: 20px; border-radius: 12px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
- 
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">⚡ Medidor:</label>
-                <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px;">
-                    <input type="text" id="ipr_medidor" placeholder="Ingrese número de medidor"
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <button class="btn btn-secondary" onclick="buscarDatosMedidorIPR()" style="margin: 0; white-space: nowrap;">
-                        🔍 Buscar
-                    </button>
-                </div>
-            </div>
- 
-            <div id="datosAutocompletar" style="display: none; margin-top: 20px;">
- 
-                <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-                    <strong style="color: #1565c0;">✅ Datos encontrados - Verificar información</strong>
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">🏢 Unidad:</label>
-                    <input type="text" id="ipr_unidad" readonly
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">📄 NIC (Cuenta Contrato):</label>
-                    <input type="text" id="ipr_nic" readonly
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">📋 Forma:</label>
-                    <input type="text" id="ipr_forma" readonly
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">🏷️ Marca y Tipo:</label>
-                    <input type="text" id="ipr_marca" readonly
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">⚡ Voltaje:</label>
-                    <input type="text" id="ipr_voltaje" readonly
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: #f5f5f5; font-size: 16px;">
-                </div>
- 
-                <hr style="margin: 30px 0; border: 1px solid #e2e8f0;">
- 
-                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
-                    <strong style="color: #e65100;">📝 Completar información manualmente</strong>
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
-                    <input type="text" id="ipr_numos" placeholder="Ingrese número de orden de servicio"
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-weight: 600; color: #2d3748;">⚠️ Causa de Retiro: <span style="color: #d32f2f;">*</span></label>
-                    <select id="ipr\_causa" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                        <option value="">-- Seleccione una causa --</option>
-                        ${causasRetiro.map(causa => `<option value="${causa}">${causa}</option>`).join('')}
-                    </select>
-                </div>
- 
-                <div style="text-align: center; margin-top: 30px;">
-                    <button class="btn" onclick="guardarRegistroIPR()" style="font-size: 18px; padding: 18px 40px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
-                        💾 Guardar Registro
-                    </button>
-                </div>
- 
-            </div>
- 
-        </div>
-    `;
- 
-    // Cargar registros existentes
-    cargarRegistrosIPR();
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+
+    await limpiarRegistrosViejosIPR();
+
+    const causasRetiro = [
+        'Medidor con humedad/agua interna', 'Cambio de CAB a CAT', 'Casos por solicitud/ Campaña (SIGET)',
+        'Codigo de error', 'Irregularidad en el medidor', 'Medidor con dificultades de lectura',
+        'Medidor quebrado', 'Medidor quemado', 'Medidor con partes oxidadas', 'Medidor destruido',
+        'Fuera de limites de exactitud', 'Medidor con insectos/animales/partes de animales',
+        'Retiro/levantamiento de medidor', 'Provisionales/Abandonados', 'Testigos/En serie',
+        'Retiro por cambio de tecnología', 'Retiro por proyecto Subterraneo',
+        'Retiro de medidor con desperfecto identificado', 'Retiro de medidor por disposicion de seguridad',
+        'Por solicitud del cliente', 'Medidor incompatible/inadecuado con el servicio',
+        'Cambio a sistema blindado', 'MD parado no registra consumo', 'MD con pantalla apagada',
+        'MD con digitos borrosos', 'MD Dañado', 'MD con agua interna', 'MEDIDOR FUERA DE ESTANDAR',
+        'MD con pintura en pantalla', 'MD con pantalla amarilla', 'MD con borneras sobadas',
+        'MD Desprogramado', 'MD con bornera derretida'
+    ];
+
+    searchGrid.innerHTML = `
+        <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; border-left: 4px solid #4caf50; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 5px 0; color: #2e7d32;">📦 Registro de Retiro de Medidores</h3>
+            <p style="margin: 0; color: #666; font-size: 0.9rem;">Busque el medidor para autocompletar la información técnica.</p>
+        </div>
+
+        <div class="search-group" style="background: white; margin-bottom: 20px;">
+            <label style="font-weight: 700;">⚡ Medidor a Retirar:</label>
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <input type="text" id="ipr_medidor" placeholder="Ingrese número de medidor" style="flex: 1;">
+                <button class="btn btn-secondary" onclick="buscarDatosMedidorIPR()" style="width: auto; margin-top:0;">🔍 Buscar</button>
+            </div>
+        </div>
+
+        <div id="datosAutocompletar" style="display: none; animation: slideUp 0.3s ease-out;">
+            
+            <div style="background: #f0f9ff; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #2196f3;">
+                <strong style="color: #1565c0;">✅ Información Técnica Hallada</strong>
+            </div>
+
+            <div class="search-grid" style="margin-bottom: 20px;">
+                <div class="search-group">
+                    <label>🏢 Unidad:</label>
+                    <input type="text" id="ipr_unidad" readonly class="input-readonly">
+                </div>
+                <div class="search-group">
+                    <label>📄 NIC (Cuenta):</label>
+                    <input type="text" id="ipr_nic" readonly class="input-readonly">
+                </div>
+                <div class="search-group">
+                    <label>📋 Forma:</label>
+                    <input type="text" id="ipr_forma" readonly class="input-readonly">
+                </div>
+                <div class="search-group">
+                    <label>⚡ Voltaje:</label>
+                    <input type="text" id="ipr_voltaje" readonly class="input-readonly">
+                </div>
+                <div class="search-group full-width">
+                    <label>🏷️ Marca y Tipo:</label>
+                    <input type="text" id="ipr_marca" readonly class="input-readonly">
+                </div>
+            </div>
+
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+            <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+                <strong style="color: #e65100;">📝 Datos de la Orden</strong>
+            </div>
+
+            <div class="search-grid">
+                <div class="search-group">
+                    <label>📑 NUM. O/S: <span style="color: #d32f2f;">*</span></label>
+                    <input type="text" id="ipr_numos" placeholder="Ej: 80001234">
+                </div>
+                <div class="search-group">
+                    <label>⚠️ Causa de Retiro: <span style="color: #d32f2f;">*</span></label>
+                    <select id="ipr_causa">
+                        <option value="">-- Seleccione --</option>
+                        ${causasRetiro.map(causa => `<option value="${causa}">${causa}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 25px;">
+                <button class="btn" onclick="guardarRegistroIPR()" style="max-width: 300px; background: linear-gradient(135deg, #4caf50, #2e7d32);">
+                    💾 Guardar Registro en Sistema
+                </button>
+            </div>
+        </div>
+    `;
+
+    cargarRegistrosIPR();
 }
 
  
