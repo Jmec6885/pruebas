@@ -2397,6 +2397,9 @@ async function limpiarTurnosViejos() {
 
 
 
+// ========================================
+// 🛡️ CONTROL DE VISIBILIDAD POR ROL
+// ========================================
 function mostrarTablasSegunRol() {
     if (!currentUser || !currentUser.rol) {
         console.log('❌ currentUser no está disponible');
@@ -2407,18 +2410,14 @@ function mostrarTablasSegunRol() {
     const tableOptions = document.querySelectorAll('.table-option');
     const rol = currentUser.rol;
 
-    //---------------------------------------------
-    //  🎯 ADMINISTRADOR - VE TODO
-    //---------------------------------------------
+    // 🎯 ADMINISTRADOR - VE TODO
     if (rol === 'Administrador') {
         tableOptions.forEach(opt => opt.style.display = 'block');
         console.log('✅ Administrador: Todas las tablas visibles');
         return;
     }
 
-    //---------------------------------------------
-    //  🎯 SUPERVISOR - TODO EXCEPTO usuarios
-    //---------------------------------------------
+    // 🎯 SUPERVISOR - TODO EXCEPTO usuarios
     if (rol === 'Supervisor') {
         tableOptions.forEach(option => {
             const action = option.getAttribute('onclick') || '';
@@ -2428,20 +2427,19 @@ function mostrarTablasSegunRol() {
     }
 
     // 🎯 DESPACHO - Todo excepto usuarios e IPR
-if (rol === 'Despacho') {
-  tableOptions.forEach(option => {
-    const action = option.getAttribute('onclick') || '';
-    const prohibido = 
-      action.includes("'usuarios'") || 
-      action.includes("'retiro_medidores'");
-    option.style.display = prohibido ? 'none' : 'block';
-  });
-  console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
-  return;
-}
-    //---------------------------------------------
-    //  🎯 BODEGA - SOLO IPR + OS CERRADAS
-    //---------------------------------------------
+    if (rol === 'Despacho') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
+            const prohibido = 
+                action.includes("'usuarios'") || 
+                action.includes("'retiro_medidores'");
+            option.style.display = prohibido ? 'none' : 'block';
+        });
+        console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
+        return;
+    }
+
+    // 🎯 BODEGA - SOLO IPR + OS CERRADAS
     if (rol === 'Bodega') {
         tableOptions.forEach(option => {
             const action = option.getAttribute('onclick') || '';
@@ -2453,9 +2451,7 @@ if (rol === 'Despacho') {
         return;
     }
 
-    //---------------------------------------------
-    //  🎯 LECTURA - SOLO consultas_servicios
-    //---------------------------------------------
+    // 🎯 LECTURA - SOLO consultas_servicios
     if (rol === 'Lectura') {
         tableOptions.forEach(option => {
             const action = option.getAttribute('onclick') || '';
@@ -2464,9 +2460,7 @@ if (rol === 'Despacho') {
         return;
     }
 
-    //---------------------------------------------
-    //  🎯 ATTF / PODA - servicios + TX y Cortes + IPR
-    //---------------------------------------------
+    // 🎯 ATTF / PODA - servicios + TX y Cortes + IPR
     if (rol === 'ATTF' || rol === 'Poda') {
         tableOptions.forEach(option => {
             const action = option.getAttribute('onclick') || '';
@@ -2480,39 +2474,76 @@ if (rol === 'Despacho') {
         return;
     }
 
-    //---------------------------------------------
-    //  🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO:
-    //     ❌ usuarios
-    //     ❌ Detalle OS
-    //     ❌ Cargar Asignaciones
-    //     ✔ IPR (lo deben ver)
-    //---------------------------------------------
-   // Contratista / Consulta - TODO EXCEPTO usuarios, detalle_os, cargar_asignaciones
-if (rol === 'Contratista' || rol === 'Consulta') {
-    tableOptions.forEach(option => {
-        const action = option.getAttribute('onclick') || '';
+    // 🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO usuarios, detalle_os, cargar_asignaciones
+    if (rol === 'Contratista' || rol === 'Consulta') {
+        tableOptions.forEach(option => {
+            const action = option.getAttribute('onclick') || '';
 
-        // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
-        const prohibido =
-            action.includes("'usuarios'") ||           // Gestión de Usuarios
-            action.includes("'detalle_os'") ||         // Detalle OS
-            action.includes("'cargar_asignaciones'");  // Cargar Asignaciones
+            // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
+            const prohibido =
+                action.includes("'usuarios'") ||           // Gestión de Usuarios
+                action.includes("'detalle_os'") ||         // Detalle OS
+                action.includes("'cargar_asignaciones'");  // Cargar Asignaciones
 
-        option.style.display = prohibido ? 'none' : 'block';
-    });
+            option.style.display = prohibido ? 'none' : 'block';
+        });
 
-    console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle_os, cargar_asignaciones`);
-    return;
-}
+        console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle_os, cargar_asignaciones`);
+        return;
+    }
 
-    //---------------------------------------------
-    //  🎯 DEFAULT - TODO EXCEPTO usuarios
-    //---------------------------------------------
+    // 🎯 DEFAULT - TODO EXCEPTO usuarios
     tableOptions.forEach(option => {
         const action = option.getAttribute('onclick') || '';
         option.style.display = action.includes('usuarios') ? 'none' : 'block';
     });
 }
+
+// ========================================
+// 🔓 GESTIÓN DE DESBLOQUEO DE USUARIOS
+// ========================================
+async function desbloquearUsuario(username) {
+    if (!currentUser || (currentUser.rol !== 'Supervisor' && currentUser.rol !== 'Administrador')) {
+        alert('Solo los supervisores o administradores pueden desbloquear usuarios');
+        return;
+    }
+    
+    // Confirmación antes de proceder
+    if (!confirm(`¿Estás seguro de desbloquear al usuario ${username}? Se reseteará su ciclo de turnos.`)) {
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('usuarios')
+        .update({
+            razon_bloqueo: null,
+            ultima_actividad: new Date().toISOString(),
+            estado_ciclo: 'primera_vez',
+            contador_turnos: 0,
+            turno_hoy: null,
+            fecha_turno_hoy: null,
+            turno_manana: null,
+            fecha_turno_manana: null,
+            descanso_fecha_inicio: null,
+            descanso_fecha_fin: null,
+            turno_regreso: null,
+            fecha_turno_regreso: null
+        })
+        .eq('usuario', username);
+    
+    if (error) {
+        alert('Error desbloqueando usuario: ' + error.message);
+        return;
+    }
+    
+    alert(`Usuario ${username} desbloqueado exitosamente.\n\nSu configuración ha sido reseteada.`);
+    
+    // Opcional: Recargar la tabla si estás en la vista de gestión
+    if (typeof buscarEnTabla === 'function') {
+        buscarEnTabla('usuarios');
+    }
+}
+
 
 
 async function desbloquearUsuario(username) {
@@ -2567,7 +2598,7 @@ async function incrementarContadorBusquedas() {
             return;
         }
         
-        // 💡 CAMBIO CLAVE: Usamos parseInt() para garantizar que sea un número.
+        // 💡 CAMBIO CLAVE: Usamos parseInt() para garantizar que sea un número y no un texto.
         const contadorActual = parseInt(usuario.Contador) || 0; 
         const nuevoContador = contadorActual + 1;
         
@@ -2593,130 +2624,130 @@ async function incrementarContadorBusquedas() {
 }
 
     const tableConfigs = {
-     'consultas_servicios': {
-    title: 'Consultas de Servicios',
-    icon: '🏠',
-    fields: [
-      { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
-      { key: 'Medidor', label: 'Medidor', type: 'exact' },
-      { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like', oculto: true }  // ← AGREGADO oculto: true
-    ],
-    resultFields: ['CuentaContrato', 'Medidor', 'NombreCliente', 'Direccion', 'ComentarioGeneral'],
-    actions: ['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
-},
-      'Consumos': {
+    'consultas_servicios': {
+        title: 'Consultas de Servicios',
+        icon: '🏠',
+        fields: [
+            { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+            { key: 'Medidor', label: 'Medidor', type: 'exact' },
+            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like', oculto: true }
+        ],
+        resultFields: ['CuentaContrato', 'Medidor', 'NombreCliente', 'Direccion', 'ComentarioGeneral'],
+        actions: ['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
+    },
+    'Consumos': {
         title: 'Consumos',
         icon: '📊',
         fields: [
-          { key: 'cuentacontrato', label: 'Cuenta/Contrato', type: 'exact' },
-          { key: 'medidor', label: 'Medidor', type: 'exact' }
+            { key: 'cuentacontrato', label: 'Cuenta/Contrato', type: 'exact' },
+            { key: 'medidor', label: 'Medidor', type: 'exact' }
         ],
         resultFields: ['cuentacontrato', 'medidor'],
         actions: ['consumos']
-      },
-      'Coordenadas': {
+    },
+    'Coordenadas': {
         title: 'Coordenadas',
         icon: '📍',
         fields: [
-          { key: 'Medidor', label: 'Medidor', type: 'exact' },
-          { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' }
+            { key: 'Medidor', label: 'Medidor', type: 'exact' },
+            { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' }
         ],
         resultFields: ['Medidor', 'CuentaContrato'],
         actions: ['CoordenadasLector', 'CoordenadasGis']
-      },
-      'OS Pendientes': {
+    },
+    'OS Pendientes': {
         title: 'OS Pendientes',
         icon: '⏳',
         fields: [
-          { key: 'OSATMO', label: 'OS ATOMO', type: 'exact' },
-          { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
-          { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
-          { key: 'Medidor', label: 'Medidor', type: 'exact' },
-          { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+            { key: 'OSATMO', label: 'OS ATOMO', type: 'exact' },
+            { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
+            { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+            { key: 'Medidor', label: 'Medidor', type: 'exact' },
+            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
         ],
         resultFields: ['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
         actions: ['Coordenadas', 'FotoLink', 'CoordenadasGis']
-      },
-      'OSCerradas': {
+    },
+    'OSCerradas': {
         title: 'OS Cerradas',
         icon: '✅',
         fields: [
-          { key: 'OSATOMO', label: 'OS ATOMO', type: 'exact' },
-          { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
-          { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
-          { key: 'Medidor', label: 'Medidor', type: 'exact' },
-          { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+            { key: 'OSATOMO', label: 'OS ATOMO', type: 'exact' },
+            { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
+            { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+            { key: 'Medidor', label: 'Medidor', type: 'exact' },
+            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
         ],
         resultFields: ['OSATOMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
         actions: ['Coordenadas', 'FotoLink']
-      },
-      'TX y Cortes': {
+    },
+    'TX y Cortes': {
         title: 'TX y Cortes',
         icon: '⚡',
         fields: [
-          { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
-          { key: 'Circuitos', label: 'Circuitos', type: 'like' }
+            { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
+            { key: 'Circuitos', label: 'Circuitos', type: 'like' }
         ],
         resultFields: ['TXCortes', 'Circuitos', 'Comentario'],
         actions: ['Coordenadas']
-      },
-	// 🆕 AGREGAR ESTO:
+    },
     'usuarios': {
-    title: 'Gestión de Usuarios',
-    icon: '👥',
-    fields: [
-        { key: 'usuario', label: 'Usuario', type: 'like' }
-    ],
-    resultFields: ['usuario', 'rol', 'activo', 'bloqueado'],
-    actions: [],
-    esAdmin: true
-  },
-       'kml_ruta': {
-    title: 'KML Ruta',
-    icon: '📍',
-    fields: [],
-    resultFields: [],
-    actions: [],
-    esKMLRuta: true
-},
+        title: 'Gestión de Usuarios',
+        icon: '👥',
+        fields: [
+            { key: 'usuario', label: 'Usuario', type: 'like' }
+        ],
+        resultFields: ['usuario', 'rol', 'activo', 'bloqueado'],
+        actions: [],
+        esAdmin: true
+    },
+    'kml_ruta': {
+        title: 'KML Ruta',
+        icon: '📍',
+        fields: [],
+        resultFields: [],
+        actions: [],
+        esKMLRuta: true
+    },
     'detalle_os': {
-    title: 'Detalle OS',
-    icon: '📊',
-    fields: [],
-    resultFields: [],
-    actions: [],
-    esDetalleOS: true,
-    rolesPermitidos: ['Administrador', 'Supervisor']
-},
-'retiro_medidores': {
-    title: 'IPR - Retiro de Medidores',
-    icon: '📦',
-    fields: [],
-    resultFields: [],
-    actions: [],
-    esIPR: true,
-    rolesPermitidos: ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']
-},
-'mapa_rutas': {
-    title: 'Mapa de Rutas',
-    icon: '🗺️',
-    fields: [],
-    resultFields: [],
-    actions: [],
-    esMapaRutas: true,
-    rolesPermitidos: ['Administrador', 'Contratista', 'Consulta']
-},
-'cargar_asignaciones': {
-    title: 'Cargar Asignaciones (Admin)',
-    icon: '📤',
-    fields: [],
-    resultFields: [],
-    actions: [],
-    esAdmin: true
-}
+        title: 'Detalle OS',
+        icon: '📊',
+        fields: [],
+        resultFields: [],
+        actions: [],
+        esDetalleOS: true,
+        rolesPermitidos: ['Administrador', 'Supervisor']
+    },
+    'retiro_medidores': {
+        title: 'IPR - Retiro de Medidores',
+        icon: '📦',
+        fields: [],
+        resultFields: [],
+        actions: [],
+        esIPR: true,
+        rolesPermitidos: ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']
+    },
+    'mapa_rutas': {
+        title: 'Mapa de Rutas',
+        icon: '🗺️',
+        fields: [],
+        resultFields: [],
+        actions: [],
+        esMapaRutas: true,
+        rolesPermitidos: ['Administrador', 'Contratista', 'Consulta']
+    },
+    'cargar_asignaciones': {
+        title: 'Cargar Asignaciones (Admin)',
+        icon: '📤',
+        fields: [],
+        resultFields: [],
+        actions: [],
+        esAdmin: true
+    }
 };
 
-	async function fetchAllFromTable(tableName, columns = '*') {
+	// ✅ Función para traer todos los datos de una tabla (Paginación automática)
+async function fetchAllFromTable(tableName, columns = '*') {
     const batchSize = 1000;
     let allData = [];
     let offset = 0;
@@ -2746,39 +2777,42 @@ async function incrementarContadorBusquedas() {
     return { data: allData, count: allData.length };
 }
 
+// ✅ Variables globales para el estado de las gráficas
+let consumosChart = null;
+let lecturasChart = null;
 
-    // ✅ Variables para las gráficas
-    let consumosChart = null;
-    let lecturasChart = null;
-
-    // ✅ Función para parsear datos de gráficas (consumos)
-    function parsearDatosGrafica(graficaData) {
-        if (!graficaData || graficaData.trim() === '') {
-            return { meses: [], lecturas: [], consumos: [] };
-        }
-
-        const meses = [], lecturas = [], consumos = [];
-        const lineas = graficaData.split('\n').map(l => l.trim()).filter(l => l);
-
-        for (const linea of lineas) {
-            const match = linea.match(/^([A-Za-z]+)\.-?(\d+)(?:-(\d+))?/);
-            if (match) {
-                const [, mes, lectura, consumo] = match;
-                meses.push(mes);
-                lecturas.push(parseInt(lectura));
-                if (consumo !== undefined) {
-                    consumos.push(parseInt(consumo));
-                } else if (lecturas.length > 1) {
-                    const consumoCalculado = lecturas[lecturas.length - 1] - lecturas[lecturas.length - 2];
-                    consumos.push(Math.max(0, consumoCalculado));
-                } else {
-                    consumos.push(0);
-                }
-            }
-        }
-        return { meses, lecturas, consumos };
+// ✅ Función para parsear datos de gráficas (procesa el texto de consumos históricos)
+function parsearDatosGrafica(graficaData) {
+    if (!graficaData || graficaData.trim() === '') {
+        return { meses: [], lecturas: [], consumos: [] };
     }
 
+    const meses = [], lecturas = [], consumos = [];
+    // Limpia espacios y líneas vacías
+    const lineas = graficaData.split('\n').map(l => l.trim()).filter(l => l);
+
+    for (const linea of lineas) {
+        // Corrección de la expresión regular (limpia de barras de escape innecesarias)
+        const match = linea.match(/^([A-Za-z]+)\.-?(\d+)(?:-(\d+))?/);
+        
+        if (match) {
+            const [, mes, lectura, consumo] = match;
+            meses.push(mes);
+            lecturas.push(parseInt(lectura));
+            
+            if (consumo !== undefined) {
+                consumos.push(parseInt(consumo));
+            } else if (lecturas.length > 1) {
+                // Cálculo automático si no viene el dato de consumo explícito
+                const consumoCalculado = lecturas[lecturas.length - 1] - lecturas[lecturas.length - 2];
+                consumos.push(Math.max(0, consumoCalculado));
+            } else {
+                consumos.push(0);
+            }
+        }
+    }
+    return { meses, lecturas, consumos };
+}
     
 
 // Función para mostrar gráficas por índice con uso correcto del dato grafica
@@ -4756,57 +4790,60 @@ renovarSesion(); // ← AGREGAR
 }
 
 
+// ========================================
+// 🗺️ INTERFAZ GENERACIÓN KML RUTA
+// ========================================
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
-    console.log('🎨 Generando interfaz KML con unidades:', unidades);
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
- 
-    resultsContainer.innerHTML = '';
+    console.log('🎨 Generando interfaz KML con unidades:', unidades);
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
 
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-            <h1 class="titulo-degradado">CLESA</h1>
-            <p class="subtitulo">📍 Generación de KML por Unidad</p>
- 
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
-                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione una unidad --</option>
-                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
-                </select>
-            </div>
+    // Limpiar contenedor de resultados previos
+    resultsContainer.innerHTML = '';
 
-            <div id="containerSelectorOS" style="display: none; margin-top: 15px;">
-                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Requerido): <span style="color:red">*</span></label>
-                <select id="selectPuntoPartidaAdmin" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione OS de partida --</option>
-                </select>
-            </div>
- 
-            <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
-                <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
-                <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
-            </div>
- 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
-                    📥 KML Lector
-                </button>
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
-                    📥 KML GIS
-                </button>
-                <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
-                    🗺️ Ver Mapa
-                </button>
-            </div>
-        </div>
-    `;
- 
-    // Guardar datos globalmente
-    window.osAsignadasKML = osAsignadas;
+    searchGrid.innerHTML = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+            <h1 class="titulo-degradado">CLESA</h1>
+            <p class="subtitulo">📍 Generación de KML por Unidad</p>
+
+            <div class="form-group">
+                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
+                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione una unidad --</option>
+                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                </select>
+            </div>
+
+            <div id="containerSelectorOS" style="display: none; margin-top: 15px;">
+                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Requerido): <span style="color:red">*</span></label>
+                <select id="selectPuntoPartidaAdmin" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione OS de partida --</option>
+                </select>
+            </div>
+
+            <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
+                <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
+                <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                    📥 KML Lector
+                </button>
+                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
+                    📥 KML GIS
+                </button>
+                <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                    🗺️ Ver Mapa
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Guardar datos globalmente para que otras funciones puedan acceder
+    window.osAsignadasKML = osAsignadas;
 }
-
  
 
 // ========================================
@@ -6310,170 +6347,164 @@ function descargarKMLGIS() {
 }
 
  	// ========================================
+// ========================================
 // 📊 CARGAR INTERFAZ DETALLE OS
 // ========================================
 async function cargarInterfazDetalleOS() {
-    // ✅ Cargar festivos primero
-    await cargarFestivos();
- 
-    const searchGrid = document.getElementById('searchGrid');
-    // ... resto del código
-    const resultsContainer = document.getElementById('searchResults');
-    searchGrid.innerHTML = `
-        <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
-            <h3 style="margin: 0 0 10px 0; color: #1565c0;">📊 Análisis de OS Pendientes</h3>
-            <p style="margin: 0; color: #666;">Cargando datos de todas las unidades...</p>
-            <div class="loading" style="display: block; margin: 20px auto;"></div>
-        </div>
-    `;
-    resultsContainer.innerHTML = '';
-    try {
-        // ✅ USAR SOLO ESTO:
-        const { data: osPendientes, count } = await fetchAllFromTable(
-            'OS Pendientes',
-            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP, Comentario, Unicom, Direccion'
-        );
+    // ✅ Cargar festivos primero para cálculos de días
+    await cargarFestivos();
 
-        console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
 
-        if (!osPendientes || osPendientes.length === 0) {
-            searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes registradas</div>';
-            return;
-        }
- 
-        // Procesar y agrupar datos
-        const datosAgrupados = procesarOSPendientes(osPendientes);
- 
-        // Contar totales
-        const totalReguladas = Object.values(datosAgrupados.reguladas)
-            .reduce((sum, unidad) => {
-                return sum + Object.values(unidad.porRango).flat().length;
-            }, 0);
- 
-        const totalNoReguladas = Object.values(datosAgrupados.noReguladas)
-            .reduce((sum, unidad) => {
-                return sum + Object.values(unidad.porRango).flat().length;
-            }, 0);
- 
-        // Obtener lista de unidades únicas
-const unidadesUnicas = [...new Set(osPendientes.map(os => os.Unidad))].filter(u => u).sort();
+    // Pantalla de carga inicial
+    searchGrid.innerHTML = `
+        <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 10px 0; color: #1565c0;">📊 Análisis de OS Pendientes</h3>
+            <p style="margin: 0; color: #666;">Cargando datos de todas las unidades...</p>
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+        </div>
+    `;
+    resultsContainer.innerHTML = '';
 
-// Mostrar resumen con filtro
-searchGrid.innerHTML = `
-    <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-        <div class="result-header">✅ Análisis completado</div>
- 
-        <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-            <strong>📊 Resumen General:</strong><br>
-            • Total de OS: <strong>${osPendientes.length}</strong><br>
-            • OS Reguladas: <strong>${totalReguladas}</strong><br>
-            • OS No Reguladas: <strong>${totalNoReguladas}</strong><br>
-            • Unidades analizadas: <strong>${unidadesUnicas.length}</strong>
-        </div>
- 
-        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #ffc107;">
-            <strong style="font-size: 16px; color: #2d3748;">🔍 Filtrar por Unidad</strong>
- 
-            <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end; margin-top: 15px;">
-                <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">
-                        Buscar Unidad:
-                    </label>
-                    <input
-                        type="text"
-                        id="filtroUnidad"
-                        list="listaUnidades"
-                        placeholder="Escribe para buscar... (ej: CL-OPC-001)"
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;"
-                    >
-                    <datalist id="listaUnidades">
-                        ${unidadesUnicas.map(u => `<option value="${u}">`).join('')}
-                    </datalist>
-                    <small style="color: #666; display: block; margin-top: 5px;">
-                        ${unidadesUnicas.length} unidades disponibles
-                    </small>
-                </div>
- 
-                <button class="btn btn-secondary" onclick="aplicarFiltroUnidad()" style="margin: 0;">
-                    🔍 Aplicar Filtro
-                </button>
-            </div>
- 
-            <div style="text-align: center; margin-top: 15px;">
-                <button class="btn" onclick="limpiarFiltroUnidad()" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); width: auto; padding: 10px 20px;">
-                    🗑️ Limpiar Filtro
-                </button>
-            </div>
-        </div>
-    </div>
-`;
- 
-        // Guardar datos procesados globalmente
-        window.datosDetalleOS = datosAgrupados;
- 	// Guardar datos originales para filtros
-window.datosDetalleOS_Original = JSON.parse(JSON.stringify(datosAgrupados));
-window.osPendientes_Original = osPendientes;
- 
-        console.log('✅ Datos procesados:', datosAgrupados);
-        console.log('📊 Reguladas:', totalReguladas, '| No Reguladas:', totalNoReguladas);
- 
-        // Generar y mostrar las 4 tablas
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: white; padding: 30px;">
- 
-                <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-    📡 UNICOM - Por Condición
-</h2>
-${generarTablaUnicomPorCondicion(osPendientes)}
+    try {
+        // ✅ Obtener datos masivos de la tabla 'OS Pendientes'
+        const { data: osPendientes, count } = await fetchAllFromTable(
+            'OS Pendientes',
+            'OSATMO, Unidad, Tipo_de_OS, "Fecha Gen.", Dias_por_OS, Tipologia, Medidor, Estado_ATOMO, Estado_SAP, Comentario, Unicom, Direccion'
+        );
 
-<h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
-    📡 UNICOM - Por Rango de Días
-</h2>
-${generarTablaUnicomPorRango(osPendientes)}
+        console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
 
-<h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
-    🚫 TABLA 4: OS Bloqueadas por Rango de Días
-</h2>
-${generarTablaBloqueados(datosAgrupados)}
+        if (!osPendientes || osPendientes.length === 0) {
+            searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes registradas</div>';
+            return;
+        }
 
-<h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
-    🔄 TABLA 3: Estado SAP vs Estado ATOMO
-</h2>
-${generarTablaEstadoSapVsAtomo(datosAgrupados)}
+        // Procesar y agrupar datos lógicamente
+        const datosAgrupados = procesarOSPendientes(osPendientes);
 
-<h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
-    📊 TABLA 2: Estado ATOMO vs Rangos de Días
-</h2>
-${generarTablaEstadoAtomoPorRango(datosAgrupados)}
+        // Contar totales para el resumen
+        const totalReguladas = Object.values(datosAgrupados.reguladas)
+            .reduce((sum, unidad) => sum + Object.values(unidad.porRango).flat().length, 0);
 
-<h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
-    ⚠️ REGULADAS - Por Condición
-</h2>
-${generarTablaPorCondicion(datosAgrupados.reguladas, 'reguladas')}
+        const totalNoReguladas = Object.values(datosAgrupados.noReguladas)
+            .reduce((sum, unidad) => sum + Object.values(unidad.porRango).flat().length, 0);
 
-<h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
-    📊 REGULADAS - Por Rango de Días
-</h2>
-${generarTablaPorRango(datosAgrupados.reguladas, 'reguladas')}
+        // Obtener lista de unidades únicas para el buscador/filtro
+        const unidadesUnicas = [...new Set(osPendientes.map(os => os.Unidad))].filter(u => u).sort();
 
-<h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
-    ⚠️ NO REGULADAS - Por Condición
-</h2>
-${generarTablaPorCondicion(datosAgrupados.noReguladas, 'noReguladas')}
+        // Mostrar resumen con filtro de búsqueda
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+                <div class="result-header">✅ Análisis completado</div>
 
-<h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
-    📊 NO REGULADAS - Por Rango de Días
-</h2>
-${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <strong>📊 Resumen General:</strong><br>
+                    • Total de OS: <strong>${osPendientes.length}</strong><br>
+                    • OS Reguladas: <strong>${totalReguladas}</strong><br>
+                    • OS No Reguladas: <strong>${totalNoReguladas}</strong><br>
+                    • Unidades analizadas: <strong>${unidadesUnicas.length}</strong>
+                </div>
 
-</div>
-`;
- 
-    } catch (err) {
-        console.error('Error cargando Detalle OS:', err);
-        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
-    }
+                <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #ffc107;">
+                    <strong style="font-size: 16px; color: #2d3748;">🔍 Filtrar por Unidad</strong>
+
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end; margin-top: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568;">
+                                Buscar Unidad:
+                            </label>
+                            <input
+                                type="text"
+                                id="filtroUnidad"
+                                list="listaUnidades"
+                                placeholder="Escribe para buscar... (ej: CL-OPC-001)"
+                                style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;"
+                            >
+                            <datalist id="listaUnidades">
+                                ${unidadesUnicas.map(u => `<option value="${u}">`).join('')}
+                            </datalist>
+                            <small style="color: #666; display: block; margin-top: 5px;">
+                                ${unidadesUnicas.length} unidades disponibles
+                            </small>
+                        </div>
+
+                        <button class="btn btn-secondary" onclick="aplicarFiltroUnidad()" style="margin: 0;">
+                            🔍 Aplicar Filtro
+                        </button>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button class="btn" onclick="limpiarFiltroUnidad()" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); width: auto; padding: 10px 20px;">
+                            🗑️ Limpiar Filtro
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Guardar datos en memoria para filtros rápidos sin volver a consultar la base
+        window.datosDetalleOS = datosAgrupados;
+        window.datosDetalleOS_Original = JSON.parse(JSON.stringify(datosAgrupados));
+        window.osPendientes_Original = osPendientes;
+
+        // Generar y renderizar todas las tablas de análisis
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: white; padding: 30px;">
+                <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+                    📡 UNICOM - Por Condición
+                </h2>
+                ${generarTablaUnicomPorCondicion(osPendientes)}
+
+                <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
+                    📡 UNICOM - Por Rango de Días
+                </h2>
+                ${generarTablaUnicomPorRango(osPendientes)}
+
+                <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
+                    🚫 TABLA 4: OS Bloqueadas por Rango de Días
+                </h2>
+                ${generarTablaBloqueados(datosAgrupados)}
+
+                <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
+                    🔄 TABLA 3: Estado SAP vs Estado ATOMO
+                </h2>
+                ${generarTablaEstadoSapVsAtomo(datosAgrupados)}
+
+                <h2 style="color: #0091ea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0091ea; padding-bottom: 10px;">
+                    📊 TABLA 2: Estado ATOMO vs Rangos de Días
+                </h2>
+                ${generarTablaEstadoAtomoPorRango(datosAgrupados)}
+
+                <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
+                    ⚠️ REGULADAS - Por Condición
+                </h2>
+                ${generarTablaPorCondicion(datosAgrupados.reguladas, 'reguladas')}
+
+                <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
+                    📊 REGULADAS - Por Rango de Días
+                </h2>
+                ${generarTablaPorRango(datosAgrupados.reguladas, 'reguladas')}
+
+                <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
+                    ⚠️ NO REGULADAS - Por Condición
+                </h2>
+                ${generarTablaPorCondicion(datosAgrupados.noReguladas, 'noReguladas')}
+
+                <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
+                    📊 NO REGULADAS - Por Rango de Días
+                </h2>
+                ${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
+            </div>
+        `;
+
+    } catch (err) {
+        console.error('Error cargando Detalle OS:', err);
+        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión o proceso de datos</div>';
+    }
 }
+
 
 
  	// ========================================
@@ -6529,188 +6560,187 @@ function aplicarFiltroUnidad() {
 // 🔄 REGENERAR TABLAS CON FILTRO
 // ========================================
 function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad) {
-    const resultsContainer = document.getElementById('searchResults');
- 
-    let html = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <div class="result-header">✅ Filtro aplicado: ${unidad}</div>
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Resultados:</strong><br>
-                • Total de OS de esta unidad: <strong>${osFiltradas.length}</strong>
-            </div>
-        </div>
- 
-        <div class="result-card" style="background: white; padding: 30px;">
-    `;
- 
-    // Verificar si hay datos en cada tabla antes de mostrarla
- 
-    // UNICOM por Condición
-    const unicomCondicion = osFiltradas.filter(os => os.Unicom);
-    if (unicomCondicion.length > 0) {
-        html += `
-            <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-                📡 UNICOM - Por Condición
-            </h2>
-            ${generarTablaUnicomPorCondicion(unicomCondicion)}`;
-    }
- 
-    // UNICOM por Rango
-    if (unicomCondicion.length > 0) {
-        html += `
-            <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
-                📡 UNICOM - Por Rango de Días
-            </h2>
-            ${generarTablaUnicomPorRango(unicomCondicion)}`;
-    }
- 
-    // Reguladas por Condición
-    if (Object.keys(datosFiltrados.reguladas).length > 0) {
-        html += `
-            <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
-                ⚠️ REGULADAS - Por Condición
-            </h2>
-            ${generarTablaPorCondicion(datosFiltrados.reguladas, 'reguladas')}`;
-    }
- 
-    // Reguladas por Rango
-    if (Object.keys(datosFiltrados.reguladas).length > 0) {
-        html += `
-            <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
-                📊 REGULADAS - Por Rango de Días
-            </h2>
-            ${generarTablaPorRango(datosFiltrados.reguladas, 'reguladas')}`;
-    }
- 
-    // No Reguladas por Condición
-    if (Object.keys(datosFiltrados.noReguladas).length > 0) {
-        html += `
-            <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
-                ⚠️ NO REGULADAS - Por Condición
-            </h2>
-            ${generarTablaPorCondicion(datosFiltrados.noReguladas, 'noReguladas')}`;
-    }
- 
-    // No Reguladas por Rango
-    if (Object.keys(datosFiltrados.noReguladas).length > 0) {
-        html += `
-            <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
-                📊 NO REGULADAS - Por Rango de Días
-            </h2>
-            ${generarTablaPorRango(datosFiltrados.noReguladas, 'noReguladas')}`;
-    }
- 
-    // Estado ATOMO vs Rangos (se regenera con datos filtrados)
-    html += `
-        <h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
-            📊 TABLA 2: Estado ATOMO vs Rangos de Días
-        </h2>
-        ${generarTablaEstadoAtomoPorRango(datosFiltrados)}`;
- 
-    // Estado SAP vs ATOMO
-    html += `
-        <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
-            🔄 TABLA 3: Estado SAP vs Estado ATOMO
-        </h2>
-        ${generarTablaEstadoSapVsAtomo(datosFiltrados)}`;
- 
-    // OS Bloqueadas
-    html += `
-        <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
-            🚫 TABLA 4: OS Bloqueadas por Rango de Días
-        </h2>
-        ${generarTablaBloqueados(datosFiltrados)}`;
- 
-    html += `</div>`;
- 
-    resultsContainer.innerHTML = html;
- 
-    console.log(`✅ Tablas regeneradas para unidad: ${unidad}`);
-}
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Início do HTML com o cabeçalho do filtro
+    let html = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">✅ Filtro aplicado: ${unidad}</div>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resultados:</strong><br>
+                • Total de OS de esta unidad: <strong>${osFiltradas.length}</strong>
+            </div>
+        </div>
 
+        <div class="result-card" style="background: white; padding: 30px;">
+    `;
+
+    // 1. UNICOM por Condición
+    const unicomCondicion = osFiltradas.filter(os => os.Unicom);
+    if (unicomCondicion.length > 0) {
+        html += `
+            <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+                📡 UNICOM - Por Condición
+            </h2>
+            ${generarTablaUnicomPorCondicion(unicomCondicion)}`;
+    }
+
+    // 2. UNICOM por Rango
+    if (unicomCondicion.length > 0) {
+        html += `
+            <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
+                📡 UNICOM - Por Rango de Días
+            </h2>
+            ${generarTablaUnicomPorRango(unicomCondicion)}`;
+    }
+
+    // 3. Reguladas por Condición
+    if (datosFiltrados.reguladas && Object.keys(datosFiltrados.reguladas).length > 0) {
+        html += `
+            <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
+                ⚠️ REGULADAS - Por Condición
+            </h2>
+            ${generarTablaPorCondicion(datosFiltrados.reguladas, 'reguladas')}`;
+    }
+
+    // 4. Reguladas por Rango
+    if (datosFiltrados.reguladas && Object.keys(datosFiltrados.reguladas).length > 0) {
+        html += `
+            <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
+                📊 REGULADAS - Por Rango de Días
+            </h2>
+            ${generarTablaPorRango(datosFiltrados.reguladas, 'reguladas')}`;
+    }
+
+    // 5. No Reguladas por Condición
+    if (datosFiltrados.noReguladas && Object.keys(datosFiltrados.noReguladas).length > 0) {
+        html += `
+            <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
+                ⚠️ NO REGULADAS - Por Condición
+            </h2>
+            ${generarTablaPorCondicion(datosFiltrados.noReguladas, 'noReguladas')}`;
+    }
+
+    // 6. No Reguladas por Rango
+    if (datosFiltrados.noReguladas && Object.keys(datosFiltrados.noReguladas).length > 0) {
+        html += `
+            <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
+                📊 NO REGULADAS - Por Rango de Días
+            </h2>
+            ${generarTablaPorRango(datosFiltrados.noReguladas, 'noReguladas')}`;
+    }
+
+    // 7. Estado ATOMO vs Rangos
+    html += `
+        <h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
+            📊 TABLA 2: Estado ATOMO vs Rangos de Días
+        </h2>
+        ${generarTablaEstadoAtomoPorRango(datosFiltrados)}`;
+
+    // 8. Estado SAP vs ATOMO
+    html += `
+        <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
+            🔄 TABLA 3: Estado SAP vs Estado ATOMO
+        </h2>
+        ${generarTablaEstadoSapVsAtomo(datosFiltrados)}`;
+
+    // 9. OS Bloqueadas (Tabla 4)
+    html += `
+        <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
+            🚫 TABLA 4: OS Bloqueadas por Rango de Días
+        </h2>
+        ${generarTablaBloqueados(datosFiltrados)}`;
+
+    // Fechamento do container principal
+    html += `</div>`;
+
+    // Renderização final
+    resultsContainer.innerHTML = html;
+
+    console.log(`✅ Tablas regeneradas exitosamente para unidad: ${unidad}`);
+}
 
  	// ========================================
 // 🗑️ LIMPIAR FILTRO Y RESTAURAR TODAS LAS TABLAS
 // ========================================
 function limpiarFiltroUnidad() {
-    console.log('🗑️ Limpiando filtro...');
- 
-    // Limpiar input
-    document.getElementById('filtroUnidad').value = '';
- 
-    // Restaurar datos originales
-    window.datosDetalleOS = JSON.parse(JSON.stringify(window.datosDetalleOS_Original));
- 
-    const osPendientes = window.osPendientes_Original;
-    const datosAgrupados = window.datosDetalleOS;
- 
-    // Recalcular totales
-    const totalReguladas = Object.values(datosAgrupados.reguladas)
-        .reduce((sum, unidad) => {
-            return sum + Object.values(unidad.porRango).flat().length;
-        }, 0);
- 
-    const totalNoReguladas = Object.values(datosAgrupados.noReguladas)
-        .reduce((sum, unidad) => {
-            return sum + Object.values(unidad.porRango).flat().length;
-        }, 0);
- 
-    // Regenerar todas las tablas
-    const resultsContainer = document.getElementById('searchResults');
- 
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: white; padding: 30px;">
- 
-            <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-                📡 UNICOM - Por Condición
-            </h2>
-            ${generarTablaUnicomPorCondicion(osPendientes)}
- 
-            <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
-                📡 UNICOM - Por Rango de Días
-            </h2>
-            ${generarTablaUnicomPorRango(osPendientes)}
- 
-            <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
-                🚫 TABLA 4: OS Bloqueadas por Rango de Días
-            </h2>
-            ${generarTablaBloqueados(datosAgrupados)}
- 
-            <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
-                🔄 TABLA 3: Estado SAP vs Estado ATOMO
-            </h2>
-            ${generarTablaEstadoSapVsAtomo(datosAgrupados)}
- 
-            <h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
-                📊 TABLA 2: Estado ATOMO vs Rangos de Días
-            </h2>
-            ${generarTablaEstadoAtomoPorRango(datosAgrupados)}
- 
-            <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
-                ⚠️ REGULADAS - Por Condición
-            </h2>
-            ${generarTablaPorCondicion(datosAgrupados.reguladas, 'reguladas')}
- 
-            <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
-                📊 REGULADAS - Por Rango de Días
-            </h2>
-            ${generarTablaPorRango(datosAgrupados.reguladas, 'reguladas')}
- 
-            <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
-                ⚠️ NO REGULADAS - Por Condición
-            </h2>
-            ${generarTablaPorCondicion(datosAgrupados.noReguladas, 'noReguladas')}
- 
-            <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
-                📊 NO REGULADAS - Por Rango de Días
-            </h2>
-            ${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
- 
-        </div>
-    `;
- 
-    console.log('✅ Filtro limpiado - Mostrando todas las unidades');
-    alert('✅ Filtro eliminado - Mostrando todas las unidades');
+    console.log('🗑️ Limpiando filtro...');
+
+    // 1. Limpiar el campo de texto del buscador
+    const filtroInput = document.getElementById('filtroUnidad');
+    if (filtroInput) filtroInput.value = '';
+
+    // 2. Restaurar los datos desde la copia de seguridad global
+    // Usamos JSON.parse para asegurar que recuperamos una copia limpia
+    window.datosDetalleOS = JSON.parse(JSON.stringify(window.datosDetalleOS_Original));
+
+    const osPendientes = window.osPendientes_Original;
+    const datosAgrupados = window.datosDetalleOS;
+
+    // 3. Recalcular los totales generales para la consola (opcional)
+    const totalReguladas = Object.values(datosAgrupados.reguladas)
+        .reduce((sum, unidad) => sum + Object.values(unidad.porRango).flat().length, 0);
+
+    const totalNoReguladas = Object.values(datosAgrupados.noReguladas)
+        .reduce((sum, unidad) => sum + Object.values(unidad.porRango).flat().length, 0);
+
+    // 4. Regenerar todas las tablas con la vista completa
+    const resultsContainer = document.getElementById('searchResults');
+
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: white; padding: 30px;">
+
+            <h2 style="color: #26c6da; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+                📡 UNICOM - Por Condición
+            </h2>
+            ${generarTablaUnicomPorCondicion(osPendientes)}
+
+            <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
+                📡 UNICOM - Por Rango de Días
+            </h2>
+            ${generarTablaUnicomPorRango(osPendientes)}
+
+            <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
+                🚫 TABLA 4: OS Bloqueadas por Rango de Días
+            </h2>
+            ${generarTablaBloqueados(datosAgrupados)}
+
+            <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
+                🔄 TABLA 3: Estado SAP vs Estado ATOMO
+            </h2>
+            ${generarTablaEstadoSapVsAtomo(datosAgrupados)}
+
+            <h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
+                📊 TABLA 2: Estado ATOMO vs Rangos de Días
+            </h2>
+            ${generarTablaEstadoAtomoPorRango(datosAgrupados)}
+
+            <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
+                ⚠️ REGULADAS - Por Condición
+            </h2>
+            ${generarTablaPorCondicion(datosAgrupados.reguladas, 'reguladas')}
+
+            <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
+                📊 REGULADAS - Por Rango de Días
+            </h2>
+            ${generarTablaPorRango(datosAgrupados.reguladas, 'reguladas')}
+
+            <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
+                ⚠️ NO REGULADAS - Por Condición
+            </h2>
+            ${generarTablaPorCondicion(datosAgrupados.noReguladas, 'noReguladas')}
+
+            <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
+                📊 NO REGULADAS - Por Rango de Días
+            </h2>
+            ${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
+
+        </div>
+    `;
+
+    console.log('✅ Filtro limpiado - Mostrando todas las unidades');
+    // Pequeña notificación visual
+    mostrarNotificacion('✅ Filtro eliminado - Vista completa restaurada');
 }
 
 
