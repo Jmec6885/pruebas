@@ -6283,7 +6283,9 @@ async function cargarInterfazDetalleOS() {
 
 
 function generarTablaTipologiaVsRango(osFiltradas) {
-    const rangos = ['0-3', '4-7', '8-15', '16-30', '31-60', '61-90', '90+'];
+    // 1. Definimos los rangos exactos que devuelve tu función determinarRangoDias
+    const rangos = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
+    
     const matriz = {};
     const totalesVerticales = {};
     rangos.forEach(r => totalesVerticales[r] = 0);
@@ -6291,7 +6293,10 @@ function generarTablaTipologiaVsRango(osFiltradas) {
     
     osFiltradas.forEach(os => {
         const tipo = os.Tipologia || 'SIN CLASIFICAR';
-        const rango = os.RangoDias || '0-3'; 
+        
+        // 2. 🔥 USAMOS TU FUNCIÓN ORIGINAL PARA CALCULAR EL RANGO EN TIEMPO REAL
+        // Usamos os["Fecha Gen."] que es el campo que viene de la base de datos
+        const rango = determinarRangoDias(os["Fecha Gen."]); 
         
         if (!matriz[tipo]) {
             matriz[tipo] = {};
@@ -6299,6 +6304,7 @@ function generarTablaTipologiaVsRango(osFiltradas) {
             matriz[tipo].total = 0;
         }
         
+        // Solo sumamos si el rango devuelto coincide con nuestros encabezados
         if (matriz[tipo][rango] !== undefined) {
             matriz[tipo][rango]++;
             matriz[tipo].total++;
@@ -6306,6 +6312,9 @@ function generarTablaTipologiaVsRango(osFiltradas) {
             granTotal++;
         }
     });
+
+    // 3. Ordenar por total (Mayor a Menor)
+    const tipologiasOrdenadas = Object.keys(matriz).sort((a, b) => matriz[b].total - matriz[a].total);
 
     let tablaHtml = `
         <div style="overflow-x: auto; margin-top: 15px;">
@@ -6320,27 +6329,23 @@ function generarTablaTipologiaVsRango(osFiltradas) {
                 <tbody>
     `;
 
-    // 🔥 CAMBIO AQUÍ: Ordenar de mayor a menor basado en el total acumulado
-    const tipologiasOrdenadas = Object.keys(matriz).sort((a, b) => matriz[b].total - matriz[a].total);
-
     tipologiasOrdenadas.forEach((tipo, index) => {
-        // Efecto cebreado para lectura fácil
         const fondoFila = index % 2 === 0 ? '#ffffff' : '#f9f9f9';
-        
         tablaHtml += `
             <tr style="background: ${fondoFila}; border-bottom: 1px solid #eee;">
                 <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #333;">${tipo}</td>
                 ${rangos.map(r => {
                     const v = matriz[tipo][r];
-                    // Si el valor es 90+, lo ponemos en rojo suave para alertar
-                    const colorAlerta = (r === '90+' && v > 0) ? 'background: #ffebee; color: #d32f2f;' : '';
-                    return `<td style="padding: 8px; text-align: center; border: 1px solid #ddd; ${colorAlerta} ${v > 0 ? 'font-weight: bold;' : 'color: #ccc;'}">${v}</td>`;
+                    // Resaltar rangos críticos (más de 31 días) si tienen datos
+                    const esCritico = (r === '31-45' || r === '46-180' || r === '>180') && v > 0;
+                    const estiloCelda = esCritico ? 'background: #fff5f5; color: #c62828; font-weight: bold;' : (v > 0 ? 'font-weight: bold;' : 'color: #ccc;');
+                    
+                    return `<td style="padding: 8px; text-align: center; border: 1px solid #ddd; ${estiloCelda}">${v}</td>`;
                 }).join('')}
                 <td style="padding: 8px; text-align: center; border: 1px solid #ddd; background: #fff8e1; font-weight: 900; color: #000;">${matriz[tipo].total}</td>
             </tr>`;
     });
 
-    // Fila final de TOTALES
     tablaHtml += `
                 <tr style="background: #eee; font-weight: bold;">
                     <td style="padding: 10px; border: 1px solid #ddd;">TOTALES POR RANGO</td>
@@ -6353,6 +6358,7 @@ function generarTablaTipologiaVsRango(osFiltradas) {
     `;
     return tablaHtml;
 }
+
 
  	// ========================================
 // 🔍 APLICAR FILTRO POR UNIDAD
