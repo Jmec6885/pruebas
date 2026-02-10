@@ -4079,35 +4079,37 @@ async function leerArchivoActualizacion(archivo, extension) {
 
 
  	// ========================================
-// ✅ VALIDAR ESTRUCTURA DEL ARCHIVO
+// ✅ VALIDAR ESTRUCTURA DEL ARCHIVO (CORREGIDA)
 // ========================================
 function validarEstructuraArchivo(datos, tipo) {
-    let columnasRequeridas = 0;
-    let nombreColumnas = '';
- 
-    if (tipo === 'medidor_comentario') {
-        columnasRequeridas = 3;
-        nombreColumnas = 'CuentaContrato, Medidor, ComentarioGeneral';
-    } else if (tipo === 'nombre_cuenta') {
-        columnasRequeridas = 3;
-        nombreColumnas = 'CuentaContrato, Medidor, NombreCliente';
-    } else if (tipo === 'grafica') {
-        columnasRequeridas = 2;
-        nombreColumnas = 'CuentaContrato, Grafica';
-    }
- 
-    // Validar que todas las filas tengan el número correcto de columnas
-    for (let i = 0; i < datos.length; i++) {
-        if (datos[i].length < columnasRequeridas) {
-            return {
-                valido: false,
-                mensaje: `Fila ${i + 2}: Se esperan ${columnasRequeridas} columnas (${nombreColumnas}), pero solo se encontraron ${datos\[i].length}`
-            };
-        }
-    }
- 
-    return { valido: true };
+    let columnasRequeridas = 0;
+    let nombreColumnas = '';
+
+    if (tipo === 'medidor_comentario') {
+        columnasRequeridas = 3;
+        nombreColumnas = 'CuentaContrato, Medidor, ComentarioGeneral';
+    } else if (tipo === 'nombre_cuenta') {
+        columnasRequeridas = 3;
+        nombreColumnas = 'CuentaContrato, Medidor, NombreCliente';
+    } else if (tipo === 'grafica') {
+        columnasRequeridas = 2;
+        nombreColumnas = 'CuentaContrato, Grafica';
+    }
+
+    // Validar que todas las filas tengan el número correcto de columnas
+    for (let i = 0; i < datos.length; i++) {
+        // CORRECCIÓN: datos[i].length (sin la barra invertida)
+        if (datos[i].length < columnasRequeridas) {
+            return {
+                valido: false,
+                mensaje: `Fila ${i + 2}: Se esperan ${columnasRequeridas} columnas (${nombreColumnas}), pero solo se encontraron ${datos[i].length}`
+            };
+        }
+    }
+
+    return { valido: true };
 }
+
 
  	// ========================================
 // 🔍 BUSCAR COINCIDENCIAS EN BD
