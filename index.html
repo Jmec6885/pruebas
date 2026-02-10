@@ -3363,103 +3363,95 @@ function seccionComun(user) {
 }
 
  	function seccionGestionTurnos(user) {
-    // Opciones de turnos
-    const opcionesTurnos = `
-        <option value="">-- Ninguno --</option>
-        ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
-            `<option value="${key}" ${user.turno\_hoy === key ? 'selected' : ''}>${turno.nombre}</option>`
-        ).join('')}
-    `;
- 
-    const opcionesTurnosManana = `
-        <option value="">-- Ninguno --</option>
-        ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
-            `<option value="${key}" ${user.turno\_manana === key ? 'selected' : ''}>${turno.nombre}</option>`
-        ).join('')}
-    `;
- 
-    const opcionesTurnosRegreso = `
-        <option value="">-- Ninguno --</option>
-        ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
-            `<option value="${key}" ${user.turno\_regreso === key ? 'selected' : ''}>${turno.nombre}</option>`
-        ).join('')}
-    `;
- 
-    return `
-        <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-            <h3 style="margin-top: 0; color: #1565c0;">⚙️ Gestión de Turnos (${user.rol})</h3>
- 
-            <div class="form-group">
-                <label>🔄 Turno HOY:</label>
-                <select id="edit\_turno\_hoy" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                    ${opcionesTurnos}
-                </select>
-            </div>
- 
-            <div class="form-group">
-                <label>📅 Fecha Turno HOY:</label>
-                <input type="date" id="edit_fecha_turno_hoy" value="${user.fecha_turno_hoy || ''}"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <div class="form-group">
-                <label>🔄 Turno MAÑANA:</label>
-                <select id="edit\_turno\_manana" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                    ${opcionesTurnosManana}
-                </select>
-            </div>
- 
-            <div class="form-group">
-                <label>📅 Fecha Turno MAÑANA:</label>
-                <input type="date" id="edit_fecha_turno_manana" value="${user.fecha_turno_manana || ''}"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <hr style="margin: 20px 0; border: 1px solid #90caf9;">
- 
-            <div class="form-group">
-                <label>🏖️ Descanso Inicio:</label>
-                <input type="date" id="edit_descanso_inicio" value="${user.descanso_fecha_inicio || ''}"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <div class="form-group">
-                <label>🏖️ Descanso Fin:</label>
-                <input type="date" id="edit_descanso_fin" value="${user.descanso_fecha_fin || ''}"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <div class="form-group">
-                <label>🔙 Turno Regreso:</label>
-                <select id="edit\_turno\_regreso" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                    ${opcionesTurnosRegreso}
-                </select>
-            </div>
- 
-            <div class="form-group">
-                <label>📅 Fecha Turno Regreso:</label>
-                <input type="date" id="edit_fecha_turno_regreso" value="${user.fecha_turno_regreso || ''}"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <hr style="margin: 20px 0; border: 1px solid #90caf9;">
- 
-            <div class="form-group">
-                <label>📊 Contador Turnos:</label>
-                <input type="number" id="edit_contador" value="${user.contador_turnos || 0}" min="0" max="5"
-                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-            </div>
- 
-            <div class="form-group">
-                <label>🔄 Estado Ciclo:</label>
-                <select id="edit\_estado\_ciclo" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                    <option value="">-- Ninguno --</option>
-                    <option value="primera_vez" ${user.estado_ciclo === 'primera_vez' ? 'selected' : ''}>Primera vez</option>
-                    <option value="ciclo_normal" ${user.estado_ciclo === 'ciclo_normal' ? 'selected' : ''}>Ciclo normal</option>
-                </select>
-            </div>
-        </div>
-    `;
+    // Helper para generar opciones de turnos sin errores de escape
+    const generarOpciones = (valorSeleccionado) => {
+        return `
+            <option value="">-- Ninguno --</option>
+            ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
+                `<option value="${key}" ${valorSeleccionado === key ? 'selected' : ''}>${turno.nombre}</option>`
+            ).join('')}
+        `;
+    };
+
+    const opcionesTurnos = generarOpciones(user.turno_hoy);
+    const opcionesTurnosManana = generarOpciones(user.turno_manana);
+    const opcionesTurnosRegreso = generarOpciones(user.turno_regreso);
+
+    return `
+        <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #1565c0;">⚙️ Gestión de Turnos (${user.rol || 'Sin Rol'})</h3>
+
+            <div class="form-group">
+                <label>🔄 Turno HOY:</label>
+                <select id="edit_turno_hoy" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    ${opcionesTurnos}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>📅 Fecha Turno HOY:</label>
+                <input type="date" id="edit_fecha_turno_hoy" value="${user.fecha_turno_hoy || ''}"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <div class="form-group">
+                <label>🔄 Turno MAÑANA:</label>
+                <select id="edit_turno_manana" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    ${opcionesTurnosManana}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>📅 Fecha Turno MAÑANA:</label>
+                <input type="date" id="edit_fecha_turno_manana" value="${user.fecha_turno_manana || ''}"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <hr style="margin: 20px 0; border: 1px solid #90caf9;">
+
+            <div class="form-group">
+                <label>🏖️ Descanso Inicio:</label>
+                <input type="date" id="edit_descanso_inicio" value="${user.descanso_fecha_inicio || ''}"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <div class="form-group">
+                <label>🏖️ Descanso Fin:</label>
+                <input type="date" id="edit_descanso_fin" value="${user.descanso_fecha_fin || ''}"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <div class="form-group">
+                <label>🔙 Turno Regreso:</label>
+                <select id="edit_turno_regreso" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    ${opcionesTurnosRegreso}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>📅 Fecha Turno Regreso:</label>
+                <input type="date" id="edit_fecha_turno_regreso" value="${user.fecha_turno_regreso || ''}"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <hr style="margin: 20px 0; border: 1px solid #90caf9;">
+
+            <div class="form-group">
+                <label>📊 Contador Turnos:</label>
+                <input type="number" id="edit_contador" value="${user.contador_turnos || 0}" min="0" max="5"
+                       style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+            </div>
+
+            <div class="form-group">
+                <label>🔄 Estado Ciclo:</label>
+                <select id="edit_estado_ciclo" style="width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    <option value="">-- Ninguno --</option>
+                    <option value="primera_vez" ${user.estado_ciclo === 'primera_vez' ? 'selected' : ''}>Primera vez</option>
+                    <option value="ciclo_normal" ${user.estado_ciclo === 'ciclo_normal' ? 'selected' : ''}>Ciclo normal</option>
+                </select>
+            </div>
+        </div>
+    `;
 }
 
 
