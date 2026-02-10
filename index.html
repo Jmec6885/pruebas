@@ -5306,34 +5306,24 @@ generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioConfigurado)
 
 
 function determinarRangoDias(fechaGen) {
-    if (!fechaGen) return "SIN FECHA";
- 
-    try {
-        // Normalizar HOY a las 00:00:00 UTC
-        const ahora = new Date();
-        const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
+    if (!fechaGen) return "SIN FECHA";
+    try {
+        const ahora = new Date();
+        const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
 
-        // Normalizar Fecha OS a las 00:00:00 UTC
-        const inicio = new Date(fechaGen);
-        const inicioUTC = Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate());
+        const inicio = new Date(fechaGen);
+        const inicioUTC = Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate());
 
-        const diferenciaMs = hoyUTC - inicioUTC;
-        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
+        const diferenciaMs = hoyUTC - inicioUTC;
+        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
 
-        if (dias >= 0 && dias <= 5) return '0-5';
-        if (dias >= 6 && dias <= 10) return '6-10';
-        if (dias >= 11 && dias <= 15) return '11-15';
-        if (dias >= 16 && dias <= 20) return '16-20';
-        if (dias >= 21 && dias <= 30) return '21-30';
-        if (dias >= 31 && dias <= 45) return '31-45';
-        if (dias >= 46 && dias <= 180) return '46-180';
-        if (dias > 180) return '>180';
- 
-        return "FUERA DE RANGO";
-    } catch (e) {
-        return "ERROR FECHA";
-    }
+        // Llama a la maestra
+        return obtenerRangoPorNumero(dias); 
+    } catch (e) {
+        return "ERROR FECHA";
+    }
 }
+
  	// ========================================
 // 📊 ACTUALIZAR RESUMEN UNIDAD KML
 // ========================================
@@ -8892,124 +8882,108 @@ async function guardarFiltrosMapaGlobales() {
  
 
 // ========================================
-// 🗺️ GENERAR MAPA LEAFLET CON CÍRCULO Y CONTROL DE RADIO
+// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA)
 // ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-    const resultsContainer = document.getElementById('searchResults');
- 
-    if (window.mapaLeafletInstance) {
-        try {
-            window.mapaLeafletInstance.remove();
-            console.log('✅ Mapa anterior limpiado');
-        } catch (e) {
-            console.warn('⚠️ Error limpiando mapa anterior:', e);
-        }
-        window.mapaLeafletInstance = null;
-    }
- 
-    const conteoPorTipologia = {};
-    osEnRadio.forEach(os => {
-        const tip = os.Tipologia || 'Sin tipología';
-        conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
-    });
+    const resultsContainer = document.getElementById('searchResults');
 
-    const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
-        .sort((a, b) => b[1] - a[1]);
- 
-    // ✅ Obtener radio actual desde filtrosAplicados o usar el parámetro
-    const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
- 
-    // ⚠️ ATENCIÓN: Todo el HTML debe empezar con esta comilla invertida `
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header">
-                🗺️ Mapa de Rutas - OS ${osCentro.OSATMO} (${osEnRadio.length} OS en ${radioActual} km)
-            </div>
- 
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #3b82f6;">
-                <strong>📍 Radio de Búsqueda:</strong>
-                <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-                    <input type="range" id="sliderRadioKm" min="1" max="20" value="${radioActual}"
-                           style="flex: 1; height: 8px; border-radius: 4px; cursor: pointer;"
-                           oninput="document.getElementById('valorRadioKm').innerText = this.value + ' km'">
-                    <span id="valorRadioKm" style="font-weight: bold; color: #3b82f6; min-width: 60px; text-align: center;">
-                        ${radioActual} km
-                    </span>
-                    <button onclick="actualizarRadioMapa(document.getElementById('sliderRadioKm').value, false)"
-                            style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                        🔁 Actualizar
-                    </button>
-                </div>
-                <small style="color: #666; display: block; margin-top: 8px; font-size: 13px;">
-                    ⚠️ Cambiar el radio actualiza el mapa. Los filtros originales permanecen intactos.
-                </small>
-            </div>
- 
-            <div style="background: white; padding: 10px; border-radius: 8px; margin: 15px 0;">
-                <strong>Leyenda (Click para filtrar):</strong>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 14px;">
-                    <button onclick="filtrarPorEstado('centro')" style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟢 Tu OS (centro)</button>
-                    <button onclick="filtrarPorEstado('asignada')" style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟠 OS Asignadas</button>
-                    <button onclick="filtrarPorEstado('regulada')" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔴 OS Reguladas</button>
-                    <button onclick="filtrarPorEstado('no\_regulada')" style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔵 OS No Reguladas</button>
-                    <button onclick="filtrarPorEstado('deuda\_alta')" style="background: #fdd835; color: #333; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟡 Deuda Alta (>$500)</button>
-                    <button onclick="filtrarPorEstado('deuda\_media')" style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🟠 Deuda Media</button>
-                    <button onclick="filtrarPorEstado('deuda\_baja')" style="background: #f48fb1; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🌸 Deuda Baja</button>
-                    <button onclick="filtrarPorEstado('todas')" style="background: #9e9e9e; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;">🔄 Ver Todas</button>
-                </div>
-            </div>
+    // 🛡️ 1. FILTRADO DINÁMICO DE SEGURIDAD
+    // Filtramos antes de contar o dibujar para que la interfaz sea coherente
+    const osValidadasParaMapa = osEnRadio.filter(os => {
+        // Criterio A: ¿Es una orden REGULADA según su campo de condición?
+        const esRegulada = os.Condicion?.toUpperCase() === 'REGULADA';
+        
+        // Criterio B: ¿La tipología está en la lista autorizada de Supabase?
+        const listaAutorizada = window.filtrosAplicados?.tipologias || [];
+        const esAutorizada = listaAutorizada.includes(os.Tipologia);
 
-            ${window.filtrosAplicados ? `
-            <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
-                <strong>🔍 Filtros activos:</strong><br>
-                <span style="font-size: 14px; color: #666;">
-                    • Radio: <strong>${radioActual} km</strong><br>
-                    ${window.filtrosAplicados.rangos ? `• Rangos: <strong>${window.filtrosAplicados.rangos.length}</strong><br>` : ''}
-                    ${window.filtrosAplicados.tipologias ? `• Tipologías: <strong>${window.filtrosAplicados.tipologias.length}</strong>` : ''}
-                </span>
-            </div>` : ''}
- 
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Totales por Tipología (Click para resaltar):</strong>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 10px;">
-                    ${tipologiasOrdenadas.map(([tip, count]) => `
-                        <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')"
-                             id="tipologia_${tip.replace(/[^a-zA-Z0-9]/g, '_')}"
-                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2196f3; cursor: pointer; transition: all 0.3s;"
-                             onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(5px)'"
-                             onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)'">
-                            <strong style="color: #2196f3;">${count}</strong> - ${tip}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
- 
-            <div id="mapaLeaflet" style="width: 100%; height: 500px; border-radius: 12px; margin: 15px 0; border: 1px solid #ccc;"></div>
- 
-            <div id="panelDetalleOS" style="margin-top: 20px; min-height: 200px;">
-                <div style="text-align: center; padding: 40px; color: #999; background: white; border-radius: 12px; border: 2px dashed #e2e8f0;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un punto del mapa para ver detalles</p>
-                </div>
-            </div>
-        </div>
-    `; // ⚠️ AQUÍ TERMINA RECIÉN EL INNERHTML
+        // Retorna TRUE si cumple cualquiera de las dos (O es prioritaria o es pedida)
+        return esRegulada || esAutorizada;
+    });
 
-    // ✅ EJECUCIÓN DEL MAPA DESPUÉS DE CARGAR EL HTML
-    setTimeout(() => {
-        const panel = document.getElementById('panelDetalleOS');
-        if (panel) {
-            console.log('✅ Panel de detalle listo');
-            try {
-                inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioActual);
-            } catch (error) {
-                console.error('❌ Error inicializando mapa:', error);
-            }
-        }
-    }, 150);
- 
-    window.datosMapaExportar = osEnRadio;
+    // Limpieza de instancia previa para evitar fugas de memoria
+    if (window.mapaLeafletInstance) {
+        try {
+            window.mapaLeafletInstance.remove();
+        } catch (e) {
+            console.warn('⚠️ Error limpiando mapa anterior:', e);
+        }
+        window.mapaLeafletInstance = null;
+    }
+
+    // 2. Contar y Ordenar Tipologías (Solo de las validadas)
+    const conteoPorTipologia = {};
+    osValidadasParaMapa.forEach(os => {
+        const tip = os.Tipologia || 'Sin tipología';
+        conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
+    });
+
+    const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
+        .sort((a, b) => b[1] - a[1]);
+
+    const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
+
+    // 3. Generar HTML
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>🗺️ Mapa de Rutas - OS ${osCentro.OSATMO || osCentro.OS}</span>
+                <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">
+                    ${osValidadasParaMapa.length} órdenes visibles en ${radioActual} km
+                </span>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
+                <strong style="display: block; margin-bottom: 10px; color: #1e40af;">Leyenda de Estados (Click para filtrar mapa):</strong>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px;">
+                    <button onclick="filtrarPorEstado('centro')" style="background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🟢 Tu OS</button>
+                    <button onclick="filtrarPorEstado('asignada')" style="background: #ff9800; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🟠 Asignadas</button>
+                    <button onclick="filtrarPorEstado('regulada')" style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔴 Reguladas</button>
+                    <button onclick="filtrarPorEstado('no_regulada')" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔵 No Reguladas</button>
+                    <button onclick="filtrarPorEstado('todas')" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔄 Ver Todas</button>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
+                <strong style="display: block; margin-bottom: 10px; color: #1e40af;">📊 Tipologías en radio (Ordenadas por cantidad):</strong>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px;">
+                    ${tipologiasOrdenadas.map(([tip, count]) => `
+                        <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')"
+                             style="background: #f8f9fa; padding: 8px 12px; border-radius: 6px; border-left: 4px solid #3b82f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee;">
+                            <span style="font-size: 13px; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;" title="${tip}">${tip}</span>
+                            <strong style="color: #3b82f6; background: #dbeafe; padding: 2px 8px; border-radius: 4px;">${count}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div id="mapaLeaflet" style="width: 100%; height: 550px; border-radius: 12px; border: 1px solid #cbd5e1; z-index: 1;"></div>
+
+            <div id="panelDetalleOS" style="margin-top: 20px;">
+                <div style="text-align: center; padding: 30px; color: #64748b; background: white; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                    <p style="font-size: 15px;">📍 Haz clic en un marcador para ver el detalle de la orden</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 4. Inicialización diferida pasando los datos ya filtrados
+    setTimeout(() => {
+        if (document.getElementById('mapaLeaflet')) {
+            try {
+                // Importante: usamos osValidadasParaMapa aquí
+                inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
+                if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
+            } catch (error) {
+                console.error('❌ Error inicializando mapa:', error);
+            }
+        }
+    }, 300);
+
+    window.datosMapaExportar = osValidadasParaMapa;
 }
+
+
 
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
     // ✅ Convertir a número y validar
@@ -11163,24 +11137,26 @@ function calcularDias(fechaGen) {
     return diffDias;
 }
 
- 
-
-
-
- 	// ========================================
-// 📊 DETERMINAR RANGO POR DÍAS
-// ========================================
-function determinarRango(dias) {
-    if (dias >= 0 && dias <= 5) return '0-5';
-    if (dias >= 6 && dias <= 10) return '6-10';
-    if (dias >= 11 && dias <= 15) return '11-15';
-    if (dias >= 16 && dias <= 20) return '16-20';
-    if (dias >= 21 && dias <= 30) return '21-30';
-    if (dias >= 31 && dias <= 45) return '31-45';
-    if (dias >= 46 && dias <= 180) return '46-180';
-    return '>180';
+ function determinarRango(dias) {
+    return obtenerRangoPorNumero(dias);
 }
 
+
+
+// ÚNICA FUENTE DE VERDAD PARA LOS RANGOS
+function obtenerRangoPorNumero(dias) {
+    const d = parseInt(dias);
+    if (isNaN(d) || d < 0) return "FUERA DE RANGO";
+
+    if (d <= 5) return '0-5';
+    if (d <= 10) return '6-10';
+    if (d <= 15) return '11-15';
+    if (d <= 20) return '16-20';
+    if (d <= 30) return '21-30';
+    if (d <= 45) return '31-45';
+    if (d <= 180) return '46-180';
+    return '>180';
+}
 
 // ========================================
 // ⚠️ DETERMINAR CONDICIÓN (TEMPORAL - Sin Dias_por_OS)
