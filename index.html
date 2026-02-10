@@ -8882,26 +8882,28 @@ async function guardarFiltrosMapaGlobales() {
  
 
 // ========================================
-// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA)
+// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA CON CONTADORES)
 // ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     const resultsContainer = document.getElementById('searchResults');
 
     // 🛡️ 1. FILTRADO DINÁMICO DE SEGURIDAD
-    // Filtramos antes de contar o dibujar para que la interfaz sea coherente
     const osValidadasParaMapa = osEnRadio.filter(os => {
-        // Criterio A: ¿Es una orden REGULADA según su campo de condición?
         const esRegulada = os.Condicion?.toUpperCase() === 'REGULADA';
-        
-        // Criterio B: ¿La tipología está en la lista autorizada de Supabase?
         const listaAutorizada = window.filtrosAplicados?.tipologias || [];
         const esAutorizada = listaAutorizada.includes(os.Tipologia);
-
-        // Retorna TRUE si cumple cualquiera de las dos (O es prioritaria o es pedida)
         return esRegulada || esAutorizada;
     });
 
-    // Limpieza de instancia previa para evitar fugas de memoria
+    // 📊 2. CÁLCULO DE TOTALES PARA BOTONES DE ESTADO
+    const conteoEstados = {
+        centro: osValidadasParaMapa.filter(os => os.EsCentro).length,
+        asignada: osValidadasParaMapa.filter(os => os.Estado_SAP === 'ASIGNADA').length,
+        regulada: osValidadasParaMapa.filter(os => os.Condicion?.toUpperCase() === 'REGULADA').length,
+        no_regulada: osValidadasParaMapa.filter(os => os.Condicion?.toUpperCase() !== 'REGULADA' && !os.EsCentro).length
+    };
+
+    // Limpieza de instancia previa
     if (window.mapaLeafletInstance) {
         try {
             window.mapaLeafletInstance.remove();
@@ -8911,7 +8913,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         window.mapaLeafletInstance = null;
     }
 
-    // 2. Contar y Ordenar Tipologías (Solo de las validadas)
+    // 3. Contar y Ordenar Tipologías
     const conteoPorTipologia = {};
     osValidadasParaMapa.forEach(os => {
         const tip = os.Tipologia || 'Sin tipología';
@@ -8923,7 +8925,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
 
     const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
 
-    // 3. Generar HTML
+    // 4. Generar HTML
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -8936,11 +8938,26 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
                 <strong style="display: block; margin-bottom: 10px; color: #1e40af;">Leyenda de Estados (Click para filtrar mapa):</strong>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px;">
-                    <button onclick="filtrarPorEstado('centro')" style="background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🟢 Tu OS</button>
-                    <button onclick="filtrarPorEstado('asignada')" style="background: #ff9800; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🟠 Asignadas</button>
-                    <button onclick="filtrarPorEstado('regulada')" style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔴 Reguladas</button>
-                    <button onclick="filtrarPorEstado('no_regulada')" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔵 No Reguladas</button>
-                    <button onclick="filtrarPorEstado('todas')" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🔄 Ver Todas</button>
+                    
+                    <button onclick="filtrarPorEstado('centro')" style="background: #4caf50; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        🟢 Tu OS <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.centro}</span>
+                    </button>
+                    
+                    <button onclick="filtrarPorEstado('asignada')" style="background: #ff9800; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        🟠 Asignadas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.asignada}</span>
+                    </button>
+                    
+                    <button onclick="filtrarPorEstado('regulada')" style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        🔴 Reguladas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.regulada}</span>
+                    </button>
+                    
+                    <button onclick="filtrarPorEstado('no_regulada')" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        🔵 No Reguladas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.no_regulada}</span>
+                    </button>
+                    
+                    <button onclick="filtrarPorEstado('todas')" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        🔄 Ver Todas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${osValidadasParaMapa.length}</span>
+                    </button>
                 </div>
             </div>
 
@@ -8967,11 +8984,10 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         </div>
     `;
 
-    // 4. Inicialización diferida pasando los datos ya filtrados
+    // 5. Inicialización diferida
     setTimeout(() => {
         if (document.getElementById('mapaLeaflet')) {
             try {
-                // Importante: usamos osValidadasParaMapa aquí
                 inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
                 if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
             } catch (error) {
@@ -8982,8 +8998,6 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
 
     window.datosMapaExportar = osValidadasParaMapa;
 }
-
-
 
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
     // ✅ Convertir a número y validar
@@ -9167,41 +9181,59 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
 
 
 // ========================================
-// 3️⃣ NUEVA FUNCIÓN: FILTRAR MAPA POR ESTADO
+// 3️⃣ NUEVA FUNCIÓN: FILTRAR MAPA POR ESTADO (CORREGIDA)
 // ========================================
 function filtrarPorEstado(estado) {
-    const mapa = window.mapaLeafletInstance;
-    if (!mapa || !window.markersPorEstado) {
-        console.error('Mapa no inicializado');
-        return;
-    }
+    const mapa = window.mapaLeafletInstance;
+    
+    // 1. Verificación de seguridad
+    if (!mapa || !window.markersPorEstado) {
+        console.error('❌ Mapa o marcadores no inicializados');
+        return;
+    }
 
-    console.log(`🔍 Filtrando por estado: ${estado}`);
+    console.log(`🔍 Filtrando por estado: ${estado}`);
+    window.estadoFiltrado = estado;
 
-    // Limpiar filtro anterior
-    window.estadoFiltrado = estado;
+    const bounds = L.latLngBounds();
+    let hayMarcadoresVisibles = false;
 
-    // Mostrar/ocultar markers según el estado
-    Object.entries(window.markersPorEstado).forEach(([key, markersArray]) => {
-        markersArray.forEach(marker => {
-            if (estado === 'todas' || key === estado) {
-                if (!mapa.hasLayer(marker)) {
-                    mapa.addLayer(marker);
-                }
-            } else {
-                mapa.removeLayer(marker);
-            }
-        });
-    });
+    // 2. Procesar visibilidad de marcadores
+    Object.entries(window.markersPorEstado).forEach(([key, markersArray]) => {
+        const debeMostrarse = (estado === 'todas' || key === estado);
 
-    // Ajustar vista si hay markers visibles
-    if (estado !== 'todas' && window.markersPorEstado[estado]) {
-        const bounds = L.latLngBounds();
-        window.markersPorEstado[estado].forEach(marker => {
-            bounds.extend(marker.getLatLng());
-        });
-        mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-    }
+        markersArray.forEach(marker => {
+            if (debeMostrarse) {
+                if (!mapa.hasLayer(marker)) {
+                    mapa.addLayer(marker);
+                }
+                bounds.extend(marker.getLatLng());
+                hayMarcadoresVisibles = true;
+            } else {
+                if (mapa.hasLayer(marker)) {
+                    mapa.removeLayer(marker);
+                }
+            }
+        });
+    });
+
+    // 3. Ajustar vista SOLO si hay marcadores válidos (Evita el error de consola)
+    if (hayMarcadoresVisibles) {
+        // Solo hacemos fitBounds si el área es válida
+        if (bounds.isValid()) {
+            mapa.fitBounds(bounds, { 
+                padding: [50, 50], 
+                maxZoom: 16,
+                animate: true 
+            });
+        }
+    } else {
+        console.warn(`⚠️ No hay marcadores para el estado: ${estado}`);
+        // Opcional: Si no hay nada que mostrar, centrar en la OS principal
+        if (window.markerCentro) {
+            mapa.setView(window.markerCentro.getLatLng(), 15);
+        }
+    }
 }
 
 
@@ -9388,6 +9420,60 @@ function buscarOSEnListado() {
     if (!encontrada) alert(`OS "${busqueda}" no encontrada en el listado`);
 }
 
+
+function dibujarMarcadores(mapa, ordenes) {
+    // 1. Limpiar capas anteriores si existen para no duplicar puntos
+    if (window.capaMarcadores) {
+        mapa.removeLayer(window.capaMarcadores);
+    }
+    
+    // 2. Crear un grupo nuevo y añadirlo al mapa
+    window.capaMarcadores = L.featureGroup().addTo(mapa);
+
+    ordenes.forEach(os => {
+        // Validación estricta de coordenadas
+        const lat = parseFloat(os.Latitud);
+        const lng = parseFloat(os.Longitud);
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+            // Determinar color (Usando tu lógica de estados)
+            let color = '#2196f3'; // Azul por defecto
+            if (os.EsCentro) color = '#4caf50'; // Verde
+            else if (os.Condicion?.toUpperCase() === 'REGULADA') color = '#f44336'; // Rojo
+            else if (os.Estado_SAP === 'ASIGNADA') color = '#ff9800'; // Naranja
+
+            const marker = L.circleMarker([lat, lng], {
+                radius: 9,
+                fillColor: color,
+                color: "#ffffff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9
+            });
+
+            // Popup con información clave
+            marker.bindPopup(`
+                <div style="font-family: sans-serif;">
+                    <strong style="color: #1e40af;">OS: ${os.OSATMO || os.OS}</strong><br>
+                    <small>${os.Tipologia}</small><br>
+                    <hr style="margin: 5px 0;">
+                    <b>Estado:</b> ${os.Estado_SAP || 'N/A'}<br>
+                    <b>Condición:</b> ${os.Condicion || 'NORMAL'}
+                </div>
+            `);
+
+            marker.addTo(window.capaMarcadores);
+        }
+    });
+
+    // 3. Ajuste de vista SEGURO
+    const bounds = window.capaMarcadores.getBounds();
+    if (bounds.isValid()) {
+        mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    } else {
+        console.warn("⚠️ No hay coordenadas válidas para ajustar el mapa.");
+    }
+}
 
 
 // ========================================
