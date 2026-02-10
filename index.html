@@ -7630,7 +7630,7 @@ while (true) {
     });
  
     totalCargado += data.length;
-    console.log(`📊 Batch ${offset/BATCH\_SIZE + 1}: ${data.length} registros | Total unidades únicas: ${unidadesUnicas.length}`);
+    console.log(`📊 Batch ${offset/BATCH_SIZE + 1}: ${data.length} registros | Total unidades únicas: ${unidadesUnicas.length}`);
  
     if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
