@@ -746,9 +746,9 @@
 
 <script>
 
-&nbsp;   // --- 1. DEFINICIÓN DE VARIABLES GLOBALES (Usar solo 'let', una vez) ---
+  // --- 1. DEFINICIÓN DE VARIABLES GLOBALES (Usar solo 'let', una vez) ---
 
-&nbsp;   let currentUser = null;
+  let currentUser = null;
 
 let selectedTable = null;
 
@@ -788,129 +788,129 @@ const ROLES\_CON\_ACCESO\_TOTAL\_NOMBRE = \['Administrador', 'Supervisor', 'Desp
 
 async function cargarTipologias() {
 
-&nbsp;   if (tipologiasCache) {
+  if (tipologiasCache) {
 
-&nbsp;       console.log('✅ Usando cache (' + tipologiasCache.length + ' tipologías)');
+      console.log('✅ Usando cache (' + tipologiasCache.length + ' tipologías)');
 
-&nbsp;       return tipologiasCache;
+      return tipologiasCache;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   console.log('🔄 Cargando tipologías únicas...');
+  console.log('🔄 Cargando tipologías únicas...');
 
-&nbsp;   
+  
 
-&nbsp;   try {
+  try {
 
-&nbsp;       const tipologiasSet = new Set();
+      const tipologiasSet = new Set();
 
-&nbsp;       let offset = 0;
+      let offset = 0;
 
-&nbsp;       const batchSize = 1000; // ✅ Reducir tamaño de batch
+      const batchSize = 1000; // ✅ Reducir tamaño de batch
 
-&nbsp;       let hasMore = true;
+      let hasMore = true;
 
-&nbsp;       let totalProcesados = 0;
+      let totalProcesados = 0;
 
-&nbsp;       
+      
 
-&nbsp;       while (hasMore) { // ✅ QUITAR límite artificial
+      while (hasMore) { // ✅ QUITAR límite artificial
 
-&nbsp;           const { data, error } = await supabaseClient
+          const { data, error } = await supabaseClient
 
-&nbsp;               .from('OS Pendientes')
+              .from('OS Pendientes')
 
-&nbsp;               .select('Tipologia')
+              .select('Tipologia')
 
-&nbsp;               .not('Tipologia', 'is', null)
+              .not('Tipologia', 'is', null)
 
-&nbsp;               .range(offset, offset + batchSize - 1);
+              .range(offset, offset + batchSize - 1);
 
-&nbsp;           
+          
 
-&nbsp;           if (error) {
+          if (error) {
 
-&nbsp;               console.error('❌ Error en batch:', error);
+              console.error('❌ Error en batch:', error);
 
-&nbsp;               break; // Solo romper en error
+              break; // Solo romper en error
 
-&nbsp;           }
+          }
 
-&nbsp;           
+          
 
-&nbsp;           // ✅ Validar que data existe
+          // ✅ Validar que data existe
 
-&nbsp;           if (!data || data.length === 0) {
+          if (!data || data.length === 0) {
 
-&nbsp;               console.log('⚠️ No hay más datos');
+              console.log('⚠️ No hay más datos');
 
-&nbsp;               break;
+              break;
 
-&nbsp;           }
+          }
 
-&nbsp;           
+          
 
-&nbsp;           // Agregar tipologías al Set
+          // Agregar tipologías al Set
 
-&nbsp;           data.forEach(item => {
+          data.forEach(item => {
 
-&nbsp;               if (item.Tipologia) {
+              if (item.Tipologia) {
 
-&nbsp;                   const tip = item.Tipologia.trim();
+                  const tip = item.Tipologia.trim();
 
-&nbsp;                   if (tip !== '') tipologiasSet.add(tip);
+                  if (tip !== '') tipologiasSet.add(tip);
 
-&nbsp;               }
+              }
 
-&nbsp;           });
+          });
 
-&nbsp;           
+          
 
-&nbsp;           totalProcesados += data.length;
+          totalProcesados += data.length;
 
-&nbsp;           
+          
 
-&nbsp;           // ✅ CORRECCIÓN CLAVE: Continuar solo si se llenó el batch completo
+          // ✅ CORRECCIÓN CLAVE: Continuar solo si se llenó el batch completo
 
-&nbsp;           hasMore = (data.length === batchSize);
+          hasMore = (data.length === batchSize);
 
-&nbsp;           offset += batchSize;
+          offset += batchSize;
 
-&nbsp;           
+          
 
-&nbsp;           console.log(`📊 Procesados ${totalProcesados} registros - ${tipologiasSet.size} tipologías únicas`);
+          console.log(`📊 Procesados ${totalProcesados} registros - ${tipologiasSet.size} tipologías únicas`);
 
-&nbsp;           
+          
 
-&nbsp;           // ✅ Pequeña pausa para no saturar
+          // ✅ Pequeña pausa para no saturar
 
-&nbsp;           await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 50));
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       const tipologiasUnicas = Array.from(tipologiasSet).sort();
+      const tipologiasUnicas = Array.from(tipologiasSet).sort();
 
-&nbsp;       tipologiasCache = tipologiasUnicas;
+      tipologiasCache = tipologiasUnicas;
 
-&nbsp;       
+      
 
-&nbsp;       console.log(`✅ ${tipologiasUnicas.length} tipologías TOTALES de ${totalProcesados} registros`);
+      console.log(`✅ ${tipologiasUnicas.length} tipologías TOTALES de ${totalProcesados} registros`);
 
-&nbsp;       return tipologiasUnicas;
+      return tipologiasUnicas;
 
-&nbsp;       
+      
 
-&nbsp;   } catch (err) {
+  } catch (err) {
 
-&nbsp;       console.error('❌ Error cargando tipologías:', err);
+      console.error('❌ Error cargando tipologías:', err);
 
-&nbsp;       return \[];
+      return \[];
 
-&nbsp;   }
+  }
 
 }
 
@@ -938,119 +938,119 @@ async function cargarTipologias() {
 
 function limpiarCacheTipologias() {
 
-&nbsp;   console.log('🗑️ Limpiando cache de tipologías...');
+  console.log('🗑️ Limpiando cache de tipologías...');
 
-&nbsp;   tipologiasCache = null;
+  tipologiasCache = null;
 
 }
 
 
 
-&nbsp;   // --- 2. CONFIGURACIÓN E INICIALIZACIÓN DE SUPABASE ---
+  // --- 2. CONFIGURACIÓN E INICIALIZACIÓN DE SUPABASE ---
 
-&nbsp;   const SUPABASE\_URL = 'https://bsxllefnehbwkuqbelec.supabase.co';
+  const SUPABASE\_URL = 'https://bsxllefnehbwkuqbelec.supabase.co';
 
-&nbsp;   const SUPABASE\_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGxsZWZuZWhid2t1cWJlbGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0NjQzMTksImV4cCI6MjA3MzA0MDMxOX0.Ma8elbehsraBPzPwSmntE78NaAfTgBKgDW\_hMb-ohhg';
+  const SUPABASE\_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGxsZWZuZWhid2t1cWJlbGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0NjQzMTksImV4cCI6MjA3MzA0MDMxOX0.Ma8elbehsraBPzPwSmntE78NaAfTgBKgDW\_hMb-ohhg';
 
-&nbsp;   const supabaseClient = window.supabase.createClient(SUPABASE\_URL, SUPABASE\_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE\_URL, SUPABASE\_KEY);
 
-&nbsp;   
+  
 
-&nbsp;   // NOTA: Las variables ya fueron declaradas arriba. ¡No las repitas!
+  // NOTA: Las variables ya fueron declaradas arriba. ¡No las repitas!
 
 
 
-&nbsp;   // === CONFIGURACIÓN DE TURNOS ATTF (Visibilidad del Botón) ===
+  // === CONFIGURACIÓN DE TURNOS ATTF (Visibilidad del Botón) ===
 
 const TURNOS\_ATTF = {
 
-&nbsp;   turno1: {
+  turno1: {
 
-&nbsp;       nombre: "6:00 AM - 2:00 PM",
+      nombre: "6:00 AM - 2:00 PM",
 
-&nbsp;       codigo: "6am-2pm",
+      codigo: "6am-2pm",
 
-&nbsp;       horaInicio: 6,
+      horaInicio: 6,
 
-&nbsp;       horaFin: 14,
+      horaFin: 14,
 
-&nbsp;       horaInicioGracia: 4,        // Puede ingresar desde 4 AM
+      horaInicioGracia: 4,        // Puede ingresar desde 4 AM
 
-&nbsp;       horaFinGracia: 18,          // Puede trabajar hasta 6 PM (14 + 4h)
+      horaFinGracia: 18,          // Puede trabajar hasta 6 PM (14 + 4h)
 
-&nbsp;       ventanaBotonInicio: 4,      // Botón visible desde 4 AM
+      ventanaBotonInicio: 4,      // Botón visible desde 4 AM
 
-&nbsp;       ventanaBotonFin: 10,        // Botón visible hasta 10 AM
+      ventanaBotonFin: 10,        // Botón visible hasta 10 AM
 
-&nbsp;       esTurnoNocturno: false
+      esTurnoNocturno: false
 
-&nbsp;   },
+  },
 
-&nbsp;   turno4: {
+  turno4: {
 
-&nbsp;       nombre: "8:00 AM - 4:00 PM",
+      nombre: "8:00 AM - 4:00 PM",
 
-&nbsp;       codigo: "8am-4pm",
+      codigo: "8am-4pm",
 
-&nbsp;       horaInicio: 8,
+      horaInicio: 8,
 
-&nbsp;       horaFin: 16,
+      horaFin: 16,
 
-&nbsp;       horaInicioGracia: 6,        // Puede ingresar desde 6 AM
+      horaInicioGracia: 6,        // Puede ingresar desde 6 AM
 
-&nbsp;       horaFinGracia: 20,          // Puede trabajar hasta 8 PM (16 + 4h)
+      horaFinGracia: 20,          // Puede trabajar hasta 8 PM (16 + 4h)
 
-&nbsp;       ventanaBotonInicio: 6,
+      ventanaBotonInicio: 6,
 
-&nbsp;       ventanaBotonFin: 11,
+      ventanaBotonFin: 11,
 
-&nbsp;       esTurnoNocturno: false
+      esTurnoNocturno: false
 
-&nbsp;   },
+  },
 
-&nbsp;   turno2: {
+  turno2: {
 
-&nbsp;       nombre: "2:00 PM - 10:00 PM",
+      nombre: "2:00 PM - 10:00 PM",
 
-&nbsp;       codigo: "2pm-10pm",
+      codigo: "2pm-10pm",
 
-&nbsp;       horaInicio: 14,
+      horaInicio: 14,
 
-&nbsp;       horaFin: 22,
+      horaFin: 22,
 
-&nbsp;       horaInicioGracia: 12,       // Puede ingresar desde 12 PM
+      horaInicioGracia: 12,       // Puede ingresar desde 12 PM
 
-&nbsp;       horaFinGracia: 26,          // Puede trabajar hasta 2 AM (22 + 4h = 26, o sea 02:00)
+      horaFinGracia: 26,          // Puede trabajar hasta 2 AM (22 + 4h = 26, o sea 02:00)
 
-&nbsp;       ventanaBotonInicio: 12,
+      ventanaBotonInicio: 12,
 
-&nbsp;       ventanaBotonFin: 17,
+      ventanaBotonFin: 17,
 
-&nbsp;       esTurnoNocturno: false
+      esTurnoNocturno: false
 
-&nbsp;   },
+  },
 
-&nbsp;   turno3: {
+  turno3: {
 
-&nbsp;       nombre: "10:00 PM - 6:00 AM",
+      nombre: "10:00 PM - 6:00 AM",
 
-&nbsp;       codigo: "10pm-6am",
+      codigo: "10pm-6am",
 
-&nbsp;       horaInicio: 22,
+      horaInicio: 22,
 
-&nbsp;       horaFin: 6,
+      horaFin: 6,
 
-&nbsp;       horaInicioGracia: 20,       // Puede ingresar desde 8 PM
+      horaInicioGracia: 20,       // Puede ingresar desde 8 PM
 
-&nbsp;       horaFinGracia: 9,           // Puede trabajar hasta 9 AM (6 + 3h extra por nocturno)
+      horaFinGracia: 9,           // Puede trabajar hasta 9 AM (6 + 3h extra por nocturno)
 
-&nbsp;       ventanaBotonInicio: 18,     // Botón visible desde 6 PM
+      ventanaBotonInicio: 18,     // Botón visible desde 6 PM
 
-&nbsp;       ventanaBotonFin: 24,        // Botón visible hasta medianoche (23:59)
+      ventanaBotonFin: 24,        // Botón visible hasta medianoche (23:59)
 
-&nbsp;       esTurnoNocturno: true
+      esTurnoNocturno: true
 
-&nbsp;   }
+  }
 
 };
 
@@ -1066,121 +1066,121 @@ const TURNOS\_ATTF = {
 
 function cambiarFechasDescansoATTF() {
 
-&nbsp; const loginSection = document.getElementById('loginSection');
+const loginSection = document.getElementById('loginSection');
 
-&nbsp; if (!loginSection) return;
+if (!loginSection) return;
 
 
 
-&nbsp; // Pedir fechas manualmente
+// Pedir fechas manualmente
 
-&nbsp; const fechaInicio = prompt("📅 Ingrese fecha de inicio de descanso (YYYY-MM-DD):");
+const fechaInicio = prompt("📅 Ingrese fecha de inicio de descanso (YYYY-MM-DD):");
 
-&nbsp; const fechaFin = prompt("📅 Ingrese fecha de fin de descanso (YYYY-MM-DD):");
+const fechaFin = prompt("📅 Ingrese fecha de fin de descanso (YYYY-MM-DD):");
 
 
 
-&nbsp; if (!fechaInicio || !fechaFin) {
+if (!fechaInicio || !fechaFin) {
 
-&nbsp;   alert("⚠️ Ambas fechas son obligatorias");
+  alert("⚠️ Ambas fechas son obligatorias");
 
-&nbsp;   return;
+  return;
 
-&nbsp; }
+}
 
 
 
-&nbsp; // Validar formato básico
+// Validar formato básico
 
-&nbsp; const regex = /^\\d{4}-\\d{2}-\\d{2}$/;
+const regex = /^\\d{4}-\\d{2}-\\d{2}$/;
 
-&nbsp; if (!regex.test(fechaInicio) || !regex.test(fechaFin)) {
+if (!regex.test(fechaInicio) || !regex.test(fechaFin)) {
 
-&nbsp;   alert("⚠️ Formato de fecha inválido. Use YYYY-MM-DD");
+  alert("⚠️ Formato de fecha inválido. Use YYYY-MM-DD");
 
-&nbsp;   return;
+  return;
 
-&nbsp; }
+}
 
 
 
-&nbsp; // Guardar temporalmente
+// Guardar temporalmente
 
-&nbsp; window.fechasDescansoPersonalizadas = { inicio: fechaInicio, fin: fechaFin };
+window.fechasDescansoPersonalizadas = { inicio: fechaInicio, fin: fechaFin };
 
 
 
-&nbsp; // Mostrar vista de confirmación con estas fechas
+// Mostrar vista de confirmación con estas fechas
 
-&nbsp; const turnoRegreso = document.getElementById('turnoRegreso')?.value || '';
+const turnoRegreso = document.getElementById('turnoRegreso')?.value || '';
 
-&nbsp; const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
+const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
 
 
 
-&nbsp; loginSection.innerHTML = `
+loginSection.innerHTML = `
 
-&nbsp;   <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+  <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;   <h1 class="titulo-degradado">CLESA</h1>
+  <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;   <p class="subtitulo">Confirmar Descanso Personalizado</p>
+  <p class="subtitulo">Confirmar Descanso Personalizado</p>
 
-&nbsp;   
+  
 
-&nbsp;   <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
+  <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
 
-&nbsp;     <strong>📅 Fechas seleccionadas:</strong><br>
+    <strong>📅 Fechas seleccionadas:</strong><br>
 
-&nbsp;     <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
+    <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
 
-&nbsp;       Inicio: ${fechaInicio}<br>
+      Inicio: ${fechaInicio}<br>
 
-&nbsp;       Fin: ${fechaFin}
+      Fin: ${fechaFin}
 
-&nbsp;     </div>
+    </div>
 
-&nbsp;   </div>
+  </div>
 
 
 
-&nbsp;   <div class="form-group">
+  <div class="form-group">
 
-&nbsp;     <label>Turno de REGRESO:</label>
+    <label>Turno de REGRESO:</label>
 
-&nbsp;     <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+    <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;       <option value="">-- Seleccione --</option>
+      <option value="">-- Seleccione --</option>
 
-&nbsp;       ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) =>
+      ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) =>
 
-&nbsp;         `<option value="${key}" ${turnoRegreso === key ? 'selected' : ''}>${turno.nombre}</option>`
+        `<option value="${key}" ${turnoRegreso === key ? 'selected' : ''}>${turno.nombre}</option>`
 
-&nbsp;       ).join('')}
+      ).join('')}
 
-&nbsp;     </select>
+    </select>
 
-&nbsp;   </div>
+  </div>
 
 
 
-&nbsp;   <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+  <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
 
-&nbsp;     <button class="btn" onclick="confirmarDescansoPersonalizadoATTF()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+    <button class="btn" onclick="confirmarDescansoPersonalizadoATTF()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
 
-&nbsp;       ✅ Aceptar
+      ✅ Aceptar
 
-&nbsp;     </button>
+    </button>
 
-&nbsp;     <button class="btn btn-secondary" onclick="mostrarForzarDescansoATTF()">
+    <button class="btn btn-secondary" onclick="mostrarForzarDescansoATTF()">
 
-&nbsp;       ↩️ Volver
+      ↩️ Volver
 
-&nbsp;     </button>
+    </button>
 
-&nbsp;   </div>
+  </div>
 
-&nbsp; `;
+`;
 
 }
 
@@ -1188,101 +1188,101 @@ function cambiarFechasDescansoATTF() {
 
 async function confirmarDescansoPersonalizadoATTF() {
 
-&nbsp; const turnoRegreso = document.getElementById('turnoRegreso').value;
+const turnoRegreso = document.getElementById('turnoRegreso').value;
 
-&nbsp; if (!turnoRegreso) {
+if (!turnoRegreso) {
 
-&nbsp;   alert('⚠️ Seleccione el turno de regreso');
+  alert('⚠️ Seleccione el turno de regreso');
 
-&nbsp;   return;
+  return;
 
-&nbsp; }
-
-
-
-&nbsp; const { inicio, fin } = window.fechasDescansoPersonalizadas || {};
-
-&nbsp; if (!inicio || !fin) {
-
-&nbsp;   alert('⚠️ No hay fechas seleccionadas');
-
-&nbsp;   return;
-
-&nbsp; }
+}
 
 
 
-&nbsp; const confirmar = confirm(
+const { inicio, fin } = window.fechasDescansoPersonalizadas || {};
 
-&nbsp;   `¿Confirmar descanso personalizado?\\n` +
+if (!inicio || !fin) {
 
-&nbsp;   `📅 Inicio: ${inicio}\\n` +
+  alert('⚠️ No hay fechas seleccionadas');
 
-&nbsp;   `📅 Fin: ${fin}\\n` +
+  return;
 
-&nbsp;   `🔙 Regreso: ${TURNOS\_ATTF\[turnoRegreso]?.nombre || '---'}`
-
-&nbsp; );
+}
 
 
 
-&nbsp; if (!confirmar) return;
+const confirmar = confirm(
+
+  `¿Confirmar descanso personalizado?\\n` +
+
+  `📅 Inicio: ${inicio}\\n` +
+
+  `📅 Fin: ${fin}\\n` +
+
+  `🔙 Regreso: ${TURNOS\_ATTF\[turnoRegreso]?.nombre || '---'}`
+
+);
 
 
 
-&nbsp; // Guardar en base de datos
-
-&nbsp; const fechaRegresoDate = new Date(fin + 'T00:00:00');
-
-&nbsp; fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
-
-&nbsp; const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
+if (!confirmar) return;
 
 
 
-&nbsp; const { error } = await supabaseClient
+// Guardar en base de datos
 
-&nbsp;   .from('usuarios')
+const fechaRegresoDate = new Date(fin + 'T00:00:00');
 
-&nbsp;   .update({
+fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
 
-&nbsp;     descanso\_fecha\_inicio: inicio,
-
-&nbsp;     descanso\_fecha\_fin: fin,
-
-&nbsp;     turno\_regreso: turnoRegreso,
-
-&nbsp;     fecha\_turno\_regreso: fechaRegreso,
-
-&nbsp;     contador\_turnos: 0,
-
-&nbsp;     estado\_ciclo: 'ciclo\_normal',
-
-&nbsp;     turno\_manana: null,
-
-&nbsp;     fecha\_turno\_manana: null,
-
-&nbsp;     ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
-
-&nbsp;   })
-
-&nbsp;   .eq('id', currentUser.id);
+const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
 
 
 
-&nbsp; if (error) {
+const { error } = await supabaseClient
 
-&nbsp;   alert('❌ Error: ' + error.message);
+  .from('usuarios')
 
-&nbsp;   return;
+  .update({
 
-&nbsp; }
+    descanso\_fecha\_inicio: inicio,
+
+    descanso\_fecha\_fin: fin,
+
+    turno\_regreso: turnoRegreso,
+
+    fecha\_turno\_regreso: fechaRegreso,
+
+    contador\_turnos: 0,
+
+    estado\_ciclo: 'ciclo\_normal',
+
+    turno\_manana: null,
+
+    fecha\_turno\_manana: null,
+
+    ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+
+  })
+
+  .eq('id', currentUser.id);
 
 
 
-&nbsp; alert('✅ Descanso personalizado guardado');
+if (error) {
 
-&nbsp; accederMenuATTF();
+  alert('❌ Error: ' + error.message);
+
+  return;
+
+}
+
+
+
+alert('✅ Descanso personalizado guardado');
+
+accederMenuATTF();
 
 }
 
@@ -1290,333 +1290,333 @@ async function confirmarDescansoPersonalizadoATTF() {
 
 function verificarHorarioPermitido(rol, userData = null) {
 
-&nbsp;   // ✅ Obtener fecha/hora de El Salvador (UTC-6)
+  // ✅ Obtener fecha/hora de El Salvador (UTC-6)
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
 const offsetElSalvador = -6; // UTC-6 en horas
 
 const fechaSV = new Date(ahora.toLocaleString("en-US", {timeZone: "America/El\_Salvador"}));
 
-&nbsp;   
+  
 
-&nbsp;   const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
+  const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
 
-&nbsp;   const horaActual = fechaSV.getHours();
+  const horaActual = fechaSV.getHours();
 
-&nbsp;   const minutoActual = fechaSV.getMinutes();
+  const minutoActual = fechaSV.getMinutes();
 
-&nbsp;   const diaActual = fechaSV.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+  const diaActual = fechaSV.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
 
-&nbsp;   
+  
 
-&nbsp;   console.log('🔍 Verificando horario (El Salvador):', {
+  console.log('🔍 Verificando horario (El Salvador):', {
 
-&nbsp;       fecha: fechaHoy,
+      fecha: fechaHoy,
 
-&nbsp;       hora: `${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`,
+      hora: `${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`,
 
-&nbsp;       rol: rol,
+      rol: rol,
 
-&nbsp;       fecha\_excepcional: userData?.fecha\_excepcional,
+      fecha\_excepcional: userData?.fecha\_excepcional,
 
-&nbsp;       horario\_excepcional\_inicio: userData?.horario\_excepcional\_inicio,
+      horario\_excepcional\_inicio: userData?.horario\_excepcional\_inicio,
 
-&nbsp;       horario\_excepcional\_fin: userData?.horario\_excepcional\_fin
+      horario\_excepcional\_fin: userData?.horario\_excepcional\_fin
 
-&nbsp;   });
+  });
 
-&nbsp;   
+  
 
-&nbsp;   // ========================================
+  // ========================================
 
-&nbsp;   // ✅ PRIORIDAD 1: Verificar horario excepcional
+  // ✅ PRIORIDAD 1: Verificar horario excepcional
 
-&nbsp;   // ========================================
+  // ========================================
 
-&nbsp;   if (userData \&\& userData.fecha\_excepcional) {
+  if (userData \&\& userData.fecha\_excepcional) {
 
-&nbsp;       // ✅ NORMALIZAR fecha excepcional a formato YYYY-MM-DD
+      // ✅ NORMALIZAR fecha excepcional a formato YYYY-MM-DD
 
-&nbsp;       const fechaExcepcional = new Date(userData.fecha\_excepcional + 'T00:00:00');
+      const fechaExcepcional = new Date(userData.fecha\_excepcional + 'T00:00:00');
 
-&nbsp;       const fechaExcepcionalStr = `${fechaExcepcional.getFullYear()}-${String(fechaExcepcional.getMonth() + 1).padStart(2, '0')}-${String(fechaExcepcional.getDate()).padStart(2, '0')}`;
+      const fechaExcepcionalStr = `${fechaExcepcional.getFullYear()}-${String(fechaExcepcional.getMonth() + 1).padStart(2, '0')}-${String(fechaExcepcional.getDate()).padStart(2, '0')}`;
 
-&nbsp;       
+      
 
-&nbsp;       if (fechaExcepcionalStr === fechaHoy \&\&
+      if (fechaExcepcionalStr === fechaHoy \&\&
 
-&nbsp;           userData.horario\_excepcional\_inicio \&\&
+          userData.horario\_excepcional\_inicio \&\&
 
-&nbsp;           userData.horario\_excepcional\_fin) {
+          userData.horario\_excepcional\_fin) {
 
-&nbsp;           
+          
 
-&nbsp;           // Convertir horas a minutos para comparación precisa
+          // Convertir horas a minutos para comparación precisa
 
-&nbsp;           const \[horaInicio, minutoInicio] = userData.horario\_excepcional\_inicio.split(':').map(Number);
+          const \[horaInicio, minutoInicio] = userData.horario\_excepcional\_inicio.split(':').map(Number);
 
-&nbsp;           const \[horaFin, minutoFin] = userData.horario\_excepcional\_fin.split(':').map(Number);
+          const \[horaFin, minutoFin] = userData.horario\_excepcional\_fin.split(':').map(Number);
 
-&nbsp;           
+          
 
-&nbsp;           const minutosActuales = (horaActual \* 60) + minutoActual;
+          const minutosActuales = (horaActual \* 60) + minutoActual;
 
-&nbsp;           const minutosInicio = (horaInicio \* 60) + minutoInicio;
+          const minutosInicio = (horaInicio \* 60) + minutoInicio;
 
-&nbsp;           const minutosFin = (horaFin \* 60) + minutoFin;
+          const minutosFin = (horaFin \* 60) + minutoFin;
 
-&nbsp;           
+          
 
-&nbsp;           console.log('🎯 Horario excepcional configurado para HOY:', {
+          console.log('🎯 Horario excepcional configurado para HOY:', {
 
-&nbsp;               fechaConfigurada: fechaExcepcionalStr,
+              fechaConfigurada: fechaExcepcionalStr,
 
-&nbsp;               rango: `${userData.horario\_excepcional\_inicio} - ${userData.horario\_excepcional\_fin}`,
+              rango: `${userData.horario\_excepcional\_inicio} - ${userData.horario\_excepcional\_fin}`,
 
-&nbsp;               minutosActuales: minutosActuales,
+              minutosActuales: minutosActuales,
 
-&nbsp;               minutosInicio: minutosInicio,
+              minutosInicio: minutosInicio,
 
-&nbsp;               minutosFin: minutosFin
+              minutosFin: minutosFin
 
-&nbsp;           });
+          });
 
-&nbsp;           
+          
 
-&nbsp;           // ✅ SI está DENTRO del rango excepcional → PERMITIR INMEDIATAMENTE
+          // ✅ SI está DENTRO del rango excepcional → PERMITIR INMEDIATAMENTE
 
-&nbsp;           if (minutosActuales >= minutosInicio \&\& minutosActuales <= minutosFin) {
+          if (minutosActuales >= minutosInicio \&\& minutosActuales <= minutosFin) {
 
-&nbsp;               console.log(`✅ ACCESO PERMITIDO por horario excepcional: ${userData.horario\_excepcional\_inicio} - ${userData.horario\_excepcional\_fin}`);
+              console.log(`✅ ACCESO PERMITIDO por horario excepcional: ${userData.horario\_excepcional\_inicio} - ${userData.horario\_excepcional\_fin}`);
 
-&nbsp;               return { permitido: true };
+              return { permitido: true };
 
-&nbsp;           }
+          }
 
-&nbsp;           
+          
 
-&nbsp;           // ⚠️ SI está FUERA del rango → CONTINUAR a validación normal (NO bloquear)
+          // ⚠️ SI está FUERA del rango → CONTINUAR a validación normal (NO bloquear)
 
-&nbsp;           console.log(`⚠️ Fecha excepcional coincide pero hora (${horaActual}:${String(minutoActual).padStart(2, '0')}) fuera de rango excepcional. Evaluando horario regular...`);
+          console.log(`⚠️ Fecha excepcional coincide pero hora (${horaActual}:${String(minutoActual).padStart(2, '0')}) fuera de rango excepcional. Evaluando horario regular...`);
 
-&nbsp;       }
+      }
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // ========================================
+  // ========================================
 
-&nbsp;   // ✅ PRIORIDAD 2: Validar según rol (horario regular)
+  // ✅ PRIORIDAD 2: Validar según rol (horario regular)
 
-&nbsp;   // ========================================
+  // ========================================
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 Roles con acceso ILIMITADO (todos los días, todas las horas)
+  // 🔹 Roles con acceso ILIMITADO (todos los días, todas las horas)
 
-&nbsp;   const rolesIlimitados = \['Administrador', 'Supervisor', 'ATFF'];
+  const rolesIlimitados = \['Administrador', 'Supervisor', 'ATFF'];
 
-&nbsp;   if (rolesIlimitados.includes(rol)) {
+  if (rolesIlimitados.includes(rol)) {
 
-&nbsp;       console.log(`✅ Rol ${rol} tiene acceso ILIMITADO`);
+      console.log(`✅ Rol ${rol} tiene acceso ILIMITADO`);
 
-&nbsp;       return { permitido: true };
+      return { permitido: true };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 Roles con acceso Lunes-Sábado, 6:00 AM - 6:00 PM
+  // 🔹 Roles con acceso Lunes-Sábado, 6:00 AM - 6:00 PM
 
-&nbsp;   const rolesHorarioDiurno = \['Despacho', 'Consulta', 'Contratista', 'Lectura'];
+  const rolesHorarioDiurno = \['Despacho', 'Consulta', 'Contratista', 'Lectura'];
 
-&nbsp;   if (rolesHorarioDiurno.includes(rol)) {
+  if (rolesHorarioDiurno.includes(rol)) {
 
-&nbsp;       if (diaActual === 0) { // Domingo
+      if (diaActual === 0) { // Domingo
 
-&nbsp;           return {
+          return {
 
-&nbsp;               permitido: false,
+              permitido: false,
 
-&nbsp;               mensaje: `El rol ${rol} no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 6:00 AM - 6:00 PM`
+              mensaje: `El rol ${rol} no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 6:00 AM - 6:00 PM`
 
-&nbsp;           };
+          };
 
-&nbsp;       }
+      }
 
-&nbsp;       if (horaActual >= 6 \&\& horaActual < 18) {
+      if (horaActual >= 6 \&\& horaActual < 18) {
 
-&nbsp;           console.log(`✅ Acceso permitido para ${rol} (6:00 AM - 6:00 PM)`);
+          console.log(`✅ Acceso permitido para ${rol} (6:00 AM - 6:00 PM)`);
 
-&nbsp;           return { permitido: true };
+          return { permitido: true };
 
-&nbsp;       }
+      }
 
-&nbsp;       return {
+      return {
 
-&nbsp;           permitido: false,
+          permitido: false,
 
-&nbsp;           mensaje: `Horario de acceso para ${rol}:\\n...\\n\\nHora actual (El Salvador): ${String(fechaSV.getHours()).padStart(2, '0')}:${String(fechaSV.getMinutes()).padStart(2, '0')}`
+          mensaje: `Horario de acceso para ${rol}:\\n...\\n\\nHora actual (El Salvador): ${String(fechaSV.getHours()).padStart(2, '0')}:${String(fechaSV.getMinutes()).padStart(2, '0')}`
 
-&nbsp;       };
+      };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 Bodega: Lunes-Sábado 24/7, Domingo bloqueado
+  // 🔹 Bodega: Lunes-Sábado 24/7, Domingo bloqueado
 
-&nbsp;   if (rol === 'Bodega') {
+  if (rol === 'Bodega') {
 
-&nbsp;       if (diaActual === 0) {
+      if (diaActual === 0) {
 
-&nbsp;           return {
+          return {
 
-&nbsp;               permitido: false,
+              permitido: false,
 
-&nbsp;               mensaje: 'El rol Bodega no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 24 horas'
+              mensaje: 'El rol Bodega no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 24 horas'
 
-&nbsp;           };
+          };
 
-&nbsp;       }
+      }
 
-&nbsp;       console.log('✅ Acceso permitido para Bodega (Lunes-Sábado 24/7)');
+      console.log('✅ Acceso permitido para Bodega (Lunes-Sábado 24/7)');
 
-&nbsp;       return { permitido: true };
+      return { permitido: true };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 Poda: Lunes-Sábado, 5:00 AM - 10:00 PM
+  // 🔹 Poda: Lunes-Sábado, 5:00 AM - 10:00 PM
 
-&nbsp;   if (rol === 'Poda') {
+  if (rol === 'Poda') {
 
-&nbsp;       if (diaActual === 0) {
+      if (diaActual === 0) {
 
-&nbsp;           return {
+          return {
 
-&nbsp;               permitido: false,
+              permitido: false,
 
-&nbsp;               mensaje: 'El rol Poda no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 5:00 AM - 10:00 PM'
+              mensaje: 'El rol Poda no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado, 5:00 AM - 10:00 PM'
 
-&nbsp;           };
+          };
 
-&nbsp;       }
+      }
 
-&nbsp;       if (horaActual >= 5 \&\& horaActual < 22) {
+      if (horaActual >= 5 \&\& horaActual < 22) {
 
-&nbsp;           console.log('✅ Acceso permitido para Poda (5:00 AM - 10:00 PM)');
+          console.log('✅ Acceso permitido para Poda (5:00 AM - 10:00 PM)');
 
-&nbsp;           return { permitido: true };
+          return { permitido: true };
 
-&nbsp;       }
+      }
 
-&nbsp;       return {
+      return {
 
-&nbsp;           permitido: false,
+          permitido: false,
 
-&nbsp;           mensaje: `Horario de acceso para Poda:\\nLunes a Sábado, 5:00 AM - 10:00 PM\\n\\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+          mensaje: `Horario de acceso para Poda:\\nLunes a Sábado, 5:00 AM - 10:00 PM\\n\\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
 
-&nbsp;       };
+      };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 ATTF: Turnos rotativos (6am-2pm, 10am-6pm, 2pm-10pm, 6pm-2am, 10pm-6am)
+  // 🔹 ATTF: Turnos rotativos (6am-2pm, 10am-6pm, 2pm-10pm, 6pm-2am, 10pm-6am)
 
-&nbsp;   if (rol === 'ATTF') {
+  if (rol === 'ATTF') {
 
-&nbsp;       if (diaActual === 0) {
+      if (diaActual === 0) {
 
-&nbsp;           return {
+          return {
 
-&nbsp;               permitido: false,
+              permitido: false,
 
-&nbsp;               mensaje: 'El rol ATTF no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado en turnos programados'
+              mensaje: 'El rol ATTF no tiene acceso los domingos.\\nAcceso permitido: Lunes a Sábado en turnos programados'
 
-&nbsp;           };
+          };
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       const turnosATTF = \[
+      const turnosATTF = \[
 
-&nbsp;           { inicio: 6, fin: 14, nombre: '6:00 AM - 2:00 PM' },
+          { inicio: 6, fin: 14, nombre: '6:00 AM - 2:00 PM' },
 
-&nbsp;           { inicio: 10, fin: 18, nombre: '10:00 AM - 6:00 PM' },
+          { inicio: 10, fin: 18, nombre: '10:00 AM - 6:00 PM' },
 
-&nbsp;           { inicio: 14, fin: 22, nombre: '2:00 PM - 10:00 PM' },
+          { inicio: 14, fin: 22, nombre: '2:00 PM - 10:00 PM' },
 
-&nbsp;           { inicio: 18, fin: 24, nombre: '6:00 PM - 2:00 AM' },
+          { inicio: 18, fin: 24, nombre: '6:00 PM - 2:00 AM' },
 
-&nbsp;           { inicio: 22, fin: 24, nombre: '10:00 PM - 6:00 AM' },
+          { inicio: 22, fin: 24, nombre: '10:00 PM - 6:00 AM' },
 
-&nbsp;           { inicio: 0, fin: 6, nombre: '10:00 PM - 6:00 AM (cont.)' }
+          { inicio: 0, fin: 6, nombre: '10:00 PM - 6:00 AM (cont.)' }
 
-&nbsp;       ];
+      ];
 
-&nbsp;       
+      
 
-&nbsp;       const enTurno = turnosATTF.some(turno => {
+      const enTurno = turnosATTF.some(turno => {
 
-&nbsp;           if (turno.inicio < turno.fin) {
+          if (turno.inicio < turno.fin) {
 
-&nbsp;               return horaActual >= turno.inicio \&\& horaActual < turno.fin;
+              return horaActual >= turno.inicio \&\& horaActual < turno.fin;
 
-&nbsp;           } else {
+          } else {
 
-&nbsp;               // Turno que cruza medianoche (ej: 22:00 - 06:00)
+              // Turno que cruza medianoche (ej: 22:00 - 06:00)
 
-&nbsp;               return horaActual >= turno.inicio || horaActual < turno.fin;
+              return horaActual >= turno.inicio || horaActual < turno.fin;
 
-&nbsp;           }
+          }
 
-&nbsp;       });
+      });
 
-&nbsp;       
+      
 
-&nbsp;       if (enTurno) {
+      if (enTurno) {
 
-&nbsp;           console.log('✅ Acceso permitido para ATTF (en turno activo)');
+          console.log('✅ Acceso permitido para ATTF (en turno activo)');
 
-&nbsp;           return { permitido: true };
+          return { permitido: true };
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       const turnosTexto = turnosATTF
+      const turnosTexto = turnosATTF
 
-&nbsp;           .filter(t => t.inicio < t.fin)
+          .filter(t => t.inicio < t.fin)
 
-&nbsp;           .map(t => t.nombre)
+          .map(t => t.nombre)
 
-&nbsp;           .join('\\n');
+          .join('\\n');
 
-&nbsp;       
+      
 
-&nbsp;       return {
+      return {
 
-&nbsp;           permitido: false,
+          permitido: false,
 
-&nbsp;           mensaje: `Turnos ATTF permitidos (Lunes a Sábado):\\n${turnosTexto}\\n\\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+          mensaje: `Turnos ATTF permitidos (Lunes a Sábado):\\n${turnosTexto}\\n\\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
 
-&nbsp;       };
+      };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🔹 Rol no reconocido → permitir por defecto (o bloquear según política)
+  // 🔹 Rol no reconocido → permitir por defecto (o bloquear según política)
 
-&nbsp;   console.warn(`⚠️ Rol no configurado explícitamente: ${rol}. Permitiendo acceso por defecto.`);
+  console.warn(`⚠️ Rol no configurado explícitamente: ${rol}. Permitiendo acceso por defecto.`);
 
-&nbsp;   return { permitido: true };
+  return { permitido: true };
 
 }
 
@@ -1626,87 +1626,87 @@ const fechaSV = new Date(ahora.toLocaleString("en-US", {timeZone: "America/El\_S
 
 async function verificarInactividad(userData) {
 
-&nbsp;   if (!userData.ultima\_actividad) {
+  if (!userData.ultima\_actividad) {
 
-&nbsp;       // Primera vez, actualizar timestamp
+      // Primera vez, actualizar timestamp
 
-&nbsp;       await supabaseClient
+      await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({ ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+          .update({ ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
 &nbsp;				 })
 
-&nbsp;           .eq('id', userData.id);
+          .eq('id', userData.id);
 
-&nbsp;       return { inactivo: false };
+      return { inactivo: false };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const ultimaActividad = new Date(userData.ultima\_actividad);
+  const ultimaActividad = new Date(userData.ultima\_actividad);
 
-&nbsp;   const diasInactivo = Math.floor((ahora - ultimaActividad) / (1000 \* 60 \* 60 \* 24));
+  const diasInactivo = Math.floor((ahora - ultimaActividad) / (1000 \* 60 \* 60 \* 24));
 
-&nbsp;   
+  
 
-&nbsp;   console.log(`⏰ Días sin actividad: ${diasInactivo}`);
+  console.log(`⏰ Días sin actividad: ${diasInactivo}`);
 
-&nbsp;   
+  
 
-&nbsp;   // Supervisor sin límite
+  // Supervisor sin límite
 
-&nbsp;   if (userData.rol === 'Supervisor') {
+  if (userData.rol === 'Supervisor') {
 
-&nbsp;       return { inactivo: false };
+      return { inactivo: false };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Todos los demás roles: 5 días
+  // Todos los demás roles: 5 días
 
-&nbsp;   if (diasInactivo >= 5) {
+  if (diasInactivo >= 5) {
 
-&nbsp;   // Bloquear usuario
+  // Bloquear usuario
 
-&nbsp;   await supabaseClient
+  await supabaseClient
 
-&nbsp;       .from('usuarios')
+      .from('usuarios')
 
-&nbsp;       .update({ 
+      .update({ 
 
-&nbsp;           razon\_bloqueo: `Inactividad de ${diasInactivo} días`,
+          razon\_bloqueo: `Inactividad de ${diasInactivo} días`,
 
-&nbsp;           sessionactiva: false,
+          sessionactiva: false,
 
-&nbsp;           sessiontoken: null
+          sessiontoken: null
 
-&nbsp;       })
+      })
 
-&nbsp;       .eq('id', userData.id);
+      .eq('id', userData.id);
 
-&nbsp;       
+      
 
-&nbsp;       return { 
+      return { 
 
-&nbsp;           inactivo: true, 
+          inactivo: true, 
 
-&nbsp;           dias: diasInactivo,
+          dias: diasInactivo,
 
-&nbsp;           mensaje: `Usuario bloqueado por inactividad de ${diasInactivo} días.\\n\\nContacte al administrador para desbloquear su cuenta.`
+          mensaje: `Usuario bloqueado por inactividad de ${diasInactivo} días.\\n\\nContacte al administrador para desbloquear su cuenta.`
 
-&nbsp;       };
+      };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   return { inactivo: false };
+  return { inactivo: false };
 
 }
 
@@ -1718,83 +1718,83 @@ async function verificarInactividad(userData) {
 
 function verificarDiaDescanso(userData) {
 
-&nbsp;   if (!userData.descanso\_fecha\_inicio || !userData.descanso\_fecha\_fin) {
+  if (!userData.descanso\_fecha\_inicio || !userData.descanso\_fecha\_fin) {
 
-&nbsp;       return false;
+      return false;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const horaActual = ahora.getHours();
+  const horaActual = ahora.getHours();
 
-&nbsp;   const fechaHoy = getFechaHoyElSalvador();
+  const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;   
+  
 
-&nbsp;   // Verificar si hoy está en el rango de descanso
+  // Verificar si hoy está en el rango de descanso
 
-&nbsp;   if (fechaHoy < userData.descanso\_fecha\_inicio || fechaHoy > userData.descanso\_fecha\_fin) {
+  if (fechaHoy < userData.descanso\_fecha\_inicio || fechaHoy > userData.descanso\_fecha\_fin) {
 
-&nbsp;       console.log('✅ Fuera del período de descanso');
+      console.log('✅ Fuera del período de descanso');
 
-&nbsp;       return false;
+      return false;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // === EXCEPCIÓN: TURNO NOCTURNO QUE TERMINA EN PRIMER DÍA DE DESCANSO ===
+  // === EXCEPCIÓN: TURNO NOCTURNO QUE TERMINA EN PRIMER DÍA DE DESCANSO ===
 
-&nbsp;   if (userData.rol === 'ATTF' \&\& fechaHoy === userData.descanso\_fecha\_inicio) {
+  if (userData.rol === 'ATTF' \&\& fechaHoy === userData.descanso\_fecha\_inicio) {
 
-&nbsp;       if (userData.turno\_hoy === 'turno3') {
+      if (userData.turno\_hoy === 'turno3') {
 
-&nbsp;           // Si estamos en ventana de gracia del turno nocturno (hasta 9 AM)
+          // Si estamos en ventana de gracia del turno nocturno (hasta 9 AM)
 
-&nbsp;           if (horaActual >= 0 \&\& horaActual < 9) {
+          if (horaActual >= 0 \&\& horaActual < 9) {
 
-&nbsp;               console.log('🌙 Permitiendo terminar turno nocturno en primer día de descanso');
+              console.log('🌙 Permitiendo terminar turno nocturno en primer día de descanso');
 
-&nbsp;               return false; // NO es descanso aún, puede terminar turno
+              return false; // NO es descanso aún, puede terminar turno
 
-&nbsp;           }
+          }
 
-&nbsp;       }
+      }
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // === EXCEPCIÓN: TURNO NOCTURNO QUE INICIA EN ÚLTIMO DÍA DE DESCANSO ===
+  // === EXCEPCIÓN: TURNO NOCTURNO QUE INICIA EN ÚLTIMO DÍA DE DESCANSO ===
 
-&nbsp;   if (userData.rol === 'ATTF' \&\& fechaHoy === userData.descanso\_fecha\_fin) {
+  if (userData.rol === 'ATTF' \&\& fechaHoy === userData.descanso\_fecha\_fin) {
 
-&nbsp;       if (userData.turno\_regreso === 'turno3') {
+      if (userData.turno\_regreso === 'turno3') {
 
-&nbsp;           // Si estamos en ventana de ingreso del turno nocturno (desde 18:00)
+          // Si estamos en ventana de ingreso del turno nocturno (desde 18:00)
 
-&nbsp;           if (horaActual >= 18) {
+          if (horaActual >= 18) {
 
-&nbsp;               console.log('🌙 Permitiendo ingresar para turno nocturno en último día de descanso');
+              console.log('🌙 Permitiendo ingresar para turno nocturno en último día de descanso');
 
-&nbsp;               return false; // NO es descanso, puede ingresar
+              return false; // NO es descanso, puede ingresar
 
-&nbsp;           }
+          }
 
-&nbsp;       }
+      }
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Regla general: Está en día de descanso
+  // Regla general: Está en día de descanso
 
-&nbsp;   console.log(`📅 Día de descanso activo: ${fechaHoy}`);
+  console.log(`📅 Día de descanso activo: ${fechaHoy}`);
 
-&nbsp;   return true;
+  return true;
 
 }
 
@@ -1804,71 +1804,71 @@ function verificarDiaDescanso(userData) {
 
 function validarVentanaTurno(codigoTurno, horaActual) {
 
-&nbsp;   const turno = TURNOS\_ATTF\[codigoTurno];
+  const turno = TURNOS\_ATTF\[codigoTurno];
 
-&nbsp;   if (!turno) {
+  if (!turno) {
 
-&nbsp;       console.error('❌ Turno no encontrado:', codigoTurno);
+      console.error('❌ Turno no encontrado:', codigoTurno);
 
-&nbsp;       return false;
+      return false;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Turno nocturno (cruza medianoche)
+  // Turno nocturno (cruza medianoche)
 
-&nbsp;   if (turno.esTurnoNocturno) {
+  if (turno.esTurnoNocturno) {
 
-&nbsp;       // Ventana: 20:00 → 09:00 (día siguiente)
+      // Ventana: 20:00 → 09:00 (día siguiente)
 
-&nbsp;       if (horaActual >= turno.horaInicioGracia || horaActual < turno.horaFinGracia) {
+      if (horaActual >= turno.horaInicioGracia || horaActual < turno.horaFinGracia) {
 
-&nbsp;           console.log(`✅ Dentro de ventana nocturna: ${turno.nombre}`);
+          console.log(`✅ Dentro de ventana nocturna: ${turno.nombre}`);
 
-&nbsp;           return true;
+          return true;
 
-&nbsp;       }
+      }
 
-&nbsp;   } else {
+  } else {
 
-&nbsp;       // Turno diurno normal
+      // Turno diurno normal
 
-&nbsp;       let horaFin = turno.horaFinGracia;
+      let horaFin = turno.horaFinGracia;
 
-&nbsp;       
+      
 
-&nbsp;       // Si la gracia cruza medianoche (ej: turno 14-22 con gracia hasta 02:00)
+      // Si la gracia cruza medianoche (ej: turno 14-22 con gracia hasta 02:00)
 
-&nbsp;       if (horaFin >= 24) {
+      if (horaFin >= 24) {
 
-&nbsp;           if (horaActual >= turno.horaInicioGracia || horaActual < (horaFin - 24)) {
+          if (horaActual >= turno.horaInicioGracia || horaActual < (horaFin - 24)) {
 
-&nbsp;               console.log(`✅ Dentro de ventana con cruce de medianoche: ${turno.nombre}`);
+              console.log(`✅ Dentro de ventana con cruce de medianoche: ${turno.nombre}`);
 
-&nbsp;               return true;
+              return true;
 
-&nbsp;           }
+          }
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           if (horaActual >= turno.horaInicioGracia \&\& horaActual < horaFin) {
+          if (horaActual >= turno.horaInicioGracia \&\& horaActual < horaFin) {
 
-&nbsp;               console.log(`✅ Dentro de ventana diurna: ${turno.nombre}`);
+              console.log(`✅ Dentro de ventana diurna: ${turno.nombre}`);
 
-&nbsp;               return true;
+              return true;
 
-&nbsp;           }
+          }
 
-&nbsp;       }
+      }
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   console.log(`❌ Fuera de ventana: ${turno.nombre} (hora actual: ${horaActual})`);
+  console.log(`❌ Fuera de ventana: ${turno.nombre} (hora actual: ${horaActual})`);
 
-&nbsp;   return false;
+  return false;
 
 }
 
@@ -1878,253 +1878,253 @@ function validarVentanaTurno(codigoTurno, horaActual) {
 
 async function login() {
 
-&nbsp;   console.log('🔐 Ejecutando login...');
+  console.log('🔐 Ejecutando login...');
 
-&nbsp;   
+  
 
-&nbsp;   // Limpiar datos viejos
+  // Limpiar datos viejos
 
-&nbsp;   await limpiarTurnosViejos();
+  await limpiarTurnosViejos();
 
-&nbsp;   await limpiarDiasDescansoViejos();
+  await limpiarDiasDescansoViejos();
 
 
 
-&nbsp;   const username = document.getElementById('username').value.trim();
+  const username = document.getElementById('username').value.trim();
 
-&nbsp;   const password = document.getElementById('password').value.trim();
+  const password = document.getElementById('password').value.trim();
 
 
 
-&nbsp;   if (!username || !password) {
+  if (!username || !password) {
 
-&nbsp;       alert('Por favor ingrese usuario y contraseña');
+      alert('Por favor ingrese usuario y contraseña');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
 
 
-&nbsp;   try {
+  try {
 
-&nbsp;       // 1. Autenticar usuario
+      // 1. Autenticar usuario
 
-&nbsp;       const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .select('\*')
+          .select('\*')
 
-&nbsp;           .eq('usuario', username)
+          .eq('usuario', username)
 
-&nbsp;           .eq('password', password)
+          .eq('password', password)
 
-&nbsp;           .eq('activo', true)
+          .eq('activo', true)
 
-&nbsp;           .single();
+          .single();
 
 
 
-&nbsp;       if (error || !data) {
+      if (error || !data) {
 
-&nbsp;           alert('Usuario o contraseña incorrectos');
+          alert('Usuario o contraseña incorrectos');
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // 2. Verificar bloqueo manual
+      // 2. Verificar bloqueo manual
 
-&nbsp;       // 2. Verificar bloqueo (si razon\_bloqueo tiene texto = está bloqueado)
+      // 2. Verificar bloqueo (si razon\_bloqueo tiene texto = está bloqueado)
 
-&nbsp;       if (data.razon\_bloqueo \&\& data.razon\_bloqueo.trim() !== '') {
+      if (data.razon\_bloqueo \&\& data.razon\_bloqueo.trim() !== '') {
 
-&nbsp;           alert(`🚫 Usuario bloqueado\\n\\nMotivo: ${data.razon\_bloqueo}`);
+          alert(`🚫 Usuario bloqueado\\n\\nMotivo: ${data.razon\_bloqueo}`);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       
+      
 
-&nbsp;       // 3. Verificar inactividad (bloquea automáticamente si >= 5 días)
+      // 3. Verificar inactividad (bloquea automáticamente si >= 5 días)
 
-&nbsp;       const checkInactividad = await verificarInactividad(data);
+      const checkInactividad = await verificarInactividad(data);
 
-&nbsp;       if (checkInactividad.inactivo) {
+      if (checkInactividad.inactivo) {
 
-&nbsp;           // Asegurarse de que el bloqueo esté reflejado en BD
+          // Asegurarse de que el bloqueo esté reflejado en BD
 
-&nbsp;           await supabaseClient
+          await supabaseClient
 
-&nbsp;               .from('usuarios')
+              .from('usuarios')
 
-&nbsp;               .update({ 
+              .update({ 
 
-&nbsp;                   bloqueado: true,
+                  bloqueado: true,
 
-&nbsp;                   razon\_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
+                  razon\_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
 
-&nbsp;               })
+              })
 
-&nbsp;               .eq('id', data.id);
+              .eq('id', data.id);
 
-&nbsp;           
+          
 
-&nbsp;           alert(checkInactividad.mensaje);
+          alert(checkInactividad.mensaje);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
 
 
-&nbsp;       // 4. Verificar horario permitido (validación básica por rol)
+      // 4. Verificar horario permitido (validación básica por rol)
 
-&nbsp;       const verificacion = verificarHorarioPermitido(data.rol, data);
+      const verificacion = verificarHorarioPermitido(data.rol, data);
 
-&nbsp;       if (!verificacion.permitido) {
+      if (!verificacion.permitido) {
 
-&nbsp;           alert(verificacion.mensaje);
+          alert(verificacion.mensaje);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
 
 
-&nbsp;       // 5. Crear sesión
+      // 5. Crear sesión
 
-&nbsp;       const sessionToken = btoa(username + Date.now() + Math.random());
+      const sessionToken = btoa(username + Date.now() + Math.random());
 
-&nbsp;       await supabaseClient
+      await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({
+          .update({
 
-&nbsp;               sessionactiva: true,
+              sessionactiva: true,
 
-&nbsp;               sessiontoken: sessionToken,
+              sessiontoken: sessionToken,
 
-&nbsp;               ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+              ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
 
-&nbsp;               ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+              ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;           })
+          })
 
-&nbsp;           .eq('id', data.id);
+          .eq('id', data.id);
 
 
 
-&nbsp;       currentUser = { ...data, session\_token: sessionToken };
+      currentUser = { ...data, session\_token: sessionToken };
 
-&nbsp;       
+      
 
-&nbsp;       // ✅ EJECUTAR LIMPIEZA AUTOMÁTICA PARA ADMINS/SUPERVISORES
+      // ✅ EJECUTAR LIMPIEZA AUTOMÁTICA PARA ADMINS/SUPERVISORES
 
-&nbsp;       if (data.rol === 'Administrador' || data.rol === 'Supervisor') {
+      if (data.rol === 'Administrador' || data.rol === 'Supervisor') {
 
-&nbsp;           setTimeout(() => {
+          setTimeout(() => {
 
-&nbsp;               limpiarFiltrosObsoletos();
+              limpiarFiltrosObsoletos();
 
-&nbsp;           }, 2000); // Esperar 2 segundos para no bloquear la carga inicial
+          }, 2000); // Esperar 2 segundos para no bloquear la carga inicial
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       guardarDatosOffline(); // ← Asegúrate de que esta función guarde session\_token
+      guardarDatosOffline(); // ← Asegúrate de que esta función guarde session\_token
 
-&nbsp;       
+      
 
-&nbsp;       // 6. Actualizar timestamp de actividad
+      // 6. Actualizar timestamp de actividad
 
-&nbsp;       await supabaseClient
+      await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({ ultima\_actividad: new Date().toISOString() })
+          .update({ ultima\_actividad: new Date().toISOString() })
 
-&nbsp;           .eq('id', data.id);
+          .eq('id', data.id);
 
 
 
-&nbsp;       // 7. Redirigir según rol
+      // 7. Redirigir según rol
 
-&nbsp;       console.log(`👤 Rol detectado: ${data.rol}`);
+      console.log(`👤 Rol detectado: ${data.rol}`);
 
-&nbsp;       
+      
 
-&nbsp;       if (data.rol === 'ATTF') {
+      if (data.rol === 'ATTF') {
 
-&nbsp;           loginATTF(data); // Nueva función (próximo bloque)
+          loginATTF(data); // Nueva función (próximo bloque)
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       if (data.rol === 'Poda') {
+      if (data.rol === 'Poda') {
 
-&nbsp;           loginPoda(data); // Nueva función (próximo bloque)
+          loginPoda(data); // Nueva función (próximo bloque)
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
 
 
-&nbsp;      
+     
 
-&nbsp;       // Para otros roles: acceso directo
+      // Para otros roles: acceso directo
 
-&nbsp;       document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
+      document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
 
-&nbsp;       document.getElementById('userInfo').classList.remove('hidden');
+      document.getElementById('userInfo').classList.remove('hidden');
 
-&nbsp;       document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('loginSection').style.display = 'none';
 
-&nbsp;       document.getElementById('tableSelectionSection').style.display = 'block';
+      document.getElementById('tableSelectionSection').style.display = 'block';
 
 
 
-&nbsp;       iniciarVerificacionSesion();
+      iniciarVerificacionSesion();
 
-&nbsp;       guardarDatosOffline();
+      guardarDatosOffline();
 
-&nbsp;       mostrarTablasSegunRol();
+      mostrarTablasSegunRol();
 
 
 
-&nbsp;       // 🔄 Mostrar mensaje de actualización y recargar
+      // 🔄 Mostrar mensaje de actualización y recargar
 
-&nbsp;       // 🔄 Forzar actualización de la página para obtener última versión
+      // 🔄 Forzar actualización de la página para obtener última versión
 
 &nbsp;	
 
 
 
-&nbsp;   } catch (err) {
+  } catch (err) {
 
-&nbsp;       console.error('Error de login:', err);
+      console.error('Error de login:', err);
 
-&nbsp;       alert('Error de conexión. Por favor intente nuevamente.');
+      alert('Error de conexión. Por favor intente nuevamente.');
 
-&nbsp;   }
+  }
 
 }
 
 
 
-&nbsp;   // ========================================
+  // ========================================
 
 // 🆕 FUNCIÓN AUXILIAR: Validar fecha máxima de descanso
 
@@ -2132,41 +2132,41 @@ async function login() {
 
 function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 
-&nbsp;   const inicio = new Date(fechaInicio + 'T00:00:00');
+  const inicio = new Date(fechaInicio + 'T00:00:00');
 
-&nbsp;   const hoy = new Date(fechaHoy + 'T00:00:00');
+  const hoy = new Date(fechaHoy + 'T00:00:00');
 
-&nbsp;   
+  
 
-&nbsp;   // Calcular diferencia en días
+  // Calcular diferencia en días
 
-&nbsp;   const diffMs = inicio - hoy;
+  const diffMs = inicio - hoy;
 
-&nbsp;   const diffDias = Math.ceil(diffMs / (1000 \* 60 \* 60 \* 24));
+  const diffDias = Math.ceil(diffMs / (1000 \* 60 \* 60 \* 24));
 
-&nbsp;   
+  
 
-&nbsp;   // Día 1 = HOY, Día 6 = máximo permitido
+  // Día 1 = HOY, Día 6 = máximo permitido
 
-&nbsp;   // diffDias = 1 es mañana (día 2)
+  // diffDias = 1 es mañana (día 2)
 
-&nbsp;   // diffDias = 5 es día 6 (máximo)
+  // diffDias = 5 es día 6 (máximo)
 
-&nbsp;   if (diffDias < 1 || diffDias > 5) {
+  if (diffDias < 1 || diffDias > 5) {
 
-&nbsp;       return {
+      return {
 
-&nbsp;           valido: false,
+          valido: false,
 
-&nbsp;           mensaje: 'El día de inicio de descanso debe ser entre mañana (día 2) y máximo 5 días después (día 6).'
+          mensaje: 'El día de inicio de descanso debe ser entre mañana (día 2) y máximo 5 días después (día 6).'
 
-&nbsp;       };
+      };
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   return { valido: true };
+  return { valido: true };
 
 }
 
@@ -2174,121 +2174,121 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 
 async function loginATTF(userData) {
 
-&nbsp;   console.log('👷 Iniciando flujo ATTF');
+  console.log('👷 Iniciando flujo ATTF');
 
-&nbsp;   
+  
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const fechaHoy = getFechaHoyElSalvador();
+  const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;   const horaActual = ahora.getHours();
+  const horaActual = ahora.getHours();
 
-&nbsp;   
+  
 
-&nbsp;   // 1. Verificar si está en día de descanso
+  // 1. Verificar si está en día de descanso
 
-&nbsp;   if (verificarDiaDescanso(userData)) {
+  if (verificarDiaDescanso(userData)) {
 
-&nbsp;       alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
+      alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
 
-&nbsp;       logout();
+      logout();
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 2. Verificar si necesita configuración inicial o reset
+  // 2. Verificar si necesita configuración inicial o reset
 
-&nbsp;   const diasSinActividad = calcularDiasSinActividad(userData.ultima\_actividad);
+  const diasSinActividad = calcularDiasSinActividad(userData.ultima\_actividad);
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Primera vez o post-bloqueo (con opción descanso flexible)
+  // 🎯 CAMBIO: Primera vez o post-bloqueo (con opción descanso flexible)
 
-&nbsp;   if (!userData.estado\_ciclo || userData.estado\_ciclo === 'primera\_vez' || diasSinActividad >= 1) {
+  if (!userData.estado\_ciclo || userData.estado\_ciclo === 'primera\_vez' || diasSinActividad >= 1) {
 
-&nbsp;       console.log('🔧 Requiere configuración inicial - Descanso flexible permitido');
+      console.log('🔧 Requiere configuración inicial - Descanso flexible permitido');
 
-&nbsp;       mostrarConfiguracionInicialATTF();
+      mostrarConfiguracionInicialATTF();
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 3. Verificar si tiene turno programado para HOY
+  // 3. Verificar si tiene turno programado para HOY
 
-&nbsp;   if (userData.turno\_hoy \&\& userData.fecha\_turno\_hoy === fechaHoy) {
+  if (userData.turno\_hoy \&\& userData.fecha\_turno\_hoy === fechaHoy) {
 
-&nbsp;       console.log(`✅ Turno de hoy: ${userData.turno\_hoy}`);
+      console.log(`✅ Turno de hoy: ${userData.turno\_hoy}`);
 
-&nbsp;       
+      
 
-&nbsp;       // ✅ VALIDAR configuración completa (turno\_manana O descanso)
+      // ✅ VALIDAR configuración completa (turno\_manana O descanso)
 
-&nbsp;       const tieneDescansoActivo = userData.descanso\_fecha\_inicio \&\& userData.descanso\_fecha\_fin;
+      const tieneDescansoActivo = userData.descanso\_fecha\_inicio \&\& userData.descanso\_fecha\_fin;
 
-&nbsp;       const tieneTurnoManana = userData.turno\_manana \&\& userData.fecha\_turno\_manana;
+      const tieneTurnoManana = userData.turno\_manana \&\& userData.fecha\_turno\_manana;
 
-&nbsp;       
+      
 
-&nbsp;       if (!tieneDescansoActivo \&\& !tieneTurnoManana) {
+      if (!tieneDescansoActivo \&\& !tieneTurnoManana) {
 
-&nbsp;           console.log('⚠️ Configuración incompleta: falta turno mañana o descanso');
+          console.log('⚠️ Configuración incompleta: falta turno mañana o descanso');
 
-&nbsp;           const contadorTurnos = parseInt(userData.contador\_turnos) || 0;
+          const contadorTurnos = parseInt(userData.contador\_turnos) || 0;
 
-&nbsp;           
+          
 
-&nbsp;           if (contadorTurnos >= 5) {
+          if (contadorTurnos >= 5) {
 
-&nbsp;               mostrarForzarDescansoATTF();
+              mostrarForzarDescansoATTF();
 
-&nbsp;           } else {
+          } else {
 
-&nbsp;               mostrarProgramarTurnoMañanaConDescanso(userData);
+              mostrarProgramarTurnoMañanaConDescanso(userData);
 
-&nbsp;           }
+          }
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // Validar ventana horaria
+      // Validar ventana horaria
 
-&nbsp;       if (!validarVentanaTurno(userData.turno\_hoy, horaActual)) {
+      if (!validarVentanaTurno(userData.turno\_hoy, horaActual)) {
 
-&nbsp;           alert(`No estás en el horario de tu turno programado...`);
+          alert(`No estás en el horario de tu turno programado...`);
 
-&nbsp;           logout();
+          logout();
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // ✅ TODO OK - Acceder al menú
+      // ✅ TODO OK - Acceder al menú
 
-&nbsp;       accederMenuATTF();
+      accederMenuATTF();
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 4. Si llegó aquí, necesita configuración inicial
+  // 4. Si llegó aquí, necesita configuración inicial
 
-&nbsp;   console.log('⚠️ Sin turno programado, requiere configuración');
+  console.log('⚠️ Sin turno programado, requiere configuración');
 
-&nbsp;   mostrarConfiguracionInicialATTF();
+  mostrarConfiguracionInicialATTF();
 
 } // ← CIERRE DE loginATTF()
 
@@ -2296,19 +2296,19 @@ async function loginATTF(userData) {
 
 function calcularDiasSinActividad(ultimaActividad) {
 
-&nbsp;   if (!ultimaActividad) return 999; // Sin registro previo    
+  if (!ultimaActividad) return 999; // Sin registro previo    
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const ultima = new Date(ultimaActividad);
+  const ultima = new Date(ultimaActividad);
 
-&nbsp;   const diffMs = ahora - ultima;
+  const diffMs = ahora - ultima;
 
-&nbsp;   const diffDias = Math.floor(diffMs / (1000 \* 60 \* 60 \* 24));
+  const diffDias = Math.floor(diffMs / (1000 \* 60 \* 60 \* 24));
 
-&nbsp;   
+  
 
-&nbsp;   return diffDias;
+  return diffDias;
 
 }
 
@@ -2320,109 +2320,109 @@ function calcularDiasSinActividad(ultimaActividad) {
 
 function mostrarConfiguracionInicialATTF() {
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const horaActual = ahora.getHours();
+  const horaActual = ahora.getHours();
 
-&nbsp;   
+  
 
-&nbsp;   // Determinar qué turnos están disponibles según la hora
+  // Determinar qué turnos están disponibles según la hora
 
-&nbsp;   const turnosDisponibles = \[];
+  const turnosDisponibles = \[];
 
-&nbsp;   
+  
 
-&nbsp;   Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
+  Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
 
-&nbsp;       // Verificar si el botón está visible en este horario
+      // Verificar si el botón está visible en este horario
 
-&nbsp;       if (turno.esTurnoNocturno) {
+      if (turno.esTurnoNocturno) {
 
-&nbsp;           // Turno nocturno: 18:00 - 23:59
+          // Turno nocturno: 18:00 - 23:59
 
-&nbsp;           if (horaActual >= turno.ventanaBotonInicio \&\& horaActual < 24) {
+          if (horaActual >= turno.ventanaBotonInicio \&\& horaActual < 24) {
 
-&nbsp;               turnosDisponibles.push({ key, ...turno });
+              turnosDisponibles.push({ key, ...turno });
 
-&nbsp;           }
+          }
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           // Turnos diurnos
+          // Turnos diurnos
 
-&nbsp;           if (horaActual >= turno.ventanaBotonInicio \&\& horaActual < turno.ventanaBotonFin) {
+          if (horaActual >= turno.ventanaBotonInicio \&\& horaActual < turno.ventanaBotonFin) {
 
-&nbsp;               turnosDisponibles.push({ key, ...turno });
+              turnosDisponibles.push({ key, ...turno });
 
-&nbsp;           }
+          }
 
-&nbsp;       }
+      }
 
-&nbsp;   });
+  });
 
-&nbsp;   
+  
 
-&nbsp;   if (turnosDisponibles.length === 0) {
+  if (turnosDisponibles.length === 0) {
 
-&nbsp;       alert('No hay turnos disponibles en este horario.\\n\\nIntenta ingresar en el horario de tu turno correspondiente.');
+      alert('No hay turnos disponibles en este horario.\\n\\nIntenta ingresar en el horario de tu turno correspondiente.');
 
-&nbsp;       logout();
+      logout();
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">Configura tu Calendario de Trabajo</p>
+      <p class="subtitulo">Configura tu Calendario de Trabajo</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
 
-&nbsp;           <strong>Paso 1 de 2:</strong> Selecciona tu turno de HOY
+          <strong>Paso 1 de 2:</strong> Selecciona tu turno de HOY
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Turno de HOY:</label>
+          <label>Turno de HOY:</label>
 
-&nbsp;           <select id="turnoHoy" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+          <select id="turnoHoy" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;               <option value="">-- Seleccione su turno --</option>
+              <option value="">-- Seleccione su turno --</option>
 
-&nbsp;               ${turnosDisponibles.map(t => `<option value="${t.key}">${t.nombre}</option>`).join('')}
+              ${turnosDisponibles.map(t => `<option value="${t.key}">${t.nombre}</option>`).join('')}
 
-&nbsp;           </select>
+          </select>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <button class="btn" onclick="confirmarTurnoHoyATTF()" style="margin-top: 20px;">
+      <button class="btn" onclick="confirmarTurnoHoyATTF()" style="margin-top: 20px;">
 
-&nbsp;           Continuar al Paso 2 →
+          Continuar al Paso 2 →
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;       <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
+      <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
 
-&nbsp;           Cancelar
+          Cancelar
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;   `;
+  `;
 
 }
 
@@ -2432,77 +2432,77 @@ function mostrarConfiguracionInicialATTF() {
 
 async function confirmarTurnoHoyATTF() {
 
-&nbsp;   const turnoHoyKey = document.getElementById('turnoHoy').value;
+  const turnoHoyKey = document.getElementById('turnoHoy').value;
 
 
 
-&nbsp;   if (!turnoHoyKey) {
+  if (!turnoHoyKey) {
 
-&nbsp;       alert('Por favor seleccione su turno de hoy');
+      alert('Por favor seleccione su turno de hoy');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
-
-
-
-&nbsp;   // --- INICIO: CAMBIO 1 para ELIMINAR CONFIRMACIÓN ---
-
-&nbsp;   
-
-&nbsp;   // Obtener la cantidad de turnos que el usuario pudo seleccionar en el Paso 1
-
-&nbsp;   // (Asumimos que solo puede seleccionar un turno si solo hay una opción)
-
-&nbsp;   const selectElement = document.getElementById('turnoHoy');
-
-&nbsp;   const numOpciones = selectElement.options.length - 1; // Restamos la opción "-- Seleccione su turno --"
-
-&nbsp;   
-
-&nbsp;   let confirmar = true; // Por defecto, NO pide confirmación (asumimos que está bien)
+  }
 
 
 
-&nbsp;   if (numOpciones > 1) {
+  // --- INICIO: CAMBIO 1 para ELIMINAR CONFIRMACIÓN ---
 
-&nbsp;       // Si hay más de una opción disponible, SÍ pedimos confirmación (lógica actual)
+  
 
-&nbsp;       const turnoHoy = TURNOS\_ATTF\[turnoHoyKey];
+  // Obtener la cantidad de turnos que el usuario pudo seleccionar en el Paso 1
 
-&nbsp;       confirmar = confirm(
+  // (Asumimos que solo puede seleccionar un turno si solo hay una opción)
 
-&nbsp;           `¿Confirmas que tu turno de HOY es:\\n\\n${turnoHoy.nombre}?\\n\\n✅ SÍ - Continuar\\n❌ NO - Corregir`
+  const selectElement = document.getElementById('turnoHoy');
 
-&nbsp;       );
+  const numOpciones = selectElement.options.length - 1; // Restamos la opción "-- Seleccione su turno --"
 
-&nbsp;   }
+  
 
-&nbsp;   
-
-&nbsp;   // Si la confirmación fue cancelada (o si había varias opciones y el usuario dijo NO)
-
-&nbsp;   if (!confirmar) {
-
-&nbsp;       return;
-
-&nbsp;   }
+  let confirmar = true; // Por defecto, NO pide confirmación (asumimos que está bien)
 
 
 
-&nbsp;   // --- FIN: CAMBIO 1 ---
+  if (numOpciones > 1) {
 
-&nbsp;   
+      // Si hay más de una opción disponible, SÍ pedimos confirmación (lógica actual)
 
-&nbsp;   // Guardar temporalmente en memoria
+      const turnoHoy = TURNOS\_ATTF\[turnoHoyKey];
 
-&nbsp;   window.turnoHoySeleccionado = turnoHoyKey;
+      confirmar = confirm(
+
+          `¿Confirmas que tu turno de HOY es:\\n\\n${turnoHoy.nombre}?\\n\\n✅ SÍ - Continuar\\n❌ NO - Corregir`
+
+      );
+
+  }
+
+  
+
+  // Si la confirmación fue cancelada (o si había varias opciones y el usuario dijo NO)
+
+  if (!confirmar) {
+
+      return;
+
+  }
 
 
 
-&nbsp;   // Pasar al paso 2
+  // --- FIN: CAMBIO 1 ---
 
-&nbsp;   mostrarProgramarTurnoManana(true); // Con opción descanso (primera vez)
+  
+
+  // Guardar temporalmente en memoria
+
+  window.turnoHoySeleccionado = turnoHoyKey;
+
+
+
+  // Pasar al paso 2
+
+  mostrarProgramarTurnoManana(true); // Con opción descanso (primera vez)
 
 }
 
@@ -2518,19 +2518,19 @@ async function confirmarTurnoHoyATTF() {
 
 function getTurnoConsecutivo(turnoHoyKey) {
 
-&nbsp;   // Definir todos los turnos consecutivos bloqueados para cada turno
+  // Definir todos los turnos consecutivos bloqueados para cada turno
 
-&nbsp;   const relaciones = {
+  const relaciones = {
 
-&nbsp;      "turno3": \["turno1", "turno4"]  // Si trabajas 10-6, NO puedes 6-2 ni 8-4
+     "turno3": \["turno1", "turno4"]  // Si trabajas 10-6, NO puedes 6-2 ni 8-4
 
-&nbsp;   };
+  };
 
-&nbsp;   
+  
 
-&nbsp;   // Retornar array de turnos bloqueados (o array vacío si no hay)
+  // Retornar array de turnos bloqueados (o array vacío si no hay)
 
-&nbsp;   return relaciones\[turnoHoyKey] || \[];
+  return relaciones\[turnoHoyKey] || \[];
 
 }
 
@@ -2538,135 +2538,135 @@ function getTurnoConsecutivo(turnoHoyKey) {
 
 function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Determinar el título según el contexto
+  // 🎯 CAMBIO: Determinar el título según el contexto
 
-&nbsp;   let paso, instruccion;
+  let paso, instruccion;
 
-&nbsp;   const contadorActual = parseInt(currentUser?.contador\_turnos) || 0;
+  const contadorActual = parseInt(currentUser?.contador\_turnos) || 0;
 
-&nbsp;   
+  
 
-&nbsp;   if (mostrarOpcionDescanso) {
+  if (mostrarOpcionDescanso) {
 
-&nbsp;       // Primera vez - Con opción descanso
+      // Primera vez - Con opción descanso
 
-&nbsp;       paso = "Paso 2 de 2";
+      paso = "Paso 2 de 2";
 
-&nbsp;       instruccion = "Selecciona tu turno de MAÑANA o configura DESCANSO";
+      instruccion = "Selecciona tu turno de MAÑANA o configura DESCANSO";
 
-&nbsp;   } else {
+  } else {
 
-&nbsp;       // Días 1-4 - Sin opción descanso
+      // Días 1-4 - Sin opción descanso
 
-&nbsp;       paso = `Programar Turno (Día ${contadorActual + 1} → ${contadorActual + 2})`;
+      paso = `Programar Turno (Día ${contadorActual + 1} → ${contadorActual + 2})`;
 
-&nbsp;       instruccion = "Selecciona tu turno de MAÑANA";
+      instruccion = "Selecciona tu turno de MAÑANA";
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Obtener el turno de HOY seleccionado
+  // Obtener el turno de HOY seleccionado
 
-&nbsp;   const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno\_hoy;
+  const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno\_hoy;
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Obtener array de turnos consecutivos bloqueados
+  // 🎯 CAMBIO: Obtener array de turnos consecutivos bloqueados
 
-&nbsp;   const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
+  const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
 
-&nbsp;   
+  
 
-&nbsp;   let opcionesHTML = '';
+  let opcionesHTML = '';
 
-&nbsp;   
+  
 
-&nbsp;   // Generar opciones de turnos
+  // Generar opciones de turnos
 
-&nbsp;   Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
+  Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
 
-&nbsp;       // 🎯 CAMBIO: Verificar si está en el array de consecutivos
+      // 🎯 CAMBIO: Verificar si está en el array de consecutivos
 
-&nbsp;       if (turnosConsecutivos.includes(key)) {
+      if (turnosConsecutivos.includes(key)) {
 
-&nbsp;           opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+          opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+          opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
 
-&nbsp;       }
+      }
 
-&nbsp;   });
+  });
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Solo agregar opción descanso si está permitido (primera vez)
+  // 🎯 CAMBIO: Solo agregar opción descanso si está permitido (primera vez)
 
-&nbsp;   if (mostrarOpcionDescanso) {
+  if (mostrarOpcionDescanso) {
 
-&nbsp;       opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
+      opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">${paso}</p>
+      <p class="subtitulo">${paso}</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
 
-&nbsp;           <strong>${instruccion}</strong>
+          <strong>${instruccion}</strong>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Turno de MAÑANA:</label>
+          <label>Turno de MAÑANA:</label>
 
-&nbsp;           <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+          <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;               <option value="">-- Seleccione --</option>
+              <option value="">-- Seleccione --</option>
 
-&nbsp;               ${opcionesHTML}
+              ${opcionesHTML}
 
-&nbsp;           </select>
+          </select>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
+      <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
 
-&nbsp;       
+      
 
-&nbsp;       <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; display: none;">
+      <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; display: none;">
 
-&nbsp;           ✅ Confirmar y Acceder
+          ✅ Confirmar y Acceder
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;       <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
+      <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
 
-&nbsp;           Cancelar
+          Cancelar
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;   `;
+  `;
 
 }
 
@@ -2680,143 +2680,143 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
 
 function verificarSeleccionDescanso() {
 
-&nbsp;   const turnoManana = document.getElementById('turnoManana').value;
+  const turnoManana = document.getElementById('turnoManana').value;
 
-&nbsp;   const seccionDescanso = document.getElementById('seccionDescanso');
+  const seccionDescanso = document.getElementById('seccionDescanso');
 
-&nbsp;   const btnConfirmar = document.getElementById('btnConfirmarManana');
+  const btnConfirmar = document.getElementById('btnConfirmarManana');
 
-&nbsp;   
+  
 
-&nbsp;   if (turnoManana === 'descanso') {
+  if (turnoManana === 'descanso') {
 
-&nbsp;       // 🎯 CAMBIO: Calcular límites de fechas (día 2 hasta día 6)
+      // 🎯 CAMBIO: Calcular límites de fechas (día 2 hasta día 6)
 
-&nbsp;       const ahora = new Date();
+      const ahora = new Date();
 
-&nbsp;       const fechaHoy = getFechaHoyElSalvador();
+      const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;       
+      
 
-&nbsp;       // Fecha mínima: Mañana (día 2)
+      // Fecha mínima: Mañana (día 2)
 
-&nbsp;       const fechaMinima = new Date(ahora);
+      const fechaMinima = new Date(ahora);
 
-&nbsp;       fechaMinima.setDate(fechaMinima.getDate() + 1);
+      fechaMinima.setDate(fechaMinima.getDate() + 1);
 
-&nbsp;       const fechaMinimaStr = fechaMinima.toISOString().split('T')\[0];
+      const fechaMinimaStr = fechaMinima.toISOString().split('T')\[0];
 
-&nbsp;       
+      
 
-&nbsp;       // Fecha máxima: Día 6 (5 días después de hoy)
+      // Fecha máxima: Día 6 (5 días después de hoy)
 
-&nbsp;       const fechaMaxima = new Date(ahora);
+      const fechaMaxima = new Date(ahora);
 
-&nbsp;       fechaMaxima.setDate(fechaMaxima.getDate() + 5);
+      fechaMaxima.setDate(fechaMaxima.getDate() + 5);
 
-&nbsp;       const fechaMaximaStr = fechaMaxima.toISOString().split('T')\[0];
+      const fechaMaximaStr = fechaMaxima.toISOString().split('T')\[0];
 
-&nbsp;       
+      
 
-&nbsp;       // Mostrar calendario y turno de regreso
+      // Mostrar calendario y turno de regreso
 
-&nbsp;       seccionDescanso.style.display = 'block';
+      seccionDescanso.style.display = 'block';
 
-&nbsp;       seccionDescanso.innerHTML = `
+      seccionDescanso.innerHTML = `
 
-&nbsp;           <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+          <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
 
-&nbsp;               <strong>Configura tu descanso:</strong>
+              <strong>Configura tu descanso:</strong>
 
-&nbsp;               <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
+              <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
 
-&nbsp;                   ⚠️ El inicio de descanso debe ser entre <strong>mañana</strong> (día 2) y máximo <strong>5 días después</strong> (día 6).
+                  ⚠️ El inicio de descanso debe ser entre <strong>mañana</strong> (día 2) y máximo <strong>5 días después</strong> (día 6).
 
-&nbsp;               </p>
+              </p>
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;           
+          
 
-&nbsp;           <div class="form-group">
+          <div class="form-group">
 
-&nbsp;               <label>Primer día de descanso:</label>
+              <label>Primer día de descanso:</label>
 
-&nbsp;               <input type="date" 
+              <input type="date" 
 
-&nbsp;                      id="fechaDescansoInicio" 
+                     id="fechaDescansoInicio" 
 
-&nbsp;                      class="form-control" 
+                     class="form-control" 
 
-&nbsp;                      min="${fechaMinimaStr}" 
+                     min="${fechaMinimaStr}" 
 
-&nbsp;                      max="${fechaMaximaStr}"
+                     max="${fechaMaximaStr}"
 
-&nbsp;                      onchange="calcularFechaFin()" 
+                     onchange="calcularFechaFin()" 
 
-&nbsp;                      style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                     style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;               <small style="color: #666;">Mínimo: ${fechaMinimaStr} | Máximo: ${fechaMaximaStr}</small>
+              <small style="color: #666;">Mínimo: ${fechaMinimaStr} | Máximo: ${fechaMaximaStr}</small>
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;           
+          
 
-&nbsp;           <div class="form-group">
+          <div class="form-group">
 
-&nbsp;               <label>Segundo día de descanso:</label>
+              <label>Segundo día de descanso:</label>
 
-&nbsp;               <input type="date" 
+              <input type="date" 
 
-&nbsp;                      id="fechaDescansoFin" 
+                     id="fechaDescansoFin" 
 
-&nbsp;                      class="form-control" 
+                     class="form-control" 
 
-&nbsp;                      readonly 
+                     readonly 
 
-&nbsp;                      style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
+                     style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
 
-&nbsp;               <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
+              <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;           
+          
 
-&nbsp;           <div class="form-group">
+          <div class="form-group">
 
-&nbsp;               <label>Turno de REGRESO (post-descanso):</label>
+              <label>Turno de REGRESO (post-descanso):</label>
 
-&nbsp;               <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+              <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;                   <option value="">-- Seleccione --</option>
+                  <option value="">-- Seleccione --</option>
 
-&nbsp;                   ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) => 
+                  ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) => 
 
-&nbsp;                       `<option value="${key}">${turno.nombre}</option>`
+                      `<option value="${key}">${turno.nombre}</option>`
 
-&nbsp;                   ).join('')}
+                  ).join('')}
 
-&nbsp;               </select>
+              </select>
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;       `;
+      `;
 
-&nbsp;       btnConfirmar.style.display = 'block';
+      btnConfirmar.style.display = 'block';
 
-&nbsp;   } else if (turnoManana) {
+  } else if (turnoManana) {
 
-&nbsp;       seccionDescanso.style.display = 'none';
+      seccionDescanso.style.display = 'none';
 
-&nbsp;       btnConfirmar.style.display = 'block';
+      btnConfirmar.style.display = 'block';
 
-&nbsp;   } else {
+  } else {
 
-&nbsp;       seccionDescanso.style.display = 'none';
+      seccionDescanso.style.display = 'none';
 
-&nbsp;       btnConfirmar.style.display = 'none';
+      btnConfirmar.style.display = 'none';
 
-&nbsp;   }
+  }
 
 }
 
@@ -2828,25 +2828,25 @@ function verificarSeleccionDescanso() {
 
 function calcularFechaFin() {
 
-&nbsp;   const fechaInicio = document.getElementById('fechaDescansoInicio').value;
+  const fechaInicio = document.getElementById('fechaDescansoInicio').value;
 
-&nbsp;   const inputFin = document.getElementById('fechaDescansoFin');
+  const inputFin = document.getElementById('fechaDescansoFin');
 
-&nbsp;   
+  
 
-&nbsp;   if (!fechaInicio) return;
+  if (!fechaInicio) return;
 
-&nbsp;   
+  
 
-&nbsp;   const fecha = new Date(fechaInicio + 'T00:00:00');
+  const fecha = new Date(fechaInicio + 'T00:00:00');
 
-&nbsp;   fecha.setDate(fecha.getDate() + 1); // Día consecutivo
+  fecha.setDate(fecha.getDate() + 1); // Día consecutivo
 
-&nbsp;   
+  
 
-&nbsp;   const fechaFin = fecha.toISOString().split('T')\[0];
+  const fechaFin = fecha.toISOString().split('T')\[0];
 
-&nbsp;   inputFin.value = fechaFin;
+  inputFin.value = fechaFin;
 
 }
 
@@ -2858,235 +2858,235 @@ function calcularFechaFin() {
 
 async function confirmarTurnoMananaATTF() {
 
-&nbsp;   const turnoManana = document.getElementById('turnoManana').value;
+  const turnoManana = document.getElementById('turnoManana').value;
 
-&nbsp;   
+  
 
-&nbsp;   if (!turnoManana) {
+  if (!turnoManana) {
 
-&nbsp;       alert('Por favor seleccione el turno de mañana');
+      alert('Por favor seleccione el turno de mañana');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Caso 1: Eligió un turno normal
+  // Caso 1: Eligió un turno normal
 
-&nbsp;   if (turnoManana !== 'descanso') {
+  if (turnoManana !== 'descanso') {
 
-&nbsp;       const turno = TURNOS\_ATTF\[turnoManana];
+      const turno = TURNOS\_ATTF\[turnoManana];
 
-&nbsp;       
+      
 
-&nbsp;       // Confirmación
+      // Confirmación
 
-&nbsp;       const confirmar = confirm(`¿Confirmas que tu turno de MAÑANA será:\\n\\n${turno.nombre}?\\n\\n✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`);
+      const confirmar = confirm(`¿Confirmas que tu turno de MAÑANA será:\\n\\n${turno.nombre}?\\n\\n✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`);
 
-&nbsp;       
+      
 
-&nbsp;       if (!confirmar) return;
+      if (!confirmar) return;
 
-&nbsp;       
+      
 
-&nbsp;       // Guardar en BD
+      // Guardar en BD
 
-&nbsp;       const ahora = new Date();
+      const ahora = new Date();
 
-&nbsp;       const fechaHoy = getFechaHoyElSalvador();
+      const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;       const fechaManana = new Date(ahora);
+      const fechaManana = new Date(ahora);
 
-&nbsp;       fechaManana.setDate(fechaManana.getDate() + 1);
+      fechaManana.setDate(fechaManana.getDate() + 1);
 
-&nbsp;       const fechaMananaStr = fechaManana.toISOString().split('T')\[0];
+      const fechaMananaStr = fechaManana.toISOString().split('T')\[0];
 
-&nbsp;       
+      
 
-&nbsp;       const turnoHoy = window.turnoHoySeleccionado || currentUser.turno\_hoy;
+      const turnoHoy = window.turnoHoySeleccionado || currentUser.turno\_hoy;
 
-&nbsp;       const contadorActual = parseFloat(currentUser.contador\_turnos) || 0;
+      const contadorActual = parseFloat(currentUser.contador\_turnos) || 0;
 
-&nbsp;       const nuevoContador = contadorActual + 1;
+      const nuevoContador = contadorActual + 1;
 
-&nbsp;       
+      
 
-&nbsp;       const { error } = await supabaseClient
+      const { error } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({
+          .update({
 
-&nbsp;               turno\_hoy: turnoHoy,
+              turno\_hoy: turnoHoy,
 
-&nbsp;               fecha\_turno\_hoy: fechaHoy,
+              fecha\_turno\_hoy: fechaHoy,
 
-&nbsp;               turno\_manana: turnoManana,
+              turno\_manana: turnoManana,
 
-&nbsp;               fecha\_turno\_manana: fechaMananaStr,
+              fecha\_turno\_manana: fechaMananaStr,
 
-&nbsp;               contador\_turnos: nuevoContador,
+              contador\_turnos: nuevoContador,
 
-&nbsp;               estado\_ciclo: 'ciclo\_normal',
+              estado\_ciclo: 'ciclo\_normal',
 
-&nbsp;               ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+              ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;           })
+          })
 
-&nbsp;           .eq('id', currentUser.id);
+          .eq('id', currentUser.id);
 
-&nbsp;       
+      
 
-&nbsp;       if (error) {
+      if (error) {
 
-&nbsp;           alert('Error guardando configuración: ' + error.message);
+          alert('Error guardando configuración: ' + error.message);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // Acceso al menú
+      // Acceso al menú
 
-&nbsp;       accederMenuATTF();
+      accederMenuATTF();
 
-&nbsp;       
+      
 
-&nbsp;   } else {
+  } else {
 
-&nbsp;       // Caso 2: Eligió descanso
+      // Caso 2: Eligió descanso
 
-&nbsp;       const fechaInicio = document.getElementById('fechaDescansoInicio').value;
+      const fechaInicio = document.getElementById('fechaDescansoInicio').value;
 
-&nbsp;       const fechaFin = document.getElementById('fechaDescansoFin').value;
+      const fechaFin = document.getElementById('fechaDescansoFin').value;
 
-&nbsp;       const turnoRegreso = document.getElementById('turnoRegreso').value;
+      const turnoRegreso = document.getElementById('turnoRegreso').value;
 
-&nbsp;       
+      
 
-&nbsp;       if (!fechaInicio || !fechaFin || !turnoRegreso) {
+      if (!fechaInicio || !fechaFin || !turnoRegreso) {
 
-&nbsp;           alert('Por favor complete todos los campos del descanso');
+          alert('Por favor complete todos los campos del descanso');
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // 🎯 VALIDACIÓN: Verificar que no exceda día 6
+      // 🎯 VALIDACIÓN: Verificar que no exceda día 6
 
-&nbsp;       const ahora = new Date();
+      const ahora = new Date();
 
-&nbsp;       const fechaHoy = getFechaHoyElSalvador();
+      const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;       
+      
 
-&nbsp;       const validacion = validarFechaDescansoMaxima(fechaInicio, fechaHoy);
+      const validacion = validarFechaDescansoMaxima(fechaInicio, fechaHoy);
 
-&nbsp;       if (!validacion.valido) {
+      if (!validacion.valido) {
 
-&nbsp;           alert(validacion.mensaje);
+          alert(validacion.mensaje);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
+      const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
 
-&nbsp;       
+      
 
-&nbsp;       // Confirmación
+      // Confirmación
 
-&nbsp;       const confirmar = confirm(
+      const confirmar = confirm(
 
-&nbsp;           `¿Confirmas tu configuración de descanso?\\n\\n` +
+          `¿Confirmas tu configuración de descanso?\\n\\n` +
 
-&nbsp;           `📅 Descanso: ${fechaInicio} y ${fechaFin}\\n` +
+          `📅 Descanso: ${fechaInicio} y ${fechaFin}\\n` +
 
-&nbsp;           `🔙 Regreso: ${turnoRegresoObj.nombre}\\n\\n` +
+          `🔙 Regreso: ${turnoRegresoObj.nombre}\\n\\n` +
 
-&nbsp;           `✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`
+          `✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`
 
-&nbsp;       );
+      );
 
-&nbsp;       
+      
 
-&nbsp;       if (!confirmar) return;
+      if (!confirmar) return;
 
-&nbsp;       
+      
 
-&nbsp;       // Guardar en BD
+      // Guardar en BD
 
-&nbsp;       const turnoHoy = window.turnoHoySeleccionado || currentUser.turno\_hoy;
+      const turnoHoy = window.turnoHoySeleccionado || currentUser.turno\_hoy;
 
-&nbsp;       
+      
 
-&nbsp;       // Calcular fecha de regreso (día después del último descanso)
+      // Calcular fecha de regreso (día después del último descanso)
 
-&nbsp;       const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
+      const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
 
-&nbsp;       fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+      fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
 
-&nbsp;       const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
+      const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
 
-&nbsp;       
+      
 
-&nbsp;       const { error } = await supabaseClient
+      const { error } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({
+          .update({
 
-&nbsp;               turno\_hoy: turnoHoy,
+              turno\_hoy: turnoHoy,
 
-&nbsp;               fecha\_turno\_hoy: fechaHoy,
+              fecha\_turno\_hoy: fechaHoy,
 
-&nbsp;               descanso\_fecha\_inicio: fechaInicio,
+              descanso\_fecha\_inicio: fechaInicio,
 
-&nbsp;               descanso\_fecha\_fin: fechaFin,
+              descanso\_fecha\_fin: fechaFin,
 
-&nbsp;               turno\_regreso: turnoRegreso,
+              turno\_regreso: turnoRegreso,
 
-&nbsp;               fecha\_turno\_regreso: fechaRegreso,
+              fecha\_turno\_regreso: fechaRegreso,
 
-&nbsp;               contador\_turnos: 0, // Resetear
+              contador\_turnos: 0, // Resetear
 
-&nbsp;               estado\_ciclo: 'ciclo\_normal',
+              estado\_ciclo: 'ciclo\_normal',
 
-&nbsp;               // 🎯 CAMBIO: NO guardar turno\_manana cuando se elige descanso
+              // 🎯 CAMBIO: NO guardar turno\_manana cuando se elige descanso
 
-&nbsp;               turno\_manana: null,
+              turno\_manana: null,
 
-&nbsp;               fecha\_turno\_manana: null,
+              fecha\_turno\_manana: null,
 
-&nbsp;               ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+              ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;           })
+          })
 
-&nbsp;           .eq('id', currentUser.id);
+          .eq('id', currentUser.id);
 
-&nbsp;       
+      
 
-&nbsp;       if (error) {
+      if (error) {
 
-&nbsp;           alert('Error guardando descanso: ' + error.message);
+          alert('Error guardando descanso: ' + error.message);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // Acceso al menú
+      // Acceso al menú
 
-&nbsp;       accederMenuATTF();
+      accederMenuATTF();
 
-&nbsp;   }
+  }
 
 }
 
@@ -3100,103 +3100,103 @@ async function confirmarTurnoMananaATTF() {
 
 function mostrarProgramarTurnoMañanaConDescanso(userData) {
 
-&nbsp;   const turnoHoyKey = userData.turno\_hoy;
+  const turnoHoyKey = userData.turno\_hoy;
 
-&nbsp;   const contadorActual = parseInt(userData.contador\_turnos) || 0;
+  const contadorActual = parseInt(userData.contador\_turnos) || 0;
 
-&nbsp;   
+  
 
-&nbsp;   // Calcular próximo descanso automático (días 6-7 del ciclo)
+  // Calcular próximo descanso automático (días 6-7 del ciclo)
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const diasHastaDescanso = 5 - contadorActual;
+  const diasHastaDescanso = 5 - contadorActual;
 
-&nbsp;   
+  
 
-&nbsp;   const fechaDescansoInicio = new Date(ahora);
+  const fechaDescansoInicio = new Date(ahora);
 
-&nbsp;   fechaDescansoInicio.setDate(fechaDescansoInicio.getDate() + diasHastaDescanso);
+  fechaDescansoInicio.setDate(fechaDescansoInicio.getDate() + diasHastaDescanso);
 
-&nbsp;   const fechaDescansoInicioStr = fechaDescansoInicio.toISOString().split('T')\[0];
+  const fechaDescansoInicioStr = fechaDescansoInicio.toISOString().split('T')\[0];
 
-&nbsp;   
+  
 
-&nbsp;   const fechaDescansoFin = new Date(fechaDescansoInicio);
+  const fechaDescansoFin = new Date(fechaDescansoInicio);
 
-&nbsp;   fechaDescansoFin.setDate(fechaDescansoFin.getDate() + 1);
+  fechaDescansoFin.setDate(fechaDescansoFin.getDate() + 1);
 
-&nbsp;   const fechaDescansoFinStr = fechaDescansoFin.toISOString().split('T')\[0];
+  const fechaDescansoFinStr = fechaDescansoFin.toISOString().split('T')\[0];
 
-&nbsp;   
+  
 
-&nbsp;   // Obtener turnos disponibles (bloqueando consecutivos)
+  // Obtener turnos disponibles (bloqueando consecutivos)
 
-&nbsp;   const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
+  const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
 
-&nbsp;   let opcionesHTML = '';
+  let opcionesHTML = '';
 
-&nbsp;   
+  
 
-&nbsp;   Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
+  Object.entries(TURNOS\_ATTF).forEach((\[key, turno]) => {
 
-&nbsp;       if (turnosConsecutivos.includes(key)) {
+      if (turnosConsecutivos.includes(key)) {
 
-&nbsp;           opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+          opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+          opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
 
-&nbsp;       }
+      }
 
-&nbsp;   });
+  });
 
-&nbsp;   
+  
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">Programar Turno de Mañana</p>
+      <p class="subtitulo">Programar Turno de Mañana</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
 
-&nbsp;           <strong>📊 Día ${contadorActual + 1} de 5</strong>
+          <strong>📊 Día ${contadorActual + 1} de 5</strong>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Turno de MAÑANA:</label>
+          <label>Turno de MAÑANA:</label>
 
-&nbsp;           <select id="turnoManana" class="form-control">
+          <select id="turnoManana" class="form-control">
 
-&nbsp;               <option value="">-- Seleccione --</option>
+              <option value="">-- Seleccione --</option>
 
-&nbsp;               ${opcionesHTML}
+              ${opcionesHTML}
 
-&nbsp;           </select>
+          </select>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <button class="btn" onclick="validarDescansoATTF('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')">
+      <button class="btn" onclick="validarDescansoATTF('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')">
 
-&nbsp;           ✅ Continuar
+          ✅ Continuar
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;   `;
+  `;
 
 }
 
@@ -3212,71 +3212,71 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
 
 function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
-&nbsp;   const turnoManana = document.getElementById('turnoManana').value;
+  const turnoManana = document.getElementById('turnoManana').value;
 
-&nbsp;   
+  
 
-&nbsp;   if (!turnoManana) {
+  if (!turnoManana) {
 
-&nbsp;       alert('Por favor seleccione el turno de mañana');
+      alert('Por favor seleccione el turno de mañana');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Guardar turno de mañana temporalmente
+  // Guardar turno de mañana temporalmente
 
-&nbsp;   window.turnoMañanaSeleccionado = turnoManana;
+  window.turnoMañanaSeleccionado = turnoManana;
 
-&nbsp;   
+  
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">Confirmación de Descanso</p>
+      <p class="subtitulo">Confirmación de Descanso</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+      <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
 
-&nbsp;           <strong style="font-size: 18px;">⚠️ Tus próximos días de descanso serán:</strong><br><br>
+          <strong style="font-size: 18px;">⚠️ Tus próximos días de descanso serán:</strong><br><br>
 
-&nbsp;           <div style="font-size: 20px; font-weight: 600; color: #2d3748;">
+          <div style="font-size: 20px; font-weight: 600; color: #2d3748;">
 
-&nbsp;               📅 ${fechaInicioAuto}<br>
+              📅 ${fechaInicioAuto}<br>
 
-&nbsp;               📅 ${fechaFinAuto}
+              📅 ${fechaFinAuto}
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
 
-&nbsp;           <button class="btn" onclick="confirmarDescansoAutomaticoATTF('${fechaInicioAuto}', '${fechaFinAuto}')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+          <button class="btn" onclick="confirmarDescansoAutomaticoATTF('${fechaInicioAuto}', '${fechaFinAuto}')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
 
-&nbsp;               ✅ Aceptar
+              ✅ Aceptar
 
-&nbsp;           </button>
+          </button>
 
-&nbsp;           <button class="btn btn-secondary" onclick="cambiarFechasDescansoATTF()">
+          <button class="btn btn-secondary" onclick="cambiarFechasDescansoATTF()">
 
-&nbsp;               🔄 Cambiar Fechas
+              🔄 Cambiar Fechas
 
-&nbsp;           </button>
+          </button>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;   `;
+  `;
 
 }
 
@@ -3288,25 +3288,25 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 function accederMenuATTF() {
 
-&nbsp;   document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+  document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
 
-&nbsp;   document.getElementById('userInfo').classList.remove('hidden');
+  document.getElementById('userInfo').classList.remove('hidden');
 
-&nbsp;   document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('loginSection').style.display = 'none';
 
-&nbsp;   document.getElementById('tableSelectionSection').style.display = 'block';
+  document.getElementById('tableSelectionSection').style.display = 'block';
 
-&nbsp;   
+  
 
-&nbsp;   mostrarTablasSegunRol();
+  mostrarTablasSegunRol();
 
-&nbsp;   iniciarVerificacionSesion();
+  iniciarVerificacionSesion();
 
-&nbsp;   guardarDatosOffline();
+  guardarDatosOffline();
 
-&nbsp;   
+  
 
-&nbsp;   console.log('✅ Acceso concedido al menú ATTF');
+  console.log('✅ Acceso concedido al menú ATTF');
 
 }
 
@@ -3316,219 +3316,219 @@ function accederMenuATTF() {
 
 function mostrarForzarDescansoATTF() {
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Calcular fechas automáticamente (mañana y pasado)
+  // 🎯 CAMBIO: Calcular fechas automáticamente (mañana y pasado)
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   
+  
 
-&nbsp;   const fechaManana = new Date(ahora);
+  const fechaManana = new Date(ahora);
 
-&nbsp;   fechaManana.setDate(fechaManana.getDate() + 1);
+  fechaManana.setDate(fechaManana.getDate() + 1);
 
-&nbsp;   const fechaManaanaStr = fechaManana.toISOString().split('T')\[0];
+  const fechaManaanaStr = fechaManana.toISOString().split('T')\[0];
 
-&nbsp;   
+  
 
-&nbsp;   const fechaPasado = new Date(ahora);
+  const fechaPasado = new Date(ahora);
 
-&nbsp;   fechaPasado.setDate(fechaPasado.getDate() + 2);
+  fechaPasado.setDate(fechaPasado.getDate() + 2);
 
-&nbsp;   const fechaPasadoStr = fechaPasado.toISOString().split('T')\[0];
+  const fechaPasadoStr = fechaPasado.toISOString().split('T')\[0];
 
-&nbsp;   
+  
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">Descanso Obligatorio</p>
+      <p class="subtitulo">Descanso Obligatorio</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+      <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
 
-&nbsp;           <strong>⚠️ Has completado 5 turnos consecutivos</strong><br>
+          <strong>⚠️ Has completado 5 turnos consecutivos</strong><br>
 
-&nbsp;           Debes tomar tu descanso obligatorio de 2 días
+          Debes tomar tu descanso obligatorio de 2 días
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
 
-&nbsp;           <strong>📅 Tus días de descanso son:</strong><br><br>
+          <strong>📅 Tus días de descanso son:</strong><br><br>
 
-&nbsp;           <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
+          <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
 
-&nbsp;               🗓️ Primer día: ${fechaManaanaStr}<br>
+              🗓️ Primer día: ${fechaManaanaStr}<br>
 
-&nbsp;               🗓️ Segundo día: ${fechaPasadoStr}
+              🗓️ Segundo día: ${fechaPasadoStr}
 
-&nbsp;           </div>
+          </div>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Turno de REGRESO:</label>
+          <label>Turno de REGRESO:</label>
 
-&nbsp;           <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+          <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;               <option value="">-- Seleccione --</option>
+              <option value="">-- Seleccione --</option>
 
-&nbsp;               ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) => 
+              ${Object.entries(TURNOS\_ATTF).map((\[key, turno]) => 
 
-&nbsp;                   `<option value="${key}">${turno.nombre}</option>`
+                  `<option value="${key}">${turno.nombre}</option>`
 
-&nbsp;               ).join('')}
+              ).join('')}
 
-&nbsp;           </select>
+          </select>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="margin-top: 20px;">
+      <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="margin-top: 20px;">
 
-&nbsp;           ✅ Confirmar Descanso
+          ✅ Confirmar Descanso
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;   `;
+  `;
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Guardar las fechas en variables globales temporales
+  // 🎯 CAMBIO: Guardar las fechas en variables globales temporales
 
-&nbsp;   window.fechasDescansoAutomaticas = {
+  window.fechasDescansoAutomaticas = {
 
-&nbsp;       inicio: fechaManaanaStr,
+      inicio: fechaManaanaStr,
 
-&nbsp;       fin: fechaPasadoStr
+      fin: fechaPasadoStr
 
-&nbsp;   };
+  };
 
 }
 
-&nbsp;   
+  
 
 
 
 async function confirmarDescansoObligatorioATTF() {
 
-&nbsp;   const turnoRegreso = document.getElementById('turnoRegreso').value;
+  const turnoRegreso = document.getElementById('turnoRegreso').value;
 
-&nbsp;   
+  
 
-&nbsp;   if (!turnoRegreso) {
+  if (!turnoRegreso) {
 
-&nbsp;       alert('Por favor seleccione el turno de regreso');
+      alert('Por favor seleccione el turno de regreso');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 🎯 CAMBIO: Usar fechas calculadas automáticamente
+  // 🎯 CAMBIO: Usar fechas calculadas automáticamente
 
-&nbsp;   const fechaInicio = window.fechasDescansoAutomaticas.inicio;
+  const fechaInicio = window.fechasDescansoAutomaticas.inicio;
 
-&nbsp;   const fechaFin = window.fechasDescansoAutomaticas.fin;
+  const fechaFin = window.fechasDescansoAutomaticas.fin;
 
-&nbsp;   
+  
 
-&nbsp;   const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
+  const turnoRegresoObj = TURNOS\_ATTF\[turnoRegreso];
 
-&nbsp;   
+  
 
-&nbsp;   const confirmar = confirm(
+  const confirmar = confirm(
 
-&nbsp;       `¿Confirmas tu descanso obligatorio?\\n\\n` +
+      `¿Confirmas tu descanso obligatorio?\\n\\n` +
 
-&nbsp;       `📅 Descanso: ${fechaInicio} y ${fechaFin}\\n` +
+      `📅 Descanso: ${fechaInicio} y ${fechaFin}\\n` +
 
-&nbsp;       `🔙 Regreso: ${turnoRegresoObj.nombre}\\n\\n` +
+      `🔙 Regreso: ${turnoRegresoObj.nombre}\\n\\n` +
 
-&nbsp;       `✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`
+      `✅ SÍ - Guardar y acceder\\n❌ NO - Corregir`
 
-&nbsp;   );
+  );
 
-&nbsp;   
+  
 
-&nbsp;   if (!confirmar) return;
+  if (!confirmar) return;
 
-&nbsp;   
+  
 
-&nbsp;   // Calcular fecha de regreso (día después del último descanso)
+  // Calcular fecha de regreso (día después del último descanso)
 
-&nbsp;   const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
+  const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
 
-&nbsp;   fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+  fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
 
-&nbsp;   const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
+  const fechaRegreso = fechaRegresoDate.toISOString().split('T')\[0];
 
-&nbsp;   
+  
 
-&nbsp;   const { error } = await supabaseClient
+  const { error } = await supabaseClient
 
-&nbsp;       .from('usuarios')
+      .from('usuarios')
 
-&nbsp;       .update({
+      .update({
 
-&nbsp;           descanso\_fecha\_inicio: fechaInicio,
+          descanso\_fecha\_inicio: fechaInicio,
 
-&nbsp;           descanso\_fecha\_fin: fechaFin,
+          descanso\_fecha\_fin: fechaFin,
 
-&nbsp;           turno\_regreso: turnoRegreso,
+          turno\_regreso: turnoRegreso,
 
-&nbsp;           fecha\_turno\_regreso: fechaRegreso,
+          fecha\_turno\_regreso: fechaRegreso,
 
-&nbsp;           contador\_turnos: 0, // Resetear
+          contador\_turnos: 0, // Resetear
 
-&nbsp;           estado\_ciclo: 'ciclo\_normal',
+          estado\_ciclo: 'ciclo\_normal',
 
-&nbsp;           // 🎯 CAMBIO: Limpiar turnos de hoy y mañana
+          // 🎯 CAMBIO: Limpiar turnos de hoy y mañana
 
-&nbsp;           turno\_manana: null,
+          turno\_manana: null,
 
-&nbsp;           fecha\_turno\_manana: null,
+          fecha\_turno\_manana: null,
 
-&nbsp;           ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+          ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;       })
+      })
 
-&nbsp;       .eq('id', currentUser.id);
+      .eq('id', currentUser.id);
 
-&nbsp;   
+  
 
-&nbsp;   if (error) {
+  if (error) {
 
-&nbsp;       alert('Error guardando: ' + error.message);
+      alert('Error guardando: ' + error.message);
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Limpiar variable temporal
+  // Limpiar variable temporal
 
-&nbsp;   delete window.fechasDescansoAutomaticas;
+  delete window.fechasDescansoAutomaticas;
 
-&nbsp;   
+  
 
-&nbsp;   accederMenuATTF();
+  accederMenuATTF();
 
 }
 
@@ -3538,73 +3538,73 @@ async function confirmarDescansoObligatorioATTF() {
 
 async function loginPoda(userData) {
 
-&nbsp;   console.log('🌳 Iniciando flujo Poda');
+  console.log('🌳 Iniciando flujo Poda');
 
-&nbsp;   
+  
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const fechaHoy = getFechaHoyElSalvador();
+  const fechaHoy = getFechaHoyElSalvador();
 
-&nbsp;   
+  
 
-&nbsp;   // 1. Verificar si está en día de descanso
+  // 1. Verificar si está en día de descanso
 
-&nbsp;   if (verificarDiaDescanso(userData)) {
+  if (verificarDiaDescanso(userData)) {
 
-&nbsp;       alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
+      alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
 
-&nbsp;       logout();
+      logout();
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 2. Verificar configuración completa de días de descanso
+  // 2. Verificar configuración completa de días de descanso
 
-&nbsp;   const tieneDescansoProgramado = userData.descanso\_fecha\_inicio \&\& 
+  const tieneDescansoProgramado = userData.descanso\_fecha\_inicio \&\& 
 
-&nbsp;                                   userData.descanso\_fecha\_fin \&\& 
+                                  userData.descanso\_fecha\_fin \&\& 
 
-&nbsp;                                   userData.descanso\_fecha\_fin >= fechaHoy;
-
-
-
-&nbsp;   if (!tieneDescansoProgramado) {
-
-&nbsp;       console.log('🔧 Poda necesita configurar días de descanso');
-
-&nbsp;       mostrarConfiguracionDescansoPoda();
-
-&nbsp;       return;
-
-&nbsp;   }
+                                  userData.descanso\_fecha\_fin >= fechaHoy;
 
 
 
-&nbsp;   // 3. ✅ TODO OK - Acceso al menú
+  if (!tieneDescansoProgramado) {
 
-&nbsp;   document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
+      console.log('🔧 Poda necesita configurar días de descanso');
 
-&nbsp;   document.getElementById('userInfo').classList.remove('hidden');
+      mostrarConfiguracionDescansoPoda();
 
-&nbsp;   document.getElementById('loginSection').style.display = 'none';
+      return;
 
-&nbsp;   document.getElementById('tableSelectionSection').style.display = 'block';
-
-
-
-&nbsp;   mostrarTablasSegunRol();
-
-&nbsp;   iniciarVerificacionSesion();
-
-&nbsp;   guardarDatosOffline();
+  }
 
 
 
-&nbsp;   console.log('✅ Acceso concedido al menú Poda');
+  // 3. ✅ TODO OK - Acceso al menú
+
+  document.getElementById('currentUser').textContent = `Bienvenido, ${userData.usuario} (Poda)`;
+
+  document.getElementById('userInfo').classList.remove('hidden');
+
+  document.getElementById('loginSection').style.display = 'none';
+
+  document.getElementById('tableSelectionSection').style.display = 'block';
+
+
+
+  mostrarTablasSegunRol();
+
+  iniciarVerificacionSesion();
+
+  guardarDatosOffline();
+
+
+
+  console.log('✅ Acceso concedido al menú Poda');
 
 }
 
@@ -3616,63 +3616,63 @@ async function loginPoda(userData) {
 
 function mostrarConfiguracionDescansoPoda() {
 
-&nbsp;   const loginSection = document.getElementById('loginSection');
+  const loginSection = document.getElementById('loginSection');
 
-&nbsp;   
+  
 
-&nbsp;   loginSection.innerHTML = `
+  loginSection.innerHTML = `
 
-&nbsp;       <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+      <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
 
-&nbsp;       <h1 class="titulo-degradado">CLESA</h1>
+      <h1 class="titulo-degradado">CLESA</h1>
 
-&nbsp;       <p class="subtitulo">Configura tus Días de Descanso</p>
+      <p class="subtitulo">Configura tus Días de Descanso</p>
 
-&nbsp;       
+      
 
-&nbsp;       <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+      <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
 
-&nbsp;           <strong>Rol Poda:</strong> Selecciona 2 días consecutivos de descanso para esta semana
+          <strong>Rol Poda:</strong> Selecciona 2 días consecutivos de descanso para esta semana
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Primer día de descanso:</label>
+          <label>Primer día de descanso:</label>
 
-&nbsp;           <input type="date" id="fechaDescansoPodaInicio" class="form-control" onchange="calcularFechaFinPoda()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+          <input type="date" id="fechaDescansoPodaInicio" class="form-control" onchange="calcularFechaFinPoda()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <div class="form-group">
+      <div class="form-group">
 
-&nbsp;           <label>Segundo día de descanso:</label>
+          <label>Segundo día de descanso:</label>
 
-&nbsp;           <input type="date" id="fechaDescansoPodaFin" class="form-control" readonly style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
+          <input type="date" id="fechaDescansoPodaFin" class="form-control" readonly style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
 
-&nbsp;           <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
+          <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
 
-&nbsp;       </div>
+      </div>
 
-&nbsp;       
+      
 
-&nbsp;       <button class="btn" onclick="confirmarDescansoPoda()" style="margin-top: 20px;">
+      <button class="btn" onclick="confirmarDescansoPoda()" style="margin-top: 20px;">
 
-&nbsp;           ✅ Confirmar Días de Descanso
+          ✅ Confirmar Días de Descanso
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;       <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
+      <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
 
-&nbsp;           Cancelar
+          Cancelar
 
-&nbsp;       </button>
+      </button>
 
-&nbsp;   `;
+  `;
 
 }
 
@@ -3682,25 +3682,25 @@ function mostrarConfiguracionDescansoPoda() {
 
 function calcularFechaFinPoda() {
 
-&nbsp;   const fechaInicio = document.getElementById('fechaDescansoPodaInicio').value;
+  const fechaInicio = document.getElementById('fechaDescansoPodaInicio').value;
 
-&nbsp;   const inputFin = document.getElementById('fechaDescansoPodaFin');
+  const inputFin = document.getElementById('fechaDescansoPodaFin');
 
-&nbsp;   
+  
 
-&nbsp;   if (!fechaInicio) return;
+  if (!fechaInicio) return;
 
-&nbsp;   
+  
 
-&nbsp;   const fecha = new Date(fechaInicio + 'T00:00:00');
+  const fecha = new Date(fechaInicio + 'T00:00:00');
 
-&nbsp;   fecha.setDate(fecha.getDate() + 1); // Día consecutivo
+  fecha.setDate(fecha.getDate() + 1); // Día consecutivo
 
-&nbsp;   
+  
 
-&nbsp;   const fechaFin = fecha.toISOString().split('T')\[0];
+  const fechaFin = fecha.toISOString().split('T')\[0];
 
-&nbsp;   inputFin.value = fechaFin;
+  inputFin.value = fechaFin;
 
 }
 
@@ -3710,119 +3710,119 @@ function calcularFechaFinPoda() {
 
 async function confirmarDescansoPoda() {
 
-&nbsp;   const fechaInicio = document.getElementById('fechaDescansoPodaInicio').value;
+  const fechaInicio = document.getElementById('fechaDescansoPodaInicio').value;
 
-&nbsp;   const fechaFin = document.getElementById('fechaDescansoPodaFin').value;
+  const fechaFin = document.getElementById('fechaDescansoPodaFin').value;
 
-&nbsp;   
+  
 
-&nbsp;   if (!fechaInicio || !fechaFin) {
+  if (!fechaInicio || !fechaFin) {
 
-&nbsp;       alert('Por favor seleccione las fechas de descanso');
+      alert('Por favor seleccione las fechas de descanso');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Validar que sean fechas futuras
+  // Validar que sean fechas futuras
 
-&nbsp;   const hoy = new Date().toISOString().split('T')\[0];
+  const hoy = new Date().toISOString().split('T')\[0];
 
-&nbsp;   if (fechaInicio <= hoy) {
+  if (fechaInicio <= hoy) {
 
-&nbsp;       alert('Las fechas de descanso deben ser futuras (desde mañana en adelante)');
+      alert('Las fechas de descanso deben ser futuras (desde mañana en adelante)');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // Confirmación
+  // Confirmación
 
-&nbsp;   const confirmar = confirm(
+  const confirmar = confirm(
 
-&nbsp;       `¿Confirmas tus días de descanso?\\n\\n` +
+      `¿Confirmas tus días de descanso?\\n\\n` +
 
-&nbsp;       `📅 Primer día: ${fechaInicio}\\n` +
+      `📅 Primer día: ${fechaInicio}\\n` +
 
-&nbsp;       `📅 Segundo día: ${fechaFin}\\n\\n` +
+      `📅 Segundo día: ${fechaFin}\\n\\n` +
 
-&nbsp;       `✅ SÍ - Guardar y acceder\\n` +
+      `✅ SÍ - Guardar y acceder\\n` +
 
-&nbsp;       `❌ NO - Corregir`
+      `❌ NO - Corregir`
 
-&nbsp;   );
+  );
 
-&nbsp;   
+  
 
-&nbsp;   if (!confirmar) return;
+  if (!confirmar) return;
 
-&nbsp;   
+  
 
-&nbsp;   // Guardar en BD
+  // Guardar en BD
 
-&nbsp;   const { error } = await supabaseClient
+  const { error } = await supabaseClient
 
-&nbsp;       .from('usuarios')
+      .from('usuarios')
 
-&nbsp;       .update({
+      .update({
 
-&nbsp;           descanso\_fecha\_inicio: fechaInicio,
+          descanso\_fecha\_inicio: fechaInicio,
 
-&nbsp;           descanso\_fecha\_fin: fechaFin,
+          descanso\_fecha\_fin: fechaFin,
 
-&nbsp;           ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+          ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
 
 ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;       })
+      })
 
-&nbsp;       .eq('id', currentUser.id);
+      .eq('id', currentUser.id);
 
-&nbsp;   
+  
 
-&nbsp;   if (error) {
+  if (error) {
 
-&nbsp;       alert('Error guardando días de descanso: ' + error.message);
+      alert('Error guardando días de descanso: ' + error.message);
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   console.log('✅ Días de descanso Poda guardados');
+  console.log('✅ Días de descanso Poda guardados');
 
-&nbsp;   
+  
 
-&nbsp;   // Actualizar currentUser
+  // Actualizar currentUser
 
-&nbsp;   currentUser.descanso\_fecha\_inicio = fechaInicio;
+  currentUser.descanso\_fecha\_inicio = fechaInicio;
 
-&nbsp;   currentUser.descanso\_fecha\_fin = fechaFin;
+  currentUser.descanso\_fecha\_fin = fechaFin;
 
-&nbsp;   
+  
 
-&nbsp;   // Acceso al menú
+  // Acceso al menú
 
-&nbsp;   document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (Poda)`;
+  document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (Poda)`;
 
-&nbsp;   document.getElementById('userInfo').classList.remove('hidden');
+  document.getElementById('userInfo').classList.remove('hidden');
 
-&nbsp;   document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('loginSection').style.display = 'none';
 
-&nbsp;   document.getElementById('tableSelectionSection').style.display = 'block';
+  document.getElementById('tableSelectionSection').style.display = 'block';
 
-&nbsp;   
+  
 
-&nbsp;   mostrarTablasSegunRol();
+  mostrarTablasSegunRol();
 
-&nbsp;   iniciarVerificacionSesion();
+  iniciarVerificacionSesion();
 
-&nbsp;   guardarDatosOffline();
+  guardarDatosOffline();
 
 }
 
@@ -3832,137 +3832,137 @@ ultima\_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
 async function limpiarDiasDescansoViejos() {
 
-&nbsp;   // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
+  // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   const fechaHoyStr = getFechaHoyElSalvador();
+  const fechaHoyStr = getFechaHoyElSalvador();
 
-&nbsp;   
+  
 
-&nbsp;   // 2. Buscar usuarios cuyo descanso terminó o termina hoy
+  // 2. Buscar usuarios cuyo descanso terminó o termina hoy
 
-&nbsp;   // La fecha de fin de descanso (descanso\_fecha\_fin) es el último día libre.
+  // La fecha de fin de descanso (descanso\_fecha\_fin) es el último día libre.
 
-&nbsp;   // El turno de regreso (turno\_regreso) está programado para el día siguiente.
+  // El turno de regreso (turno\_regreso) está programado para el día siguiente.
 
-&nbsp;   // Por eso, usamos 'lt' (less than, menor que) para fechas pasadas.
+  // Por eso, usamos 'lt' (less than, menor que) para fechas pasadas.
 
-&nbsp;   const { data: usuarios, error } = await supabaseClient
+  const { data: usuarios, error } = await supabaseClient
 
-&nbsp;       .from('usuarios')
+      .from('usuarios')
 
-&nbsp;       .select('id, turno\_regreso, fecha\_turno\_regreso, descanso\_fecha\_fin')
+      .select('id, turno\_regreso, fecha\_turno\_regreso, descanso\_fecha\_fin')
 
-&nbsp;       // Filtramos a los que tienen un descanso\_fecha\_fin que ya pasó o es hoy
+      // Filtramos a los que tienen un descanso\_fecha\_fin que ya pasó o es hoy
 
-&nbsp;       .lte('descanso\_fecha\_fin', fechaHoyStr) 
+      .lte('descanso\_fecha\_fin', fechaHoyStr) 
 
-&nbsp;       // y que tienen un turno de regreso programado
+      // y que tienen un turno de regreso programado
 
-&nbsp;       .not('turno\_regreso', 'is', null); 
+      .not('turno\_regreso', 'is', null); 
 
-&nbsp;       
+      
 
-&nbsp;   if (error) {
+  if (error) {
 
-&nbsp;       console.error('Error al consultar usuarios para limpieza de descanso:', error);
+      console.error('Error al consultar usuarios para limpieza de descanso:', error);
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 3. Procesar cada usuario encontrado (cuyo descanso terminó)
+  // 3. Procesar cada usuario encontrado (cuyo descanso terminó)
 
-&nbsp;   const updates = usuarios.map(usuario => {
+  const updates = usuarios.map(usuario => {
 
-&nbsp;       // Promovemos el Turno de Regreso para que se convierta en el Turno de Hoy.
+      // Promovemos el Turno de Regreso para que se convierta en el Turno de Hoy.
 
-&nbsp;       // Esto reinicia el contador y el ciclo de 5 días.
+      // Esto reinicia el contador y el ciclo de 5 días.
 
-&nbsp;       
+      
 
-&nbsp;       // Lógica de validación de REGRESO:
+      // Lógica de validación de REGRESO:
 
-&nbsp;       // Solo promovemos si la fecha de regreso es HOY. 
+      // Solo promovemos si la fecha de regreso es HOY. 
 
-&nbsp;       // Si el usuario se ausentó (llegó más tarde de la fecha\_turno\_regreso), 
+      // Si el usuario se ausentó (llegó más tarde de la fecha\_turno\_regreso), 
 
-&nbsp;       // la función limpiarTurnosViejos() manejará la migración del turno.
+      // la función limpiarTurnosViejos() manejará la migración del turno.
 
-&nbsp;       const fechaRegresoProgramada = usuario.fecha\_turno\_regreso;
+      const fechaRegresoProgramada = usuario.fecha\_turno\_regreso;
 
 
 
-&nbsp;       if (fechaRegresoProgramada === fechaHoyStr) {
+      if (fechaRegresoProgramada === fechaHoyStr) {
 
-&nbsp;           return {
+          return {
 
-&nbsp;               id: usuario.id,
+              id: usuario.id,
 
-&nbsp;               // Reinicio del ciclo:
+              // Reinicio del ciclo:
 
-&nbsp;               turno\_hoy: usuario.turno\_regreso,
+              turno\_hoy: usuario.turno\_regreso,
 
-&nbsp;               fecha\_turno\_hoy: usuario.fecha\_turno\_regreso,
+              fecha\_turno\_hoy: usuario.fecha\_turno\_regreso,
 
-&nbsp;               contador\_turnos: 0, // El primer turno después del descanso es el turno 0/1
+              contador\_turnos: 0, // El primer turno después del descanso es el turno 0/1
 
 
 
-&nbsp;               // Limpieza de campos de descanso (muy importante):
+              // Limpieza de campos de descanso (muy importante):
 
-&nbsp;               descanso\_fecha\_inicio: null,
+              descanso\_fecha\_inicio: null,
 
-&nbsp;               descanso\_fecha\_fin: null,
+              descanso\_fecha\_fin: null,
 
-&nbsp;               turno\_regreso: null,
+              turno\_regreso: null,
 
-&nbsp;               fecha\_turno\_regreso: null
+              fecha\_turno\_regreso: null
 
-&nbsp;           };
+          };
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // Si la fecha de regreso ya pasó, se salta este usuario en la limpieza de descanso.
+      // Si la fecha de regreso ya pasó, se salta este usuario en la limpieza de descanso.
 
-&nbsp;       // Esto evita que se "peguen" turnos viejos si el usuario estuvo inactivo mucho tiempo.
+      // Esto evita que se "peguen" turnos viejos si el usuario estuvo inactivo mucho tiempo.
 
-&nbsp;       return null;
+      return null;
 
-&nbsp;   }).filter(update => update !== null); // Eliminar los registros nulos (que no deben actualizarse hoy)
+  }).filter(update => update !== null); // Eliminar los registros nulos (que no deben actualizarse hoy)
 
 
 
 
 
-&nbsp;   if (updates.length > 0) {
+  if (updates.length > 0) {
 
-&nbsp;       // 4. Ejecutar la actualización masiva de los usuarios que regresan
+      // 4. Ejecutar la actualización masiva de los usuarios que regresan
 
-&nbsp;       const { error: updateError } = await supabaseClient
+      const { error: updateError } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .upsert(updates);
+          .upsert(updates);
 
 
 
-&nbsp;       if (updateError) {
+      if (updateError) {
 
-&nbsp;           console.error('Error al actualizar limpieza de descanso:', updateError);
+          console.error('Error al actualizar limpieza de descanso:', updateError);
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           console.log(`🌴 ${updates.length} usuario(s) regresaron de descanso. Ciclo reiniciado.`);
+          console.log(`🌴 ${updates.length} usuario(s) regresaron de descanso. Ciclo reiniciado.`);
 
-&nbsp;       }
+      }
 
-&nbsp;   }
+  }
 
 }
 
@@ -3972,95 +3972,95 @@ async function limpiarDiasDescansoViejos() {
 
 async function limpiarTurnosViejos() {
 
-&nbsp;   const ahora = new Date();
+  const ahora = new Date();
 
-&nbsp;   // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
+  // 1. Obtener la fecha de HOY en formato YYYY-MM-DD para comparación
 
-&nbsp;   const fechaHoyStr = getFechaHoyElSalvador();
+  const fechaHoyStr = getFechaHoyElSalvador();
 
-&nbsp;   
+  
 
-&nbsp;   // Buscar usuarios donde la fecha\_turno\_hoy no sea hoy (es decir, ya pasó)
+  // Buscar usuarios donde la fecha\_turno\_hoy no sea hoy (es decir, ya pasó)
 
-&nbsp;   const { data: usuarios, error } = await supabaseClient
+  const { data: usuarios, error } = await supabaseClient
 
-&nbsp;       .from('usuarios')
+      .from('usuarios')
 
-&nbsp;       .select('id, fecha\_turno\_hoy, turno\_manana, fecha\_turno\_manana')
+      .select('id, fecha\_turno\_hoy, turno\_manana, fecha\_turno\_manana')
 
-&nbsp;       // Filtramos por usuarios cuya fecha\_turno\_hoy NO sea la de hoy
+      // Filtramos por usuarios cuya fecha\_turno\_hoy NO sea la de hoy
 
-&nbsp;       .not('fecha\_turno\_hoy', 'eq', fechaHoyStr)
+      .not('fecha\_turno\_hoy', 'eq', fechaHoyStr)
 
-&nbsp;       .or('turno\_hoy.not.is.null'); // Solo aquellos que alguna vez tuvieron turno hoy
+      .or('turno\_hoy.not.is.null'); // Solo aquellos que alguna vez tuvieron turno hoy
 
-&nbsp;       
+      
 
-&nbsp;   if (error) {
+  if (error) {
 
-&nbsp;       console.error('Error al consultar usuarios para limpieza de turnos:', error);
+      console.error('Error al consultar usuarios para limpieza de turnos:', error);
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   // 2. Procesar cada usuario encontrado
+  // 2. Procesar cada usuario encontrado
 
-&nbsp;   const updates = usuarios.map(usuario => {
+  const updates = usuarios.map(usuario => {
 
-&nbsp;       // La fecha de turno de hoy programada ya pasó, o nunca se programó para hoy.
+      // La fecha de turno de hoy programada ya pasó, o nunca se programó para hoy.
 
-&nbsp;       // Asignamos el turno de MAÑANA como el turno de HOY.
+      // Asignamos el turno de MAÑANA como el turno de HOY.
 
-&nbsp;       const nuevoTurnoHoy = usuario.turno\_manana;
+      const nuevoTurnoHoy = usuario.turno\_manana;
 
-&nbsp;       const nuevaFechaTurnoHoy = usuario.fecha\_turno\_manana;
+      const nuevaFechaTurnoHoy = usuario.fecha\_turno\_manana;
 
-&nbsp;       
+      
 
-&nbsp;       return {
+      return {
 
-&nbsp;           id: usuario.id,
+          id: usuario.id,
 
-&nbsp;           turno\_hoy: nuevoTurnoHoy,
+          turno\_hoy: nuevoTurnoHoy,
 
-&nbsp;           fecha\_turno\_hoy: nuevaFechaTurnoHoy,
+          fecha\_turno\_hoy: nuevaFechaTurnoHoy,
 
-&nbsp;           turno\_manana: null, // Limpiamos el turno de mañana
+          turno\_manana: null, // Limpiamos el turno de mañana
 
-&nbsp;           fecha\_turno\_manana: null // Limpiamos la fecha de mañana
+          fecha\_turno\_manana: null // Limpiamos la fecha de mañana
 
-&nbsp;       };
+      };
 
-&nbsp;   });
-
-
-
-&nbsp;   if (updates.length > 0) {
-
-&nbsp;       // 3. Ejecutar la actualización masiva de los turnos "viejos"
-
-&nbsp;       const { error: updateError } = await supabaseClient
-
-&nbsp;           .from('usuarios')
-
-&nbsp;           .upsert(updates);
+  });
 
 
 
-&nbsp;       if (updateError) {
+  if (updates.length > 0) {
 
-&nbsp;           console.error('Error al actualizar turnos viejos:', updateError);
+      // 3. Ejecutar la actualización masiva de los turnos "viejos"
 
-&nbsp;       } else {
+      const { error: updateError } = await supabaseClient
 
-&nbsp;           console.log(`🧹 ${updates.length} turno(s) viejo(s) limpiado(s) y migrado(s).`);
+          .from('usuarios')
 
-&nbsp;       }
+          .upsert(updates);
 
-&nbsp;   }
+
+
+      if (updateError) {
+
+          console.error('Error al actualizar turnos viejos:', updateError);
+
+      } else {
+
+          console.log(`🧹 ${updates.length} turno(s) viejo(s) limpiado(s) y migrado(s).`);
+
+      }
+
+  }
 
 }
 
@@ -4074,233 +4074,233 @@ async function limpiarTurnosViejos() {
 
 function mostrarTablasSegunRol() {
 
-&nbsp;   if (!currentUser || !currentUser.rol) {
+  if (!currentUser || !currentUser.rol) {
 
-&nbsp;       console.log('❌ currentUser no está disponible');
+      console.log('❌ currentUser no está disponible');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
-
-
-
-&nbsp;   console.log('🔍 Filtrando tablas para rol:', currentUser.rol);
-
-&nbsp;   const tableOptions = document.querySelectorAll('.table-option');
-
-&nbsp;   const rol = currentUser.rol;
+  }
 
 
 
-&nbsp;   //---------------------------------------------
+  console.log('🔍 Filtrando tablas para rol:', currentUser.rol);
 
-&nbsp;   //  🎯 ADMINISTRADOR - VE TODO
+  const tableOptions = document.querySelectorAll('.table-option');
 
-&nbsp;   //---------------------------------------------
-
-&nbsp;   if (rol === 'Administrador') {
-
-&nbsp;       tableOptions.forEach(opt => opt.style.display = 'block');
-
-&nbsp;       console.log('✅ Administrador: Todas las tablas visibles');
-
-&nbsp;       return;
-
-&nbsp;   }
+  const rol = currentUser.rol;
 
 
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   //  🎯 SUPERVISOR - TODO EXCEPTO usuarios
+  //  🎯 ADMINISTRADOR - VE TODO
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   if (rol === 'Supervisor') {
+  if (rol === 'Administrador') {
 
-&nbsp;       tableOptions.forEach(option => {
+      tableOptions.forEach(opt => opt.style.display = 'block');
 
-&nbsp;           const action = option.getAttribute('onclick') || '';
+      console.log('✅ Administrador: Todas las tablas visibles');
 
-&nbsp;           option.style.display = action.includes('usuarios') ? 'none' : 'block';
+      return;
 
-&nbsp;       });
-
-&nbsp;       return;
-
-&nbsp;   }
+  }
 
 
 
-&nbsp;   // 🎯 DESPACHO - Todo excepto usuarios e IPR
+  //---------------------------------------------
+
+  //  🎯 SUPERVISOR - TODO EXCEPTO usuarios
+
+  //---------------------------------------------
+
+  if (rol === 'Supervisor') {
+
+      tableOptions.forEach(option => {
+
+          const action = option.getAttribute('onclick') || '';
+
+          option.style.display = action.includes('usuarios') ? 'none' : 'block';
+
+      });
+
+      return;
+
+  }
+
+
+
+  // 🎯 DESPACHO - Todo excepto usuarios e IPR
 
 if (rol === 'Despacho') {
 
-&nbsp; tableOptions.forEach(option => {
+tableOptions.forEach(option => {
 
-&nbsp;   const action = option.getAttribute('onclick') || '';
+  const action = option.getAttribute('onclick') || '';
 
-&nbsp;   const prohibido = 
+  const prohibido = 
 
-&nbsp;     action.includes("'usuarios'") || 
+    action.includes("'usuarios'") || 
 
-&nbsp;     action.includes("'retiro\_medidores'");
+    action.includes("'retiro\_medidores'");
 
-&nbsp;   option.style.display = prohibido ? 'none' : 'block';
+  option.style.display = prohibido ? 'none' : 'block';
 
-&nbsp; });
+});
 
-&nbsp; console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
+console.log('✅ Despacho: Módulos visibles (incluye Cargar Asignaciones)');
 
-&nbsp; return;
+return;
 
 }
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   //  🎯 BODEGA - SOLO IPR + OS CERRADAS
+  //  🎯 BODEGA - SOLO IPR + OS CERRADAS
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   if (rol === 'Bodega') {
+  if (rol === 'Bodega') {
 
-&nbsp;       tableOptions.forEach(option => {
+      tableOptions.forEach(option => {
 
-&nbsp;           const action = option.getAttribute('onclick') || '';
+          const action = option.getAttribute('onclick') || '';
 
-&nbsp;           option.style.display =
+          option.style.display =
 
-&nbsp;               (action.includes('retiro\_medidores') || action.includes('OSCerradas'))
+              (action.includes('retiro\_medidores') || action.includes('OSCerradas'))
 
-&nbsp;               ? 'block'
+              ? 'block'
 
-&nbsp;               : 'none';
+              : 'none';
 
-&nbsp;       });
+      });
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
-
-
-
-&nbsp;   //---------------------------------------------
-
-&nbsp;   //  🎯 LECTURA - SOLO consultas\_servicios
-
-&nbsp;   //---------------------------------------------
-
-&nbsp;   if (rol === 'Lectura') {
-
-&nbsp;       tableOptions.forEach(option => {
-
-&nbsp;           const action = option.getAttribute('onclick') || '';
-
-&nbsp;           option.style.display = action.includes('consultas\_servicios') ? 'block' : 'none';
-
-&nbsp;       });
-
-&nbsp;       return;
-
-&nbsp;   }
+  }
 
 
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   //  🎯 ATTF / PODA - servicios + TX y Cortes + IPR
+  //  🎯 LECTURA - SOLO consultas\_servicios
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   if (rol === 'ATTF' || rol === 'Poda') {
+  if (rol === 'Lectura') {
 
-&nbsp;       tableOptions.forEach(option => {
+      tableOptions.forEach(option => {
 
-&nbsp;           const action = option.getAttribute('onclick') || '';
+          const action = option.getAttribute('onclick') || '';
 
-&nbsp;           option.style.display =
+          option.style.display = action.includes('consultas\_servicios') ? 'block' : 'none';
 
-&nbsp;               (action.includes('consultas\_servicios') ||
+      });
 
-&nbsp;                action.includes('TX y Cortes') ||
+      return;
 
-&nbsp;                action.includes('retiro\_medidores'))
-
-&nbsp;               ? 'block'
-
-&nbsp;               : 'none';
-
-&nbsp;       });
-
-&nbsp;       return;
-
-&nbsp;   }
+  }
 
 
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   //  🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO:
+  //  🎯 ATTF / PODA - servicios + TX y Cortes + IPR
 
-&nbsp;   //     ❌ usuarios
+  //---------------------------------------------
 
-&nbsp;   //     ❌ Detalle OS
+  if (rol === 'ATTF' || rol === 'Poda') {
 
-&nbsp;   //     ❌ Cargar Asignaciones
+      tableOptions.forEach(option => {
 
-&nbsp;   //     ✔ IPR (lo deben ver)
+          const action = option.getAttribute('onclick') || '';
 
-&nbsp;   //---------------------------------------------
+          option.style.display =
 
-&nbsp;  // Contratista / Consulta - TODO EXCEPTO usuarios, detalle\_os, cargar\_asignaciones
+              (action.includes('consultas\_servicios') ||
+
+               action.includes('TX y Cortes') ||
+
+               action.includes('retiro\_medidores'))
+
+              ? 'block'
+
+              : 'none';
+
+      });
+
+      return;
+
+  }
+
+
+
+  //---------------------------------------------
+
+  //  🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO:
+
+  //     ❌ usuarios
+
+  //     ❌ Detalle OS
+
+  //     ❌ Cargar Asignaciones
+
+  //     ✔ IPR (lo deben ver)
+
+  //---------------------------------------------
+
+ // Contratista / Consulta - TODO EXCEPTO usuarios, detalle\_os, cargar\_asignaciones
 
 if (rol === 'Contratista' || rol === 'Consulta') {
 
-&nbsp;   tableOptions.forEach(option => {
+  tableOptions.forEach(option => {
 
-&nbsp;       const action = option.getAttribute('onclick') || '';
+      const action = option.getAttribute('onclick') || '';
 
 
 
-&nbsp;       // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
+      // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
 
-&nbsp;       const prohibido =
+      const prohibido =
 
-&nbsp;           action.includes("'usuarios'") ||           // Gestión de Usuarios
+          action.includes("'usuarios'") ||           // Gestión de Usuarios
 
-&nbsp;           action.includes("'detalle\_os'") ||         // Detalle OS
+          action.includes("'detalle\_os'") ||         // Detalle OS
 
-&nbsp;           action.includes("'cargar\_asignaciones'") ||  // Cargar Asignaciones
+          action.includes("'cargar\_asignaciones'") ||  // Cargar Asignaciones
 
 &nbsp;	    action.includes("'mapa\_rutas'");           // ← AGREGADO: Mapa de Rutas
 
-&nbsp;       option.style.display = prohibido ? 'none' : 'block';
+      option.style.display = prohibido ? 'none' : 'block';
 
-&nbsp;   });
+  });
 
 
 
-&nbsp;   console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle\_os, cargar\_asignaciones`);
+  console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle\_os, cargar\_asignaciones`);
 
-&nbsp;   return;
+  return;
 
 }
 
 
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   //  🎯 DEFAULT - TODO EXCEPTO usuarios
+  //  🎯 DEFAULT - TODO EXCEPTO usuarios
 
-&nbsp;   //---------------------------------------------
+  //---------------------------------------------
 
-&nbsp;   tableOptions.forEach(option => {
+  tableOptions.forEach(option => {
 
-&nbsp;       const action = option.getAttribute('onclick') || '';
+      const action = option.getAttribute('onclick') || '';
 
-&nbsp;       option.style.display = action.includes('usuarios') ? 'none' : 'block';
+      option.style.display = action.includes('usuarios') ? 'none' : 'block';
 
-&nbsp;   });
+  });
 
 }
 
@@ -4310,63 +4310,63 @@ if (rol === 'Contratista' || rol === 'Consulta') {
 
 async function desbloquearUsuario(username) {
 
-&nbsp;   if (!currentUser || currentUser.rol !== 'Supervisor') {
+  if (!currentUser || currentUser.rol !== 'Supervisor') {
 
-&nbsp;       alert('Solo los supervisores pueden desbloquear usuarios');
+      alert('Solo los supervisores pueden desbloquear usuarios');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   const { error } = await supabaseClient
+  const { error } = await supabaseClient
 
-&nbsp;   .from('usuarios')
+  .from('usuarios')
 
-&nbsp;   .update({
+  .update({
 
-&nbsp;       razon\_bloqueo: null,
+      razon\_bloqueo: null,
 
-&nbsp;       ultima\_actividad: new Date().toISOString(),
+      ultima\_actividad: new Date().toISOString(),
 
-&nbsp;       estado\_ciclo: 'primera\_vez',
+      estado\_ciclo: 'primera\_vez',
 
-&nbsp;       contador\_turnos: 0,
+      contador\_turnos: 0,
 
-&nbsp;       turno\_hoy: null,
+      turno\_hoy: null,
 
-&nbsp;       fecha\_turno\_hoy: null,
+      fecha\_turno\_hoy: null,
 
-&nbsp;       turno\_manana: null,
+      turno\_manana: null,
 
-&nbsp;       fecha\_turno\_manana: null,
+      fecha\_turno\_manana: null,
 
-&nbsp;       descanso\_fecha\_inicio: null,
+      descanso\_fecha\_inicio: null,
 
-&nbsp;       descanso\_fecha\_fin: null,
+      descanso\_fecha\_fin: null,
 
-&nbsp;       turno\_regreso: null,
+      turno\_regreso: null,
 
-&nbsp;       fecha\_turno\_regreso: null
+      fecha\_turno\_regreso: null
 
-&nbsp;   })
+  })
 
-&nbsp;       .eq('usuario', username);
+      .eq('usuario', username);
 
-&nbsp;   
+  
 
-&nbsp;   if (error) {
+  if (error) {
 
-&nbsp;       alert('Error desbloqueando usuario: ' + error.message);
+      alert('Error desbloqueando usuario: ' + error.message);
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   alert(`Usuario ${username} desbloqueado exitosamente.\\n\\nSu configuración ha sido reseteada.`);
+  alert(`Usuario ${username} desbloqueado exitosamente.\\n\\nSu configuración ha sido reseteada.`);
 
 }
 
@@ -4382,327 +4382,327 @@ async function desbloquearUsuario(username) {
 
 async function incrementarContadorBusquedas() {
 
-&nbsp;   if (!currentUser) return;
+  if (!currentUser) return;
 
-&nbsp;   
+  
 
-&nbsp;   try {
+  try {
 
-&nbsp;       // 1. Obtener contador actual
+      // 1. Obtener contador actual
 
-&nbsp;       const { data: usuario, error: errorGet } = await supabaseClient
+      const { data: usuario, error: errorGet } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .select('Contador')
+          .select('Contador')
 
-&nbsp;           .eq('id', currentUser.id)
+          .eq('id', currentUser.id)
 
-&nbsp;           .single();
+          .single();
 
-&nbsp;       
+      
 
-&nbsp;       if (errorGet) {
+      if (errorGet) {
 
-&nbsp;           console.error('Error obteniendo Contador:', errorGet.message);
+          console.error('Error obteniendo Contador:', errorGet.message);
 
-&nbsp;           return;
+          return;
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;       // 💡 CAMBIO CLAVE: Usamos parseInt() para garantizar que sea un número.
+      // 💡 CAMBIO CLAVE: Usamos parseInt() para garantizar que sea un número.
 
-&nbsp;       const contadorActual = parseInt(usuario.Contador) || 0; 
+      const contadorActual = parseInt(usuario.Contador) || 0; 
 
-&nbsp;       const nuevoContador = contadorActual + 1;
+      const nuevoContador = contadorActual + 1;
 
-&nbsp;       
+      
 
-&nbsp;       // 2. Actualizar contador
+      // 2. Actualizar contador
 
-&nbsp;       const { error: errorUpdate } = await supabaseClient
+      const { error: errorUpdate } = await supabaseClient
 
-&nbsp;           .from('usuarios')
+          .from('usuarios')
 
-&nbsp;           .update({ 
+          .update({ 
 
-&nbsp;               Contador: nuevoContador,
+              Contador: nuevoContador,
 
-&nbsp;               ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+              ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
 
-&nbsp;           })
+          })
 
-&nbsp;           .eq('id', currentUser.id);
+          .eq('id', currentUser.id);
 
-&nbsp;       
+      
 
-&nbsp;       if (errorUpdate) {
+      if (errorUpdate) {
 
-&nbsp;           console.error('Error actualizando Contador:', errorUpdate.message);
+          console.error('Error actualizando Contador:', errorUpdate.message);
 
-&nbsp;       } else {
+      } else {
 
-&nbsp;           console.log(`Búsqueda #${nuevoContador} registrada para ${currentUser.usuario}`);
+          console.log(`Búsqueda #${nuevoContador} registrada para ${currentUser.usuario}`);
 
-&nbsp;           currentUser.Contador = nuevoContador; 
+          currentUser.Contador = nuevoContador; 
 
-&nbsp;       }
+      }
 
-&nbsp;       
+      
 
-&nbsp;   } catch (error) {
+  } catch (error) {
 
-&nbsp;       console.error('Error general en contador de búsquedas:', error.message);
+      console.error('Error general en contador de búsquedas:', error.message);
 
-&nbsp;   }
+  }
 
 }
 
 
 
-&nbsp;   const tableConfigs = {
+  const tableConfigs = {
 
-&nbsp;    'consultas\_servicios': {
+   'consultas\_servicios': {
 
-&nbsp;   title: 'Consultas de Servicios',
+  title: 'Consultas de Servicios',
 
-&nbsp;   icon: '🏠',
+  icon: '🏠',
 
-&nbsp;   fields: \[
+  fields: \[
 
-&nbsp;     { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+    { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
 
-&nbsp;     { key: 'Medidor', label: 'Medidor', type: 'exact' },
+    { key: 'Medidor', label: 'Medidor', type: 'exact' },
 
-&nbsp;     { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like', oculto: true }  // ← AGREGADO oculto: true
+    { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like', oculto: true }  // ← AGREGADO oculto: true
 
-&nbsp;   ],
+  ],
 
-&nbsp;   resultFields: \['CuentaContrato', 'Medidor', 'NombreCliente', 'Direccion', 'ComentarioGeneral'],
+  resultFields: \['CuentaContrato', 'Medidor', 'NombreCliente', 'Direccion', 'ComentarioGeneral'],
 
-&nbsp;   actions: \['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
+  actions: \['Coordenadas', 'Coordenadasgis', 'FotoLink', 'Grafica']
 
 },
 
-&nbsp;     'Consumos': {
+    'Consumos': {
 
-&nbsp;       title: 'Consumos',
+      title: 'Consumos',
 
-&nbsp;       icon: '📊',
+      icon: '📊',
 
-&nbsp;       fields: \[
+      fields: \[
 
-&nbsp;         { key: 'cuentacontrato', label: 'Cuenta/Contrato', type: 'exact' },
+        { key: 'cuentacontrato', label: 'Cuenta/Contrato', type: 'exact' },
 
-&nbsp;         { key: 'medidor', label: 'Medidor', type: 'exact' }
+        { key: 'medidor', label: 'Medidor', type: 'exact' }
 
-&nbsp;       ],
+      ],
 
-&nbsp;       resultFields: \['cuentacontrato', 'medidor'],
+      resultFields: \['cuentacontrato', 'medidor'],
 
-&nbsp;       actions: \['consumos']
+      actions: \['consumos']
 
-&nbsp;     },
+    },
 
-&nbsp;     'Coordenadas': {
+    'Coordenadas': {
 
-&nbsp;       title: 'Coordenadas',
+      title: 'Coordenadas',
 
-&nbsp;       icon: '📍',
+      icon: '📍',
 
-&nbsp;       fields: \[
+      fields: \[
 
-&nbsp;         { key: 'Medidor', label: 'Medidor', type: 'exact' },
+        { key: 'Medidor', label: 'Medidor', type: 'exact' },
 
-&nbsp;         { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' }
+        { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' }
 
-&nbsp;       ],
+      ],
 
-&nbsp;       resultFields: \['Medidor', 'CuentaContrato'],
+      resultFields: \['Medidor', 'CuentaContrato'],
 
-&nbsp;       actions: \['CoordenadasLector', 'CoordenadasGis']
+      actions: \['CoordenadasLector', 'CoordenadasGis']
 
-&nbsp;     },
+    },
 
-&nbsp;     'OS Pendientes': {
+    'OS Pendientes': {
 
-&nbsp;       title: 'OS Pendientes',
+      title: 'OS Pendientes',
 
-&nbsp;       icon: '⏳',
+      icon: '⏳',
 
-&nbsp;       fields: \[
+      fields: \[
 
-&nbsp;         { key: 'OSATMO', label: 'OS ATOMO', type: 'exact' },
+        { key: 'OSATMO', label: 'OS ATOMO', type: 'exact' },
 
-&nbsp;         { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
+        { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
 
-&nbsp;         { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+        { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
 
-&nbsp;         { key: 'Medidor', label: 'Medidor', type: 'exact' },
+        { key: 'Medidor', label: 'Medidor', type: 'exact' },
 
-&nbsp;         { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+        { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
 
-&nbsp;       ],
+      ],
 
-&nbsp;       resultFields: \['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
+      resultFields: \['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
 
-&nbsp;       actions: \['Coordenadas', 'FotoLink', 'CoordenadasGis']
+      actions: \['Coordenadas', 'FotoLink', 'CoordenadasGis']
 
-&nbsp;     },
+    },
 
-&nbsp;     'OSCerradas': {
+    'OSCerradas': {
 
-&nbsp;       title: 'OS Cerradas',
+      title: 'OS Cerradas',
 
-&nbsp;       icon: '✅',
+      icon: '✅',
 
-&nbsp;       fields: \[
+      fields: \[
 
-&nbsp;         { key: 'OSATOMO', label: 'OS ATOMO', type: 'exact' },
+        { key: 'OSATOMO', label: 'OS ATOMO', type: 'exact' },
 
-&nbsp;         { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
+        { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
 
-&nbsp;         { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
+        { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
 
-&nbsp;         { key: 'Medidor', label: 'Medidor', type: 'exact' },
+        { key: 'Medidor', label: 'Medidor', type: 'exact' },
 
-&nbsp;         { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+        { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
 
-&nbsp;       ],
+      ],
 
-&nbsp;       resultFields: \['OSATOMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
+      resultFields: \['OSATOMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
 
-&nbsp;       actions: \['Coordenadas', 'FotoLink']
+      actions: \['Coordenadas', 'FotoLink']
 
-&nbsp;     },
+    },
 
-&nbsp;     'TX y Cortes': {
+    'TX y Cortes': {
 
-&nbsp;       title: 'TX y Cortes',
+      title: 'TX y Cortes',
 
-&nbsp;       icon: '⚡',
+      icon: '⚡',
 
-&nbsp;       fields: \[
+      fields: \[
 
-&nbsp;         { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
+        { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
 
-&nbsp;         { key: 'Circuitos', label: 'Circuitos', type: 'like' }
+        { key: 'Circuitos', label: 'Circuitos', type: 'like' }
 
-&nbsp;       ],
+      ],
 
-&nbsp;       resultFields: \['TXCortes', 'Circuitos', 'Comentario'],
+      resultFields: \['TXCortes', 'Circuitos', 'Comentario'],
 
-&nbsp;       actions: \['Coordenadas']
+      actions: \['Coordenadas']
 
-&nbsp;     },
+    },
 
 &nbsp;	// 🆕 AGREGAR ESTO:
 
-&nbsp;   'usuarios': {
+  'usuarios': {
 
-&nbsp;   title: 'Gestión de Usuarios',
+  title: 'Gestión de Usuarios',
 
-&nbsp;   icon: '👥',
+  icon: '👥',
 
-&nbsp;   fields: \[
+  fields: \[
 
-&nbsp;       { key: 'usuario', label: 'Usuario', type: 'like' }
+      { key: 'usuario', label: 'Usuario', type: 'like' }
 
-&nbsp;   ],
+  ],
 
-&nbsp;   resultFields: \['usuario', 'rol', 'activo', 'bloqueado'],
+  resultFields: \['usuario', 'rol', 'activo', 'bloqueado'],
 
-&nbsp;   actions: \[],
+  actions: \[],
 
-&nbsp;   esAdmin: true
-
-&nbsp; },
-
-&nbsp;      'kml\_ruta': {
-
-&nbsp;   title: 'KML Ruta',
-
-&nbsp;   icon: '📍',
-
-&nbsp;   fields: \[],
-
-&nbsp;   resultFields: \[],
-
-&nbsp;   actions: \[],
-
-&nbsp;   esKMLRuta: true
+  esAdmin: true
 
 },
 
-&nbsp;   'detalle\_os': {
+     'kml\_ruta': {
 
-&nbsp;   title: 'Detalle OS',
+  title: 'KML Ruta',
 
-&nbsp;   icon: '📊',
+  icon: '📍',
 
-&nbsp;   fields: \[],
+  fields: \[],
 
-&nbsp;   resultFields: \[],
+  resultFields: \[],
 
-&nbsp;   actions: \[],
+  actions: \[],
 
-&nbsp;   esDetalleOS: true,
+  esKMLRuta: true
 
-&nbsp;   rolesPermitidos: \['Administrador', 'Supervisor']
+},
+
+  'detalle\_os': {
+
+  title: 'Detalle OS',
+
+  icon: '📊',
+
+  fields: \[],
+
+  resultFields: \[],
+
+  actions: \[],
+
+  esDetalleOS: true,
+
+  rolesPermitidos: \['Administrador', 'Supervisor']
 
 },
 
 'retiro\_medidores': {
 
-&nbsp;   title: 'IPR - Retiro de Medidores',
+  title: 'IPR - Retiro de Medidores',
 
-&nbsp;   icon: '📦',
+  icon: '📦',
 
-&nbsp;   fields: \[],
+  fields: \[],
 
-&nbsp;   resultFields: \[],
+  resultFields: \[],
 
-&nbsp;   actions: \[],
+  actions: \[],
 
-&nbsp;   esIPR: true,
+  esIPR: true,
 
-&nbsp;   rolesPermitidos: \['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']
+  rolesPermitidos: \['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']
 
 },
 
 'mapa\_rutas': {
 
-&nbsp;   title: 'Mapa de Rutas',
+  title: 'Mapa de Rutas',
 
-&nbsp;   icon: '🗺️',
+  icon: '🗺️',
 
-&nbsp;   fields: \[],
+  fields: \[],
 
-&nbsp;   resultFields: \[],
+  resultFields: \[],
 
-&nbsp;   actions: \[],
+  actions: \[],
 
-&nbsp;   esMapaRutas: true,
+  esMapaRutas: true,
 
-&nbsp;   rolesPermitidos: \['Administrador', 'Contratista', 'Consulta']
+  rolesPermitidos: \['Administrador', 'Contratista', 'Consulta']
 
 },
 
 'cargar\_asignaciones': {
 
-&nbsp;   title: 'Cargar Asignaciones (Admin)',
+  title: 'Cargar Asignaciones (Admin)',
 
-&nbsp;   icon: '📤',
+  icon: '📤',
 
-&nbsp;   fields: \[],
+  fields: \[],
 
-&nbsp;   resultFields: \[],
+  resultFields: \[],
 
-&nbsp;   actions: \[],
+  actions: \[],
 
-&nbsp;   esAdmin: true
+  esAdmin: true
 
 }
 
@@ -4712,59 +4712,59 @@ async function incrementarContadorBusquedas() {
 
 &nbsp;	async function fetchAllFromTable(tableName, columns = '\*') {
 
-&nbsp;   const batchSize = 1000;
+  const batchSize = 1000;
 
-&nbsp;   let allData = \[];
+  let allData = \[];
 
-&nbsp;   let offset = 0;
+  let offset = 0;
 
-&nbsp;   let hasMore = true;
-
-
-
-&nbsp;   while (hasMore) {
-
-&nbsp;       const { data, error, count } = await supabaseClient
-
-&nbsp;           .from(tableName)
-
-&nbsp;           .select(columns, { count: offset === 0 ? 'exact' : undefined })
-
-&nbsp;           .range(offset, offset + batchSize - 1);
+  let hasMore = true;
 
 
 
-&nbsp;       if (error) {
+  while (hasMore) {
 
-&nbsp;           console.error('Error en fetchAllFromTable:', error);
+      const { data, error, count } = await supabaseClient
 
-&nbsp;           throw error;
+          .from(tableName)
 
-&nbsp;       }
+          .select(columns, { count: offset === 0 ? 'exact' : undefined })
 
-
-
-&nbsp;       if (data \&\& data.length > 0) {
-
-&nbsp;           allData = allData.concat(data);
-
-&nbsp;           console.log(`✅ Cargadas ${allData.length} de ${count || '?'} filas...`);
-
-&nbsp;           offset += batchSize;
-
-&nbsp;           hasMore = data.length === batchSize;
-
-&nbsp;       } else {
-
-&nbsp;           hasMore = false;
-
-&nbsp;       }
-
-&nbsp;   }
+          .range(offset, offset + batchSize - 1);
 
 
 
-&nbsp;   return { data: allData, count: allData.length };
+      if (error) {
+
+          console.error('Error en fetchAllFromTable:', error);
+
+          throw error;
+
+      }
+
+
+
+      if (data \&\& data.length > 0) {
+
+          allData = allData.concat(data);
+
+          console.log(`✅ Cargadas ${allData.length} de ${count || '?'} filas...`);
+
+          offset += batchSize;
+
+          hasMore = data.length === batchSize;
+
+      } else {
+
+          hasMore = false;
+
+      }
+
+  }
+
+
+
+  return { data: allData, count: allData.length };
 
 }
 
@@ -4772,71 +4772,71 @@ async function incrementarContadorBusquedas() {
 
 
 
-&nbsp;   // ✅ Variables para las gráficas
+  // ✅ Variables para las gráficas
 
-&nbsp;   let consumosChart = null;
+  let consumosChart = null;
 
-&nbsp;   let lecturasChart = null;
-
-
-
-&nbsp;   // ✅ Función para parsear datos de gráficas (consumos)
-
-&nbsp;   function parsearDatosGrafica(graficaData) {
-
-&nbsp;       if (!graficaData || graficaData.trim() === '') {
-
-&nbsp;           return { meses: \[], lecturas: \[], consumos: \[] };
-
-&nbsp;       }
+  let lecturasChart = null;
 
 
 
-&nbsp;       const meses = \[], lecturas = \[], consumos = \[];
+  // ✅ Función para parsear datos de gráficas (consumos)
 
-&nbsp;       const lineas = graficaData.split('\\n').map(l => l.trim()).filter(l => l);
+  function parsearDatosGrafica(graficaData) {
 
+      if (!graficaData || graficaData.trim() === '') {
 
+          return { meses: \[], lecturas: \[], consumos: \[] };
 
-&nbsp;       for (const linea of lineas) {
-
-&nbsp;           const match = linea.match(/^(\[A-Za-z]+)\\.-?(\\d+)(?:-(\\d+))?/);
-
-&nbsp;           if (match) {
-
-&nbsp;               const \[, mes, lectura, consumo] = match;
-
-&nbsp;               meses.push(mes);
-
-&nbsp;               lecturas.push(parseInt(lectura));
-
-&nbsp;               if (consumo !== undefined) {
-
-&nbsp;                   consumos.push(parseInt(consumo));
-
-&nbsp;               } else if (lecturas.length > 1) {
-
-&nbsp;                   const consumoCalculado = lecturas\[lecturas.length - 1] - lecturas\[lecturas.length - 2];
-
-&nbsp;                   consumos.push(Math.max(0, consumoCalculado));
-
-&nbsp;               } else {
-
-&nbsp;                   consumos.push(0);
-
-&nbsp;               }
-
-&nbsp;           }
-
-&nbsp;       }
-
-&nbsp;       return { meses, lecturas, consumos };
-
-&nbsp;   }
+      }
 
 
 
-&nbsp;   
+      const meses = \[], lecturas = \[], consumos = \[];
+
+      const lineas = graficaData.split('\\n').map(l => l.trim()).filter(l => l);
+
+
+
+      for (const linea of lineas) {
+
+          const match = linea.match(/^(\[A-Za-z]+)\\.-?(\\d+)(?:-(\\d+))?/);
+
+          if (match) {
+
+              const \[, mes, lectura, consumo] = match;
+
+              meses.push(mes);
+
+              lecturas.push(parseInt(lectura));
+
+              if (consumo !== undefined) {
+
+                  consumos.push(parseInt(consumo));
+
+              } else if (lecturas.length > 1) {
+
+                  const consumoCalculado = lecturas\[lecturas.length - 1] - lecturas\[lecturas.length - 2];
+
+                  consumos.push(Math.max(0, consumoCalculado));
+
+              } else {
+
+                  consumos.push(0);
+
+              }
+
+          }
+
+      }
+
+      return { meses, lecturas, consumos };
+
+  }
+
+
+
+  
 
 
 
@@ -4844,17 +4844,17 @@ async function incrementarContadorBusquedas() {
 
 function verGraficasPorIndice(dataIndex) {
 
-&nbsp;   if (dataIndex === undefined || dataIndex < 0 || dataIndex >= consultasData.length) {
+  if (dataIndex === undefined || dataIndex < 0 || dataIndex >= consultasData.length) {
 
-&nbsp;       alert('Datos de gráfica no disponibles');
+      alert('Datos de gráfica no disponibles');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
-&nbsp;   const item = consultasData\[dataIndex];
+  const item = consultasData\[dataIndex];
 
-&nbsp;   verGraficas(item.Grafica || item.grafica || '', item.NombreCliente || 'Cliente', item.CuentaContrato || 'N/A');
+  verGraficas(item.Grafica || item.grafica || '', item.NombreCliente || 'Cliente', item.CuentaContrato || 'N/A');
 
 }
 
@@ -4864,59 +4864,59 @@ function verGraficasPorIndice(dataIndex) {
 
 function verGraficas(graficaData, nombreCliente, cuentaContrato) {
 
-&nbsp;   try {
+  try {
 
-&nbsp;       const modal = document.getElementById('chartsModal');
+      const modal = document.getElementById('chartsModal');
 
-&nbsp;       const modalTitle = document.getElementById('modalTitle');
+      const modalTitle = document.getElementById('modalTitle');
 
-&nbsp;       modalTitle.textContent = `Gráficas - ${nombreCliente} (Cuenta: ${cuentaContrato})`;
+      modalTitle.textContent = `Gráficas - ${nombreCliente} (Cuenta: ${cuentaContrato})`;
 
-&nbsp;       modal.style.display = 'block';
-
-
-
-&nbsp;       // Parsear los datos dinámicos
-
-&nbsp;       const datos = parsearDatosGrafica(graficaData);
+      modal.style.display = 'block';
 
 
 
-&nbsp;       // Solo si no hay ningún dato válido mostramos mensaje o ejemplo muy discreto
+      // Parsear los datos dinámicos
 
-&nbsp;       if (datos.meses.length === 0) {
-
-&nbsp;           alert('No hay datos de consumo y lectura disponibles para esta fila.');
-
-&nbsp;           cerrarGraficas();
-
-&nbsp;           return;
-
-&nbsp;       }
+      const datos = parsearDatosGrafica(graficaData);
 
 
 
-&nbsp;       // Destruir gráficos previos si existen
+      // Solo si no hay ningún dato válido mostramos mensaje o ejemplo muy discreto
 
-&nbsp;       if (consumosChart) consumosChart.destroy();
+      if (datos.meses.length === 0) {
 
-&nbsp;       if (lecturasChart) lecturasChart.destroy();
+          alert('No hay datos de consumo y lectura disponibles para esta fila.');
+
+          cerrarGraficas();
+
+          return;
+
+      }
 
 
 
-&nbsp;       // Crear las gráficas con los datos extraídos de la fila
+      // Destruir gráficos previos si existen
 
-&nbsp;       setTimeout(() => { crearGraficas(datos); }, 100);
+      if (consumosChart) consumosChart.destroy();
+
+      if (lecturasChart) lecturasChart.destroy();
 
 
 
-&nbsp;   } catch (error) {
+      // Crear las gráficas con los datos extraídos de la fila
 
-&nbsp;       console.error('❌ Error mostrando gráficas:', error);
+      setTimeout(() => { crearGraficas(datos); }, 100);
 
-&nbsp;       alert('Error mostrando las gráficas. Por favor intente de nuevo.');
 
-&nbsp;   }
+
+  } catch (error) {
+
+      console.error('❌ Error mostrando gráficas:', error);
+
+      alert('Error mostrando las gráficas. Por favor intente de nuevo.');
+
+  }
 
 }
 
@@ -4924,407 +4924,407 @@ function verGraficas(graficaData, nombreCliente, cuentaContrato) {
 
 
 
-&nbsp;  // ✅ Función para crear gráficas HORIZONTALES (barras de izq→der, líneas arriba→abajo)
+ // ✅ Función para crear gráficas HORIZONTALES (barras de izq→der, líneas arriba→abajo)
 
 function crearGraficas(datos) {
 
-&nbsp;   try {
+  try {
 
-&nbsp;       const ctxConsumos = document.getElementById('consumosChart');
+      const ctxConsumos = document.getElementById('consumosChart');
 
-&nbsp;       if (ctxConsumos) {
+      if (ctxConsumos) {
 
-&nbsp;           consumosChart = new Chart(ctxConsumos, {
+          consumosChart = new Chart(ctxConsumos, {
 
-&nbsp;               type: 'bar',
+              type: 'bar',
 
-&nbsp;               data: {
+              data: {
 
-&nbsp;                   labels: datos.meses,
+                  labels: datos.meses,
 
-&nbsp;                   datasets: \[{
+                  datasets: \[{
 
-&nbsp;                       label: 'Consumo (kWh)',
+                      label: 'Consumo (kWh)',
 
-&nbsp;                       data: datos.consumos,
+                      data: datos.consumos,
 
-&nbsp;                       backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                      backgroundColor: 'rgba(102, 126, 234, 0.8)',
 
-&nbsp;                       borderColor: 'rgba(102, 126, 234, 1)',
+                      borderColor: 'rgba(102, 126, 234, 1)',
 
-&nbsp;                       borderWidth: 2,
+                      borderWidth: 2,
 
-&nbsp;                       borderRadius: 5,
+                      borderRadius: 5,
 
-&nbsp;                       borderSkipped: false,
+                      borderSkipped: false,
 
-&nbsp;                   }]
+                  }]
 
-&nbsp;               },
+              },
 
-&nbsp;               plugins: \[ChartDataLabels],
+              plugins: \[ChartDataLabels],
 
-&nbsp;               options: {
+              options: {
 
-&nbsp;                   indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
+                  indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
 
-&nbsp;                   responsive: true,
+                  responsive: true,
 
-&nbsp;                   maintainAspectRatio: false,
+                  maintainAspectRatio: false,
 
-&nbsp;                   plugins: {
+                  plugins: {
 
-&nbsp;                       legend: {display: true, position: 'top'},
+                      legend: {display: true, position: 'top'},
 
-&nbsp;                       datalabels: {
+                      datalabels: {
 
-&nbsp;                           display: true,
+                          display: true,
 
-&nbsp;                           anchor: 'end',
+                          anchor: 'end',
 
-&nbsp;                           align: 'right',
+                          align: 'right',
 
-&nbsp;                           font: {
+                          font: {
 
-&nbsp;                               weight: 'bold',
+                              weight: 'bold',
 
-&nbsp;                               size: 12
+                              size: 12
 
-&nbsp;                           },
+                          },
 
-&nbsp;                           color: '#2d3748',
+                          color: '#2d3748',
 
-&nbsp;                           formatter: function(value) {
+                          formatter: function(value) {
 
-&nbsp;                               return value + ' kWh';
+                              return value + ' kWh';
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       },
+                      },
 
-&nbsp;                       tooltip: {
+                      tooltip: {
 
-&nbsp;                           callbacks: {
+                          callbacks: {
 
-&nbsp;                               label: function(context) {
+                              label: function(context) {
 
-&nbsp;                                   return `${context.dataset.label}: ${context.parsed.x} kWh`;
+                                  return `${context.dataset.label}: ${context.parsed.x} kWh`;
 
-&nbsp;                               }
+                              }
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       }
+                      }
 
-&nbsp;                   },
+                  },
 
-&nbsp;                   scales: {
+                  scales: {
 
-&nbsp;                       x: { // 🎯 Ahora X es el valor (consumo)
+                      x: { // 🎯 Ahora X es el valor (consumo)
 
-&nbsp;                           beginAtZero: true,
+                          beginAtZero: true,
 
-&nbsp;                           title: {display: true, text: 'Consumo (kWh)'},
+                          title: {display: true, text: 'Consumo (kWh)'},
 
-&nbsp;                           suggestedMax: function(context) {
+                          suggestedMax: function(context) {
 
-&nbsp;                               const max = Math.max(...datos.consumos);
+                              const max = Math.max(...datos.consumos);
 
-&nbsp;                               return max \* 1.15;
+                              return max \* 1.15;
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       },
+                      },
 
-&nbsp;                       y: { // 🎯 Ahora Y son los meses
+                      y: { // 🎯 Ahora Y son los meses
 
-&nbsp;                           title: {display: true, text: 'Mes'},
+                          title: {display: true, text: 'Mes'},
 
-&nbsp;                           ticks: {
+                          ticks: {
 
-&nbsp;                               font: {
+                              font: {
 
-&nbsp;                                   size: 11
+                                  size: 11
 
-&nbsp;                               }
+                              }
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       }
+                      }
 
-&nbsp;                   }
+                  }
 
-&nbsp;               }
+              }
 
-&nbsp;           });
+          });
 
-&nbsp;       }
+      }
 
 
 
-&nbsp;       const ctxLecturas = document.getElementById('lecturasChart');
+      const ctxLecturas = document.getElementById('lecturasChart');
 
-&nbsp;       if (ctxLecturas) {
+      if (ctxLecturas) {
 
-&nbsp;           lecturasChart = new Chart(ctxLecturas, {
+          lecturasChart = new Chart(ctxLecturas, {
 
-&nbsp;               type: 'line',
+              type: 'line',
 
-&nbsp;               data: {
+              data: {
 
-&nbsp;                   labels: datos.meses,
+                  labels: datos.meses,
 
-&nbsp;                   datasets: \[{
+                  datasets: \[{
 
-&nbsp;                       label: 'Lectura Acumulada',
+                      label: 'Lectura Acumulada',
 
-&nbsp;                       data: datos.lecturas,
+                      data: datos.lecturas,
 
-&nbsp;                       borderColor: 'rgba(118, 75, 162, 1)',
+                      borderColor: 'rgba(118, 75, 162, 1)',
 
-&nbsp;                       backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                      backgroundColor: 'rgba(118, 75, 162, 0.1)',
 
-&nbsp;                       borderWidth: 3,
+                      borderWidth: 3,
 
-&nbsp;                       fill: true,
+                      fill: true,
 
-&nbsp;                       tension: 0.4,
+                      tension: 0.4,
 
-&nbsp;                       pointBackgroundColor: 'rgba(118, 75, 162, 1)',
+                      pointBackgroundColor: 'rgba(118, 75, 162, 1)',
 
-&nbsp;                       pointBorderColor: '#fff',
+                      pointBorderColor: '#fff',
 
-&nbsp;                       pointBorderWidth: 2,
+                      pointBorderWidth: 2,
 
-&nbsp;                       pointRadius: 8,
+                      pointRadius: 8,
 
-&nbsp;                       pointHoverRadius: 10
+                      pointHoverRadius: 10
 
-&nbsp;                   }]
+                  }]
 
-&nbsp;               },
+              },
 
-&nbsp;               plugins: \[ChartDataLabels],
+              plugins: \[ChartDataLabels],
 
-&nbsp;               options: {
+              options: {
 
-&nbsp;                   indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
+                  indexAxis: 'y', // 🎯 CLAVE: Cambiar a horizontal (meses en eje Y)
 
-&nbsp;                   responsive: true,
+                  responsive: true,
 
-&nbsp;                   maintainAspectRatio: false,
+                  maintainAspectRatio: false,
 
-&nbsp;                   plugins: {
+                  plugins: {
 
-&nbsp;                       legend: {display: true, position: 'top'},
+                      legend: {display: true, position: 'top'},
 
-&nbsp;                       datalabels: {
+                      datalabels: {
 
-&nbsp;                           display: true,
+                          display: true,
 
-&nbsp;                           anchor: 'end',
+                          anchor: 'end',
 
-&nbsp;                           align: 'right',
+                          align: 'right',
 
-&nbsp;                           offset: 5,
+                          offset: 5,
 
-&nbsp;                           font: {
+                          font: {
 
-&nbsp;                               weight: 'bold',
+                              weight: 'bold',
 
-&nbsp;                               size: 11
+                              size: 11
 
-&nbsp;                           },
+                          },
 
-&nbsp;                           color: '#2d3748',
+                          color: '#2d3748',
 
-&nbsp;                           backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.8)',
 
-&nbsp;                           borderColor: 'rgba(118, 75, 162, 0.5)',
+                          borderColor: 'rgba(118, 75, 162, 0.5)',
 
-&nbsp;                           borderWidth: 1,
+                          borderWidth: 1,
 
-&nbsp;                           borderRadius: 4,
+                          borderRadius: 4,
 
-&nbsp;                           padding: 3,
+                          padding: 3,
 
-&nbsp;                           formatter: function(value) {
+                          formatter: function(value) {
 
-&nbsp;                               return value.toLocaleString() + ' kWh';
+                              return value.toLocaleString() + ' kWh';
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       },
+                      },
 
-&nbsp;                       tooltip: {
+                      tooltip: {
 
-&nbsp;                           callbacks: {
+                          callbacks: {
 
-&nbsp;                               label: function(context) {
+                              label: function(context) {
 
-&nbsp;                                   return `${context.dataset.label}: ${context.parsed.x.toLocaleString()} kWh`;
+                                  return `${context.dataset.label}: ${context.parsed.x.toLocaleString()} kWh`;
 
-&nbsp;                               }
+                              }
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       }
+                      }
 
-&nbsp;                   },
+                  },
 
-&nbsp;                   scales: {
+                  scales: {
 
-&nbsp;                       x: { // 🎯 Ahora X es el valor (lectura)
+                      x: { // 🎯 Ahora X es el valor (lectura)
 
-&nbsp;                           beginAtZero: false,
+                          beginAtZero: false,
 
-&nbsp;                           title: {display: true, text: 'Lectura Acumulada (kWh)'},
+                          title: {display: true, text: 'Lectura Acumulada (kWh)'},
 
-&nbsp;                           ticks: {
+                          ticks: {
 
-&nbsp;                               callback: function(value) {
+                              callback: function(value) {
 
-&nbsp;                                   return value.toLocaleString();
+                                  return value.toLocaleString();
 
-&nbsp;                               }
+                              }
 
-&nbsp;                           },
+                          },
 
-&nbsp;                           suggestedMax: function(context) {
+                          suggestedMax: function(context) {
 
-&nbsp;                               const max = Math.max(...datos.lecturas);
+                              const max = Math.max(...datos.lecturas);
 
-&nbsp;                               return max \* 1.1;
+                              return max \* 1.1;
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       },
+                      },
 
-&nbsp;                       y: { // 🎯 Ahora Y son los meses
+                      y: { // 🎯 Ahora Y son los meses
 
-&nbsp;                           title: {display: true, text: 'Mes'},
+                          title: {display: true, text: 'Mes'},
 
-&nbsp;                           ticks: {
+                          ticks: {
 
-&nbsp;                               font: {
+                              font: {
 
-&nbsp;                                   size: 11
+                                  size: 11
 
-&nbsp;                               }
+                              }
 
-&nbsp;                           }
+                          }
 
-&nbsp;                       }
+                      }
 
-&nbsp;                   }
+                  }
 
-&nbsp;               }
+              }
 
-&nbsp;           });
+          });
 
-&nbsp;       }
+      }
 
 
 
-&nbsp;       console.log('✅ Gráficas creadas exitosamente en formato HORIZONTAL');
+      console.log('✅ Gráficas creadas exitosamente en formato HORIZONTAL');
 
 
 
-&nbsp;   } catch (error) {
+  } catch (error) {
 
-&nbsp;       console.error('❌ Error creando gráficas:', error);
+      console.error('❌ Error creando gráficas:', error);
 
-&nbsp;   }
+  }
 
 }
 
 
 
-&nbsp;   // ✅ Función para cerrar gráficas
+  // ✅ Función para cerrar gráficas
 
-&nbsp;   function cerrarGraficas() {
+  function cerrarGraficas() {
 
-&nbsp;       document.getElementById('chartsModal').style.display = 'none';
+      document.getElementById('chartsModal').style.display = 'none';
 
-&nbsp;       if (consumosChart) { consumosChart.destroy(); consumosChart = null; }
+      if (consumosChart) { consumosChart.destroy(); consumosChart = null; }
 
-&nbsp;       if (lecturasChart) { lecturasChart.destroy(); lecturasChart = null; }
+      if (lecturasChart) { lecturasChart.destroy(); lecturasChart = null; }
 
-&nbsp;   }
-
-
-
-&nbsp;   // ✅ Cerrar modal al hacer click fuera
-
-&nbsp;   window.onclick = function(event) {
-
-&nbsp;       const modal = document.getElementById('chartsModal');
-
-&nbsp;       if (event.target === modal) cerrarGraficas();
-
-&nbsp;   }
+  }
 
 
 
-&nbsp;   // Funciones para descarga KML
+  // ✅ Cerrar modal al hacer click fuera
+
+  window.onclick = function(event) {
+
+      const modal = document.getElementById('chartsModal');
+
+      if (event.target === modal) cerrarGraficas();
+
+  }
+
+
+
+  // Funciones para descarga KML
 
 function descargarKML() {
 
-&nbsp;   if (consultasData.length === 0) {
+  if (consultasData.length === 0) {
 
-&nbsp;       alert('No hay datos para descargar');
+      alert('No hay datos para descargar');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
 
 
-&nbsp;   const ubicaciones = \[];
+  const ubicaciones = \[];
 
-&nbsp;   consultasData.forEach((item, index) => {
+  consultasData.forEach((item, index) => {
 
-&nbsp;   const coordenadas = item.Coordenadas || item.coordenadas || item.Coordenadasgis || item.coordenadasgis;
+  const coordenadas = item.Coordenadas || item.coordenadas || item.Coordenadasgis || item.coordenadasgis;
 
-&nbsp;   if (coordenadas) {
+  if (coordenadas) {
 
-&nbsp;       // 🎯 CAMBIO: Priorizar Medidor como etiqueta
+      // 🎯 CAMBIO: Priorizar Medidor como etiqueta
 
-&nbsp;       const etiqueta = item.Medidor || item.CuentaContrato || `Punto ${index + 1}`;
+      const etiqueta = item.Medidor || item.CuentaContrato || `Punto ${index + 1}`;
 
-&nbsp;       ubicaciones.push({ etiqueta, coordenadas });
+      ubicaciones.push({ etiqueta, coordenadas });
 
-&nbsp;   }
+  }
 
 });
 
 
 
-&nbsp;   if (ubicaciones.length === 0) {
+  if (ubicaciones.length === 0) {
 
-&nbsp;       alert('No se encontraron coordenadas válidas para descargar');
+      alert('No se encontraron coordenadas válidas para descargar');
 
-&nbsp;       return;
+      return;
 
-&nbsp;   }
+  }
 
 
 
-&nbsp;   const kmlString = generarKMLString(ubicaciones);
+  const kmlString = generarKMLString(ubicaciones);
 
-&nbsp;   const blob = new Blob(\[kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+  const blob = new Blob(\[kmlString], { type: 'application/vnd.google-earth.kml+xml' });
 
-&nbsp;   const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
 
-&nbsp;   const a = document.createElement('a');
+  const a = document.createElement('a');
 
-&nbsp;   a.href = url;
+  a.href = url;
 
-&nbsp;   a.download = `coordenadas\_${selectedTable}\_${new Date().getTime()}.kml`;
+  a.download = `coordenadas\_${selectedTable}\_${new Date().getTime()}.kml`;
 
-&nbsp;   a.click();
+  a.click();
 
-&nbsp;   URL.revokeObjectURL(url);
+  URL.revokeObjectURL(url);
 
 }
 
@@ -5334,49 +5334,49 @@ function descargarKML() {
 
 function generarKMLString(ubicaciones) {
 
-&nbsp;   if (!ubicaciones || ubicaciones.length === 0) {
+  if (!ubicaciones || ubicaciones.length === 0) {
 
-&nbsp;       throw new Error("No hay ubicaciones para KML");
+      throw new Error("No hay ubicaciones para KML");
 
-&nbsp;   }
+  }
 
-&nbsp;   
+  
 
-&nbsp;   let kml = '<?xml version="1.0" encoding="UTF-8"?>\\n';
+  let kml = '<?xml version="1.0" encoding="UTF-8"?>\\n';
 
-&nbsp;   kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\\n<Document>\\n';
+  kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\\n<Document>\\n';
 
-&nbsp;   kml += '<name>Rutas CLESA - Ordenadas por Cercanía</name>\\n';
+  kml += '<name>Rutas CLESA - Ordenadas por Cercanía</name>\\n';
 
-&nbsp;   
+  
 
-&nbsp;   // 🆕 AGREGAR ESTILOS NUMERADOS
+  // 🆕 AGREGAR ESTILOS NUMERADOS
 
-&nbsp;   const colores = \['ff0000ff', 'ff00ff00', 'ff00ffff', 'ffffff00']; // Rojo, Verde, Azul, Amarillo
+  const colores = \['ff0000ff', 'ff00ff00', 'ff00ffff', 'ffffff00']; // Rojo, Verde, Azul, Amarillo
 
-&nbsp;   
+  
 
-&nbsp;   ubicaciones.forEach(({ etiqueta, coordenadas, numeroOrden }, index) => {
+  ubicaciones.forEach(({ etiqueta, coordenadas, numeroOrden }, index) => {
 
-&nbsp;       const partes = coordenadas.split(',').map(s => s.trim());
+      const partes = coordenadas.split(',').map(s => s.trim());
 
-&nbsp;       let coordsKML = partes.length >= 2 
+      let coordsKML = partes.length >= 2 
 
-&nbsp;           ? `${partes\[1]},${partes\[0]}${partes\[2] ? ',' + partes\[2] : ''}` 
+          ? `${partes\[1]},${partes\[0]}${partes\[2] ? ',' + partes\[2] : ''}` 
 
-&nbsp;           : coordenadas;
+          : coordenadas;
 
-&nbsp;       
+      
 
-&nbsp;       const color = colores\[index % colores.length];
+      const color = colores\[index % colores.length];
 
-&nbsp;       
+      
 
-&nbsp;       kml += '<Placemark>\\n';
+      kml += '<Placemark>\\n';
 
-&nbsp;       kml += `<name>${numeroOrden || index + 1}. ${etiqueta}</name>\\n`;  // ← NÚMERO PRIMERO
+      kml += `<name>${numeroOrden || index + 1}. ${etiqueta}</name>\\n`;  // ← NÚMERO PRIMERO
 
-&nbsp;       kml += `<description>OS: ${etiqueta} | Orden: ${numeroOrden || index + 1}</description>\\n`;
+      kml += `<description>OS: ${etiqueta} | Orden: ${numeroOrden || index + 1}</description>\\n`;
 
         kml += `<Point><coordinates>${coordsKML}</coordinates></Point>\\n`;
         kml += '</Placemark>\n';
@@ -11026,10 +11026,9 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
             if (esPrioritaria) {
                 // Las prioritarias pasan solo con validar el radio y que no estén asignadas
-               if (esPrioritaria) {
-    osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: true }); // ✅ AHORA SÍ
-    continue;
-}
+                osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: true });
+                continue;
+            }
 
             // E. 🛡️ REGLA: Filtro de Estado para las órdenes COMUNES (Mantenimiento, etc.)
             const unidad = (os.Unidad || "").trim();
