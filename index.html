@@ -12305,10 +12305,10 @@ html += `</tr></thead><tbody>`;
         const bgColor = idx % 2 === 0 ? '#f8f9fa' : 'white';
                 html += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;"><td style="padding: 12px; font-weight: 600;">${unicom}</td>`;
         condiciones.forEach(c => {
-            const count = datosPorUnicom[unicom][c].length;
-            html += `<td style="padding: 12px; text-align: center; cursor: ${count > 0 ? 'pointer' : 'default'};" ${count > 0 ? `onclick="toggleDetalleUnicomCondicion('${unicom}', '${c}')"` : ''}>
-            <span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? colores\[c]+'20' : '#f5f5f5'}; color: ${count > 0 ? colores\[c] : '#999'};">${count}</span></td>`;
-        });
+            const count = datosPorUnicom[unicom][c].length;
+            html += `<td style="padding: 12px; text-align: center; cursor: ${count > 0 ? 'pointer' : 'default'};" ${count > 0 ? `onclick="toggleDetalleUnicomCondicion('${unicom}', '${c}')"` : ''}>
+            <span style="padding: 6px 12px; border-radius: 6px; font-weight: 600; background: ${count > 0 ? colores[c] + '20' : '#f5f5f5'}; color: ${count > 0 ? colores[c] : '#999'};">${count}</span></td>`;
+        });
         // ✅ CALCULAR Y MOSTRAR EL TOTAL PARA ESTA FILA
         const total = condiciones.reduce((sum, c) => sum + datosPorUnicom[unicom][c].length, 0);
         html += `<td style="padding: 12px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.05);">${total}</td>`;
