@@ -6320,15 +6320,23 @@ function generarTablaTipologiaVsRango(osFiltradas) {
                 <tbody>
     `;
 
-    Object.keys(matriz).sort().forEach(tipo => {
+    // 🔥 CAMBIO AQUÍ: Ordenar de mayor a menor basado en el total acumulado
+    const tipologiasOrdenadas = Object.keys(matriz).sort((a, b) => matriz[b].total - matriz[a].total);
+
+    tipologiasOrdenadas.forEach((tipo, index) => {
+        // Efecto cebreado para lectura fácil
+        const fondoFila = index % 2 === 0 ? '#ffffff' : '#f9f9f9';
+        
         tablaHtml += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; background: #fdfdfd;">${tipo}</td>
+            <tr style="background: ${fondoFila}; border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: #333;">${tipo}</td>
                 ${rangos.map(r => {
                     const v = matriz[tipo][r];
-                    return `<td style="padding: 8px; text-align: center; border: 1px solid #ddd; ${v > 0 ? 'font-weight: bold;' : 'color: #ccc;'}">${v}</td>`;
+                    // Si el valor es 90+, lo ponemos en rojo suave para alertar
+                    const colorAlerta = (r === '90+' && v > 0) ? 'background: #ffebee; color: #d32f2f;' : '';
+                    return `<td style="padding: 8px; text-align: center; border: 1px solid #ddd; ${colorAlerta} ${v > 0 ? 'font-weight: bold;' : 'color: #ccc;'}">${v}</td>`;
                 }).join('')}
-                <td style="padding: 8px; text-align: center; border: 1px solid #ddd; background: #fff8e1; font-weight: 900;">${matriz[tipo].total}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid #ddd; background: #fff8e1; font-weight: 900; color: #000;">${matriz[tipo].total}</td>
             </tr>`;
     });
 
@@ -6346,53 +6354,52 @@ function generarTablaTipologiaVsRango(osFiltradas) {
     return tablaHtml;
 }
 
-
  	// ========================================
 // 🔍 APLICAR FILTRO POR UNIDAD
 // ========================================
 function aplicarFiltroUnidad() {
-    const unidadSeleccionada = document.getElementById('filtroUnidad').value.trim();
- 
-    if (!unidadSeleccionada) {
-        alert('Por favor ingrese o seleccione una unidad');
-        return;
-    }
- 
-    // Validar que la unidad exista
-    const unidadesDisponibles = [...new Set(window.osPendientes_Original.map(os => os.Unidad))];
-    if (!unidadesDisponibles.includes(unidadSeleccionada)) {
-        alert(`La unidad "${unidadSeleccionada}" no existe en los datos`);
-        return;
-    }
- 
-    console.log(`🔍 Filtrando por unidad: ${unidadSeleccionada}`);
- 
-    // Filtrar datos por unidad
-    const datosFiltrados = {
-        reguladas: {},
-        noReguladas: {}
-    };
- 
-    // Copiar solo la unidad seleccionada
-    ['reguladas', 'noReguladas'].forEach(tipo => {
-        if (window.datosDetalleOS_Original[tipo][unidadSeleccionada]) {
-            datosFiltrados[tipo][unidadSeleccionada] = window.datosDetalleOS_Original[tipo][unidadSeleccionada];
-        }
-    });
- 
-    // Filtrar OS Pendientes
-    const osFiltradas = window.osPendientes_Original.filter(os => os.Unidad === unidadSeleccionada);
- 
-    if (osFiltradas.length === 0) {
-        alert(`No se encontraron OS para la unidad: ${unidadSeleccionada}`);
-        return;
-    }
- 
-    // Actualizar datos globales
-    window.datosDetalleOS = datosFiltrados;
- 
-    // Regenerar tablas
-    regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidadSeleccionada);
+    const unidadSeleccionada = document.getElementById('filtroUnidad').value.trim();
+
+    if (!unidadSeleccionada) {
+        alert('Por favor ingrese o seleccione una unidad');
+        return;
+    }
+
+    // Validar que la unidad exista
+    const unidadesDisponibles = [...new Set(window.osPendientes_Original.map(os => os.Unidad))];
+    if (!unidadesDisponibles.includes(unidadSeleccionada)) {
+        alert(`La unidad "${unidadSeleccionada}" no existe en los datos`);
+        return;
+    }
+
+    console.log(`🔍 Filtrando por unidad: ${unidadSeleccionada}`);
+
+    // 1. Filtrar datos estructurados (Reguladas/No Reguladas)
+    const datosFiltrados = {
+        reguladas: {},
+        noReguladas: {}
+    };
+
+    ['reguladas', 'noReguladas'].forEach(tipo => {
+        if (window.datosDetalleOS_Original[tipo][unidadSeleccionada]) {
+            datosFiltrados[tipo][unidadSeleccionada] = window.datosDetalleOS_Original[tipo][unidadSeleccionada];
+        }
+    });
+
+    // 2. Filtrar array plano de OS (Esto es lo que usa la tabla de Tipologías)
+    const osFiltradas = window.osPendientes_Original.filter(os => os.Unidad === unidadSeleccionada);
+
+    if (osFiltradas.length === 0) {
+        alert(`No se encontraron OS para la unidad: ${unidadSeleccionada}`);
+        return;
+    }
+
+    // 3. Actualizar datos globales de la sesión actual
+    window.datosDetalleOS = datosFiltrados;
+
+    // 4. Llamar a la regeneración de tablas pasando los datos de la unidad
+    // La función regenerarTablasFiltradas ahora incluirá la tabla de tipologías filtrada
+    regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidadSeleccionada);
 }
 
 
@@ -6402,7 +6409,7 @@ function aplicarFiltroUnidad() {
 function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Início do HTML com o cabeçalho do filtro
+    // Inicio del HTML con el cabezal del filtro
     let html = `
         <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
             <div class="result-header">✅ Filtro aplicado: ${unidad}</div>
@@ -6414,6 +6421,16 @@ function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad) {
 
         <div class="result-card" style="background: white; padding: 30px;">
     `;
+
+    // 🆕 0. TABLA DE TIPOLOGÍA (Filtrada por Unidad y Ordenada de Mayor a Menor)
+    html += `
+        <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
+            📋 TABLA: Tipología de OS vs Rangos de Días (${unidad})
+        </h2>
+        ${generarTablaTipologiaVsRango(osFiltradas)}`;
+
+    // --- SEPARADOR ---
+    html += `<hr style="margin: 40px 0; border: none; border-top: 1px solid #eee;">`;
 
     // 1. UNICOM por Condición
     const unicomCondicion = osFiltradas.filter(os => os.Unicom);
