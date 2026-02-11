@@ -5047,13 +5047,13 @@ async function generarMapaUnidadConFiltros(incluirAsignadas = true) {
 console.log('📋 ==========================================');
 console.log('📋 FILTROS CARGADOS DESDE TABLA');
 console.log('📋 ==========================================');
+const radioConfig = filtrosAplicar?.radio_km || window.filtrosAplicados?.radio_km || 3;
 console.table({
     'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
     'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
-    'Radio (km)': radioConfigurado,
-    'Fecha programada': filtrosUnidadHoy?.fecha_programada || 'Sin fecha (filtro base)'
+    'Radio (km)': radioConfig,
+    'Fecha programada': filtrosAplicar?.fecha_programada || 'Sin fecha'
 });
-console.log('📋 ==========================================');
 
 
  
