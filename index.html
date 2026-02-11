@@ -8993,7 +8993,7 @@ async function guardarFiltrosMapaGlobales() {
  
 
 // ========================================
-// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA CON CONTADORES)
+// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA CON CONTADORES CORREGIDOS)
 // ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     console.log('🗺️ ==========================================');
@@ -9002,26 +9002,45 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     console.log('🗺️ ==========================================');
 
     const resultsContainer = document.getElementById('searchResults');
+    const osValidadasParaMapa = osEnRadio || [];
 
-    // 🛡️ 1. FILTRADO DINÁMICO DE SEGURIDAD
- // ✅ Las OS ya vienen filtradas de generarMapaUnidadConFiltros
-const osValidadasParaMapa = osEnRadio;
-
-console.log('🗺️ ==========================================');
-console.log('🗺️ GENERANDO INTERFAZ DE MAPA');
-console.log('🗺️ Total OS para mostrar:', osValidadasParaMapa.length);
-console.log('🗺️ ==========================================');
-
-   
-
-    // 📊 2. CÁLCULO DE TOTALES PARA BOTONES DE ESTADO
+    // 📊 2. CÁLCULO DE TOTALES PARA BOTONES DE ESTADO (LÓGICA CORREGIDA)
     const conteoEstados = {
-    centro: osValidadasParaMapa.filter(os => os.EsCentro).length,
-    asignada: osValidadasParaMapa.filter(os => os.estado === 'asignada').length,
-    regulada: osValidadasParaMapa.filter(os => os.estado === 'regulada').length,
-    no_regulada: osValidadasParaMapa.filter(os => os.estado === 'no_regulada').length,
-    deuda_alta: osValidadasParaMapa.filter(os => os.estado === 'deuda_alta').length
-};
+        centro: 0,
+        asignada: 0,
+        regulada: 0,
+        no_regulada: 0,
+        deuda_alta: 0
+    };
+
+    osValidadasParaMapa.forEach(os => {
+        const idActual = String(os.OSATMO || "").trim();
+        const idCentro = String(osCentro.OSATMO || "").trim();
+
+        if (idActual === idCentro && idCentro !== "") {
+            conteoEstados.centro++;
+        } else {
+            // Normalizamos a Mayúsculas para la búsqueda interna (No afecta la base de datos)
+            const tipoBusqueda = (os.Tipo_de_OS || '').toUpperCase();
+            const deuda = parseFloat(os.Deuda) || 0;
+            const unidad = (os.Unidad || "").trim();
+            
+            // Verificamos estados
+            const esRegulada = tipoBusqueda.includes('REGULADA') && !tipoBusqueda.includes('NO');
+            const esDeudaAlta = deuda >= 500;
+            const estaAsignada = (unidad !== "" && unidad !== "--------------------" && !unidad.includes("---"));
+
+            if (esRegulada) {
+                conteoEstados.regulada++;
+            } else if (esDeudaAlta) {
+                conteoEstados.deuda_alta++;
+            } else if (estaAsignada) {
+                conteoEstados.asignada++;
+            } else {
+                conteoEstados.no_regulada++;
+            }
+        }
+    });
 
     // Limpieza de instancia previa
     if (window.mapaLeafletInstance) {
@@ -9040,19 +9059,15 @@ console.log('🗺️ ==========================================');
         conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
     });
 
-
-
     console.log('📊 Conteo por estado:');
     console.table(conteoEstados);
-
-    
 
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
         .sort((a, b) => b[1] - a[1]);
 
     const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
 
-    // 4. Generar HTML
+    // 4. Generar HTML con los contadores inyectados
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -9081,6 +9096,10 @@ console.log('🗺️ ==========================================');
                     <button onclick="filtrarPorEstado('no_regulada')" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
                         🔵 No Reguladas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.no_regulada}</span>
                     </button>
+
+                    <button onclick="filtrarPorEstado('deuda_alta')" style="background: #795548; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        💰 Deuda ≥ 500 <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${conteoEstados.deuda_alta}</span>
+                    </button>
                     
                     <button onclick="filtrarPorEstado('todas')" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
                         🔄 Ver Todas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${osValidadasParaMapa.length}</span>
@@ -9089,7 +9108,7 @@ console.log('🗺️ ==========================================');
             </div>
 
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
-                <strong style="display: block; margin-bottom: 10px; color: #1e40af;">📊 Tipologías en radio (Ordenadas por cantidad):</strong>
+                <strong style="display: block; margin-bottom: 10px; color: #1e40af;">📊 Tipologías en radio (Filtradas):</strong>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px;">
                     ${tipologiasOrdenadas.map(([tip, count]) => `
                         <div onclick="resaltarTipologiaEnMapa('${tip.replace(/'/g, "\\'")}')"
