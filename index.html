@@ -5254,26 +5254,30 @@ if (String(os.OSATMO).trim() === '11195544') {
     const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
     if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-   // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD ---
+   // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD (Para KML Ruta) ---
 const uOS = (os.Unidad || "").trim().toUpperCase();
 const idOS = String(os.OSATMO).trim();
 
-// 1. ¿Está asignada a alguien más? (Comparación contra tu unidad normalizada)
-const esDeOtro = uOS !== "" && uOS !== "---" && uOS !== "SIN UNIDAD" && uOS !== miUnidadNorm;
+// 1. Definimos qué textos significan que la OS NO tiene dueño aún
+// Esto permite que aparezcan en KML Ruta como sugerencias
+const unidadesVacias = ["", "---", "SIN UNIDAD", "NULL", "POR ASIGNAR", "PENDIENTE", "SIN ASIGNAR"];
 
-// 2. ¿Está en la tabla global de asignados pero no es mía?
+// 2. ¿Está realmente ocupada por otro técnico?
+// Es de otro SI NO está en la lista de vacías Y TAMPOCO es mi unidad (la del KML actual)
+const esDeOtro = !unidadesVacias.includes(uOS) && uOS !== miUnidadNorm;
+
+// 3. Verificación contra el set global de asignaciones
 const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
 const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS);
 
-// 🚩 LÓGICA DE EXCLUSIÓN:
-// Si es de otro O (está asignada globalmente Y NO es mía), la saltamos de inmediato.
+// 🚩 LÓGICA DE EXCLUSIÓN PARA KML RUTA:
 if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
     if (esDeOtro) {
-        contadorUnidadInvalida++;
+        contadorUnidadInvalida++; // Estas son órdenes de otros compañeros
     } else {
-        contadorDuplicados++;
+        contadorDuplicados++; // Estas ya están en el sistema de asignación activa
     }
-    return; // ⛔ Se detiene aquí, no se procesa para el mapa
+    return; // ⛔ NO se incluyen como sugerencia en el KML
 }
 
 // 3. Si llegó aquí, la OS está "libre" para ti o ya es tuya. 
