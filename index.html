@@ -8482,7 +8482,7 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
 }
 
 // ========================================
-// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (VERSION CORREGIDA)
+// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CON AUDITORÍA ESTRICTA)
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8504,27 +8504,23 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         }
         
         window.filtrosAplicados = filtrosAplicar;
-
-        // ✅ CORRECCIÓN: Definir la variable antes de usarla en el log
         const radioKm = filtrosAplicar.radio_km || 3;
 
-        // ✅ LOG DE FILTROS APLICADOS (CORREGIDO)
+        // ✅ LOGS DE FILTROS (MANTENIDOS)
         console.log('📋 ==========================================');
         console.log('📋 FILTROS CARGADOS DESDE TABLA');
         console.log('📋 ==========================================');
         console.table({
             'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
             'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
-            'Radio (km)': radioKm, // Antes decía radioConfigurado (error)
+            'Radio (km)': radioKm,
             'Unidad': unidadFiltro
         });
         console.log('📋 ==========================================');
 
         // 2. Coordenadas del Punto Central
-        // CORRECCIÓN: Asegurar que existan coordenadas antes de hacer split
         const coordsCentroStr = osCentro.Coordenadas || osCentro.Coordendasgis;
         if (!coordsCentroStr) throw new Error("La OS de referencia no tiene coordenadas.");
-
         const [latCentro, lngCentro] = coordsCentroStr.split(',').map(c => parseFloat(c.trim()));
 
         // 3. 🛡️ CARGAR OS ASIGNADAS
@@ -8550,15 +8546,13 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             offset += BATCH_SIZE;
         }
 
-        // 5. 🔍 PROCESAMIENTO Y FILTRADO
+        // 5. 🔍 PROCESAMIENTO Y FILTRADO INICIAL (Radio y Estado)
         const osFinalesParaFiltrar = []; 
         let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, prohibidas: 0 };
 
         for (const os of todasOSRegistradas) {
             const osatmoActual = String(os.OSATMO).trim();
-
             if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
-
             if (osAsignadasSet.has(osatmoActual)) {
                 stats.asignadasOcultas++;
                 continue; 
@@ -8569,7 +8563,6 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             
             const [lat, lng] = cStr.split(',').map(c => parseFloat(c.trim()));
             const dist = calcularDistancia(latCentro, lngCentro, lat, lng);
-            
             if (dist > radioKm) { stats.fueraRadio++; continue; }
 
             const tipoOS = (os.Tipo_de_OS || '').toUpperCase();
@@ -8583,7 +8576,6 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
             const unidad = (os.Unidad || "").trim();
             const estadoAtomo = (os.Estado_ATOMO || "").trim().toUpperCase();
-            
             const esLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
             const esRegistradaBD = estadoAtomo === "REGISTRADA";
 
@@ -8594,14 +8586,35 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             }
         }
 
-        // 🚩 6. FILTRADO FINAL
-        let osConFiltros = osFinalesParaFiltrar.filter(os => {
-            if (os.esPrioritaria) return true;
-            return validarFiltrosOS(os, filtrosAplicar);
+        // 🚩 6. FILTRADO FINAL CON AUDITORÍA (BLOQUE NUEVO)
+        let aprobadas = [];
+        let resumenFiltrado = { porPrioridad: 0, porFiltroTabla: 0, descartadas: 0 };
+
+        osFinalesParaFiltrar.forEach(os => {
+            if (os.esPrioritaria) {
+                aprobadas.push(os);
+                resumenFiltrado.porPrioridad++;
+            } else if (validarFiltrosOS(os, filtrosAplicar)) {
+                aprobadas.push(os);
+                resumenFiltrado.porFiltroTabla++;
+            } else {
+                resumenFiltrado.descartadas++;
+            }
         });
 
+        // ✅ LOG DE RESULTADOS FINAL (TABLA RESUMEN)
+        console.log("%c📊 RESUMEN TÉCNICO DE FILTRADO", "background: #222; color: #bada55; font-size: 12px; padding: 5px;");
+        console.table({
+            "Total en Radio": osFinalesParaFiltrar.length,
+            "Pasan por Prioridad (Regulada/Deuda)": resumenFiltrado.porPrioridad,
+            "Pasan por Filtro de Tabla": resumenFiltrado.porFiltroTabla,
+            "Descartadas (No cumplen filtros)": resumenFiltrado.descartadas
+        });
+
+        let osConFiltros = aprobadas;
+
         // 7. DIBUJAR MAPA
-        console.log('📊 RESUMEN FINAL:', stats, 'TOTAL EN MAPA:', osConFiltros.length);
+        console.log('📊 TOTAL FINAL EN MAPA:', osConFiltros.length);
         
         if (osConFiltros.length === 0) {
             alert('ℹ️ No hay órdenes que cumplan los filtros en este radio.');
@@ -8759,33 +8772,36 @@ function parsearCoordenadas(coordString) {
 }
 
 
-// ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION ESTRICTA CON LOGS)
+/// ========================================
+// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION FINAL ESTRICTA)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    // Normalización mínima: Solo tildes y espacios extremos. Respeta palabras y puntos.
+    // Normalización mínima: Solo quitamos tildes para evitar errores de teclado.
+    // Mantenemos puntos, conectores ("DE") y palabras intactas.
     const normalizar = (texto) => {
         return (texto || "").toString()
             .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "") // Quita solo tildes
-            .trim()                          // Quita espacios inicio/final
+            .replace(/[\u0300-\u036f]/g, "") // Solo quita tildes
+            .trim()                          // Espacios inicio/final
             .toUpperCase();
     };
 
     const osID = os.OSATMO || "Sin ID";
 
     // --- 🛡️ 1. PASE LIBRE: PRIORIDADES DE NEGOCIO ---
+    // Estas pasan solo por estar en el radio (No se les aplica filtro de tabla)
     const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
     const esRegulada = tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no');
     const deudaTotal = parseFloat(os.Deuda) || 0;
     const esDeudaAlta = deudaTotal >= 500;
 
     if (esRegulada || esDeudaAlta) {
-        console.log(`%c✅ OS ${osID} pasa por PRIORIDAD (Regulada/Deuda)`, "color: #4caf50; font-weight: bold;");
+        console.log(`%c✅ OS ${osID} PASA POR PRIORIDAD: [Regulada: ${esRegulada} | Deuda: $${deudaTotal}]`, "color: #4caf50; font-weight: bold;");
         return true;
     }
 
     // --- 🛡️ 2. REQUISITOS OBLIGATORIOS PARA EL RESTO ---
+    // Si no es prioridad, debe estar libre y registrada para ser evaluada por la tabla
     const unidad = (os.Unidad || "").trim();
     const estado = (os.Estado_ATOMO || "").trim().toUpperCase();
     const estaLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
@@ -8795,7 +8811,7 @@ function validarFiltrosOS(os, filtros) {
         return false; 
     }
 
-    // --- 🛡️ 3. FILTRO DE TABLA (ESTRICTO) ---
+    // --- 🛡️ 3. FILTRO DE TABLA (COMPARACIÓN ESTRICTA) ---
     if (!filtros) return false;
 
     const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
@@ -8803,27 +8819,25 @@ function validarFiltrosOS(os, filtros) {
 
     if (!tipologiasActivas && !rangosActivos) return false;
 
-    // A. Validación de Tipología (Comparación Estricta)
+    // A. Validación de Tipología (Estricta: OS debe ser igual al filtro)
     let tipOk = true;
     if (tipologiasActivas) {
         const tipOS_Actual = normalizar(os.Tipologia);
         
         tipOk = tipologiasActivas.some(t => {
             const tNorm = normalizar(t);
-            const coincide = tipOS_Actual === tNorm;
+            // COMPARACIÓN ESTRICTA (===)
+            const coincide = tipOS_Actual === tNorm; 
             
-            // Log de ayuda si la tipología se parece pero no es igual
+            // Log informativo si la tipología se parece pero no es idéntica
             if (!coincide && tipOS_Actual.includes("MEDIDOR") && tNorm.includes("MEDIDOR")) {
-                console.log(`%c🔍 Comparando: [${tipOS_Actual}] vs [${tNorm}] ❌ No coinciden`, "color: #888;");
+                console.log(`%c🔍 Descarte Estricto: OS [${tipOS_Actual}] ≠ Filtro [${tNorm}]`, "color: #9e9e9e; font-size: 10px;");
             }
             
             return coincide;
         });
 
-        if (!tipOk) {
-            // console.log(`🚫 OS ${osID} no coincide con ninguna tipología del filtro`);
-            return false;
-        }
+        if (!tipOk) return false; // No coincide ninguna tipología guardada
     }
 
     // B. Validación de Rango (Antigüedad)
@@ -8835,14 +8849,14 @@ function validarFiltrosOS(os, filtros) {
         rangoOk = rangosActivos.includes(miRango);
         
         if (!rangoOk) {
-            console.log(`🚫 OS ${osID} fuera de rango de días (${miRango})`);
+            console.log(`%c🚫 OS ${osID} DESCARTADA: Fuera de rango (${miRango})`, "color: #ff9800;");
             return false;
         }
     }
 
     const resultado = tipOk && rangoOk;
     if (resultado) {
-        console.log(`%c🎯 OS ${osID} cumple filtros de tabla: ${os.Tipologia}`, "color: #2196f3; font-weight: bold;");
+        console.log(`%c🎯 OS ${osID} CUMPLE FILTROS DE TABLA: [${os.Tipologia}]`, "color: #2196f3; font-weight: bold;");
     }
  
     return resultado;
