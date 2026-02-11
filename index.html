@@ -4463,6 +4463,16 @@ function transformarUsuarioAUnidad(usuario) {
 
 async function cargarInterfazKMLRuta() {
     console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
+    
+    // ✅ DEFINICIÓN DE CHUNKARRAY (Indispensable para evitar el ReferenceError)
+    const chunkArray = (arr, size) => {
+        const out = [];
+        for (let i = 0; i < arr.length; i += size) {
+            out.push(arr.slice(i, i + size));
+        }
+        return out;
+    };
+
     await limpiarFiltrosObsoletos();
     renovarSesion();
 
@@ -4475,8 +4485,7 @@ async function cargarInterfazKMLRuta() {
         const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
         const rol = currentUser?.rol;
 
-        // 1️⃣ OBTENER MIS ASIGNACIONES (La base de tus 12 órdenes)
-        // Usamos la columna "Unidad" con U mayúscula según tu tabla public.os_asignadas
+        // 1️⃣ OBTENER TODAS LAS ASIGNACIONES
         const { data: asignaciones, error: errorAsignadas } = await supabaseClient
             .from('os_asignadas')
             .select('osatomo, Unidad, Estado, Tipologia');
@@ -4486,6 +4495,8 @@ async function cargarInterfazKMLRuta() {
         // 2️⃣ OBTENER COORDENADAS DESDE PENDIENTES
         const osNumeros = asignaciones.map(a => (a.osatomo || '').toString().trim()).filter(x => x);
         const osDetallesPendientes = [];
+        
+        // Ahora chunkArray ya está definido arriba, no fallará
         const grupos = chunkArray(osNumeros, 100);
 
         for (const grupo of grupos) {
@@ -4496,56 +4507,49 @@ async function cargarInterfazKMLRuta() {
             if (data) osDetallesPendientes.push(...data);
         }
 
-        // 3️⃣ CRUCE DE DATOS (Asegurar que no se pierdan las 12 órdenes)
-        // Mapeamos sobre 'asignaciones' para que ellas sean la base, no los pendientes
+        // 3️⃣ CRUCE DE DATOS DINÁMICO
         const osEnriquecidas = asignaciones.map(asig => {
             const id = String(asig.osatomo).trim();
             const detalle = osDetallesPendientes.find(p => String(p.OSATMO).trim() === id);
             
             return {
                 ...asig,
-                // Si no hay detalle en pendientes, mantenemos el ID y ponemos coords null
                 OSATMO: id, 
                 Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
                 Coordendasgis: detalle?.Coordendasgis || null,
                 Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
                 Deuda: detalle?.Deuda || 0,
                 "Fecha Gen.": detalle?.["Fecha Gen."] || null,
-                esAsignada: true // Marcador para el mapa
+                esAsignada: true 
             };
         });
 
-        // 4️⃣ FILTRAR POR MI UNIDAD (Para Contratistas)
-        const mis12Ordenes = osEnriquecidas.filter(asig => 
-            asig.Unidad.trim().toUpperCase() === miUnidad.trim().toUpperCase()
+        // 4️⃣ FILTRAR POR LA UNIDAD ACTUAL (Sea cual sea la cantidad)
+        const misAsignacionesPropias = osEnriquecidas.filter(asig => 
+            String(asig.Unidad).trim().toUpperCase() === miUnidad.trim().toUpperCase()
         );
 
-        // ==========================================================
-        // ✅ VARIABLE GLOBAL CRÍTICA PARA EL BOTÓN DE FILTRO
-        // Esto permite que 'generarMapaUnidadConFiltros' vea tus 12 órdenes
-        // ==========================================================
-        window.osAsignadasKML = mis12Ordenes;
-        window.osKMLData = mis12Ordenes; 
-        // ==========================================================
+        // ✅ ASIGNACIÓN A VARIABLES GLOBALES (Para que el botón de radio funcione)
+        window.osAsignadasKML = misAsignacionesPropias;
+        window.osKMLData = misAsignacionesPropias; 
 
-        console.log(`✅ Unidad: ${miUnidad}. Órdenes detectadas: ${mis12Ordenes.length}`);
+        console.log(`✅ Unidad: ${miUnidad}. Cantidad detectada: ${misAsignacionesPropias.length}`);
 
-        // 5️⃣ RENDERIZADO POR ROL
+        // 5️⃣ RENDERIZADO
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
             const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
             generarInterfazAdminKMLRuta(unidadesUnicas, osEnriquecidas);
         } else if (rol === 'Consulta' || rol === 'Contratista') {
-            if (mis12Ordenes.length === 0) {
+            if (misAsignacionesPropias.length === 0) {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS para la unidad ${miUnidad}</div>`;
                 return;
             }
-            // Dibujamos la interfaz inicial (Selector de punto de partida)
-            generarMapaKMLRuta(mis12Ordenes, miUnidad);
+            generarMapaKMLRuta(misAsignacionesPropias, miUnidad);
         }
 
     } catch (err) {
         console.error('❌ Error en KML Ruta:', err);
-        searchGrid.innerHTML = `<div class="result-card">❌ Error de conexión o datos</div>`;
+        searchGrid.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
 }
 
