@@ -951,7 +951,7 @@ if (rol === 'ATTF') {
             permitido: false,
             mensaje: `Turnos ATTF permitidos (Lunes a Sábado):\n${turnosTexto}\n\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
         };
-    }
+    
     
     // 🔹 Rol no reconocido → permitir por defecto (o bloquear según política)
     console.warn(`⚠️ Rol no configurado explícitamente: ${rol}. Permitiendo acceso por defecto.`);
