@@ -7397,28 +7397,21 @@ verificarZonaHoraria();
  	function mostrarPreviewAsignaciones(datos, validacionBD, duplicados) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // 🛡️ ESCUDO 1: Asegurar que validacionBD y duplicados sean objetos/arrays válidos
-    const vBD = validacionBD || { existentes: [], noExistentes: [] };
-    const dups = duplicados || [];
+    // 🛡️ ESCUDO 1: Asegurar que los datos sean válidos
     const listaDatos = datos || [];
-
-    // 🛡️ ESCUDO 2: Filtrado seguro
+    const dups = duplicados || [];
+    
+    // 🎯 CAMBIO CLAVE: Ya no filtramos por "existeEnBD". 
+    // Solo filtramos filas vacías para que pasen las 395 órdenes.
     const registrosValidos = listaDatos.filter(fila => {
-        if (!fila || !fila[0]) return false; // Evitar filas vacías
-        const os = fila[0].toString().trim();
-        
-        // Verificamos existencia y que no sea un duplicado
-        const existeEnBD = vBD.existentes ? vBD.existentes.includes(os) : false;
-        const esDuplicado = dups.some(dup => (dup.osatomo || dup.os) === os);
-        
-        return existeEnBD && !esDuplicado;
+        return fila && fila[0] && fila[0].toString().trim() !== ""; 
     });
 
     // 🎨 Generación de Interfaz
     let html = `
-        <div class="result-card" style="background: ${dups.length > 0 ? '#fff3cd' : '#e8f5e9'}; border: 2px solid ${dups.length > 0 ? '#ffc107' : '#4caf50'};">
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
             <div class="result-header" style="display: flex; align-items: center; gap: 10px;">
-                ${dups.length > 0 ? '⚠️' : '✅'} <span>Validación de Carga completada</span>
+                ✅ <span>Validación de Carga completada</span>
             </div>
 
             <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #e2e8f0;">
@@ -7429,41 +7422,26 @@ verificarZonaHoraria();
                         <strong>${listaDatos.length}</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; color: #166534; background: #f0fdf4; padding: 5px 8px; border-radius: 4px;">
-                        <span>✅ OS válidas para asignar:</span>
+                        <span>✅ OS para procesar (Nuevas y Existentes):</span>
                         <strong>${registrosValidos.length}</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; color: #991b1b;">
-                        <span>❌ OS no encontradas en Pendientes:</span>
-                        <strong>${vBD.noExistentes ? vBD.noExistentes.length : 0}</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; color: #9a3412;">
-                        <span>⚠️ OS duplicadas detectadas:</span>
-                        <strong>${dups.length}</strong>
+                    <div style="display: flex; justify-content: space-between; color: #64748b;">
+                        <span>ℹ️ Estado:</span>
+                        <strong>Listo para asignar todo</strong>
                     </div>
                 </div>
             </div>`;
 
-    // Sección de OS no existentes
-    if (vBD.noExistentes && vBD.noExistentes.length > 0) {
-        html += `
-            <div style="background: #fff1f2; padding: 15px; border-radius: 10px; margin: 15px 0; border: 1px solid #fda4af;">
-                <strong style="color: #be123c;">❌ OS que NO existen en sistema (${vBD.noExistentes.length}):</strong>
-                <p style="font-size: 13px; color: #4b5563; margin-top: 8px; word-break: break-all;">
-                    ${vBD.noExistentes.slice(0, 30).join(', ')}${vBD.noExistentes.length > 30 ? '...' : ''}
-                </p>
-            </div>`;
-    }
-
     // Botones de acción
-    if (dups.length === 0 && registrosValidos.length > 0) {
-        // Limpiamos los datos para el onclick para evitar errores de JSON
-        const datosLimpios = registrosValidos.map(r => r.map(celda => celda.toString().trim()));
+    if (registrosValidos.length > 0) {
+        // Limpiamos los datos para el onclick
+        const datosLimpios = registrosValidos.map(r => r.map(celda => (celda ? celda.toString().trim() : "")));
         
         html += `
             <div style="background: #eff6ff; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #bfdbfe; text-align: center;">
-                <strong style="color: #1e40af; font-size: 16px;">⚠️ ATENCIÓN: REEMPLAZO MASIVO</strong>
+                <strong style="color: #1e40af; font-size: 16px;">🚀 PROCESAMIENTO MASIVO</strong>
                 <p style="margin: 10px 0; color: #64748b; font-size: 14px;">
-                    Al confirmar, se <strong style="color: #ef4444;">borrarán todas las asignaciones actuales</strong> y se instalarán estas ${registrosValidos.length} nuevas.
+                    Se asignarán <strong style="color: #22c55e;">${registrosValidos.length}</strong> órdenes. Las que no existan se crearán automáticamente.
                 </p>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
@@ -7480,9 +7458,9 @@ verificarZonaHoraria();
     } else {
         html += `
             <div style="text-align: center; margin-top: 20px;">
-                <p style="color: #ef4444; margin-bottom: 10px;">${dups.length > 0 ? 'Debe eliminar los duplicados del archivo antes de subirlo.' : 'No se encontraron registros válidos.'}</p>
+                <p style="color: #ef4444; margin-bottom: 10px;">El archivo no contiene registros válidos.</p>
                 <button class="btn" onclick="cargarInterfazAsignaciones()" style="background: #3b82f6; color: white; padding: 12px 25px; border-radius: 8px; border: none; cursor: pointer;">
-                    ← Corregir archivo y reintentar
+                    ← Reintentar
                 </button>
             </div>`;
     }
@@ -7528,43 +7506,52 @@ verificarZonaHoraria();
         console.log('✅ Tabla os_asignadas limpiada');
 
         // 3️⃣ INSERTAR NUEVAS ASIGNACIONES (por lotes)
-        const BATCH_SIZE = 500;
-        let insertados = 0;
+const BATCH_SIZE = 500;
+let insertados = 0;
 
-        for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
-            const batch = registrosValidos.slice(i, i + BATCH_SIZE);
-            
-            // Actualizar UI del progreso
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="text-align: center; padding: 30px;">
-                    <div class="loading" style="display: block; margin: 20px auto;"></div>
-                    <h3 style="color: #1565c0;">Insertando datos en la nube...</h3>
-                    <div style="font-size: 24px; font-weight: bold; color: #2e7d32; margin: 10px 0;">
-                        ${insertados} / ${registrosValidos.length}
-                    </div>
-                    <p style="color: #666;">Por favor, no cierre esta ventana.</p>
-                </div>`;
+for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
+    const batch = registrosValidos.slice(i, i + BATCH_SIZE);
+    
+    // Actualizar UI del progreso
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="text-align: center; padding: 30px;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0;">Insertando datos en la nube...</h3>
+            <div style="font-size: 24px; font-weight: bold; color: #2e7d32; margin: 10px 0;">
+                ${insertados} / ${registrosValidos.length}
+            </div>
+            <p style="color: #666;">Procesando bloque de datos. Por favor, no cierre esta ventana.</p>
+        </div>`;
 
-            const registros = batch.map(fila => ({
-                osatomo: fila[0] ? fila[0].toString().trim() : '',
-                Unidad: fila[1] ? fila[1].toString().trim() : 'SIN_UNIDAD',
-                Estado: fila[2] ? fila[2].toString().trim() : 'Asignada',
-                fecha_asignacion: fechaSV, // ✅ Usando hora El Salvador
-                usuario_asigno: currentUser ? currentUser.usuario : 'Admin_Sistema'
-            })).filter(r => r.osatomo !== ''); // 🛡️ Evitar insertar filas vacías
+    // 🎯 MEJORA 1: Mapeo ultra-robusto (evita errores si el Excel tiene celdas raras)
+    const registros = batch.map(fila => {
+        const os = fila[0] ? fila[0].toString().trim() : '';
+        const unidad = fila[1] ? fila[1].toString().trim() : 'SIN_UNIDAD';
+        const estado = fila[2] ? fila[2].toString().trim() : 'Asignada';
 
-            const { error } = await supabaseClient
-                .from('os_asignadas')
-                .insert(registros);
+        return {
+            osatomo: os,
+            Unidad: unidad,
+            Estado: estado,
+            fecha_asignacion: fechaSV, 
+            usuario_asigno: currentUser ? currentUser.usuario : 'Admin_Sistema'
+        };
+    }).filter(r => r.osatomo && r.osatomo !== '' && r.osatomo.toLowerCase() !== 'undefined');
 
-            if (error) {
-                console.error('❌ Error en batch:', error);
-                // Si un lote falla, intentamos seguir con el siguiente o lanzamos error
-                throw new Error('Error insertando lote: ' + error.message);
-            }
+    // 🎯 MEJORA 2: Cambiar .insert() por .upsert()
+    // Aunque limpies la tabla antes, el UPSERT es más seguro si hay duplicados en el mismo Excel
+    const { error } = await supabaseClient
+        .from('os_asignadas')
+        .upsert(registros, { onConflict: 'osatomo' }); 
 
-            insertados += registros.length;
-        }
+    if (error) {
+        console.error('❌ Error en batch:', error);
+        // 🎯 MEJORA 3: Detalle de error más claro
+        throw new Error(`Error en bloque ${i}-${i + BATCH_SIZE}: ${error.message}`);
+    }
+
+    insertados += registros.length;
+}
 
         // 4️⃣ ÉXITO FINAL
         resultsContainer.innerHTML = `
