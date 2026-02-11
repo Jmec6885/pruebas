@@ -5042,6 +5042,20 @@ async function generarMapaUnidadConFiltros(incluirAsignadas = true) {
         }
  
         window.filtrosAplicados = filtrosAplicar;
+
+// ✅ LOG DE FILTROS APLICADOS
+console.log('📋 ==========================================');
+console.log('📋 FILTROS CARGADOS DESDE TABLA');
+console.log('📋 ==========================================');
+console.table({
+    'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
+    'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
+    'Radio (km)': radioConfigurado,
+    'Fecha programada': filtrosUnidadHoy?.fecha_programada || 'Sin fecha (filtro base)'
+});
+console.log('📋 ==========================================');
+
+
  
         // ========================================
         // ✅ 3️⃣ Cargar OS asignadas a la unidad
@@ -5111,6 +5125,21 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         }
  
         console.log(`✅ ${osPendientes.length} OS pendientes cargadas`);
+
+// ✅ Cargar TODAS las OS asignadas (cualquier unidad)
+console.log('📥 Cargando OS asignadas de todas las unidades...');
+const { data: todasAsignadas, error: errorAsignadas } = await supabaseClient
+    .from('os_asignadas')
+    .select('osatomo');
+
+if (errorAsignadas) {
+    console.error('❌ Error cargando os_asignadas:', errorAsignadas);
+}
+
+const osatmosAsignadosGlobal = new Set(
+    (todasAsignadas || []).map(os => String(os.osatomo).trim())
+);
+console.log(`✅ ${osatmosAsignadosGlobal.size} OS asignadas globalmente`);
  
         // ✅ 6️⃣ FILTRAR OS EN RADIO
         console.log('🔍 APLICANDO FILTROS A OS EN RADIO');
@@ -5132,6 +5161,10 @@ const { data: osPendientes, error: errorPendientes } = await supabaseClient
         let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
         let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
         const diagnosticoRangos = {};
+// 📊 Contadores adicionales para reporte detallado
+let contadorReguladas_EnRadio = 0, contadorReguladas_Pasaron = 0;
+let contadorNoReguladas_EnRadio = 0, contadorNoReguladas_Pasaron = 0;
+const detallePorRango = {};
 
         console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
         console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
@@ -5159,94 +5192,122 @@ const esLibre = !u || u === "" || u.includes("---") || u === "SIN UNIDAD";
 
 // 2. Verificamos si ya está en la tabla de asignadas (EL MURO)
 // Usamos .has() porque osatmosAsignados es un Set (Ultra rápido)
-const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim());
+const esDuplicada = osatmosAsignados.has(String(os.OSATMO).trim()) || 
+                     osatmosAsignadosGlobal.has(String(os.OSATMO).trim());
 
 // 3. Si no está libre O es duplicada, la saltamos de inmediato
 if (!esLibre || esDuplicada) {
-    stats.asignadasOcultas++; // O contadorDuplicados, según tu función
-    return; // Saltamos a la siguiente OS
+    if (!esLibre) contadorUnidadInvalida++;
+    else contadorDuplicados++;
+    return;
 }
+
 
 // 4. Procesamos rango para diagnóstico
 const rangoOS = determinarRangoDias(os['Fecha Gen.']);
 diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    // --- C. DETERMINACIÓN DE PRIORIDADES (PUERTA A: INDEPENDIENTE) ---
-    const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
-    const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
-    const valorDeuda = parseFloat(os.Deuda || 0);
-    const esDeudaAlta = valorDeuda > 500;
- 
-    const esPrioridad = esRegulada || esDeudaAlta;
+    // --- C. DETERMINACIÓN DE PRIORIDADES ---
+const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
+const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
+const valorDeuda = parseFloat(os.Deuda || 0);
+const esDeudaAlta = valorDeuda >= 500;
 
-    // --- D. FILTROS DE TABLA (PUERTA B: SOLO SI EXISTEN FILTROS) ---
-    let cumpleFiltrosTabla = false;
+// 📊 Contar OS en radio por tipo
+if (esRegulada) contadorReguladas_EnRadio++;
+else contadorNoReguladas_EnRadio++;
 
-    if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
-        const tipOS_Norm = normalizarTexto(os.Tipologia);
-        const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
-        const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+const esPrioridad = esRegulada || esDeudaAlta;
 
-        const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
-        const rangoOk = rangosFiltro.includes(rangoOS);
- 
-        cumpleFiltrosTabla = tipOk && rangoOk;
-    }
+// --- D. FILTROS DE TABLA ---
+let cumpleFiltrosTabla = false;
 
-    // --- E. DECISIÓN FINAL (USO DE OPERADOR "OR" PARA NO BLOQUEAR) ---
-    // Paso 1: Filtro de seguridad (Debe estar libre y no estar ya asignada)
-    if (!esLibre || esDuplicada) {
-        if (!esLibre) contadorUnidadInvalida++;
-        else contadorDuplicados++;
-        return;
-    }
+if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+    const tipOS_Norm = normalizarTexto(os.Tipologia);
+    const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
+    const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
 
-    // Paso 2: El "O" (Si pasa por Puerta A [Prioridad] O por Puerta B [Filtros])
-    if (esPrioridad || cumpleFiltrosTabla) {
- 
-        // Definimos el estado para el color (Prioridad sobre lo normal)
-        let estadoFinal = 'no_regulada';
-        if (esRegulada) {
-            estadoFinal = 'regulada';
-            contadorReguladas++;
-        } else if (esDeudaAlta) {
-            estadoFinal = 'deuda_alta';
-            contadorDeudaAlta++;
-        } else {
-            contadorFiltradas++;
-        }
+    const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
+    const rangoOk = rangosFiltro.includes(rangoOS);
 
-        osEnRadio.push({
-            ...os,
-            lat: coords.lat,
-            lng: coords.lng,
-            distancia: dist,
-            esExtra: true,
-            // IMPORTANTE: Cambiamos estadoMapa por 'estado' para que Leaflet lo reconozca
-            estado: estadoFinal
-        });
-    } else {
-        // Aquí caen las órdenes que están en el radio pero no son prioridad ni cumplen el filtro
-        contadorSinFiltro++;
-    }
+    cumpleFiltrosTabla = tipOk && rangoOk;
+}
+
+// --- E. DECISIÓN FINAL ---
+if (esPrioridad || cumpleFiltrosTabla) {
+    
+    let estadoFinal = 'no_regulada';
+    if (esRegulada) {
+        estadoFinal = 'regulada';
+        contadorReguladas++;
+        contadorReguladas_Pasaron++; // 📊 Contador adicional
+    } else if (esDeudaAlta) {
+        estadoFinal = 'deuda_alta';
+        contadorDeudaAlta++;
+    } else {
+        contadorFiltradas++;
+        contadorNoReguladas_Pasaron++; // 📊 Contador adicional
+    }
+
+    // 📊 Registrar por rango
+    if (!detallePorRango[rangoOS]) detallePorRango[rangoOS] = 0;
+    detallePorRango[rangoOS]++;
+
+    osEnRadio.push({
+        ...os,
+        lat: coords.lat,
+        lng: coords.lng,
+        distancia: dist,
+        esExtra: true,
+        estado: estadoFinal
+    });
+} else {
+    contadorSinFiltro++;
+}
+
+    
 });
 
-        // ✅ LOG DE RESULTADOS FINAL
-        console.log('📊 --- RESUMEN FINAL MAPA DE RUTAS ---');
-        console.table(diagnosticoRangos);
-        console.log('✅ RESULTADO FINAL:');
-        console.log('✅ Total procesadas:', contadorTotal);
-        console.log('✅ Fuera de radio:', contadorFueraRadio);
-        console.log('✅ Unidad ocupada/Duplicada:', (contadorUnidadInvalida + contadorDuplicados));
-        console.log('✅ INCLUIDAS:', {
-            total: osEnRadio.length,
-            reguladas: contadorReguladas,
-            deuda_alta: contadorDeudaAlta,
-            por_filtros: contadorFiltradas
-        });
-        console.log('✅ Rechazadas por filtros:', contadorSinFiltro);
-        console.log('✅ ==========================================');
+        /// ✅ LOG FINAL CON TABLA COMPLETA
+console.log('📊 ==========================================');
+console.log('📊 RESUMEN FINAL - MAPA DE RUTAS');
+console.log('📊 ==========================================');
 
+console.table({
+    'Total procesadas': contadorTotal,
+    'Sin coordenadas': contadorSinCoordenadas,
+    'Fuera de radio': contadorFueraRadio,
+    'Ya asignadas/Duplicadas': contadorDuplicados,
+    'Unidad ocupada': contadorUnidadInvalida,
+    'TOTAL EN RADIO VÁLIDAS': contadorReguladas_EnRadio + contadorNoReguladas_EnRadio
+});
+
+console.log('\n📈 REGULADAS (pasan automático):');
+console.table({
+    'En radio': contadorReguladas_EnRadio,
+    'Pasaron al mapa': contadorReguladas_Pasaron,
+    '% aprobación': `${((contadorReguladas_Pasaron/contadorReguladas_EnRadio)*100).toFixed(1)}%`
+});
+
+console.log('\n📈 NO REGULADAS (requieren filtro):');
+console.table({
+    'En radio': contadorNoReguladas_EnRadio,
+    'Pasaron al mapa': contadorNoReguladas_Pasaron,
+    'Rechazadas por filtro': contadorSinFiltro,
+    '% aprobación': `${((contadorNoReguladas_Pasaron/contadorNoReguladas_EnRadio)*100).toFixed(1)}%`
+});
+
+console.log('\n📊 DESGLOSE POR RANGO (que pasaron):');
+console.table(detallePorRango);
+
+console.log('\n✅ RESULTADO TOTAL:');
+console.table({
+    'OS mostradas en mapa': osEnRadio.length,
+    'Reguladas': contadorReguladas_Pasaron,
+    'Deuda >= 500': contadorDeudaAlta,
+    'Por filtros de tabla': contadorNoReguladas_Pasaron
+});
+console.log('📊 ==========================================');
 
  
         // ========================================
@@ -8441,6 +8502,17 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         }
         window.filtrosAplicados = filtrosAplicar;
+	// ✅ LOG DE FILTROS APLICADOS
+console.log('📋 ==========================================');
+console.log('📋 FILTROS CARGADOS DESDE TABLA');
+console.log('📋 ==========================================');
+console.table({
+    'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
+    'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
+    'Radio (km)': radioConfigurado,
+    'Fecha programada': filtrosUnidadHoy?.fecha_programada || 'Sin fecha (filtro base)'
+});
+console.log('📋 ==========================================');
         const radioKm = filtrosAplicar.radio_km || 3;
 
         // 2. Coordenadas del Punto Central
@@ -8885,23 +8957,32 @@ async function guardarFiltrosMapaGlobales() {
 // 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA CON CONTADORES)
 // ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
+    console.log('🗺️ ==========================================');
+    console.log('🗺️ GENERANDO MAPA LEAFLET');
+    console.log('🗺️ OS recibidas:', osEnRadio?.length || 0);
+    console.log('🗺️ ==========================================');
+
     const resultsContainer = document.getElementById('searchResults');
 
     // 🛡️ 1. FILTRADO DINÁMICO DE SEGURIDAD
-    const osValidadasParaMapa = osEnRadio.filter(os => {
-        const esRegulada = os.Condicion?.toUpperCase() === 'REGULADA';
-        const listaAutorizada = window.filtrosAplicados?.tipologias || [];
-        const esAutorizada = listaAutorizada.includes(os.Tipologia);
-        return esRegulada || esAutorizada;
-    });
+ // ✅ Las OS ya vienen filtradas de generarMapaUnidadConFiltros
+const osValidadasParaMapa = osEnRadio;
+
+console.log('🗺️ ==========================================');
+console.log('🗺️ GENERANDO INTERFAZ DE MAPA');
+console.log('🗺️ Total OS para mostrar:', osValidadasParaMapa.length);
+console.log('🗺️ ==========================================');
+
+   
 
     // 📊 2. CÁLCULO DE TOTALES PARA BOTONES DE ESTADO
     const conteoEstados = {
-        centro: osValidadasParaMapa.filter(os => os.EsCentro).length,
-        asignada: osValidadasParaMapa.filter(os => os.Estado_SAP === 'ASIGNADA').length,
-        regulada: osValidadasParaMapa.filter(os => os.Condicion?.toUpperCase() === 'REGULADA').length,
-        no_regulada: osValidadasParaMapa.filter(os => os.Condicion?.toUpperCase() !== 'REGULADA' && !os.EsCentro).length
-    };
+    centro: osValidadasParaMapa.filter(os => os.EsCentro).length,
+    asignada: osValidadasParaMapa.filter(os => os.estado === 'asignada').length,
+    regulada: osValidadasParaMapa.filter(os => os.estado === 'regulada').length,
+    no_regulada: osValidadasParaMapa.filter(os => os.estado === 'no_regulada').length,
+    deuda_alta: osValidadasParaMapa.filter(os => os.estado === 'deuda_alta').length
+};
 
     // Limpieza de instancia previa
     if (window.mapaLeafletInstance) {
@@ -8919,6 +9000,13 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         const tip = os.Tipologia || 'Sin tipología';
         conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
     });
+
+
+
+    console.log('📊 Conteo por estado:');
+    console.table(conteoEstados);
+
+    
 
     const tipologiasOrdenadas = Object.entries(conteoPorTipologia)
         .sort((a, b) => b[1] - a[1]);
@@ -9480,6 +9568,14 @@ function dibujarMarcadores(mapa, ordenes) {
 // 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN COMPLETA SIN RECORTES + CORRECCIONES)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
+    console.log('🗺️ ==========================================');
+    console.log('🗺️ INICIALIZANDO MAPA LEAFLET');
+    console.log('🗺️ ==========================================');
+    console.log('📊 OS Centro:', osCentro?.OSATMO);
+    console.log('📊 Total OS recibidas para mapa:', osEnRadio?.length || 0);
+    console.log('📊 Radio configurado:', radioKm, 'km');
+    console.log('🗺️ ==========================================');
+
     const mapaDiv = document.getElementById('mapaLeaflet');
  
     if (!mapaDiv) {
@@ -9541,7 +9637,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             font-size: 20px;
             box-shadow: 0 4px 12px rgba(76,175,80,0.6);
             border: 4px solid white;
-        ">0</div>`, // Cambiado 🎯 por 0 para seguir la ruta
+        ">0</div>`,
         iconSize: [50, 50],
         iconAnchor: [25, 50]
     });
@@ -9607,8 +9703,24 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // ========================================
     // ✅ CREAR MARCADORES NUMERADOS PARA EL RESTO
     // ========================================
+    console.log('📍 ==========================================');
+    console.log('📍 PROCESANDO MARCADORES');
+    console.log('📍 Total OS a procesar:', osEnRadio.length);
+    console.log('📍 ==========================================');
+
+    let contadorProcesadas = 0, contadorSinCoords = 0, contadorDuplicadas = 0;
+    let estadisticas = {
+        reguladas: 0,
+        no_reguladas: 0,
+        deuda_alta: 0,
+        deuda_media: 0,
+        deuda_baja: 0,
+        asignadas: 0
+    };
+
     osEnRadio.forEach((os, index) => {
         if (os.OSATMO === osCentro.OSATMO) {
+            contadorDuplicadas++;
             return;
         }
 
@@ -9616,7 +9728,10 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         const lat = parseFloat(os.Latitud || os.lat);
         const lng = parseFloat(os.Longitud || os.lng);
 
-        if (isNaN(lat) || isNaN(lng)) return; 
+        if (isNaN(lat) || isNaN(lng)) {
+            contadorSinCoords++;
+            return;
+        }
 
         const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
         const esRegulada = (os.Condicion?.toUpperCase() === 'REGULADA') || (tipoOS.includes('regulad') && !tipoOS.includes('no'));
@@ -9649,6 +9764,10 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             labelEstado = 'OS NO REGULADA';
             estadoKey = 'no_regulada';
         }
+
+        // 📊 Contabilizar
+        contadorProcesadas++;
+        estadisticas[estadoKey]++;
 
         const icono = L.divIcon({
             className: 'custom-marker',
@@ -9696,6 +9815,32 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         window.markersPorTipologia[tip].push(marker);
     });
 
+    // 📊 LOG FINAL DE MARCADORES
+    console.log('📍 ==========================================');
+    console.log('📍 RESUMEN DE MARCADORES CREADOS');
+    console.log('📍 ==========================================');
+    console.table({
+        'Total procesadas': contadorProcesadas,
+        'Sin coordenadas': contadorSinCoords,
+        'Duplicadas (centro)': contadorDuplicadas,
+        'Marcadores creados': contadorProcesadas - contadorSinCoords
+    });
+    
+    console.log('\n📊 DISTRIBUCIÓN POR ESTADO:');
+    console.table(estadisticas);
+    
+    console.log('\n📊 VERIFICACIÓN DE AGRUPACIONES:');
+    console.table({
+        'Centro': window.markersPorEstado.centro.length,
+        'Asignadas': window.markersPorEstado.asignada.length,
+        'Reguladas': window.markersPorEstado.regulada.length,
+        'No Reguladas': window.markersPorEstado.no_regulada.length,
+        'Deuda Alta': window.markersPorEstado.deuda_alta.length,
+        'Deuda Media': window.markersPorEstado.deuda_media.length,
+        'Deuda Baja': window.markersPorEstado.deuda_baja.length
+    });
+    console.log('📍 ==========================================');
+
     if (bounds.isValid()) {
         mapa.fitBounds(bounds, { padding: [50, 50] });
     }
@@ -9704,6 +9849,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 
     console.log(`✅ Mapa inicializado con ${osEnRadio.length} marcadores.`);
 }
+
 
 
  	// ========================================
