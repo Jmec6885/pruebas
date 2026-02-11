@@ -4461,146 +4461,93 @@ function transformarUsuarioAUnidad(usuario) {
 
 
 
-// ==============================
-// 📍 CARGAR INTERFAZ KML RUTA (CORREGIDA)
-// ==============================
 async function cargarInterfazKMLRuta() {
-    console.log('🚀 ==========================================');
-    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
-    console.log('🚀 Rol del usuario:', currentUser?.rol);
-    console.log('🚀 Usuario:', currentUser?.usuario);
-    console.log('🚀 ==========================================');
-await limpiarFiltrosObsoletos();
-renovarSesion(); // ← AGREGAR
+    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
+    await limpiarFiltrosObsoletos();
+    renovarSesion();
 
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    resultsContainer.innerHTML = '';
 
-    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
-    resultsContainer.innerHTML = '';
+    try {
+        const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
+        const rol = currentUser?.rol;
 
-    try {
-        console.log('🔍 Intentando cargar desde os_asignadas...');
+        // 1️⃣ OBTENER MIS ASIGNACIONES (La base de tus 12 órdenes)
+        // Usamos la columna "Unidad" con U mayúscula según tu tabla public.os_asignadas
+        const { data: asignaciones, error: errorAsignadas } = await supabaseClient
+            .from('os_asignadas')
+            .select('osatomo, Unidad, Estado, Tipologia');
 
-        const { data: asignaciones, error: errorAsignadas } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo, Unidad, Estado');
+        if (errorAsignadas) throw errorAsignadas;
 
-        if (errorAsignadas) {
-            console.error('❌ Error cargando os_asignadas:', errorAsignadas);
-            searchGrid.innerHTML = `<div class="result-card">❌ Error cargando asignaciones</div>`;
-            return;
-        }
+        // 2️⃣ OBTENER COORDENADAS DESDE PENDIENTES
+        const osNumeros = asignaciones.map(a => (a.osatomo || '').toString().trim()).filter(x => x);
+        const osDetallesPendientes = [];
+        const grupos = chunkArray(osNumeros, 100);
 
-        if (!asignaciones || asignaciones.length === 0) {
-            searchGrid.innerHTML = `<div class="result-card">⚠️ No hay asignaciones de OS</div>`;
-            return;
-        }
+        for (const grupo of grupos) {
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
+                .in('OSATMO', grupo);
+            if (data) osDetallesPendientes.push(...data);
+        }
 
-        // Normalizar lista de OSATOMO (strings)
-        const osNumeros = asignaciones
-            .map(a => (a.osatomo || '').toString().trim())
-            .filter(x => x.length > 0);
+        // 3️⃣ CRUCE DE DATOS (Asegurar que no se pierdan las 12 órdenes)
+        // Mapeamos sobre 'asignaciones' para que ellas sean la base, no los pendientes
+        const osEnriquecidas = asignaciones.map(asig => {
+            const id = String(asig.osatomo).trim();
+            const detalle = osDetallesPendientes.find(p => String(p.OSATMO).trim() === id);
+            
+            return {
+                ...asig,
+                // Si no hay detalle en pendientes, mantenemos el ID y ponemos coords null
+                OSATMO: id, 
+                Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
+                Coordendasgis: detalle?.Coordendasgis || null,
+                Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
+                Deuda: detalle?.Deuda || 0,
+                "Fecha Gen.": detalle?.["Fecha Gen."] || null,
+                esAsignada: true // Marcador para el mapa
+            };
+        });
 
-        // -------------------------------------------
-        //   CARGAR DATOS COMPLETOS POR LOTES (CHUNKS de 100)
-        // -------------------------------------------
-        const osCompletas = [];
-        const CHUNK_SIZE = 100;
+        // 4️⃣ FILTRAR POR MI UNIDAD (Para Contratistas)
+        const mis12Ordenes = osEnriquecidas.filter(asig => 
+            asig.Unidad.trim().toUpperCase() === miUnidad.trim().toUpperCase()
+        );
 
-        function chunkArray(arr, size) {
-            const out = [];
-            for (let i = 0; i < arr.length; i += size) {
-                out.push(arr.slice(i, i + size));
-            }
-            return out;
-        }
+        // ==========================================================
+        // ✅ VARIABLE GLOBAL CRÍTICA PARA EL BOTÓN DE FILTRO
+        // Esto permite que 'generarMapaUnidadConFiltros' vea tus 12 órdenes
+        // ==========================================================
+        window.osAsignadasKML = mis12Ordenes;
+        window.osKMLData = mis12Ordenes; 
+        // ==========================================================
 
-        const grupos = chunkArray(osNumeros, CHUNK_SIZE);
+        console.log(`✅ Unidad: ${miUnidad}. Órdenes detectadas: ${mis12Ordenes.length}`);
 
-        for (const grupo of grupos) {
-            const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario')
-                .in('OSATMO', grupo);
+        // 5️⃣ RENDERIZADO POR ROL
+        if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
+            const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
+            generarInterfazAdminKMLRuta(unidadesUnicas, osEnriquecidas);
+        } else if (rol === 'Consulta' || rol === 'Contratista') {
+            if (mis12Ordenes.length === 0) {
+                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS para la unidad ${miUnidad}</div>`;
+                return;
+            }
+            // Dibujamos la interfaz inicial (Selector de punto de partida)
+            generarMapaKMLRuta(mis12Ordenes, miUnidad);
+        }
 
-            if (error) {
-                console.error('Error en batch de OS Pendientes:', error);
-                // continuar con el siguiente grupo (no abortar todo)
-                continue;
-            }
-            if (data && data.length) {
-                // usar spread para aplanar correctamente
-                osCompletas.push(...data);
-            }
-        }
-
-        // Unidades únicas presentes en os_asignadas (filtradas)
-        const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
-
-        console.log(`✅ ${unidadesUnicas.length} unidades encontradas y ${osCompletas.length} OS cargadas`);
-
-       // LOGICA POR ROLES
-        const rol = currentUser && currentUser.rol;
-        if (!rol) {
-            searchGrid.innerHTML = `<div class="result-card">❌ Usuario no identificado</div>`;
-            return;
-        }
-
-        // Admin / Supervisor / Despacho -> interfaz admin (selector de unidad)
-        if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
-            if (typeof generarInterfazAdminKMLRuta === 'function') {
-                generarInterfazAdminKMLRuta(unidadesUnicas, osCompletas);
-            } else {
-                console.warn('generarInterfazAdminKMLRuta no está definida.');
-                searchGrid.innerHTML = `<div class="result-card">⚠️ Interfaz admin no disponible</div>`;
-            }
-            return;
-        }
-
-        // Consulta / Contratista -> mostrar solo OS de su unidad
-        if (rol === 'Consulta' || rol === 'Contratista') {
-            const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
- 
-            const osAsignadasAMiUnidad = asignaciones
-                .filter(a => a.Unidad === miUnidad)
-                .map(a => String(a.osatomo).trim())
-                .filter(x => x);
-
-            if (osAsignadasAMiUnidad.length === 0) {
-                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
-                return;
-            }
-
-            const osParaMapa = osCompletas.filter(os =>
-                osAsignadasAMiUnidad.includes(String(os.OSATMO).trim())
-            );
-
-            if (!osParaMapa || osParaMapa.length === 0) {
-                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para tu unidad (${miUnidad})</div>`;
-                return;
-            }
-
-            console.log(`✅ Rol ${rol}. Cargando ${osParaMapa.length} OS para la unidad: ${miUnidad}`);
-
-            // ==========================================================
-            // 🔥 ESTA ES LA LÍNEA QUE FALTA PARA QUE EL BOTÓN FUNCIONE 🔥
-            window.osAsignadasKML = osParaMapa;
-            // ==========================================================
-
-            generarMapaKMLRuta(osParaMapa, miUnidad);
-            return;
-        }
-
-        // Otros roles: sin acceso
-        searchGrid.innerHTML = `<div class="result-card">⚠️ Tu rol (${rol}) no tiene acceso a esta función</div>`;
-
-    } catch (err) { // <--- Ahora el catch ya no tendrá error porque la llave anterior cerró el try
-        console.error('Error cargando KML Ruta:', err);
-        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
-    }
+    } catch (err) {
+        console.error('❌ Error en KML Ruta:', err);
+        searchGrid.innerHTML = `<div class="result-card">❌ Error de conexión o datos</div>`;
+    }
 }
-
 
 // ========================================
 // 🗺️ INTERFAZ GENERACIÓN KML RUTA (OPTIMIZADA)
