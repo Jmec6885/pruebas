@@ -786,6 +786,50 @@ async function confirmarDescansoPersonalizadoATTF() {
   accederMenuATTF();
 }
 
+// ============================================================
+// 🛠️ FUNCIÓN GLOBAL PARA PROCESAR EL DESCANSO (SOLUCIÓN ERROR)
+// ============================================================
+window.confirmarDescansoAutomaticoATTF = async function(fechaIni, fechaFin) {
+    console.log("📡 Procesando confirmación de descanso:", { fechaIni, fechaFin });
+    
+    // Validar que tengamos el turno guardado en el paso anterior
+    const turnoMañana = window.turnoMañanaSeleccionado;
+    
+    // El objeto currentUser ya debe estar disponible si se llamó desde el flujo de login
+    if (!currentUser || !currentUser.id) {
+        alert("Error: No hay sesión de usuario activa para actualizar. Por favor reintente.");
+        location.reload();
+        return;
+    }
+
+    if (!turnoMañana) {
+        alert("Error: No se detectó el turno de mañana. Por favor reintente.");
+        return;
+    }
+
+    try {
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({ 
+                descanso_fecha_inicio: fechaIni,
+                descanso_fecha_fin: fechaFin,
+                turno_manana: turnoMañana,
+                estado_ciclo: 'en_descanso', // Actualizamos el estado según tu tabla
+                ultima_actividad: new Date().toISOString()
+            })
+            .eq('id', currentUser.id);
+
+        if (error) throw error;
+
+        alert("✅ Descanso y turno de mañana confirmados.");
+        window.location.reload(); // Recarga para entrar al sistema ya validado
+
+    } catch (err) {
+        console.error("❌ Error al confirmar descanso:", err);
+        alert("Hubo un problema al guardar la información: " + err.message);
+    }
+};
+
 function verificarHorarioPermitido(rol, userData = null) {
     // ✅ Obtener fecha/hora exacta de El Salvador (Sincronización SV)
     const opciones = { timeZone: 'America/El_Salvador', hour12: false };
@@ -1742,17 +1786,18 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
 
 
 	// ========================================
-// ⚠️ VALIDAR DESCANSO PROGRAMADO
+// ⚠️ VALIDAR DESCANSO PROGRAMADO (REVISADA)
 // ========================================
 function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
-    const turnoManana = document.getElementById('turnoManana').value;
+    // 1. Obtener el turno que seleccionó el usuario en el paso previo
+    const turnoManana = document.getElementById('turnoManana')?.value;
     
     if (!turnoManana) {
-        alert('Por favor seleccione el turno de mañana');
+        alert('Por favor seleccione el turno de mañana antes de continuar');
         return;
     }
     
-    // Guardar turno de mañana temporalmente
+    // Guardar el turno en una variable global para que la función de confirmación la use
     window.turnoMañanaSeleccionado = turnoManana;
     
     const loginSection = document.getElementById('loginSection');
@@ -1761,20 +1806,22 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
         <h1 class="titulo-degradado">CLESA</h1>
         <p class="subtitulo">Confirmación de Descanso</p>
         
-        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
-            <strong style="font-size: 18px;">⚠️ Tus próximos días de descanso serán:</strong><br><br>
-            <div style="font-size: 20px; font-weight: 600; color: #2d3748;">
+        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107; text-align: left;">
+            <strong style="font-size: 16px; color: #856404;">⚠️ Tus próximos días de descanso serán:</strong><br><br>
+            <div style="font-size: 22px; font-weight: 700; color: #2d3748; text-align: center;">
                 📅 ${fechaInicioAuto}<br>
                 📅 ${fechaFinAuto}
             </div>
+            <p style="margin-top:15px; font-size: 13px; color: #666;">Turno programado para mañana: <b>${turnoManana}</b></p>
         </div>
         
         <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-            <button class="btn" onclick="confirmarDescansoAutomaticoATTF('${fechaInicioAuto}', '${fechaFinAuto}')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+            <button class="btn" onclick="confirmarDescansoAutomaticoATTF('${fechaInicioAuto}', '${fechaFinAuto}')" 
+                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 15px;">
                 ✅ Aceptar
             </button>
-            <button class="btn btn-secondary" onclick="cambiarFechasDescansoATTF()">
-                🔄 Cambiar Fechas
+            <button class="btn btn-secondary" onclick="cambiarFechasDescansoATTF()" style="padding: 15px;">
+                🔄 Cambiar
             </button>
         </div>
     `;
@@ -4837,148 +4884,135 @@ async function buscarOSParaMapa(osPartida, cargarUnidadCompleta = false) {
 }
 
 
-// ========================================
-// 💾 GUARDAR FILTROS POR UNIDAD (CORREGIDO CON FECHA)
-// ========================================
 async function guardarFiltrosPorUnidad() {
-    // Validación para Despacho
-    if (currentUser.rol === 'Despacho') {
-        const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
-        if (checkboxesUnidades.length === 0) {
-            alert('⚠️ Debes seleccionar al menos UNA unidad');
-            return;
-        }
-    }
+    // 1. Validación de permisos
+    if (currentUser.rol === 'Despacho') {
+        const seleccionadas = document.querySelectorAll('.checkbox-unidad-filtro:checked').length;
+        if (seleccionadas === 0) {
+            alert('⚠️ Debes seleccionar al menos UNA unidad');
+            return;
+        }
+    }
 
-    // ✅ SEPARAR correctamente rangos, tipologías y deuda
-    const rangos = [];
-    const tipologias = [];
-    let deudaAmarillo = false, deudaNaranja = false, deudaRosado = false;
+    const rangos = [];
+    const tipologias = [];
+    let deudaAmarillo = document.getElementById('deuda_amarillo')?.checked || false;
+    let deudaNaranja = document.getElementById('deuda_naranja')?.checked || false;
+    let deudaRosado = document.getElementById('deuda_rosado')?.checked || false;
 
-    // Solo checkboxes que NO sean de unidades
-    document.querySelectorAll('input[type="checkbox"][value]:not(.checkbox-unidad-filtro)').forEach(cb => {
-        if (cb.checked && cb.value) {
-            const valor = cb.value;
- 
-            // Rangos de distancia
-            if (valor.includes('-') || valor.startsWith('>')) {
-                rangos.push(valor);
-            }
-            // Deuda
-            else if (cb.id === 'deuda_amarillo') deudaAmarillo = true;
-            else if (cb.id === 'deuda_naranja') deudaNaranja = true;
-            else if (cb.id === 'deuda_rosado') deudaRosado = true;
-            // Tipologías
-            else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
-                tipologias.push(valor);
-            }
-        }
-    });
+    document.querySelectorAll('.checkbox-rango-unidad:checked').forEach(cb => rangos.push(cb.value));
+    document.querySelectorAll('.checkbox-tipologia-unidad:checked').forEach(cb => tipologias.push(cb.value));
 
-    // Radio
-    const radioKm = parseInt(document.getElementById('radioKmUnidad')?.value || 3);
+    const radioKm = parseInt(document.getElementById('radioKmUnidad')?.value || 3);
+    const unidadesDestino = Array.from(document.querySelectorAll('.checkbox-unidad-filtro:checked'))
+                                 .map(cb => cb.value);
 
-    // Unidades destino
-    const unidadesDestino = Array.from(document.querySelectorAll('.checkbox-unidad-filtro:checked'))
-        .map(cb => cb.value);
+    let fechaInput = document.getElementById('fechaVigenciaFiltros')?.value;
+    const hoy = new Date();
+    const fechaHoy = hoy.toISOString().split('T')[0];
+    const fechaFinal = fechaInput || fechaHoy;
 
-    // Fecha programada
-    let fechaProgramada = document.getElementById('fechaVigenciaFiltros')?.value;
-    if (!fechaProgramada) {
-        const hoy = new Date();
-        fechaProgramada = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-    }
+    // 🕵️ LOG DE PRE-VALIDACIÓN: Para ver qué capturó el código antes de procesar
+    console.log('--- 📋 DATOS CAPTURADOS ---');
+    console.log('📍 Unidades:', unidadesDestino);
+    console.log('📏 Rangos:', rangos);
+    console.log('🏷️ Tipologías:', tipologias);
+    console.log('💰 Deuda (A/N/R):', deudaAmarillo, deudaNaranja, deudaRosado);
+    console.log('📅 Fecha:', fechaFinal);
+    console.log('---------------------------');
 
-    // Validaciones
-    if (radioKm < 1 || radioKm > 20) {
-        alert('⚠️ El radio debe estar entre 1 y 20 km');
-        return;
-    }
-    if (unidadesDestino.length === 0) {
-        alert('⚠️ Debe seleccionar al menos una unidad');
-        return;
-    }
+    if (unidadesDestino.length === 0) {
+        alert('⚠️ Debe seleccionar al menos una unidad');
+        return;
+    }
+    if (radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
 
-    // Confirmar
-    if (!confirm(
-        `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\\n` +
-        `• Unidades: ${unidadesDestino.join(', ')}\\n` +
-        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Todos'}\\n` +
-        `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\\n` +
-        `• Radio: ${radioKm} km\\n` +
-        `• Fecha: ${fechaProgramada}`
-    )) return;
+    const mensaje = `¿Guardar filtros para ${unidadesDestino.length} unidad(es)?\n\n` +
+                    `• Unidades: ${unidadesDestino.slice(0, 3).join(', ')}${unidadesDestino.length > 3 ? '...' : ''}\n` +
+                    `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Todos'}\n` +
+                    `• Tipologías: ${tipologias.length > 0 ? tipologias.length : 'Todas'}\n` +
+                    `• Deuda: ${ (deudaAmarillo || deudaNaranja || deudaRosado) ? 'Sí' : 'No' }\n` +
+                    `• Fecha Programada: ${fechaFinal}`;
 
-    try {
-        const registros = unidadesDestino.map(unidad => ({
-            Unidad: unidad,
-            rangos: rangos.length > 0 ? rangos : null,
-            tipologias: tipologias.length > 0 ? tipologias : null,
-            deuda_amarillo: deudaAmarillo,
-            deuda_naranja: deudaNaranja,
-            deuda_rosado: deudaRosado,
-            radio_km: radioKm,
-            fecha_actualizacion: new Date().toISOString(),
-            configurado_por: currentUser.usuario,
-            fecha_programada: fechaProgramada
-        }));
+    if (!confirm(mensaje)) return;
 
-        const { error } = await supabaseClient
-            .from('filtros_por_unidad')
-            .upsert(registros, { onConflict: '"Unidad", fecha_programada' });
+    try {
+        const registros = unidadesDestino.map(unidad => ({
+            Unidad: unidad,
+            rangos: rangos.length > 0 ? rangos : null,
+            tipologias: tipologias.length > 0 ? tipologias : null,
+            deuda_amarillo: deudaAmarillo,
+            deuda_naranja: deudaNaranja,
+            deuda_rosado: deudaRosado,
+            radio_km: radioKm,
+            fecha_actualizacion: new Date().toISOString(),
+            configurado_por: currentUser.usuario,
+            fecha_programada: fechaFinal
+        }));
 
-        if (error) throw error;
+        console.log('🚀 Enviando Upsert a Supabase...', registros);
 
-        alert('✅ Filtros guardados correctamente');
-        console.log('✅ Guardados:', unidadesDestino);
+        const { error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .upsert(registros, { onConflict: 'Unidad,fecha_programada' });
 
-    } catch (err) {
-        console.error('❌ Error:', err);
-        alert('❌ Error: ' + err.message);
-    }
+        if (error) throw error;
+
+        // ✅ LOG DE ÉXITO FINAL
+        console.log('✅ Filtros guardados exitosamente en la base de datos');
+        alert('✅ Filtros guardados correctamente');
+
+    } catch (err) {
+        console.error('❌ ERROR CRÍTICO EN GUARDADO:', err);
+        alert('❌ Error al guardar en base de datos: ' + err.message);
+    }
 }
 
 
-// ========================================
-// 🗑️ BORRAR TODOS LOS FILTROS DE UNIDADES
-// ========================================
+
+
 async function borrarTodosFiltrosUnidades() {
-    const confirmar = confirm(
-        `⚠️ ¿ELIMINAR FILTROS DE TODAS LAS UNIDADES?\\n\\n` +
-        `Esta acción NO se puede deshacer.\\n\\n` +
-        `¿Continuar?`
-    );
- 
-    if (!confirmar) return;
- 
-    try {
-        const { error } = await supabaseClient
-            .from('filtros_por_unidad')
-            .delete()
-            .neq('id', 0);
- 
-        if (error) {
-            alert('❌ Error: ' + error.message);
-            return;
-        }
- 
-        alert('✅ Todos los filtros de unidades eliminados');
- 
-    } catch (err) {
-        console.error('Error:', err);
-        alert('❌ Error de conexión');
-    }
+    const confirmar = confirm(
+        `⚠️ ¿ELIMINAR TODOS LOS FILTROS DE UNIDADES?\n\n` +
+        `Esta acción NO se puede deshacer.\n\n` +
+        `¿Continuar?`
+    );
+
+    if (!confirmar) return;
+
+    console.log('🗑️ Iniciando borrado masivo de filtros_por_unidad...');
+
+    try {
+        const { error, count } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .not('Unidad', 'is', null); 
+
+        if (error) throw error;
+
+        // ✅ LOG ESTRATÉGICO: Nos confirma que la DB respondió bien
+        console.log('✅ Borrado exitoso en Supabase. Tabla limpia.');
+        
+        alert('✅ Todos los filtros de unidades eliminados');
+
+    } catch (err) {
+        // ❌ LOG DE ERROR: Fundamental para saber POR QUÉ falló (permisos, red, etc.)
+        console.error('❌ Error crítico al borrar filtros:', err);
+        alert('❌ Error: ' + err.message);
+    }
 }
 
-// ✅ ANTES DE LLAMAR A LA FUNCIÓN
+// ✅ MANTENEMOS TUS LOGS DE ESTADO (Para depurar el KML)
 console.log('▶️ ==========================================');
-console.log('▶️ LLAMANDO A: generarMapaUnidadConFiltros');
-console.log('▶️ Estado actual de variables:');
-console.log('▶️ window.osAsignadasKML:', window.osAsignadasKML);
-console.log('▶️ window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+console.log('▶️ MONITOREO DE CARGA:');
+console.log('▶️ window.osAsignadasKML:', window.osAsignadasKML ? 'Cargado ✅' : 'Vacío ❌');
+if (window.osAsignadasKML) {
+    console.log('▶️ Registros en memoria:', window.osAsignadasKML.length);
+}
 console.log('▶️ ==========================================');
-
-
 
 
 // ========================================
@@ -5052,36 +5086,53 @@ async function generarMapaUnidadConFiltros(incluirAsignadas = true) {
         console.log(`🎯 Radio configurado: ${radioConfigurado} km`);
 
 
-        // ========================================
-        // ✅ 2️⃣ Determinar qué filtros aplicar
-        // ========================================
-        let filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
- 
-        if (filtrosUnidadHoy) {
-            console.log('✅ ==========================================');
-            console.log('✅ USANDO FILTROS PROGRAMADOS PARA HOY');
-            console.log('✅ ==========================================');
-            filtrosAplicar = filtrosUnidadHoy;
-        } else {
-            console.warn('⚠️ ==========================================');
-            console.warn('⚠️ NO HAY FILTROS PROGRAMADOS PARA HOY');
-            console.warn('⚠️ Usando valores por defecto (radio=3km, sin filtros)');
-            console.warn('⚠️ ==========================================');
-        }
- 
-        window.filtrosAplicados = filtrosAplicar;
+       // ========================================
+        // ✅ 2️⃣ Determinar qué filtros aplicar (ESTRICTO)
+        // ========================================
+        let filtrosAplicar = filtrosUnidadHoy;
 
-// ✅ LOG DE FILTROS APLICADOS
-console.log('📋 ==========================================');
-console.log('📋 FILTROS CARGADOS DESDE TABLA');
-console.log('📋 ==========================================');
-const radioConfig = filtrosAplicar?.radio_km || window.filtrosAplicados?.radio_km || 3;
-console.table({
-    'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
-    'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
-    'Radio (km)': radioConfig,
-    'Fecha programada': filtrosAplicar?.fecha_programada || 'Sin fecha'
-});
+        if (filtrosAplicar && (filtrosAplicar.tipologias?.length > 0 || filtrosAplicar.rangos?.length > 0)) {
+            console.log('✅ ==========================================');
+            console.log('✅ FILTROS ENCONTRADOS Y VALIDADOS');
+            console.log('✅ ==========================================');
+        } else {
+            // LOG DE ADVERTENCIA EN CONSOLA
+            console.error('❌ ==========================================');
+            console.error('❌ NO HAY FILTROS CONFIGURADOS PARA ESTA UNIDAD');
+            console.error('❌ Abortando generación de mapa por seguridad.');
+            console.error('❌ ==========================================');
+
+            // MENSAJE VISUAL PARA EL USUARIO
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fef2f2; border-left: 5px solid #ef4444; padding: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="font-size: 24px;">⚠️</span>
+                        <strong style="color: #991b1b; font-size: 18px;">Configuración Requerida</strong>
+                    </div>
+                    <p style="color: #7f1d1d; margin: 0;">
+                        La unidad <b>${unidadSeleccionada}</b> no tiene filtros configurados para hoy (<b>${HOY}</b>).
+                    </p>
+                    <p style="color: #7f1d1d; font-size: 14px; margin-top: 10px;">
+                        Vaya a la sección de <b>Filtros por Unidad</b>, seleccione los criterios y guarde antes de generar el mapa.
+                    </p>
+                </div>`;
+            return; // ⛔ DETIENE LA FUNCIÓN AQUÍ
+        }
+
+        window.filtrosAplicados = filtrosAplicar;
+
+        // ✅ LOG DE FILTROS APLICADOS (Tu tabla de diagnóstico)
+        console.log('📋 ==========================================');
+        console.log('📋 DETALLE DE FILTROS QUE SE APLICARÁN');
+        console.log('📋 ==========================================');
+        const radioConfig = filtrosAplicar?.radio_km || 3;
+        
+        console.table({
+            'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
+            'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
+            'Radio (km)': radioConfig,
+            'Fecha programada': filtrosAplicar?.fecha_programada || 'Sin fecha'
+        });
 
 
  
@@ -5250,17 +5301,23 @@ const esPrioridad = esRegulada || esDeudaAlta;
 // --- D. FILTROS DE TABLA ---
 let cumpleFiltrosTabla = false;
 
-if (filtrosAplicar && filtrosAplicar.tipologias?.length > 0 && filtrosAplicar.rangos?.length > 0) {
+// Solo aplicamos filtros de tabla a las OS que NO son prioridad (Reguladas/Deuda Alta)
+// porque las prioridades ya fueron aceptadas arriba
+if (!esPrioridad) {
     const tipOS_Norm = normalizarTexto(os.Tipologia);
-    const tipologiasFiltro = filtrosAplicar.tipologias.map(t => normalizarTexto(t));
-    const rangosFiltro = filtrosAplicar.rangos.map(r => r.trim());
+    
+    // Usamos || [] para evitar que el .map falle si la columna está nula en la DB
+    const tipologiasFiltro = (filtrosAplicar.tipologias || []).map(t => normalizarTexto(t));
+    const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
 
-    const tipOk = tipologiasFiltro.some(f => tipOS_Norm.includes(f));
-    const rangoOk = rangosFiltro.includes(rangoOS);
+    // LÓGICA: Si la lista de filtros está vacía, se considera "OK" (no filtra esa categoría)
+    // Si la lista TIENE datos, entonces debe coincidir.
+    const tipOk = tipologiasFiltro.length === 0 || tipologiasFiltro.some(f => tipOS_Norm.includes(f));
+    const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
 
+    // Para que aparezca en el mapa por "Filtro de Tabla", debe cumplir ambas
     cumpleFiltrosTabla = tipOk && rangoOk;
 }
-
 // --- E. DECISIÓN FINAL ---
 if (esPrioridad || cumpleFiltrosTabla) {
     
@@ -5344,18 +5401,23 @@ console.log('📊 ==========================================');
 
 // ✅ NORMALIZAR OS ASIGNADAS (agregar lat/lng)
 const osAsignadasNormalizadas = osAsignadasUnidad.map(os => {
-    const coords = os.Coordenadas || os.Coordendasgis;
-    if (!coords || !coords.includes(',')) return null;
- 
-    const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
-    return {
-        ...os,
-        lat,
-        lng,
-        distancia: 0,
-        numeroOrden: 0
-    };
-}).filter(os => os !== null);
+    const coordsStr = os.Coordenadas || os.Coordendasgis;
+    if (!coordsStr || typeof coordsStr !== 'string' || !coordsStr.includes(',')) return null;
+
+    const [lat, lng] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+    
+    // Validar que el resultado de parseFloat sea un número real
+    if (isNaN(lat) || isNaN(lng)) return null;
+
+    return {
+        ...os,
+        lat,
+        lng,
+        distancia: 0,
+        numeroOrden: 0,
+        esAsignada: true // Útil para diferenciar colores en Leaflet
+    };
+}).filter(Boolean); // Elimina nulls de forma elegante
 
 // ✅ Decidir qué mostrar según el contexto
 const osParaMapa = incluirAsignadas
@@ -5550,37 +5612,46 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     const HOY = getFechaHoyElSalvador();
     console.log('📅 Buscando filtros para fecha local:', HOY);
 
-    // 1. Buscamos el filtro
-    let { data: filtrosUnidadHoy } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadSeleccionada)
-        .eq('fecha_programada', HOY)
-        .maybeSingle();
+    // 1️⃣ Intentar buscar filtro para HOY
+    let { data: filtrosUnidadHoy } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidadSeleccionada)
+        .eq('fecha_programada', HOY)
+        .maybeSingle();
 
-    // 2. Si no hay, buscamos el base
-    if (!filtrosUnidadHoy) {
-        console.log("🔍 Buscando filtro base (null) para:", unidadSeleccionada);
-        let { data: filtroBase } = await supabaseClient
-            .from('filtros_por_unidad')
-            .select('*')
-            .eq('Unidad', unidadSeleccionada)
-            .is('fecha_programada', null)
-            .maybeSingle();
-        filtrosUnidadHoy = filtroBase;
-    }
+    // 2️⃣ Si no hay para hoy, buscar el base (fecha_programada IS NULL)
+    if (!filtrosUnidadHoy) {
+        console.log("🔍 No hay filtros para hoy, buscando filtro base para:", unidadSeleccionada);
+        const { data: filtroBase } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidadSeleccionada)
+            .is('fecha_programada', null)
+            .maybeSingle();
+        
+        filtrosUnidadHoy = filtroBase;
+    }
 
-    // ✅ Guardar filtros para que generarMapaUnidadConFiltros() los use
-    window.filtrosAplicados = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
-    const radioConfigurado = window.filtrosAplicados.radio_km || 3;
+    // ✅ 3️⃣ NORMALIZACIÓN DE SEGURIDAD
+    // Si filtrosUnidadHoy es null, usamos el objeto por defecto para evitar errores de .length
+    const filtrosFinales = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
+    window.filtrosAplicados = filtrosFinales; 
+    
+    const radioConfigurado = filtrosFinales.radio_km || 3;
+    const tieneFiltros = !!filtrosUnidadHoy;
 
-    // ✅ CORRECCIÓN 3: Definir variables para el HTML
-    const tieneFiltros = !!filtrosUnidadHoy;
-    const mensajeFiltros = tieneFiltros
-        ? `${filtrosUnidadHoy.tipologias.length} tipologías, ${filtrosUnidadHoy.rangos.length} rangos, radio ${radioConfigurado}km`
-        : "Solo se mostrarán Reguladas/Deuda Alta (Sin filtros programados)";
-
-    console.log(`🎯 Radio configurado correctamente: ${radioConfigurado} km`);
+    // ✅ 4️⃣ MENSAJE DINÁMICO PARA LA INTERFAZ
+    let mensajeFiltros;
+    if (tieneFiltros) {
+        const tCount = (filtrosFinales.tipologias || []).length;
+        const rCount = (filtrosFinales.rangos || []).length;
+        mensajeFiltros = `✅ <b>${tCount}</b> Tipologías y <b>${rCount}</b> Rangos permitidos (Radio: ${radioConfigurado}km)`;
+        console.log("🎯 Filtros cargados con éxito:", filtrosFinales);
+    } else {
+        mensajeFiltros = "⚠️ <b>Sin filtros programados:</b> Solo se mostrarán Reguladas y Deuda Alta.";
+        console.warn("⚠️ La unidad no tiene configuración en DB. Usando modo de emergencia.");
+    }
  
     // Generar el HTML
     const htmlSelector = `
@@ -5608,7 +5679,7 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
                     📋 Solo Asignadas (${osNormalizadas.length})
                 </button>
  
-                <button id="btnAplicarFiltro" class="btn" onclick="generarMapaUnidadConFiltros()"
+                <button id="btnAplicarFiltro" class="btn" onclick="generarMapaKMLConFiltrosGuardados('${unidad}')"
                         style="background: #2563eb; color: white;">
                     🎯 Aplicar Filtro
                 </button>
@@ -5635,514 +5706,645 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
 
 // Solo asignadas (sin filtros)
 function generarMapaKMLSoloAsignadas(unidad) {
-    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
-    if (!osPartida) {
-        alert('⚠️ Seleccione un punto de partida');
-        return;
-    }
-    generarMapaKMLConPuntoPartida(unidad);
+    const osPartida = document.getElementById('selectPuntoPartidaKML')?.value;
+    
+    if (!osPartida) {
+        alert('⚠️ Seleccione un punto de partida para centrar el mapa');
+        return;
+    }
+
+    // ✅ Aseguramos que el punto de partida esté actualizado globalmente
+    window.osPartidaSeleccionada = osPartida;
+    
+    console.log(`🗺️ Generando mapa solo asignadas para ${unidad}. Centro: ${osPartida}`);
+    
+    // Suponiendo que esta función utiliza window.osPartidaSeleccionada internamente
+    generarMapaKMLConPuntoPartida(unidad);
 }
 
-// Con filtros guardados
+// ========================================
+// 🎯 CONTROLADOR: APLICAR FILTROS DESDE KML RUTA
+// ========================================
 async function generarMapaKMLConFiltrosGuardados(unidad) {
-    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
-    if (!osPartida) {
-        alert('⚠️ Seleccione un punto de partida');
-        return;
-    }
- 
-    window.osPartidaSeleccionada = osPartida;
-    await generarMapaUnidadConFiltros(true); // ✅ KML Ruta: incluir asignadas
+    const btn = document.getElementById('btnAplicarFiltro');
+    const select = document.getElementById('selectPuntoPartidaKML');
+    const osPartida = select?.value;
+
+    // 1. Validación de punto de partida
+    if (!osPartida) {
+        alert('⚠️ Por favor, seleccione una Orden de Servicio (OS) como punto de partida.');
+        // Opcional: poner el foco en el select para ayudar al usuario
+        select?.focus();
+        return;
+    }
+
+    try {
+        // 2. Feedback visual (Evita que el usuario piense que se trabó)
+        if(btn) { 
+            btn.disabled = true; 
+            btn.innerHTML = '<span class="spinner"></span> Procesando...'; 
+            btn.style.opacity = '0.7';
+        }
+        
+        // 3. Sincronización de la variable global de partida
+        window.osPartidaSeleccionada = osPartida;
+        
+        console.log('--- 🚀 INICIANDO PROCESO DE FILTRADO ---');
+        console.log(`📍 OS Punto de Partida: ${osPartida}`);
+        console.log(`🚛 Unidad: ${unidad}`);
+
+        // 4. Llamada a la función principal (la compleja que revisamos antes)
+        // Usamos await porque es una operación asíncrona (va a Supabase)
+        await generarMapaUnidadConFiltros(true); 
+
+        console.log('--- ✅ PROCESO FINALIZADO CON ÉXITO ---');
+
+    } catch (error) {
+        console.error('❌ Error crítico en el controlador de filtros:', error);
+        alert('Hubo un problema al procesar los filtros: ' + error.message);
+    } finally {
+        // 5. Siempre restaurar el botón, pase lo que pase
+        if(btn) { 
+            btn.disabled = false; 
+            btn.innerText = '🎯 Aplicar Filtro'; 
+            btn.style.opacity = '1';
+        }
+    }
 }
+
 
 /**
- * Aplica el algoritmo del Vecino Más Cercano para optimizar la secuencia de la ruta.
- * @param {Array<Object>} osData - Lista completa de órdenes de servicio (ya filtrada).
- * @param {string} osPartidaId - ID de la OS de partida.
- * @param {Object} puntoPartidaCoordenadas - Coordenadas del punto de partida (opcional, {lat, lng}).
- * @returns {Array<Object>} - Lista de OS ordenadas por cercanía consecutiva.
- */
-// ========================================
-// 🚀 OPTIMIZACIÓN DE RUTA MEJORADA (2-OPT)
-// ========================================
+ * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
+ */
 function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas = null) {
-    // 1️⃣ Encontrar OS de partida
-    const osPartida = osData.find(os => {
-        const osNum = String(os.OSATMO || os.OSATOMO || os.osatomo || '').trim();
-        return osNum === String(osPartidaId).trim();
-    });
- 
-    if (!osPartida) {
-        console.warn('⚠️ OS de partida no encontrada, usando primera disponible');
-        return osData.length > 0 ? osData : [];
-    }
+    // Función auxiliar para leer IDs de forma consistente
+    const getOSId = (os) => String(os.OSATMO || os.osatomo || os.OSATOMO || '').trim();
+    
+    console.log('--- 🛠️ INICIANDO OPTIMIZACIÓN DE RUTA ---');
 
-    // 2️⃣ Obtener coordenadas
-    const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
-    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
- 
-    if (isNaN(latCentro) || isNaN(lngCentro)) {
-        console.error(`❌ Coordenadas inválidas para OS ${osPartidaId}`);
-        return osData;
-    }
+    // 1️⃣ Encontrar OS de partida
+    const osPartida = osData.find(os => getOSId(os) === String(osPartidaId).trim());
+ 
+    if (!osPartida) {
+        console.warn('⚠️ OS de partida no encontrada, usando primera disponible');
+        return osData.length > 0 ? osData : [];
+    }
 
-    // 3️⃣ Determinar punto inicial
-    let puntoInicialLat = latCentro;
-    let puntoInicialLng = lngCentro;
- 
-    if (puntoPartidaCoordenadas?.lat && puntoPartidaCoordenadas?.lng) {
-        puntoInicialLat = puntoPartidaCoordenadas.lat;
-        puntoInicialLng = puntoPartidaCoordenadas.lng;
-        console.log(`✅ Usando punto de partida personalizado: ${puntoInicialLat}, ${puntoInicialLng}`);
-    }
+    // 2️⃣ Obtener coordenadas de la OS base
+    const coordsCentro = osPartida.Coordenadas || osPartida.Coordendasgis;
+    const [latCentro, lngCentro] = (coordsCentro && coordsCentro.split(',').map(c => parseFloat(c.trim()))) || [NaN, NaN];
+ 
+    if (isNaN(latCentro) || isNaN(lngCentro)) {
+        console.error(`❌ Coordenadas inválidas para OS inicial ${osPartidaId}`);
+        return osData;
+    }
 
-    // 4️⃣ Preparar OS de partida
-    const osPartidaConDatos = {
-        ...osPartida,
-        lat: puntoInicialLat,
-        lng: puntoInicialLng,
-        distancia: 0,
-        numeroOrden: 1,
-        distanciaAlPuntoInicial: 0
-    };
+    // 3️⃣ Definir coordenadas reales de inicio
+    let puntoInicialLat = latCentro;
+    let puntoInicialLng = lngCentro;
+ 
+    if (puntoPartidaCoordenadas?.lat && puntoPartidaCoordenadas?.lng) {
+        puntoInicialLat = puntoPartidaCoordenadas.lat;
+        puntoInicialLng = puntoPartidaCoordenadas.lng;
+        console.log(`📍 Inicio ajustado a coordenadas personalizadas: ${puntoInicialLat}, ${puntoInicialLng}`);
+    }
 
-    // 5️⃣ Preparar otros puntos
-    const puntosNoVisitados = osData
-        .filter(os => String(os.OSATMO || '').trim() !== String(osPartidaId).trim())
-        .map(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
- 
-            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-                return null;
-            }
- 
-            return {
-                ...os,
-                lat,
-                lng,
-                distanciaAlPuntoInicial: calcularDistanciaKm(puntoInicialLat, puntoInicialLng, lat, lng)
-            };
-        })
-        .filter(os => os !== null);
+    // 4️⃣ Preparar objeto de partida
+    const osPartidaConDatos = {
+        ...osPartida,
+        lat: puntoInicialLat,
+        lng: puntoInicialLng,
+        distancia: 0,
+        numeroOrden: 1
+    };
 
-    // 6️⃣ ALGORITMO DEL VECINO MÁS CERCANO
-    let rutaFinal = [osPartidaConDatos];
-    let puntoActual = osPartidaConDatos;
-    let orden = 2;
+    // 5️⃣ Preparar lista de puntos a visitar (Excluyendo el de partida para evitar duplicados)
+    const puntosNoVisitados = osData
+        .filter(os => getOSId(os) !== getOSId(osPartida)) 
+        .map(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
+            return { ...os, lat, lng };
+        })
+        .filter(os => os !== null);
 
-    while (puntosNoVisitados.length > 0) {
-        let vecinoMasCercano = null;
-        let minDistancia = Infinity;
-        let vecinoIndex = -1;
+    console.log(`📦 Procesando ${puntosNoVisitados.length} puntos adicionales.`);
 
-        for (let i = 0; i < puntosNoVisitados.length; i++) {
-            const os = puntosNoVisitados[i];
-            const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
- 
-            if (dist < minDistancia) {
-                minDistancia = dist;
-                vecinoMasCercano = os;
-                vecinoIndex = i;
-            }
-        }
+    // 6️⃣ ALGORITMO DEL VECINO MÁS CERCANO (Ruta inicial)
+    let rutaFinal = [osPartidaConDatos];
+    let puntoActual = osPartidaConDatos;
+    let orden = 2;
 
-        if (vecinoMasCercano && minDistancia !== Infinity) {
-            vecinoMasCercano.numeroOrden = orden++;
-            vecinoMasCercano.distancia = minDistancia;
-            rutaFinal.push(vecinoMasCercano);
-            puntoActual = vecinoMasCercano;
-            puntosNoVisitados.splice(vecinoIndex, 1);
-        } else {
-            break;
-        }
-    }
+    while (puntosNoVisitados.length > 0) {
+        let vecinoMasCercano = null;
+        let minDistancia = Infinity;
+        let vecinoIndex = -1;
 
-    // 7️⃣ MEJORA 2-OPT (Optimización adicional)
-    console.log('🔄 Aplicando optimización 2-OPT...');
- 
-    let mejorado = true;
-    let iteraciones = 0;
-    const MAX_ITERACIONES = 100;
- 
-    while (mejorado && iteraciones < MAX_ITERACIONES) {
-        mejorado = false;
-        iteraciones++;
- 
-        for (let i = 1; i < rutaFinal.length - 2; i++) {
-            for (let j = i + 1; j < rutaFinal.length - 1; j++) {
-                const distActual =
-                    calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[i+1].lat, rutaFinal[i+1].lng) +
-                    calcularDistanciaKm(rutaFinal[j].lat, rutaFinal[j].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
- 
-                const distNueva =
-                    calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[j].lat, rutaFinal[j].lng) +
-                    calcularDistanciaKm(rutaFinal[i+1].lat, rutaFinal[i+1].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
- 
-                if (distNueva < distActual - 0.01) {
-                    // Invertir segmento
-                    const segmento = rutaFinal.slice(i + 1, j + 1).reverse();
-                    rutaFinal.splice(i + 1, j - i, ...segmento);
-                    mejorado = true;
-                    break;
-                }
-            }
-            if (mejorado) break;
-        }
-    }
- 
-    console.log(`✅ Optimización 2-OPT completada (${iteraciones} iteraciones)`);
- 
-    // 8️⃣ Recalcular números de orden y distancias
-    rutaFinal.forEach((os, i) => {
-        os.numeroOrden = i + 1;
-        if (i > 0) {
-            os.distancia = calcularDistanciaKm(
-                rutaFinal[i-1].lat,
-                rutaFinal[i-1].lng,
-                os.lat,
-                os.lng
-            );
-        }
-    });
+        for (let i = 0; i < puntosNoVisitados.length; i++) {
+            const os = puntosNoVisitados[i];
+            const dist = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, os.lat, os.lng);
+            if (dist < minDistancia) {
+                minDistancia = dist;
+                vecinoMasCercano = os;
+                vecinoIndex = i;
+            }
+        }
 
-    const distanciaTotal = rutaFinal.reduce((sum, os) => sum + (os.distancia || 0), 0);
-    console.log(`✅ Ruta optimizada: ${rutaFinal.length} puntos, ${distanciaTotal.toFixed(2)} km total`);
- 
-    return rutaFinal;
+        if (vecinoMasCercano) {
+            vecinoMasCercano.numeroOrden = orden++;
+            vecinoMasCercano.distancia = minDistancia;
+            rutaFinal.push(vecinoMasCercano);
+            puntoActual = vecinoMasCercano;
+            puntosNoVisitados.splice(vecinoIndex, 1);
+        } else break;
+    }
+
+    const distInicialTotal = rutaFinal.reduce((sum, os) => sum + (os.distancia || 0), 0);
+    console.log(`📏 Distancia inicial (Vecino Cercano): ${distInicialTotal.toFixed(2)} km`);
+
+    // 7️⃣ MEJORA 2-OPT (Refinamiento de cruces)
+    console.log('🔄 Aplicando refinamiento 2-OPT para desenredar ruta...');
+    let mejorado = true;
+    let iteraciones = 0;
+    let mejorasRealizadas = 0;
+    const MAX_ITERACIONES = 100;
+
+    while (mejorado && iteraciones < MAX_ITERACIONES) {
+        mejorado = false;
+        iteraciones++;
+
+        for (let i = 0; i < rutaFinal.length - 2; i++) {
+            for (let j = i + 2; j < rutaFinal.length - 1; j++) {
+                
+                // Tramo A: i -> i+1  |  Tramo B: j -> j+1
+                const d_i_next = calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[i+1].lat, rutaFinal[i+1].lng);
+                const d_j_next = calcularDistanciaKm(rutaFinal[j].lat, rutaFinal[j].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
+                
+                // Nueva opción: i -> j  |  i+1 -> j+1
+                const d_i_j = calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[j].lat, rutaFinal[j].lng);
+                const d_next_next = calcularDistanciaKm(rutaFinal[i+1].lat, rutaFinal[i+1].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
+
+                if (d_i_j + d_next_next < d_i_next + d_j_next - 0.001) {
+                    const segmentoInvertido = rutaFinal.slice(i + 1, j + 1).reverse();
+                    rutaFinal.splice(i + 1, j - i, ...segmentoInvertido);
+                    mejorado = true;
+                    mejorasRealizadas++;
+                    break;
+                }
+            }
+            if (mejorado) break;
+        }
+    }
+
+    // 8️⃣ Recalcular números de orden y distancias finales
+    rutaFinal.forEach((os, i) => {
+        os.numeroOrden = i + 1;
+        if (i > 0) {
+            os.distancia = calcularDistanciaKm(rutaFinal[i-1].lat, rutaFinal[i-1].lng, os.lat, os.lng);
+        }
+    });
+
+    const distFinalTotal = rutaFinal.reduce((sum, os) => sum + (os.distancia || 0), 0);
+    const ahorro = distInicialTotal - distFinalTotal;
+
+    // LOG FINAL DE VALIDACIÓN
+    console.log('--- ✅ OPTIMIZACIÓN COMPLETADA ---');
+    console.log(`📊 Mejoras aplicadas: ${mejorasRealizadas} desenredos.`);
+    console.log(`🛣️  Distancia Final: ${distFinalTotal.toFixed(2)} km`);
+    console.log(`✨ Ahorro logrado: ${ahorro.toFixed(2)} km (${((ahorro/distInicialTotal)*100).toFixed(1)}%)`);
+    console.log('----------------------------------');
+
+    return rutaFinal;
 }
 
-
-
 // ========================================
-// 📍 GENERAR RUTA DESDE UN PUNTO FIJO (CORREGIDO Y COMPATIBLE)
+// 📍 GENERAR RUTA DESDE UN PUNTO FIJO (COMPLETO Y MEJORADO)
 // ========================================
 function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
-    console.log('🚨 ==========================================');
-    console.log('🚨 EJECUTANDO: generarRutaDesdePuntoFijo');
-    console.log('🚨 Parámetros recibidos:', { puntoNombre, puntoLat, puntoLng });
-    console.log('🚨 window.osAsignadasKML:', window.osAsignadasKML);
-    console.log('🚨 window.osAsignadasKML existe:', !!window.osAsignadasKML);
-    console.log('🚨 window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
-    console.log('🚨 window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
-    console.log('🚨 window.unidadActivaMapaRutas:', window.unidadActivaMapaRutas);
-    console.log('🚨 ==========================================');
- 
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
- 
- 
-    try {
-        // ✅ VALIDAR QUE EXISTAN LOS DATOS
-        if (!window.osAsignadasKML || !Array.isArray(window.osAsignadasKML)) {
-            console.error('❌ window.osAsignadasKML no está definido o no es un array');
-            throw new Error('No hay datos de OS asignadas cargados. Por favor, recargue la página.');
-        }
- 
-        if (window.osAsignadasKML.length === 0) {
-            console.warn('⚠️ No hay OS asignadas cargadas');
-            throw new Error('No hay OS asignadas disponibles.');
-        }
- 
-        console.log(`📍 Generando ruta desde punto fijo: ${puntoNombre} (${puntoLat}, ${puntoLng})`);
- 
-        // ✅ OBTENER LA UNIDAD ACTIVA (si existe)
-        const unidadActiva = window.unidadActivaMapaRutas ||
-                            (window.osAsignadasKML[0] && window.osAsignadasKML[0].Unidad);
- 
-        console.log(`📊 Unidad activa detectada: ${unidadActiva || 'TODAS'}`);
- 
-        // ✅ FILTRAR OS POR UNIDAD (si hay unidad activa)
-        let osData = window.osAsignadasKML;
-        if (unidadActiva) {
-            osData = window.osAsignadasKML.filter(os => os.Unidad === unidadActiva);
-            console.log(`✅ ${osData.length} OS filtradas para unidad: ${unidadActiva}`);
-        }
- 
-        if (!osData || osData.length === 0) {
-            console.warn('⚠️ No hay OS para la unidad activa');
-            osData = window.osAsignadasKML; // Usar todas si no hay para la unidad
-        }
- 
-        // ✅ FILTRAR SOLO OS CON COORDENADAS VÁLIDAS
-        const osConCoordenadas = osData.filter(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
-            return coords && coords.includes(',');
-        });
- 
-        if (osConCoordenadas.length === 0) {
-            console.error('❌ No hay OS con coordenadas válidas');
-            throw new Error('No hay OS con coordenadas válidas para generar la ruta.');
-        }
- 
-        console.log(`✅ ${osConCoordenadas.length} OS con coordenadas válidas encontradas`);
- 
-        // ✅ APLICAR ALGORITMO DE OPTIMIZACIÓN
-        const rutaOptimizada = optimizarRutaVecinoCercano(osConCoordenadas, '', {
-            lat: puntoLat,
-            lng: puntoLng
-        });
- 
-        console.log(`✅ Ruta optimizada generada: ${rutaOptimizada.length} puntos`);
- 
-        // ✅ MOSTRAR MAPA CON LA RUTA
-        mostrarMapaKMLConNumeracion(rutaOptimizada, puntoNombre, puntoLat, puntoLng);
- 
-    } catch (err) {
-        console.error('❌ Error generando ruta desde punto fijo:', err);
-        console.error('Stack:', err.stack);
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: #fff3cd;">
-                <div class="result-header">⚠️ Error</div>
-                <p style="color: #666;">${err.message || 'Error desconocido al generar la ruta'}</p>
-                <p style="color: #999; font-size: 12px; margin-top: 10px;">
-                    💡 Consejo: Asegúrese de que las OS estén cargadas correctamente.
-                </p>
-            </div>
-        `;
-    }
+    // 1️⃣ LOGS INICIALES DE CONTROL (Tus 🚨 originales)
+    console.log('🚨 ==========================================');
+    console.log('🚨 EJECUTANDO: generarRutaDesdePuntoFijo');
+    console.log('🚨 Parámetros recibidos:', { puntoNombre, puntoLat, puntoLng });
+    console.log('🚨 window.osAsignadasKML:', window.osAsignadasKML);
+    console.log('🚨 window.osAsignadasKML existe:', !!window.osAsignadasKML);
+    console.log('🚨 window.osAsignadasKML es array:', Array.isArray(window.osAsignadasKML));
+    console.log('🚨 window.osAsignadasKML longitud:', window.osAsignadasKML ? window.osAsignadasKML.length : 'N/A');
+    console.log('🚨 window.unidadActivaMapaRutas:', window.unidadActivaMapaRutas);
+    console.log('🚨 ==========================================');
+
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // Validamos que el contenedor exista antes de escribir en él
+    if (resultsContainer) {
+        resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    }
+
+    try {
+        // 2️⃣ VALIDAR QUE EXISTAN LOS DATOS
+        if (!window.osAsignadasKML || !Array.isArray(window.osAsignadasKML)) {
+            console.error('❌ window.osAsignadasKML no está definido o no es un array');
+            throw new Error('No hay datos de OS asignadas cargados. Por favor, recargue la página.');
+        }
+
+        if (window.osAsignadasKML.length === 0) {
+            console.warn('⚠️ No hay OS asignadas cargadas');
+            throw new Error('No hay OS asignadas disponibles en el sistema.');
+        }
+
+        console.log(`📍 Iniciando proceso para: ${puntoNombre} (${puntoLat}, ${puntoLng})`);
+
+        // 3️⃣ OBTENER LA UNIDAD ACTIVA (Lógica de prioridad)
+        const unidadActiva = window.unidadActivaMapaRutas ||
+                            (window.osAsignadasKML[0] && window.osAsignadasKML[0].Unidad);
+
+        console.log(`📊 Unidad activa detectada para filtrado: ${unidadActiva || 'TODAS'}`);
+
+        // 4️⃣ FILTRAR OS POR UNIDAD
+        let osData = window.osAsignadasKML;
+        if (unidadActiva) {
+            osData = window.osAsignadasKML.filter(os => os.Unidad === unidadActiva);
+            console.log(`✅ ${osData.length} OS filtradas para la unidad: ${unidadActiva}`);
+        }
+
+        // Si después de filtrar no queda nada, volvemos al dataset completo por seguridad
+        if (!osData || osData.length === 0) {
+            console.warn('⚠️ No se encontraron OS para la unidad activa, usando dataset completo');
+            osData = window.osAsignadasKML;
+        }
+
+        // 5️⃣ FILTRAR SOLO OS CON COORDENADAS VÁLIDAS
+        const osConCoordenadas = osData.filter(os => {
+            const coords = os.Coordenadas || os.Coordendasgis;
+            // Verificación robusta: que sea string y contenga coma
+            return coords && typeof coords === 'string' && coords.includes(',');
+        });
+
+        if (osConCoordenadas.length === 0) {
+            console.error('❌ Error: Cero puntos con coordenadas procesables');
+            throw new Error('No hay OS con coordenadas válidas para generar la ruta.');
+        }
+
+        console.log(`✅ ${osConCoordenadas.length} OS válidas encontradas. Aplicando algoritmos...`);
+
+        // 6️⃣ APLICAR ALGORITMO DE OPTIMIZACIÓN
+        // IMPORTANTE: null en el ID porque salimos de una base, no de una OS
+        const rutaOptimizada = optimizarRutaVecinoCercano(osConCoordenadas, null, {
+            lat: puntoLat,
+            lng: puntoLng
+        });
+
+        console.log(`✅ Ruta optimizada generada exitosamente: ${rutaOptimizada.length} puntos`);
+
+        // 7️⃣ MOSTRAR MAPA CON LA RUTA
+        if (typeof mostrarMapaKMLConNumeracion === 'function') {
+            mostrarMapaKMLConNumeracion(rutaOptimizada, puntoNombre, puntoLat, puntoLng);
+        } else {
+            console.error('❌ La función mostrarMapaKMLConNumeracion no existe');
+            throw new Error('El visualizador de mapas no está listo.');
+        }
+
+    } catch (err) {
+        console.error('❌ Error crítico generando ruta:', err);
+        console.error('Stack Trace:', err.stack);
+        
+        if (resultsContainer) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd; border-left: 5px solid #ffa000; padding: 15px;">
+                    <div class="result-header" style="font-weight: bold; color: #856404; margin-bottom: 5px;">⚠️ Error de Generación</div>
+                    <p style="color: #666; margin: 0;">${err.message || 'Error desconocido'}</p>
+                    <p style="color: #999; font-size: 11px; margin-top: 10px;">
+                        💡 <b>Consejo:</b> Intente refrescar los datos o verificar que la unidad tenga OS con coordenadas en el archivo cargado.
+                    </p>
+                </div>
+            `;
+        }
+    }
 }
 
 
-
 // ========================================
-// 🗺️ GENERAR MAPA KML CON PUNTO DE PARTIDA (CORREGIDO)
+// 🗺️ GENERAR MAPA KML CON PUNTO DE PARTIDA (REVISADO Y FILTRADO)
 // ========================================
 function generarMapaKMLConPuntoPartida(unidad) {
-    const osPartida = document.getElementById('selectPuntoPartidaKML').value;
- 
-    if (!osPartida) {
-        alert('⚠️ Por favor seleccione un punto de partida');
-        return;
-    }
- 
-    // ✅ VALIDAR DATOS
-    const osData = window.osKMLData;
-    if (!osData || !Array.isArray(osData)) {
-        console.error('❌ window.osKMLData no está definido o no es un array');
-        alert('❌ Error: Datos no disponibles. Por favor, recargue la página.');
-        return;
-    }
- 
-    if (osData.length === 0) {
-        console.warn('⚠️ No hay datos en window.osKMLData');
-        alert('⚠️ No hay datos disponibles para generar el mapa.');
-        return;
-    }
- 
-    console.log(`📍 Generando mapa con punto de partida: ${osPartida}`);
- 
-    // 🆕 NORMALIZACIÓN CRÍTICA: Aseguramos que la propiedad clave siempre sea 'osatomo'
-    const osDataNormalizada = osData.map(os => ({
-        ...os,
-        osatomo: os.osatomo || os.OSATMO || ''
-    }));
- 
-    console.log(`✅ ${osDataNormalizada.length} OS normalizadas`);
- 
-    // 🆕 LLAMADA AL ALGORITMO OPTIMIZADO con los datos normalizados
-    const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartida);
- 
-    if (todosLosPuntos.length === 0) {
-        console.error('❌ La optimización de ruta no devolvió puntos');
-        alert('❌ Error al optimizar la ruta. Verifique las coordenadas o el punto de partida.');
-        return;
-    }
- 
-    const osCentro = todosLosPuntos[0]; // El centro es el primer punto en la ruta optimizada
- 
-    console.log(`✅ Ruta Optimizada (Vecino Cercano) generada: ${todosLosPuntos.length} puntos numerados`);
- 
-    // ✅ VALIDAR COORDENADAS DEL CENTRO
-    if (!osCentro || !osCentro.lat || !osCentro.lng) {
-        console.error('❌ Coordenadas del centro inválidas:', osCentro);
-        alert('❌ Error: Coordenadas del punto de partida inválidas.');
-        return;
-    }
- 
-    // Generar HTML del mapa
-    mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, osCentro.lat, osCentro.lng);
+    const startTime = performance.now();
+    const osPartidaId = document.getElementById('selectPuntoPartidaKML')?.value;
+
+    if (!osPartidaId) {
+        alert('⚠️ Por favor seleccione un punto de partida');
+        return;
+    }
+
+    // 1️⃣ VALIDAR DATOS DE ORIGEN
+    const osDataOriginal = window.osKMLData;
+    if (!osDataOriginal || !Array.isArray(osDataOriginal)) {
+        console.error('❌ window.osKMLData no disponible');
+        alert('❌ Error: Datos no cargados. Recargue la página.');
+        return;
+    }
+
+    console.log(`🚨 --- INICIANDO GENERACIÓN KML RUTA (SOLO ASIGNADAS) ---`);
+    console.log(`📍 Punto partida: ${osPartidaId} | Unidad: ${unidad}`);
+
+    // 2️⃣ APLICAR REGLAS DE NEGOCIO (Recordatorio: Reguladas y > 500 siempre van)
+    // Filtramos para asegurar que lo que se muestre cumpla con los requisitos mínimos
+    const osFiltradaNegocio = osDataOriginal.filter(os => {
+        const esRegulada = String(os.Tipologia || '').toUpperCase().includes('REGULADA');
+        const montoDeuda = parseFloat(os.MontoDeuda || os.monto_deuda || 0);
+        const esDeudaAlta = montoDeuda > 500;
+        
+        // En "Solo Asignadas" mostramos lo que trae el KML + validación de seguridad
+        return true; // Aquí podrías añadir filtros específicos si fuera necesario
+    });
+
+    // 3️⃣ NORMALIZACIÓN CRÍTICA
+    const osDataNormalizada = osFiltradaNegocio.map(os => ({
+        ...os,
+        osatomo: String(os.osatomo || os.OSATMO || os.OSATOMO || '').trim()
+    })).filter(os => {
+        // Solo puntos con coordenadas válidas
+        const coords = os.Coordenadas || os.Coordendasgis;
+        return coords && String(coords).includes(',');
+    });
+
+    console.log(`📊 Puntos normalizados y con coordenadas: ${osDataNormalizada.length}`);
+
+    // 4️⃣ OPTIMIZACIÓN DE RUTA
+    // Usamos nuestra función optimizada (Vecino Cercano + 2-OPT)
+    const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartidaId);
+
+    if (todosLosPuntos.length === 0) {
+        console.error('❌ No se pudieron generar puntos optimizados');
+        alert('❌ Error: No se encontraron puntos válidos para trazar la ruta.');
+        return;
+    }
+
+    // 5️⃣ VALIDACIÓN DEL CENTRO (Primer punto de la ruta)
+    const osCentro = todosLosPuntos[0];
+    const latCentro = parseFloat(osCentro.lat);
+    const lngCentro = parseFloat(osCentro.lng);
+
+    if (isNaN(latCentro) || isNaN(lngCentro)) {
+        console.error('❌ Centro de mapa inválido:', osCentro);
+        alert('❌ Error: El punto de partida no tiene coordenadas válidas.');
+        return;
+    }
+
+    // 6️⃣ LOGS DE RENDIMIENTO Y FINALIZACIÓN
+    const endTime = performance.now();
+    const duracion = ((endTime - startTime) / 1000).toFixed(3);
+    
+    console.log('✅ --- RUTA GENERADA CON ÉXITO ---');
+    console.log(`⏱️ Tiempo total: ${duracion}s`);
+    console.log(`🛣️ Puntos en mapa: ${todosLosPuntos.length}`);
+    console.log(`📍 Coordenadas centro: ${latCentro}, ${lngCentro}`);
+
+    // 7️⃣ RENDERIZADO
+    if (typeof mostrarMapaKMLConNumeracion === 'function') {
+        mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro);
+    } else {
+        console.error('❌ mostrarMapaKMLConNumeracion no definida');
+    }
 }
 
 // ========================================
-// 🔄 REEMPLAZAR mostrarMapaKMLConNumeracion()
+// 🔄 MOSTRAR MAPA KML CON NUMERACIÓN (MEJORADO)
 // ========================================
 function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
-    const osCentro = todosLosPuntos[0]; // Primera OS es el centro
-    const osEnRadio = todosLosPuntos.slice(1); // El resto son las vecinas
-    const radioKm = 5; // Puedes ajustar esto
- 
-    // Guardar datos globalmente para KML
-    window.datosRutaKML = todosLosPuntos;
- 
-    // ✅ USAR LA MISMA FUNCIÓN QUE MAPA DE RUTAS
-    generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm);
- 
-    // Agregar botón de descarga KML al final
-    const resultsContainer = document.getElementById('searchResults');
-    const descargaHTML = `
-        <div style="text-align: center; margin-top: 20px; padding: 20px; background: white; border-radius: 12px;">
-            <button class="btn btn-secondary" onclick="descargarKMLRutaNumerada()"
-                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 18px; padding: 15px 40px;">
-                📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
-            </button>
-        </div>
-    `;
-    resultsContainer.innerHTML += descargaHTML;
+    console.log(`🎨 Renderizando mapa para ${unidad} con ${todosLosPuntos.length} puntos.`);
+
+    // 1️⃣ Preparar datos para Leaflet
+    const osCentro = todosLosPuntos[0]; // El punto de partida (Origen)
+    const osEnRadio = todosLosPuntos.slice(1); // El resto de la secuencia optimizada
+    
+    // Guardar para la función de descarga
+    window.datosRutaKML = todosLosPuntos;
+
+    // 2️⃣ Renderizar el mapa
+    // Nota: El radioKm se pone alto o se ignora en la lógica interna para mostrar todos los puntos
+    const radioVisual = 10; 
+    generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
+
+    // 3️⃣ Gestionar el contenedor de resultados y botón de descarga
+    const resultsContainer = document.getElementById('searchResults');
+    if (!resultsContainer) return;
+
+    // Limpiamos botones previos si existen para evitar duplicados
+    const botonExistente = document.getElementById('contenedorDescargaKML');
+    if (botonExistente) botonExistente.remove();
+
+    const descargaHTML = `
+        <div id="contenedorDescargaKML" style="text-align: center; margin-top: 25px; padding: 25px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px;">
+            <h4 style="margin-bottom: 15px; color: #1e293b;">📌 Ruta Optimizada Lista</h4>
+            <button class="btn" onclick="descargarKMLRutaNumerada()"
+                    style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); 
+                           color: white; font-size: 18px; padding: 15px 35px; 
+                           border-radius: 10px; border: none; cursor: pointer;
+                           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
+            </button>
+            <p style="margin-top: 10px; font-size: 12px; color: #64748b;">
+                * El archivo incluirá la secuencia del 1 al ${todosLosPuntos.length}
+            </p>
+        </div>
+    `;
+
+    // Insertar después del mapa (no sobreescribir todo el contenedor si hay más info)
+    resultsContainer.insertAdjacentHTML('beforeend', descargaHTML);
+    
+    // Auto-scroll hacia el botón para que el usuario sepa que terminó
+    resultsContainer.lastElementChild.scrollIntoView({ behavior: 'smooth' });
 }
 
 
 
 
 
-
-
 // ========================================
-// 🔄 ELIMINAR inicializarMapaKMLConNumeracion()
-// ========================================
-// YA NO SE NECESITA - Ahora usa inicializarMapaLeaflet()
-
-// ========================================
-// 📥 MANTENER descargarKMLRutaNumerada() (sin cambios)
+// 📥 DESCARGAR KML RUTA NUMERADA (MEJORADO)
 // ========================================
 function descargarKMLRutaNumerada() {
-    if (!window.datosRutaKML || window.datosRutaKML.length === 0) {
-        alert('No hay datos para descargar');
-        return;
-    }
- 
-    const ubicaciones = window.datosRutaKML.map(os => ({
-        etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: os.Coordenadas || os.Coordendasgis,
-        numeroOrden: os.numeroOrden
-    }));
- 
-    const kmlString = generarKMLString(ubicaciones);
-    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Ruta\_Numerada\_${new Date().getTime()}.kml`;
-    a.click();
-    URL.revokeObjectURL(url);
- 
-    console.log('✅ KML numerado descargado');
+    // 1️⃣ Validar existencia de datos
+    if (!window.datosRutaKML || window.datosRutaKML.length === 0) {
+        alert('⚠️ No hay datos de ruta optimizada para descargar.');
+        return;
+    }
+
+    console.log(`📦 Preparando KML para ${window.datosRutaKML.length} ubicaciones...`);
+
+    try {
+        // 2️⃣ Preparar las ubicaciones con el nombre formateado para Google Earth/Maps
+        const ubicaciones = window.datosRutaKML.map((os, index) => {
+            const numero = os.numeroOrden || (index + 1);
+            const idOS = os.OSATMO || os.osatomo || os.OSATOMO || 'Sin ID';
+            
+            return {
+                // Esto hará que en el mapa aparezca "1 - 20240510"
+                etiqueta: `${numero} - ${idOS}`, 
+                coordenadas: os.Coordenadas || os.Coordendasgis,
+                numeroOrden: numero
+            };
+        });
+
+        // 3️⃣ Generar el contenido del archivo
+        if (typeof generarKMLString !== 'function') {
+            throw new Error('La función auxiliar generarKMLString no está definida.');
+        }
+
+        const kmlString = generarKMLString(ubicaciones);
+        
+        // 4️⃣ Crear el archivo para descarga
+        const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+        const url = URL.createObjectURL(blob);
+        
+        // Formatear nombre del archivo con fecha y hora para evitar confusiones
+        const fecha = new Date().toISOString().slice(0,10);
+        const hora = new Date().getHours() + '-' + new Date().getMinutes();
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Ruta_Optimizada_${fecha}_${hora}.kml`;
+        
+        // Ejecutar descarga
+        document.body.appendChild(a); // Necesario en algunos navegadores
+        a.click();
+        document.body.removeChild(a);
+        
+        // Limpieza de memoria
+        URL.revokeObjectURL(url);
+        console.log('✅ Archivo KML generado y descargado con éxito.');
+
+    } catch (error) {
+        console.error('❌ Error al exportar KML:', error);
+        alert('Hubo un problema al generar el archivo KML: ' + error.message);
+    }
 }
-
-
-
-
 
 
  	// ========================================
-// 🗺️ GENERAR KML POR UNIDAD SELECCIONADA
+// 🗺️ GENERAR KML POR UNIDAD SELECCIONADA (CON FILTROS DE NEGOCIO)
 // ========================================
 async function generarKMLPorUnidad() {
-    const unidadSeleccionada = document.getElementById('selectUnidad').value;
- 
-    if (!unidadSeleccionada) {
-        alert('Por favor seleccione una unidad');
-        return;
-    }
- 
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
- 
-    try {
-        // Buscar todas las OS Pendientes de esa unidad
-        const { data: osPendientes, error } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('Unidad', unidadSeleccionada);
- 
-        if (error) {
-            resultsContainer.innerHTML = '<div class="result-card">❌ Error al buscar OS</div>';
-            return;
-        }
- 
-        if (!osPendientes || osPendientes.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
-                    <div class="result-header">⚠️ Sin resultados</div>
-                    <p>No se encontraron OS Pendientes para la unidad: <strong>${unidadSeleccionada}</strong></p>
-                </div>
-            `;
-            return;
-        }
- 
-        // Filtrar por tipo de coordenadas
-        let conCoordenadasLector = osPendientes.filter(os =>
-            os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
-        );
- 
-        let conCoordenadasGIS = osPendientes.filter(os =>
-            os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
-        );
- 
-        // -----------------------------------------------------
-        // 🆕 APLICAR OPTIMIZACIÓN DE RUTA SI HAY PUNTO DE PARTIDA
-        // -----------------------------------------------------
-        const osPartida = document.getElementById('selectPuntoPartidaKML')?.value;
- 
-        if (osPartida) {
-            console.log(`✨ Aplicando optimización de ruta (Vecino Cercano) con partida: ${osPartida}`);
- 
-            // Reordenar la lista Lector
-            conCoordenadasLector = optimizarRutaVecinoCercano(conCoordenadasLector, osPartida);
- 
-            // Reordenar la lista GIS
-            conCoordenadasGIS = optimizarRutaVecinoCercano(conCoordenadasGIS, osPartida);
-        } else {
-            console.log('No hay punto de partida seleccionado, se usa el orden de la base de datos.');
- 
-            // Opcional: Asegurar que tengan el campo numeroOrden, si se usa en el KML.
-            conCoordenadasLector = conCoordenadasLector.map((os, index) => ({...os, numeroOrden: index + 1}));
-            conCoordenadasGIS = conCoordenadasGIS.map((os, index) => ({...os, numeroOrden: index + 1}));
-        }
+    const unidadSeleccionada = document.getElementById('selectUnidad').value;
 
-        // -----------------------------------------------------
- 
-        // Guardar en variables globales para descarga
-        window.kmlDataLector = conCoordenadasLector;
-        window.kmlDataGIS = conCoordenadasGIS;
- 
-        // Mostrar resultados
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-                <div class="result-header">✅ Búsqueda completada - ${unidadSeleccionada}</div>
- 
-                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                    <strong>📊 Resumen:</strong><br>
-                    • Total de OS buscadas: <strong>${osPendientes.length}</strong><br>
-                    • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
-                    • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
-                </div>
- 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                    <button class="btn btn-secondary"
-                            onclick="descargarKMLLector()"
-                            ${conCoordenadasLector.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                        📥 Descargar KML Lector<br>
-                        <small>(${conCoordenadasLector.length} puntos)</small>
-                    </button>
- 
-                    <button class="btn btn-secondary"
-                            onclick="descargarKMLGIS()"
-                            ${conCoordenadasGIS.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                        📥 Descargar KML GIS<br>
-                        <small>(${conCoordenadasGIS.length} puntos)</small>
-                    </button>
-                </div>
-            </div>
-        `;
- 
-    } catch (err) {
-        console.error('Error generando KML:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
-    }
+    if (!unidadSeleccionada) {
+        alert('Por favor seleccione una unidad');
+        return;
+    }
+
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+
+    try {
+        console.log(`🚨 Iniciando búsqueda para Unidad: ${unidadSeleccionada}`);
+
+        // 1️⃣ BUSCAR OS PENDIENTES
+        const { data: osPendientes, error } = await supabaseClient
+            .from('OS Pendientes')
+            .select('*')
+            .eq('Unidad', unidadSeleccionada);
+
+        if (error) throw error;
+
+        if (!osPendientes || osPendientes.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fff3cd; border: 2px solid #ffc107;">
+                    <div class="result-header">⚠️ Sin resultados</div>
+                    <p>No se encontraron OS Pendientes para la unidad: <strong>${unidadSeleccionada}</strong></p>
+                </div>`;
+            return;
+        }
+
+      // 2️⃣ APLICAR FILTROS DE NEGOCIO (Lógica Inclusiva)
+const osFiltradasNegocio = osPendientes.filter(os => {
+    // Normalizamos valores para evitar errores de null/undefined
+    const tipologia = String(os.Tipologia || os.tipologia || '').toUpperCase();
+    const monto = parseFloat(os.MontoDeuda || os.monto_deuda || 0);
+
+    const esRegulada = tipologia.includes('REGULADA');
+    const esDeudaAlta = monto > 500;
+
+    // 🛡️ LÓGICA DE SUPERVIVENCIA:
+    // Si cumple cualquiera de las dos, se queda. 
+    // No importa si falla una, mientras la otra sea verdadera.
+    if (esRegulada || esDeudaAlta) {
+        return true; 
+    }
+
+    return false; // Solo se elimina si no es ninguna de las dos.
+});
+
+console.log(`📊 Filtro completado: Se mantienen ${osFiltradasNegocio.length} OS (Reguladas o >$500)`);
+
+        // 3️⃣ SEPARAR POR TIPO DE COORDENADAS
+        let conLector = osFiltradasNegocio.filter(os => 
+            os.Coordenadas && os.Coordenadas.includes(',')
+        );
+
+        let conGIS = osFiltradasNegocio.filter(os => 
+            os.Coordendasgis && os.Coordendasgis.includes(',')
+        );
+
+        // 4️⃣ OPTIMIZACIÓN DE RUTA
+        const osPartida = document.getElementById('selectPuntoPartidaKML')?.value;
+
+        if (osPartida && osPartida.trim() !== "") {
+            console.log(`✨ Optimizando ruta desde: ${osPartida}`);
+            
+            // Re-ordenar ambas listas con el nuevo algoritmo 2-OPT
+            if (conLector.length > 0) {
+                conLector = optimizarRutaVecinoCercano(conLector, osPartida);
+            }
+            if (conGIS.length > 0) {
+                conGIS = optimizarRutaVecinoCercano(conGIS, osPartida);
+            }
+        } else {
+            console.log('ℹ️ Sin punto de partida: Se asigna orden secuencial básico.');
+            conLector = conLector.map((os, i) => ({ ...os, numeroOrden: i + 1 }));
+            conGIS = conGIS.map((os, i) => ({ ...os, numeroOrden: i + 1 }));
+        }
+
+        // 5️⃣ GUARDAR GLOBALES PARA DESCARGA
+        window.kmlDataLector = conLector;
+        window.kmlDataGIS = conGIS;
+
+        // 6️⃣ MOSTRAR RESULTADOS
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+                <div class="result-header">✅ Proceso Completado - ${unidadSeleccionada}</div>
+
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
+                    <strong>📊 Resumen de Ruta:</strong><br>
+                    • OS Totales en Unidad: ${osPendientes.length}<br>
+                    • OS que cumplen filtros (Reg/+$500): <strong>${osFiltradasNegocio.length}</strong><br>
+                    <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
+                    • Disponibles en KML Lector: <strong>${conLector.length}</strong><br>
+                    • Disponibles en KML GIS: <strong>${conGIS.length}</strong>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="descargarKMLLector()" 
+                        ${conLector.length === 0 ? 'disabled style="opacity: 0.5;"' : ''}>
+                        📥 KML Lector<br><small>(${conLector.length} pts)</small>
+                    </button>
+
+                    <button class="btn btn-secondary" onclick="descargarKMLGIS()" 
+                        ${conGIS.length === 0 ? 'disabled style="opacity: 0.5;"' : ''}>
+                        📥 KML GIS<br><small>(${conGIS.length} pts)</small>
+                    </button>
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error('❌ Error generando KML:', err);
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fee2e2; border: 2px solid #ef4444;">
+                <div class="result-header" style="color: #b91c1c;">❌ Error de Conexión</div>
+                <p>${err.message || 'No se pudo conectar con la base de datos.'}</p>
+            </div>`;
+    }
 }
-
-
 
  	// ========================================
 // 📥 DESCARGAR KML COORDENADAS LECTOR
@@ -7193,338 +7395,322 @@ verificarZonaHoraria();
 
 
  	function mostrarPreviewAsignaciones(datos, validacionBD, duplicados) {
-    const resultsContainer = document.getElementById('searchResults');
- 
-    const registrosValidos = datos.filter(fila => {
-        const os = fila[0].toString().trim();
-        return validacionBD.existentes.includes(os) &&
-               !duplicados.some(dup => dup.osatomo === os);
-    });
- 
-    let html = `
-        <div class="result-card" style="background: ${duplicados.length > 0 ? '#fff3cd' : '#e8f5e9'}; border: 2px solid ${duplicados.length > 0 ? '#ffc107' : '#4caf50'};">
-            <div class="result-header">${duplicados.length > 0 ? '⚠️' : '✅'} Validación Completada</div>
- 
-            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <strong style="font-size: 18px; color: #2d3748;">📊 Resumen:</strong><br><br>
-                <div style="font-size: 16px; line-height: 2;">
-                    • Total de filas: <strong>${datos.length}</strong><br>
-                    • ✅ OS válidas para asignar: <strong style="color: #2e7d32;">${registrosValidos.length}</strong><br>
-                    • ❌ OS no existen en BD: <strong style="color: #d32f2f;">${validacionBD.noExistentes.length}</strong><br>
-                    • ⚠️ OS duplicadas en archivo: <strong style="color: #ff9800;">${duplicados.length}</strong>
-                </div>
-            </div>`;
- 
-    // Mostrar OS no existentes
-    if (validacionBD.noExistentes.length > 0) {
-        html += `
-            <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin: 20px 0; max-height: 200px; overflow-y: auto;">
-                <strong style="color: #c62828;">❌ OS que NO existen en OS Pendientes (${validacionBD.noExistentes.length}):</strong><br><br>
-                ${validacionBD.noExistentes.slice(0, 20).join(', ')}
-                ${validacionBD.noExistentes.length > 20 ? `<br><em>... y ${validacionBD.noExistentes.length - 20} más</em>` : ''}
-            </div>`;
-    }
- 
-    // Botones de acción
-    if (duplicados.length === 0 && registrosValidos.length > 0) {
-        html += `
-            <div style="background: #e3f2fd; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <strong style="color: #1565c0; font-size: 16px;">⚠️ CONFIRMACIÓN REQUERIDA</strong><br>
-                <p style="margin: 10px 0 0 0; color: #666;">
-                    Al confirmar, se ELIMINARÁN todas las asignaciones actuales y se cargarán las ${registrosValidos.length} nuevas.
-                </p>
-            </div>
- 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn" onclick="confirmarCargaAsignaciones(${JSON.stringify(registrosValidos).replace(/"/g, '&quot;')})"
-                        style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); font-size: 18px; padding: 18px;">
-                    ✅ Confirmar y Reemplazar
-                </button>
-                <button class="btn btn-danger" onclick="cargarInterfazAsignaciones()" style="font-size: 16px; padding: 15px;">
-                    ✕ Cancelar
-                </button>
-            </div>`;
-    } else {
-        html += `
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn btn-danger" onclick="cargarInterfazAsignaciones()">
-                    ← Corregir archivo y reintentar
-                </button>
-            </div>`;
-    }
- 
-    html += `</div>`;
- 
-    resultsContainer.innerHTML = html;
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // 🛡️ ESCUDO 1: Asegurar que validacionBD y duplicados sean objetos/arrays válidos
+    const vBD = validacionBD || { existentes: [], noExistentes: [] };
+    const dups = duplicados || [];
+    const listaDatos = datos || [];
+
+    // 🛡️ ESCUDO 2: Filtrado seguro
+    const registrosValidos = listaDatos.filter(fila => {
+        if (!fila || !fila[0]) return false; // Evitar filas vacías
+        const os = fila[0].toString().trim();
+        
+        // Verificamos existencia y que no sea un duplicado
+        const existeEnBD = vBD.existentes ? vBD.existentes.includes(os) : false;
+        const esDuplicado = dups.some(dup => (dup.osatomo || dup.os) === os);
+        
+        return existeEnBD && !esDuplicado;
+    });
+
+    // 🎨 Generación de Interfaz
+    let html = `
+        <div class="result-card" style="background: ${dups.length > 0 ? '#fff3cd' : '#e8f5e9'}; border: 2px solid ${dups.length > 0 ? '#ffc107' : '#4caf50'};">
+            <div class="result-header" style="display: flex; align-items: center; gap: 10px;">
+                ${dups.length > 0 ? '⚠️' : '✅'} <span>Validación de Carga completada</span>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #e2e8f0;">
+                <strong style="font-size: 18px; color: #1e293b; display: block; margin-bottom: 15px;">📊 Resumen de Validación:</strong>
+                <div style="font-size: 15px; display: grid; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>📄 Total de filas en archivo:</span>
+                        <strong>${listaDatos.length}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: #166534; background: #f0fdf4; padding: 5px 8px; border-radius: 4px;">
+                        <span>✅ OS válidas para asignar:</span>
+                        <strong>${registrosValidos.length}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: #991b1b;">
+                        <span>❌ OS no encontradas en Pendientes:</span>
+                        <strong>${vBD.noExistentes ? vBD.noExistentes.length : 0}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: #9a3412;">
+                        <span>⚠️ OS duplicadas detectadas:</span>
+                        <strong>${dups.length}</strong>
+                    </div>
+                </div>
+            </div>`;
+
+    // Sección de OS no existentes
+    if (vBD.noExistentes && vBD.noExistentes.length > 0) {
+        html += `
+            <div style="background: #fff1f2; padding: 15px; border-radius: 10px; margin: 15px 0; border: 1px solid #fda4af;">
+                <strong style="color: #be123c;">❌ OS que NO existen en sistema (${vBD.noExistentes.length}):</strong>
+                <p style="font-size: 13px; color: #4b5563; margin-top: 8px; word-break: break-all;">
+                    ${vBD.noExistentes.slice(0, 30).join(', ')}${vBD.noExistentes.length > 30 ? '...' : ''}
+                </p>
+            </div>`;
+    }
+
+    // Botones de acción
+    if (dups.length === 0 && registrosValidos.length > 0) {
+        // Limpiamos los datos para el onclick para evitar errores de JSON
+        const datosLimpios = registrosValidos.map(r => r.map(celda => celda.toString().trim()));
+        
+        html += `
+            <div style="background: #eff6ff; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #bfdbfe; text-align: center;">
+                <strong style="color: #1e40af; font-size: 16px;">⚠️ ATENCIÓN: REEMPLAZO MASIVO</strong>
+                <p style="margin: 10px 0; color: #64748b; font-size: 14px;">
+                    Al confirmar, se <strong style="color: #ef4444;">borrarán todas las asignaciones actuales</strong> y se instalarán estas ${registrosValidos.length} nuevas.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                    <button class="btn" onclick="confirmarCargaAsignaciones(${JSON.stringify(datosLimpios).replace(/"/g, '&quot;')})"
+                            style="background: #22c55e; color: white; padding: 15px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer;">
+                        ✅ Confirmar y Cargar
+                    </button>
+                    <button class="btn" onclick="cargarInterfazAsignaciones()" 
+                            style="background: #64748b; color: white; padding: 15px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer;">
+                        ✕ Cancelar
+                    </button>
+                </div>
+            </div>`;
+    } else {
+        html += `
+            <div style="text-align: center; margin-top: 20px;">
+                <p style="color: #ef4444; margin-bottom: 10px;">${dups.length > 0 ? 'Debe eliminar los duplicados del archivo antes de subirlo.' : 'No se encontraron registros válidos.'}</p>
+                <button class="btn" onclick="cargarInterfazAsignaciones()" style="background: #3b82f6; color: white; padding: 12px 25px; border-radius: 8px; border: none; cursor: pointer;">
+                    ← Corregir archivo y reintentar
+                </button>
+            </div>`;
+    }
+
+    html += `</div>`;
+    resultsContainer.innerHTML = html;
 }
 
+
+
  	async function confirmarCargaAsignaciones(registrosValidos) {
-    const resultsContainer = document.getElementById('searchResults');
- 
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="text-align: center;">
-            <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <h3 style="color: #1565c0;">Eliminando asignaciones anteriores...</h3>
-        </div>`;
- 
-    try {
-        // 1️⃣ ELIMINAR TODO DE os_asignadas
-        const { error: errorDelete } = await supabaseClient
-            .from('os_asignadas')
-            .delete()
-            .neq('id', 0); // Eliminar todos los registros
- 
-        if (errorDelete) {
-            alert('❌ Error al limpiar tabla: ' + errorDelete.message);
-            return;
-        }
- 
-        console.log('✅ Tabla os_asignadas limpiada');
- 
-        // 2️⃣ INSERTAR NUEVAS ASIGNACIONES (por lotes)
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="text-align: center;">
-                <div class="loading" style="display: block; margin: 20px auto;"></div>
-                <h3 style="color: #1565c0;">Insertando ${registrosValidos.length} asignaciones...</h3>
-                <p id="progresoInsert">0 / ${registrosValidos.length}</p>
-            </div>`;
- 
-        const BATCH_SIZE = 500;
-        let insertados = 0;
- 
-        for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
-            const batch = registrosValidos.slice(i, i + BATCH_SIZE);
- 
-            const registros = batch.map(fila => ({
-                osatomo: fila[0].toString().trim(),
-                Unidad: fila[1].toString().trim(),
-                Estado: fila[2] ? fila[2].toString().trim() : 'Asignada',
-                fecha_asignacion: new Date().toISOString(),
-                usuario_asigno: currentUser.usuario
-            }));
- 
-            const { error } = await supabaseClient
-                .from('os_asignadas')
-                .insert(registros);
- 
-            if (error) {
-                console.error('Error en batch:', error);
-                continue;
-            }
- 
-            insertados += registros.length;
-            document.getElementById('progresoInsert').textContent =
-                `${insertados} / ${registrosValidos.length}`;
-        }
- 
-        // 3️⃣ ÉXITO
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-                <div class="result-header">✅ Asignaciones Cargadas</div>
-                <div style="text-align: center; padding: 40px;">
-                    <div style="font-size: 72px; margin-bottom: 20px;">✅</div>
-                    <h3 style="color: #2e7d32; margin: 0 0 10px 0;">
-                        ${insertados} asignaciones cargadas correctamente
-                    </h3>
-                    <p style="color: #666; font-size: 16px;">
-                        Las asignaciones anteriores fueron reemplazadas
-                    </p>
-                </div>
-                <div style="text-align: center; margin-top: 20px;">
-                    <button class="btn" onclick="cargarInterfazAsignaciones()">
-                        🔄 Cargar nuevo archivo
-                    </button>
-                </div>
-            </div>`;
- 
-        console.log(`✅ ${insertados} asignaciones insertadas en os\_asignadas`);
- 
-    } catch (err) {
-        console.error('Error en carga:', err);
-        alert('❌ Error al cargar asignaciones: ' + err.message);
-    }
+    const resultsContainer = document.getElementById('searchResults');
+    
+    // 🛡️ Validación inicial para evitar que registrosValidos sea nulo
+    if (!registrosValidos || registrosValidos.length === 0) {
+        alert("❌ No hay registros válidos para procesar.");
+        return;
+    }
+
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="text-align: center; padding: 30px;">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <h3 style="color: #1565c0;">Iniciando proceso de actualización...</h3>
+            <p style="color: #666;">Preparando base de datos</p>
+        </div>`;
+
+    try {
+        // 1️⃣ OBTENER FECHA ACTUAL DE EL SALVADOR
+        const opciones = { timeZone: 'America/El_Salvador', hour12: false };
+        const fechaSV = new Date(new Date().toLocaleString('en-US', opciones)).toISOString();
+
+        // 2️⃣ ELIMINAR TODO DE os_asignadas
+        // Usamos un filtro que siempre sea cierto para limpiar la tabla
+        const { error: errorDelete } = await supabaseClient
+            .from('os_asignadas')
+            .delete()
+            .neq('osatomo', '0'); 
+
+        if (errorDelete) {
+            throw new Error('Error al limpiar tabla: ' + errorDelete.message);
+        }
+
+        console.log('✅ Tabla os_asignadas limpiada');
+
+        // 3️⃣ INSERTAR NUEVAS ASIGNACIONES (por lotes)
+        const BATCH_SIZE = 500;
+        let insertados = 0;
+
+        for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
+            const batch = registrosValidos.slice(i, i + BATCH_SIZE);
+            
+            // Actualizar UI del progreso
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="text-align: center; padding: 30px;">
+                    <div class="loading" style="display: block; margin: 20px auto;"></div>
+                    <h3 style="color: #1565c0;">Insertando datos en la nube...</h3>
+                    <div style="font-size: 24px; font-weight: bold; color: #2e7d32; margin: 10px 0;">
+                        ${insertados} / ${registrosValidos.length}
+                    </div>
+                    <p style="color: #666;">Por favor, no cierre esta ventana.</p>
+                </div>`;
+
+            const registros = batch.map(fila => ({
+                osatomo: fila[0] ? fila[0].toString().trim() : '',
+                Unidad: fila[1] ? fila[1].toString().trim() : 'SIN_UNIDAD',
+                Estado: fila[2] ? fila[2].toString().trim() : 'Asignada',
+                fecha_asignacion: fechaSV, // ✅ Usando hora El Salvador
+                usuario_asigno: currentUser ? currentUser.usuario : 'Admin_Sistema'
+            })).filter(r => r.osatomo !== ''); // 🛡️ Evitar insertar filas vacías
+
+            const { error } = await supabaseClient
+                .from('os_asignadas')
+                .insert(registros);
+
+            if (error) {
+                console.error('❌ Error en batch:', error);
+                // Si un lote falla, intentamos seguir con el siguiente o lanzamos error
+                throw new Error('Error insertando lote: ' + error.message);
+            }
+
+            insertados += registros.length;
+        }
+
+        // 4️⃣ ÉXITO FINAL
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #f0fdf4; border: 2px solid #22c55e; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 60px; margin-bottom: 15px;">🚀</div>
+                    <h2 style="color: #166534; margin: 0 0 10px 0;">¡Actualización Exitosa!</h2>
+                    <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">
+                        Se han procesado <strong>${insertados}</strong> registros correctamente en El Salvador.
+                    </p>
+                    
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #dcfce7; margin-bottom: 25px; text-align: left;">
+                        <small style="color: #6b7280; display: block; margin-bottom: 5px;">Detalles de la operación:</small>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                            <span>🕒 Hora SV:</span> <strong>${new Date(fechaSV).toLocaleString()}</strong>
+                        </div>
+                    </div>
+
+                    <button class="btn" onclick="cargarInterfazAsignaciones()" 
+                            style="background: #166534; color: white; width: 100%; padding: 15px; border-radius: 10px; font-weight: bold; border: none; cursor: pointer;">
+                        Entendido
+                    </button>
+                </div>
+            </div>`;
+
+    } catch (err) {
+        console.error('❌ Error crítico en carga:', err);
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fef2f2; border: 2px solid #ef4444; padding: 30px; text-align: center;">
+                <div style="font-size: 50px; margin-bottom: 15px;">⚠️</div>
+                <h3 style="color: #991b1b;">Error en la carga masiva</h3>
+                <p style="color: #b91c1c; margin-bottom: 20px;">${err.message}</p>
+                <button class="btn" onclick="cargarInterfazAsignaciones()" style="background: #991b1b; color: white; padding: 10px 20px; border-radius: 8px; border: none;">
+                    Intentar de nuevo
+                </button>
+            </div>`;
+    }
 }
 
  
 
 
  	// ========================================
-// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (CORREGIDA)
+// 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (OPTIMIZADA)
 // ========================================
 async function cargarInterfazMapaRutas() {
-    const searchGrid = document.getElementById('searchGrid');
-    const resultsContainer = document.getElementById('searchResults');
- 
-    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
-    resultsContainer.innerHTML = '';
- 
-    try {
-        // 1️⃣ CARGAR FILTROS ACTUALES
-       let filtrosQuery;
-if (currentUser.rol === 'Despacho') {
-  filtrosQuery = supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .eq('usuario', currentUser.usuario)
-    .single();
-} else {
-  // Admin, Supervisor, etc. → usar filtros globales
-  filtrosQuery = supabaseClient
-    .from('filtros_mapa')
-    .select('*')
-    .is('usuario', null)
-    .single();
-}
+    const searchGrid = document.getElementById('searchGrid');
+    const resultsContainer = document.getElementById('searchResults');
+ 
+    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    resultsContainer.innerHTML = '';
+ 
+    try {
+        // 1️⃣ CARGAR FILTROS ACTUALES (Sincronizado por Usuario/Global)
+        let filtrosQuery;
+        if (currentUser.rol === 'Despacho' || currentUser.rol === 'Contratista') {
+            filtrosQuery = supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .eq('usuario', currentUser.usuario)
+                .maybeSingle(); // Usamos maybeSingle para evitar error si no tiene filtros aún
+        } else {
+            filtrosQuery = supabaseClient
+                .from('filtros_mapa')
+                .select('*')
+                .is('usuario', null)
+                .maybeSingle();
+        }
 
-const { data: filtros, error: errorFiltros } = await filtrosQuery;
- 
-        // 2️⃣ CARGAR TIPOLOGÍAS (usando cache)
-        const tipologiasUnicas = await cargarTipologias();
- 
-        if (tipologiasUnicas.length === 0) {
-            searchGrid.innerHTML = '<div class="result-card">❌ No se pudieron cargar tipologías</div>';
-            return;
-        }
+        const { data: filtros, error: errorFiltros } = await filtrosQuery;
+ 
+        // 2️⃣ CARGAR TIPOLOGÍAS
+        const tipologiasUnicas = await cargarTipologias();
+ 
+        // 3️⃣ CARGAR UNIDADES (Para el selector de Admin)
+        const unidadesUnicas = [];
+        let offset = 0;
+        const BATCH_SIZE = 1000;
 
- 
-        // 🆕 CARGAR UNIDADES DESDE os_asignadas (CORREGIDO)
-console.log('🔍 Cargando unidades desde os_asignadas...');
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('os_asignadas')
+                .select('Unidad')
+                .range(offset, offset + BATCH_SIZE - 1);
+ 
+            if (error) break;
+            if (!data || data.length === 0) break;
+ 
+            data.forEach(row => {
+                if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+                    unidadesUnicas.push(row.Unidad);
+                }
+            });
+            if (data.length < BATCH_SIZE) break;
+            offset += BATCH_SIZE;
+        }
+        unidadesUnicas.sort();
 
-const unidadesUnicas = [];
-let offset = 0;
-const BATCH_SIZE = 1000;
+        // 4️⃣ CARGAR OS ASIGNADAS (Específico para Contratista/Lectura/Poda)
+        let osAsignadas = [];
+        const rolesRestringidos = ['Contratista', 'Lectura', 'Poda', 'Consulta'];
+        
+        if (rolesRestringidos.includes(currentUser.rol)) {
+            const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
+            console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
+ 
+            const { data: asignaciones, error: errorAsig } = await supabaseClient
+                .from('os_asignadas')
+                .select('osatomo') // Columna en os_asignadas
+                .eq('Unidad', unidadUsuario);
+ 
+            if (asignaciones && asignaciones.length > 0) {
+                const osNumeros = asignaciones.map(a => a.osatomo).filter(os => os);
+                
+                // Cargar datos completos desde OS Pendientes en lotes
+                const osCompletas = [];
+                const grupos = chunkArray(osNumeros, 100);
 
-while (true) {
-    // ✅ CORRECCIÓN: Usar el nombre correcto de la columna
-    const { data, error } = await supabaseClient
-        .from('os_asignadas')
-        .select('Unidad')  // Solo traer la columna Unidad
-        .range(offset, offset + BATCH_SIZE - 1);
- 
-    if (error) {
-        console.error('❌ Error cargando unidades:', error);
- 
-        searchGrid.innerHTML = `
-            <div class="result-card" style="background: #ffebee;">
-                <div class="result-header">❌ Error</div>
-                <p style="text-align: center; color: #666;">
-                    Error: ${error.message}<br>
-                    <strong>Código:</strong> ${error.code || 'N/A'}
-                </p>
-                <button class="btn" onclick="cargarInterfazMapaRutas()">
-                    🔄 Reintentar
-                </button>
-            </div>`;
-        return;
-    }
- 
-    if (!data || data.length === 0) break;
- 
-    // Agregar unidades únicas
-    data.forEach(row => {
-        if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
-            unidadesUnicas.push(row.Unidad);
-        }
-    });
- 
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-}
+                for (const grupo of grupos) {
+                    const { data, error } = await supabaseClient
+                        .from('OS Pendientes')
+                        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Deuda')
+                        .in('OSATMO', grupo);
 
-unidadesUnicas.sort();
-console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
-
-if (unidadesUnicas.length === 0) {
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #fff3cd;">
-            <div class="result-header">⚠️ Sin unidades</div>
-            <p style="text-align: center;">
-                No hay unidades en os_asignadas.<br>
-                <strong>Acción:</strong> Carga el archivo de asignaciones primero.
-            </p>
-        </div>`;
-    return;
-}
- 
-        // 4️⃣ CARGAR OS ASIGNADAS (si NO es Admin)
-      let osAsignadas = [];
-const rolesAdmin = ['Administrador', 'Despacho'];
-if (!rolesAdmin.includes(currentUser.rol)) {
-    const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
- 
-            console.log(`🔍 Buscando OS Asignadas para unidad: ${unidadUsuario}`);
- 
-            // Obtener OSATOMO de os_asignadas
-            const { data: asignaciones, error: errorAsig } = await supabaseClient
-                .from('os_asignadas')
-                .select('osatomo, Unidad')
-                .eq('Unidad', unidadUsuario);
- 
-            if (errorAsig) {
-    console.error('❌ Error buscando OS asignadas:', errorAsig);
-    // 🔧 CORRECCIÓN: No bloquear ejecución, solo advertir
-}
-
-if (asignaciones && asignaciones.length > 0) {
-    // ✅ CORRECCIÓN: Usar el campo correcto 'osatomo' (minúsculas)
-    const osNumeros = asignaciones.map(a => a.osatomo).filter(os => os);
- 
-                // ✅ Buscar OS Pendientes en lotes de 100 (máximo permitido por Supabase)
-const osCompletas = [];
-const CHUNK_SIZE = 100;
-const grupos = chunkArray(osNumeros, CHUNK_SIZE);
-
-for (const grupo of grupos) {
-    const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, Estado_ATOMO')
-        .in('OSATMO', grupo);
-
-    if (error) {
-        console.error('❌ Error en batch de OS Pendientes:', error);
-        continue;
-    }
-    if (data && data.length) {
-        // 🔧 VALIDAR que los datos tengan campos necesarios
-        const datosValidos = data.filter(os =>
-            os.OSATMO &&
-            (os.Coordenadas || os.Coordendasgis)
-        );
-        osCompletas.push(...datosValidos);
-    }
-}
-
-console.log(`✅ Total OS completas cargadas: ${osCompletas.length}`);
- 
-                if (!errorAsig && Array.isArray(osCompletas) && osCompletas.length > 0) {
-    // osCompletas podría ser un array de arrays si no cuidamos push; lo normalizamos:
-    osAsignadas = osCompletas.flat ? osCompletas.flat() : [].concat(...osCompletas);
-    console.log(`✅ ${osAsignadas.length} OS Asignadas encontradas para ${unidadUsuario}`);
-} else {
-    osAsignadas = [];
-    console.log('ℹ️ No se encontraron OS asignadas o hubo un error en la consulta.');
-}
-            }
-        }
- 
-        // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
- 
-if (rolesAdmin.includes(currentUser.rol)) {
-    generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
-} else {
-    generarInterfazUnidadMapaRutas(filtros, osAsignadas);
-}
- 
-    } catch (err) {
-        console.error('Error cargando Mapa de Rutas:', err);
-        searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
-    }
-}
-
-function chunkArray(arr, size) {
-    const out = [];
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-    return out;
+                    if (data) osCompletas.push(...data);
+                }
+                
+                // Limpiar duplicados y nulos
+                osAsignadas = osCompletas.filter(os => os.OSATMO && (os.Coordenadas || os.Coordendasgis));
+            }
+        }
+ 
+        // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
+        const rolesAdmin = ['Administrador', 'Despacho', 'Supervisor'];
+        
+        if (rolesAdmin.includes(currentUser.rol)) {
+            generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
+        } else {
+            // Para Contratistas, pasamos sus OS asignadas para que el mapa se centre en ellas
+            generarInterfazUnidadMapaRutas(filtros, osAsignadas);
+        }
+ 
+    } catch (err) {
+        console.error('❌ Error cargando Mapa de Rutas:', err);
+        searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar la interfaz de mapas</div>';
+    }
 }
 
 
@@ -7543,56 +7729,42 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const BATCH_SIZE = 1000;
     let totalCargado = 0;
 
-    while (true) {
-        const { data, error } = await supabaseClient
-            .from('os_asignadas')
-            .select('Unidad')
-            .range(offset, offset + BATCH_SIZE - 1);
+    // ✅ CORRECCIÓN: Captura de errores en el proceso de carga con try/catch
+    try {
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('os_asignadas')
+                .select('Unidad')
+                .range(offset, offset + BATCH_SIZE - 1);
 
-        // 🆕 DEBUG: Ver errores
-        if (error) {
-            console.error('❌ Error en batch:', error);
+            if (error) throw error; 
+            
+            if (!data || data.length === 0) break;
 
-            searchGrid.innerHTML = `
-                <div class="result-card" style="background: #ffebee; border: 2px solid #f44336;">
-                    <div class="result-header">❌ Error cargando unidades</div>
-                    <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <strong>Error al acceder a os_asignadas:</strong><br>
-                        <code style="color: #d32f2f; font-size: 13px;">${error.message}</code><br><br>
-                        <strong>Código:</strong> ${error.code || 'N/A'}<br>
-                        <strong>Detalles:</strong> ${error.details || 'N/A'}
-                    </div>
-                    <p style="text-align: center; color: #666;">
-                        Verifica que:<br>
-                        • La tabla os_asignadas exista<br>
-                        • RLS esté deshabilitado o configurado correctamente<br>
-                        • Tengas permisos de lectura
-                    </p>
-                </div>`;
-            return;
+            data.forEach(row => {
+                if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
+                    unidadesUnicas.push(row.Unidad);
+                }
+            });
+
+            totalCargado += data.length;
+            if (data.length < BATCH_SIZE) break;
+            offset += BATCH_SIZE;
         }
-
-        if (!data || data.length === 0) {
-            console.log(`⚠️ No hay más datos en offset ${offset}`);
-            break;
-        }
-
-        // Agregar unidades únicas
-        data.forEach(row => {
-            if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
-                unidadesUnicas.push(row.Unidad);
-            }
-        });
-
-        totalCargado += data.length;
-        console.log(`📊 Batch ${offset / BATCH_SIZE + 1}: ${data.length} registros | Total unidades únicas: ${unidadesUnicas.length}`);
-
-        if (data.length < BATCH_SIZE) break;
-        offset += BATCH_SIZE;
+    } catch (err) {
+        console.error('❌ Error crítico:', err);
+        searchGrid.innerHTML = `
+            <div class="result-card" style="background: #ffebee; border: 2px solid #f44336; padding: 20px; text-align: center;">
+                <h3 style="color: #d32f2f;">❌ Error de Conexión</h3>
+                <p>No se pudieron cargar las unidades. Verifica tu conexión o permisos.</p>
+                <code style="display: block; background: white; padding: 10px; margin: 10px 0; font-size: 12px;">${err.message}</code>
+                <button onclick="location.reload()" class="btn" style="background: #f44336; color: white;">🔄 Reintentar</button>
+            </div>`;
+        return; 
     }
 
     unidadesUnicas.sort();
-    console.log(`✅ ${unidadesUnicas.length} unidades únicas cargadas de ${totalCargado} registros totales`);
+    console.log(`✅ ${unidadesUnicas.length} unidades únicas listas.`);
 
     // 🆕 Si no hay unidades, mostrar error
     if (unidadesUnicas.length === 0) {
@@ -7607,9 +7779,13 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
         return;
     }
 
-    const filtrosSeguros = filtros || {}; // Si filtros es null, crea un objeto vacío
-    const rangosSeleccionados = filtrosSeguros.rangos || [];
-    const tipologiasSeleccionadas = filtrosSeguros.tipologias || [];
+    // ✅ CORRECCIÓN: Blindaje contra objetos null o undefined
+    const filtrosSeguros = filtros || { 
+        rangos: [], 
+        tipologias: [], 
+        radio_km: 3, 
+        fecha_actualizacion: null 
+    };
     const rangosDisponibles = ['0-5', '6-10', '11-15', '16-20', '21-30', '31-45', '46-180', '>180'];
 
     searchGrid.innerHTML = `
@@ -7802,7 +7978,22 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     `;
 
     // 1. Cargar tipologías dinámicas
-    cargarTipologiasParaFiltrosUnidad();
+    // ... (aquí termina tu bloque gigante de searchGrid.innerHTML = ` ... ` )
+
+    // 1. ✅ CORRECCIÓN: ESTE ES EL LUGAR EXACTO
+    // Reemplaza la línea que decía: cargarTipologiasParaFiltrosUnidad(); 
+    // Por todo este bloque:
+    const containerTips = document.getElementById('seccionTipologiasUnidad');
+    if (containerTips && tipologiasDisponibles) {
+        containerTips.innerHTML = tipologiasDisponibles.map(t => `
+            <label style="display: block; font-size: 13px; margin-bottom: 5px; cursor: pointer; background: #fff; padding: 5px; border-radius: 4px; border: 1px solid #eee;">
+                <input type="checkbox" class="checkbox-tipologia-unidad" value="${t}" style="margin-right: 8px;"> ${t}
+            </label>
+        `).join('');
+    } else {
+        // Fallback: Si no hay datos en memoria, intentamos la carga tradicional
+        cargarTipologiasParaFiltrosUnidad();
+    }
 
     // 2. Listener para los checkboxes de unidades
     const checkboxesUnidad = document.querySelectorAll('.checkbox-unidad-filtro');
@@ -7837,7 +8028,9 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     });
 
     console.log('✅ Interfaz de Administrador y listeners inicializados');
-}
+} // <-- AQUÍ TERMINA TU FUNCIÓN
+
+
 
 // ========================================
 // 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
