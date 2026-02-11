@@ -1270,7 +1270,7 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 }
 
 async function loginATTF(userData) {
-    console.log('👷 Iniciando flujo ATTF');
+    console.log('👷 Validando flujo ATTF');
     
     const ahora = new Date();
     const fechaHoy = getFechaHoyElSalvador();
@@ -1282,52 +1282,52 @@ async function loginATTF(userData) {
         logout();
         return;
     }
-    
-    // 2. Verificar si necesita configuración inicial o reset
+
+    // 2. VALIDACIÓN CRÍTICA: ¿Ya configuró TODO hoy?
+    // Si tiene turno de hoy Y ya tiene programado el de mañana (o descanso), PASA DIRECTO
+    const yaConfiguroManana = (userData.turno_manana && userData.fecha_turno_manana) || 
+                             (userData.descanso_fecha_inicio);
+
+    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy && yaConfiguroManana) {
+        console.log("✅ Configuración diaria completa. Validando ventana horaria...");
+        
+        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+            const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
+            alert(`No estás en el horario de tu turno programado (${turnoInfo.nombre}).`);
+            logout();
+            return;
+        }
+        
+        // Acceso directo al menú sin preguntas
+        accederMenuATTF();
+        return;
+    }
+
+    // 3. Verificar si necesita configuración inicial (Día 1 o después de inactividad)
     const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
     
-    // 🎯 CAMBIO: Primera vez o post-bloqueo (con opción descanso flexible)
-    if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1) {
-        console.log('🔧 Requiere configuración inicial - Descanso flexible permitido');
+    if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1 || !userData.turno_hoy) {
+        console.log('🔧 Requiere configuración inicial (Paso 1 y 2)');
         mostrarConfiguracionInicialATTF();
         return;
     }
-    
-    // 3. Verificar si tiene turno programado para HOY
-    
-if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) {
-    console.log(`✅ Turno de hoy: ${userData.turno_hoy}`);
-    
-    // Validar ventana horaria
-    if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-        alert(`No estás en el horario de tu turno programado...`);
-        logout();
+
+    // 4. Si tiene turno de hoy pero NO ha programado mañana (entró y se salió a medias)
+    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy && !yaConfiguroManana) {
+        console.log('⚠️ Turno de hoy detectado pero falta programar mañana');
+        
+        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+        if (contadorTurnos >= 5) {
+            mostrarForzarDescansoATTF();
+        } else {
+            mostrarProgramarTurnoMañanaConDescanso(userData);
+        }
         return;
     }
-    
-    // Verificar contador para determinar acción
-    const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-    
-    if (contadorTurnos >= 5) {
-        // Día 5: Forzar descanso automático
-        console.log('📅 Día 5: Descanso automático obligatorio');
-        mostrarForzarDescansoATTF();
-        return;
-    } else {
-        // Programar turno mañana + verificar descanso programado
-        console.log(`📊 Día ${contadorTurnos + 1}: Programar turno mañana`);
-        mostrarProgramarTurnoMañanaConDescanso(userData);
-        return;
-    }
-}
-    
-    // 4. Si llegó aquí, necesita configuración
-    console.log('⚠️ Sin turno programado, requiere configuración');
+
+    // 5. Por defecto, si algo falta, configurar
     mostrarConfiguracionInicialATTF();
 }
-
-
-
 
 function calcularDiasSinActividad(ultimaActividad) {
     if (!ultimaActividad) return 999; // Sin registro previo
@@ -1406,36 +1406,32 @@ async function confirmarTurnoHoyATTF() {
         return;
     }
 
-    // --- INICIO: CAMBIO 1 para ELIMINAR CONFIRMACIÓN ---
-    
-    // Obtener la cantidad de turnos que el usuario pudo seleccionar en el Paso 1
-    // (Asumimos que solo puede seleccionar un turno si solo hay una opción)
     const selectElement = document.getElementById('turnoHoy');
-    const numOpciones = selectElement.options.length - 1; // Restamos la opción "-- Seleccione su turno --"
+    const numOpciones = selectElement.options.length - 1; 
     
-    let confirmar = true; // Por defecto, NO pide confirmación (asumimos que está bien)
+    let confirmar = true; 
 
     if (numOpciones > 1) {
-        // Si hay más de una opción disponible, SÍ pedimos confirmación (lógica actual)
         const turnoHoy = TURNOS_ATTF[turnoHoyKey];
         confirmar = confirm(
             `¿Confirmas que tu turno de HOY es:\n\n${turnoHoy.nombre}?\n\n✅ SÍ - Continuar\n❌ NO - Corregir`
         );
     }
     
-    // Si la confirmación fue cancelada (o si había varias opciones y el usuario dijo NO)
-    if (!confirmar) {
-        return;
-    }
+    if (!confirmar) return;
 
-    // --- FIN: CAMBIO 1 ---
-    
-    // Guardar temporalmente en memoria
+    // ✅ Guardamos en memoria temporal
     window.turnoHoySeleccionado = turnoHoyKey;
 
-    // Pasar al paso 2
-    mostrarProgramarTurnoManana(true); // Con opción descanso (primera vez)
+    // 🚩 IMPORTANTE: Limpiamos cualquier rastro de turno_manana previo en memoria 
+    // para forzar a que el usuario lo seleccione sí o sí en el siguiente paso.
+    window.turnoMananaSeleccionado = null;
+
+    // Pasar al paso 2: Programar Mañana
+    // NOTA: Aquí NO llamamos a accederMenuATTF(), el usuario sigue bloqueado en la pantalla de selección.
+    mostrarProgramarTurnoManana(true); 
 }
+
 
 
 // ========================================
@@ -1619,23 +1615,25 @@ async function confirmarTurnoMananaATTF() {
         return;
     }
     
-    // Caso 1: Eligió un turno normal
+    const ahora = new Date();
+    const fechaHoy = getFechaHoyElSalvador();
+    // Recuperamos lo que seleccionamos en el Paso 1
+    const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
+
     if (turnoManana !== 'descanso') {
+        // ==========================================
+        // CASO 1: TURNO NORMAL PROGRAMADO
+        // ==========================================
         const turno = TURNOS_ATTF[turnoManana];
         
-        // Confirmación
         const confirmar = confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turno.nombre}?\n\n✅ SÍ - Guardar y acceder\n❌ NO - Corregir`);
-        
         if (!confirmar) return;
         
-        // Guardar en BD
-        const ahora = new Date();
-        const fechaHoy = getFechaHoyElSalvador();
+        // Calcular fecha de mañana
         const fechaManana = new Date(ahora);
         fechaManana.setDate(fechaManana.getDate() + 1);
         const fechaMananaStr = fechaManana.toISOString().split('T')[0];
         
-        const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
         const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
         const nuevoContador = contadorActual + 1;
         
@@ -1643,12 +1641,15 @@ async function confirmarTurnoMananaATTF() {
             .from('usuarios')
             .update({
                 turno_hoy: turnoHoy,
-                fecha_turno_hoy: fechaHoy,
+                fecha_turno_hoy: fechaHoy, // Registra que hoy ya se configuró
                 turno_manana: turnoManana,
                 fecha_turno_manana: fechaMananaStr,
                 contador_turnos: nuevoContador,
                 estado_ciclo: 'ciclo_normal',
-                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+                descanso_fecha_inicio: null, // Limpia descansos previos
+                descanso_fecha_fin: null,
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+                ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
         
@@ -1657,11 +1658,12 @@ async function confirmarTurnoMananaATTF() {
             return;
         }
         
-        // Acceso al menú
         accederMenuATTF();
         
     } else {
-        // Caso 2: Eligió descanso
+        // ==========================================
+        // CASO 2: DESCANSO PROGRAMADO
+        // ==========================================
         const fechaInicio = document.getElementById('fechaDescansoInicio').value;
         const fechaFin = document.getElementById('fechaDescansoFin').value;
         const turnoRegreso = document.getElementById('turnoRegreso').value;
@@ -1671,10 +1673,7 @@ async function confirmarTurnoMananaATTF() {
             return;
         }
         
-        // 🎯 VALIDACIÓN: Verificar que no exceda día 6
-        const ahora = new Date();
-        const fechaHoy = getFechaHoyElSalvador();
-        
+        // Validar que no se pase del día 6
         const validacion = validarFechaDescansoMaxima(fechaInicio, fechaHoy);
         if (!validacion.valido) {
             alert(validacion.mensaje);
@@ -1682,8 +1681,6 @@ async function confirmarTurnoMananaATTF() {
         }
         
         const turnoRegresoObj = TURNOS_ATTF[turnoRegreso];
-        
-        // Confirmación
         const confirmar = confirm(
             `¿Confirmas tu configuración de descanso?\n\n` +
             `📅 Descanso: ${fechaInicio} y ${fechaFin}\n` +
@@ -1693,10 +1690,7 @@ async function confirmarTurnoMananaATTF() {
         
         if (!confirmar) return;
         
-        // Guardar en BD
-        const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
-        
-        // Calcular fecha de regreso (día después del último descanso)
+        // Calcular fecha de regreso real
         const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
         const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
@@ -1705,17 +1699,19 @@ async function confirmarTurnoMananaATTF() {
             .from('usuarios')
             .update({
                 turno_hoy: turnoHoy,
-                fecha_turno_hoy: fechaHoy,
+                fecha_turno_hoy: fechaHoy, // Registra que hoy ya se configuró
                 descanso_fecha_inicio: fechaInicio,
                 descanso_fecha_fin: fechaFin,
                 turno_regreso: turnoRegreso,
                 fecha_turno_regreso: fechaRegreso,
-                contador_turnos: 0, // Resetear
+                contador_turnos: 0, // Reset de ciclo
                 estado_ciclo: 'ciclo_normal',
-                // 🎯 CAMBIO: NO guardar turno_manana cuando se elige descanso
-                turno_manana: null,
-                fecha_turno_manana: null,
-                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+                // 🎯 IMPORTANTE: Llenamos turno_manana con 'descanso' para que 
+                // la función login() sepa que ya terminaste el proceso por hoy.
+                turno_manana: 'descanso', 
+                fecha_turno_manana: fechaInicio,
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+                ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
         
@@ -1724,7 +1720,6 @@ async function confirmarTurnoMananaATTF() {
             return;
         }
         
-        // Acceso al menú
         accederMenuATTF();
     }
 }
@@ -7043,9 +7038,6 @@ async function cargarInterfazAsignaciones() {
     resultsContainer.innerHTML = '';
 }
 
-// ========================================
-// ⚙️ PROCESAMIENTO LOGÍSTICO DEL ARCHIVO
-// ========================================
 async function procesarArchivoAsignaciones() {
     const archivoInput = document.getElementById('archivoAsignaciones');
 
@@ -7067,11 +7059,11 @@ async function procesarArchivoAsignaciones() {
         <div class="result-card" style="text-align: center; padding: 40px;">
             <div class="loading" style="display: block; margin: 0 auto 20px auto;"></div>
             <h3 style="color: #1565c0;">Leyendo contenido del archivo...</h3>
-            <p>Analizando filas y columnas para validación.</p>
+            <p>Analizando filas y columnas para procesamiento directo.</p>
         </div>`;
 
     try {
-        // 1️⃣ LEER ARCHIVO USANDO PROMESAS
+        // 1️⃣ LEER ARCHIVO
         const datos = await leerArchivoAsignaciones(archivo, extension);
 
         if (!datos || datos.length === 0) {
@@ -7080,7 +7072,7 @@ async function procesarArchivoAsignaciones() {
             return;
         }
 
-        // 2️⃣ VALIDAR ESTRUCTURA (Se asume que la función validarEstructura existe)
+        // 2️⃣ VALIDAR ESTRUCTURA
         if (typeof validarEstructuraAsignaciones === 'function') {
             const validacion = validarEstructuraAsignaciones(datos);
             if (!validacion.valido) {
@@ -7089,21 +7081,28 @@ async function procesarArchivoAsignaciones() {
             }
         }
 
-        // 3️⃣ VALIDAR CONTRA BASE DE DATOS (OS PENDIENTES)
+        // 🎯 CAMBIO CLAVE: YA NO VALIDAMOS CONTRA BD PARA FILTRAR
+        // En su lugar, preparamos un objeto de "Simulación de Validación Positiva" 
+        // para que la vista previa (Preview) muestre todo como válido.
+        
+        const validacionTodoOk = {
+            validas: datos,         // Todas las órdenes pasan como válidas
+            invalidas: [],          // Cero inválidas
+            duplicadas: [],         // (Opcional: podrías validar duplicados en el mismo Excel aquí)
+            totalArchivo: datos.length
+        };
+
+        // 3️⃣ AVISO DE PROCESAMIENTO
         resultsContainer.innerHTML = `
             <div class="result-card" style="text-align: center; padding: 40px;">
-                <div class="loading" style="display: block; margin: 0 auto 20px auto;"></div>
-                <h3 style="color: #1565c0;">Validando órdenes en la base de datos...</h3>
-                <p style="color: #666;">Estamos verificando ${datos.length} registros. Por favor, espera.</p>
+                <h3 style="color: #4caf50;">✅ Archivo analizado correctamente</h3>
+                <p style="color: #666;">Se han detectado ${datos.length} registros listos para asignar.</p>
             </div>`;
 
-        // Se invoca la validación en BD (debe estar definida en tu código)
-        const validacionBD = await validarOSEnBD(datos);
-
-        // 4️⃣ MOSTRAR VISTA PREVIA
-        // Aquí llamarías a la función que dibuja la tabla con los resultados antes de guardar
+        // 4️⃣ MOSTRAR VISTA PREVIA (Ahora con todos los datos)
         if (typeof mostrarPreviewAsignaciones === 'function') {
-            mostrarPreviewAsignaciones(datos, validacionBD);
+            // Pasamos 'datos' como las órdenes válidas y nuestro objeto simulado
+            mostrarPreviewAsignaciones(datos, validacionTodoOk);
         }
 
     } catch (err) {
@@ -7112,6 +7111,7 @@ async function procesarArchivoAsignaciones() {
         resultsContainer.innerHTML = '';
     }
 }
+
 
 // ========================================
 // 📖 LECTOR DE ARCHIVOS (XLSX / CSV)
