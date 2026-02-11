@@ -4464,7 +4464,7 @@ function transformarUsuarioAUnidad(usuario) {
 async function cargarInterfazKMLRuta() {
     console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
     
-    // ✅ DEFINICIÓN DE CHUNKARRAY (Indispensable para evitar el ReferenceError)
+    // ✅ DEFINICIÓN DE CHUNKARRAY
     const chunkArray = (arr, size) => {
         const out = [];
         for (let i = 0; i < arr.length; i += size) {
@@ -4485,68 +4485,77 @@ async function cargarInterfazKMLRuta() {
         const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
         const rol = currentUser?.rol;
 
-        // 1️⃣ OBTENER TODAS LAS ASIGNACIONES
+        // 1️⃣ OBTENER TODAS LAS ASIGNACIONES ACTUALES
+        // (Necesitamos el mapa global de asignaciones para saber qué descartar)
         const { data: asignaciones, error: errorAsignadas } = await supabaseClient
             .from('os_asignadas')
             .select('osatomo, Unidad, Estado, Tipologia');
 
         if (errorAsignadas) throw errorAsignadas;
 
-        // 2️⃣ OBTENER COORDENADAS DESDE PENDIENTES
-        const osNumeros = asignaciones.map(a => (a.osatomo || '').toString().trim()).filter(x => x);
-        const osDetallesPendientes = [];
-        
-        // Ahora chunkArray ya está definido arriba, no fallará
-        const grupos = chunkArray(osNumeros, 100);
+        // 2️⃣ OBTENER EL UNIVERSO DE PENDIENTES (Sugerencias potenciales)
+        // Traemos un bloque grande de la tabla 'OS Pendientes' para buscar sugerencias cerca de tu ruta
+        const { data: todasLasPendientes, error: errorPendientes } = await supabaseClient
+            .from('OS Pendientes')
+            .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
+            .limit(2000); // Aumentamos el límite para asegurar que encuentre OS libres
 
-        for (const grupo of grupos) {
-            const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
-                .in('OSATMO', grupo);
-            if (data) osDetallesPendientes.push(...data);
+        if (errorPendientes) throw errorPendientes;
+
+        // 🔍 LOG DE AUDITORÍA: VALIDAR SI LA OS 11195544 EXISTE EN PENDIENTES
+        const osEncontrada = todasLasPendientes.find(p => String(p.OSATMO).trim() === '11195544');
+        if (osEncontrada) {
+            console.group("🎯 AUDITORÍA CARGA: OS 11195544");
+            console.log("Estado: Existe en tabla Pendientes");
+            console.log("Unidad asignada en tabla:", `"${osEncontrada.Unidad}"`);
+            console.log("Tipología:", osEncontrada.Tipologia);
+            console.log("Tiene Coordenadas:", !!(osEncontrada.Coordenadas || osEncontrada.Coordendasgis));
+            console.groupEnd();
+        } else {
+            console.warn("⚠️ AUDITORÍA CARGA: OS 11195544 NO encontrada en las 2000 pendientes descargadas.");
         }
 
-        // ✅ 3️⃣ CRUCE DE DATOS: Traer coordenadas y tipología de 'OS Pendientes'
-const osEnriquecidas = asignaciones.map(asig => {
-    const idAsignada = String(asig.osatomo).trim();
-    
-    // Buscamos el detalle en la lista que descargamos de OS Pendientes
-    const detalle = osDetallesPendientes.find(p => String(p.OSATMO).trim() === idAsignada);
-    
-    return {
-        ...asig,
-        OSATMO: idAsignada,
-        // Jalamos la tipología real de la tabla Pendientes
-        Tipologia: detalle?.Tipologia || asig.Tipologia || 'Sin tipología',
-        // Jalamos coordenadas de cualquiera de los dos campos disponibles
-        Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
-        Coordendasgis: detalle?.Coordendasgis || null,
-        Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
-        esAsignada: true
-    };
-});
+        // 3️⃣ CRUCE Y FILTRADO: SOLO MIS ASIGNADAS
+        // Filtramos las asignaciones para que solo queden las de la unidad logueada
+        const misAsignacionesPropias = asignaciones
+            .filter(asig => String(asig.Unidad).trim().toUpperCase() === miUnidad.trim().toUpperCase())
+            .map(asig => {
+                const idAsignada = String(asig.osatomo).trim();
+                // Buscamos el detalle (coordenadas) en la lista de pendientes
+                const detalle = todasLasPendientes.find(p => String(p.OSATMO).trim() === idAsignada);
+                
+                return {
+                    ...asig,
+                    OSATMO: idAsignada,
+                    Tipologia: detalle?.Tipologia || asig.Tipologia || 'Sin tipología',
+                    Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
+                    Coordendasgis: detalle?.Coordendasgis || null,
+                    Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
+                    esAsignada: true
+                };
+            });
 
-        // 4️⃣ FILTRAR POR LA UNIDAD ACTUAL (Sea cual sea la cantidad)
-        const misAsignacionesPropias = osEnriquecidas.filter(asig => 
-            String(asig.Unidad).trim().toUpperCase() === miUnidad.trim().toUpperCase()
-        );
-
-        // ✅ ASIGNACIÓN A VARIABLES GLOBALES (Para que el botón de radio funcione)
+        // ✅ 4️⃣ ASIGNACIÓN A VARIABLES GLOBALES
+        // window.osAsignadasKML: Solo contiene tus órdenes (puntos rojos/azules)
         window.osAsignadasKML = misAsignacionesPropias;
-        window.osKMLData = misAsignacionesPropias; 
+        
+        // window.todasLasPendientesKML: Contiene el universo de búsqueda (para las sugerencias verdes)
+        window.todasLasPendientesKML = todasLasPendientes; 
 
-        console.log(`✅ Unidad: ${miUnidad}. Cantidad detectada: ${misAsignacionesPropias.length}`);
+        console.log(`✅ Sesión: ${miUnidad}`);
+        console.log(`📋 Mis OS Propias: ${misAsignacionesPropias.length}`);
+        console.log(`🔍 Universo de Pendientes cargado: ${todasLasPendientes.length}`);
 
         // 5️⃣ RENDERIZADO
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
             const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
-            generarInterfazAdminKMLRuta(unidadesUnicas, osEnriquecidas);
+            generarInterfazAdminKMLRuta(unidadesUnicas, misAsignacionesPropias);
         } else if (rol === 'Consulta' || rol === 'Contratista') {
             if (misAsignacionesPropias.length === 0) {
-                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS para la unidad ${miUnidad}</div>`;
+                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para la unidad ${miUnidad}</div>`;
                 return;
             }
+            // Llamamos a generarMapaKMLRuta pasando tus asignadas
             generarMapaKMLRuta(misAsignacionesPropias, miUnidad);
         }
 
@@ -5585,13 +5594,13 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     const unidadSeleccionada = unidad;
 
     console.log('🗺️ Iniciando generarMapaKMLRuta para:', unidadSeleccionada);
-    console.log('📥 Datos recibidos para normalizar:', osAsignadas);
+    // Log para verificar si el universo de pendientes existe en memoria
+    console.log('🔍 Universo de Pendientes disponible en memoria:', window.todasLasPendientesKML ? window.todasLasPendientesKML.length : 0);
 
-    // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE DATOS (CON LOGS DE VALIDACIÓN)
+    // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE TUS ASIGNADAS
     const osNormalizadas = osAsignadas
         .map(os => {
             const id = (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim();
-            // Jalamos tipología y coordenadas asegurando los nombres exactos de la tabla
             const tipo = os.Tipologia || os.tipologia || 'Sin tipología';
             const coords = os.Coordenadas || os.Coordendasgis || null;
 
@@ -5607,19 +5616,29 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         .filter(os => {
             if (!os.osatomo) return false;
             if (!os.Coordenadas) {
-                console.warn(`⚠️ OS ${os.osatomo} no tiene coordenadas y no se mostrará en el mapa.`);
+                console.warn(`⚠️ Tu OS ${os.osatomo} no tiene coordenadas y no servirá como centro de ruta.`);
             }
             return true;
         });
 
-    console.log(`✅ OS Normalizadas para el selector: ${osNormalizadas.length}`);
+    // 🕵️ LOG DE VALIDACIÓN PARA OS 11195544
+    if (window.todasLasPendientesKML) {
+        const osBusqueda = window.todasLasPendientesKML.find(p => String(p.OSATMO).trim() === '11195544');
+        if (osBusqueda) {
+            console.log("✅ VALIDACIÓN: La OS 11195544 está LISTA para ser filtrada por radio.");
+        } else {
+            console.error("❌ ERROR: La OS 11195544 no está en el universo de pendientes. No aparecerá ni con filtros.");
+        }
+    }
+
+    console.log(`✅ Mis OS Normalizadas: ${osNormalizadas.length}`);
 
     if (osNormalizadas.length === 0) {
         resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas con coordenadas para esta unidad</div>';
         return;
     }
 
-    // Guardamos en memoria global para los botones de filtrado
+    // Guardamos en memoria global (Tus órdenes de trabajo)
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas;
 
@@ -5653,8 +5672,10 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     // 3️⃣ MENSAJE DINÁMICO DE FILTROS
     let mensajeFiltros;
     if (tieneFiltros) {
-        const tCount = (filtrosFinales.tipologias || []).length;
-        const rCount = (filtrosFinales.rangos || []).length;
+        const tCount = Array.isArray(filtrosFinales.tipologias) ? filtrosFinales.tipologias.length : 
+                       (filtrosFinales.tipologias ? filtrosFinales.tipologias.split(',').length : 0);
+        const rCount = Array.isArray(filtrosFinales.rangos) ? filtrosFinales.rangos.length :
+                       (filtrosFinales.rangos ? filtrosFinales.rangos.split(',').length : 0);
         mensajeFiltros = `✅ <b>${tCount}</b> Tipologías y <b>${rCount}</b> Rangos permitidos (Radio: ${radioConfigurado}km)`;
     } else {
         mensajeFiltros = "⚠️ <b>Sin filtros programados:</b> Solo se mostrarán Reguladas y Deuda Alta.";
@@ -5770,14 +5791,37 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             btn.style.opacity = '0.7';
         }
         
-        // ✅ Sincronización crucial
+        // ✅ Sincronización crucial de variables globales
         window.osPartidaSeleccionada = osPartida;
         window.currentUnidadKML = unidad; 
 
-        console.log('--- 🚀 INICIANDO PROCESO DE FILTRADO ---');
+        console.log('--- 🚀 INICIANDO PROCESO DE FILTRADO KML RUTA ---');
+        console.log('📍 OS Centro elegida:', osPartida);
+        console.log('👤 Unidad logueada:', unidad);
 
-        // 🎯 VALIDACIÓN: Si esta función no recibe la unidad como parámetro, 
-        // asegúrate de que esté leyendo window.osAsignadasKML
+        // 🔍 VALIDACIÓN PREVIA DE DATOS
+        // Si por alguna razón la lista de pendientes se perdió, intentamos recuperarla
+        if (!window.todasLasPendientesKML || window.todasLasPendientesKML.length === 0) {
+            console.warn("⚠️ El universo de pendientes no está en memoria. Recargando...");
+            // Opcional: Podrías llamar a una función de recarga aquí
+        }
+
+        // 🎯 LOG DE AUDITORÍA FINAL ANTES DE ENTRAR AL MOTOR DE FILTRADO
+        if (window.todasLasPendientesKML) {
+            const check = window.todasLasPendientesKML.find(p => String(p.OSATMO).trim() === '11195544');
+            if (check) {
+                console.log("✅ AUDITORÍA: La OS 11195544 está en el buffer de entrada. Entrando a generarMapaUnidadConFiltros...");
+            } else {
+                console.error("❌ ERROR CRÍTICO: La OS 11195544 NO llegó a esta etapa. Revisa cargarInterfazKMLRuta.");
+            }
+        }
+
+        /**
+         * 🔥 LLAMADA AL MOTOR DE RENDERIZADO
+         * IMPORTANTE: 'generarMapaUnidadConFiltros' debe estar programada para leer:
+         * 1. window.osAsignadasKML (Tus órdenes propias)
+         * 2. window.todasLasPendientesKML (Las sugerencias potenciales)
+         */
         await generarMapaUnidadConFiltros(true); 
 
         console.log('--- ✅ PROCESO FINALIZADO CON ÉXITO ---');
@@ -5788,12 +5832,11 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
     } finally {
         if(btn) { 
             btn.disabled = false; 
-            btn.innerText = '🎯 Aplicar Filtro'; 
+            btn.innerText = '🎯 Aplicar Filtro Radio'; 
             btn.style.opacity = '1';
         }
     }
 }
-
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
