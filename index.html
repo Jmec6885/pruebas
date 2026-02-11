@@ -4507,22 +4507,25 @@ async function cargarInterfazKMLRuta() {
             if (data) osDetallesPendientes.push(...data);
         }
 
-        // 3️⃣ CRUCE DE DATOS DINÁMICO
-        const osEnriquecidas = asignaciones.map(asig => {
-            const id = String(asig.osatomo).trim();
-            const detalle = osDetallesPendientes.find(p => String(p.OSATMO).trim() === id);
-            
-            return {
-                ...asig,
-                OSATMO: id, 
-                Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
-                Coordendasgis: detalle?.Coordendasgis || null,
-                Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
-                Deuda: detalle?.Deuda || 0,
-                "Fecha Gen.": detalle?.["Fecha Gen."] || null,
-                esAsignada: true 
-            };
-        });
+        // ✅ 3️⃣ CRUCE DE DATOS: Traer coordenadas y tipología de 'OS Pendientes'
+const osEnriquecidas = asignaciones.map(asig => {
+    const idAsignada = String(asig.osatomo).trim();
+    
+    // Buscamos el detalle en la lista que descargamos de OS Pendientes
+    const detalle = osDetallesPendientes.find(p => String(p.OSATMO).trim() === idAsignada);
+    
+    return {
+        ...asig,
+        OSATMO: idAsignada,
+        // Jalamos la tipología real de la tabla Pendientes
+        Tipologia: detalle?.Tipologia || asig.Tipologia || 'Sin tipología',
+        // Jalamos coordenadas de cualquiera de los dos campos disponibles
+        Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
+        Coordendasgis: detalle?.Coordendasgis || null,
+        Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
+        esAsignada: true
+    };
+});
 
         // 4️⃣ FILTRAR POR LA UNIDAD ACTUAL (Sea cual sea la cantidad)
         const misAsignacionesPropias = osEnriquecidas.filter(asig => 
@@ -5549,28 +5552,48 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     const unidadSeleccionada = unidad;
 
-    // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE DATOS
+    console.log('🗺️ Iniciando generarMapaKMLRuta para:', unidadSeleccionada);
+    console.log('📥 Datos recibidos para normalizar:', osAsignadas);
+
+    // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE DATOS (CON LOGS DE VALIDACIÓN)
     const osNormalizadas = osAsignadas
-        .map(os => ({
-            ...os,
-            osatomo: (os.osatomo || os.OSATOMO || '').toString().trim(),
-            Tipologia: os.Tipologia || os.tipologia || 'Sin tipología'
-        }))
-        .filter(os => os.osatomo !== '');
-        // ⚠️ Nota: Si quieres ver las 12 órdenes, asegúrate que 'tipologiaPermitidaParaRol' no las esté bloqueando.
-        // .filter(os => tipologiaPermitidaParaRol(os.Tipologia, currentUser.rol));
+        .map(os => {
+            const id = (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim();
+            // Jalamos tipología y coordenadas asegurando los nombres exactos de la tabla
+            const tipo = os.Tipologia || os.tipologia || 'Sin tipología';
+            const coords = os.Coordenadas || os.Coordendasgis || null;
+
+            return {
+                ...os,
+                osatomo: id,
+                OSATMO: id,
+                Tipologia: tipo,
+                Coordenadas: coords,
+                esAsignada: true
+            };
+        })
+        .filter(os => {
+            if (!os.osatomo) return false;
+            if (!os.Coordenadas) {
+                console.warn(`⚠️ OS ${os.osatomo} no tiene coordenadas y no se mostrará en el mapa.`);
+            }
+            return true;
+        });
+
+    console.log(`✅ OS Normalizadas para el selector: ${osNormalizadas.length}`);
 
     if (osNormalizadas.length === 0) {
-        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas para esta unidad</div>';
+        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas con coordenadas para esta unidad</div>';
         return;
     }
 
+    // Guardamos en memoria global para los botones de filtrado
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas;
 
-    // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE (Lógica Original Intacta)
+    // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE
     const HOY = getFechaHoyElSalvador();
-    console.log('📅 Buscando filtros para fecha local:', HOY);
+    console.log('📅 Consultando filtros en Supabase para:', HOY);
 
     let { data: filtrosUnidadHoy } = await supabaseClient
         .from('filtros_por_unidad')
@@ -5580,7 +5603,7 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         .maybeSingle();
 
     if (!filtrosUnidadHoy) {
-        console.log("🔍 No hay filtros para hoy, buscando filtro base para:", unidadSeleccionada);
+        console.log("🔍 No hay filtros para hoy, buscando filtro base (null) para:", unidadSeleccionada);
         const { data: filtroBase } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
@@ -5595,7 +5618,7 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     const radioConfigurado = filtrosFinales.radio_km || 3;
     const tieneFiltros = !!filtrosUnidadHoy;
 
-    // 3️⃣ MENSAJE DINÁMICO
+    // 3️⃣ MENSAJE DINÁMICO DE FILTROS
     let mensajeFiltros;
     if (tieneFiltros) {
         const tCount = (filtrosFinales.tipologias || []).length;
@@ -5605,7 +5628,7 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         mensajeFiltros = "⚠️ <b>Sin filtros programados:</b> Solo se mostrarán Reguladas y Deuda Alta.";
     }
 
-    // 4️⃣ GENERACIÓN DE INTERFAZ (CSS CORREGIDO PARA ORDEN VISUAL)
+    // 4️⃣ GENERACIÓN DE INTERFAZ HTML
     const htmlSelector = `
         <div class="result-card" style="background: #ffffff; border: 1px solid #3b82f6; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid #f0f9ff; padding-bottom: 10px;">
@@ -5613,8 +5636,8 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
             </h3>
 
             <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #4b5563;">Punto de Partida:</label>
-                <select id="selectPuntoPartidaKML" onchange="window.osPartidaSeleccionada = this.value" 
+                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #4b5563;">Punto de Partida (Tus Asignadas):</label>
+                <select id="selectPuntoPartidaKML" onchange="window.osPartidaSeleccionada = this.value; console.log('📍 Punto de partida seleccionado:', this.value);" 
                     style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; background: #f8fafc;">
                     <option value="">-- Seleccione una de las ${osNormalizadas.length} OS --</option>
                     ${osNormalizadas.map(os =>
@@ -5624,23 +5647,23 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
             </div>
 
             <div style="background: ${tieneFiltros ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${tieneFiltros ? '#bbf7d0' : '#fef08a'}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <strong style="color: #1e293b; display: block; margin-bottom: 5px;">📊 Filtros Programados (Hoy):</strong>
+                <strong style="color: #1e293b; display: block; margin-bottom: 5px;">📊 Configuración de Filtros:</strong>
                 <p style="margin: 0; color: #475569; font-size: 14px;">${mensajeFiltros}</p>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
                 <button class="btn" onclick="generarMapaKMLSoloAsignadas('${unidad}')"
                         style="background: #64748b; color: white; padding: 12px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">
-                    📋 Solo Asignadas (${osNormalizadas.length})
+                    📋 Solo Mis Asignadas (${osNormalizadas.length})
                 </button>
                 <button id="btnAplicarFiltro" class="btn" onclick="generarMapaKMLConFiltrosGuardados('${unidad}')"
                         style="background: #2563eb; color: white; padding: 12px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">
-                    🎯 Aplicar Filtro
+                    🎯 Aplicar Filtro Radio
                 </button>
             </div>
 
             <div style="border-top: 1px solid #e2e8f0; padding-top: 15px;">
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; text-transform: uppercase;">Rutas desde Punto Fijo:</label>
+                <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; text-transform: uppercase;">O rutas desde ciudad:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <button class="btn-fijo" onclick="generarRutaDesdePuntoFijo('Ahuachapán', 13.924670, -89.842820)">📍 Ahuachapán</button>
                     <button class="btn-fijo" onclick="generarRutaDesdePuntoFijo('Sonsonate', 13.727937, -89.717790)">📍 Sonsonate</button>
@@ -5656,17 +5679,18 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
                 border: 1px solid #e2e8f0;
                 padding: 10px 5px;
                 border-radius: 6px;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
                 cursor: pointer;
                 transition: all 0.2s;
             }
-            .btn-fijo:hover { background: #e2e8f0; border-color: #cbd5e1; }
+            .btn-fijo:hover { background: #e2e8f0; }
+            .btn:active { transform: scale(0.98); }
         </style>
     `;
 
     resultsContainer.innerHTML = htmlSelector;
-    console.log("✅ Interfaz generada y filtros preparados con todas las opciones.");
+    console.log("✅ Interfaz generada exitosamente.");
 }
 
 function generarMapaKMLSoloAsignadas(unidad) {
