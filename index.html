@@ -7523,7 +7523,7 @@ for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
             <p style="color: #666;">Procesando bloque de datos. Por favor, no cierre esta ventana.</p>
         </div>`;
 
-    // 🎯 MEJORA 1: Mapeo ultra-robusto (evita errores si el Excel tiene celdas raras)
+    // 🎯 MEJORA 1: Mapeo ultra-robusto
     const registros = batch.map(fila => {
         const os = fila[0] ? fila[0].toString().trim() : '';
         const unidad = fila[1] ? fila[1].toString().trim() : 'SIN_UNIDAD';
@@ -7538,15 +7538,16 @@ for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
         };
     }).filter(r => r.osatomo && r.osatomo !== '' && r.osatomo.toLowerCase() !== 'undefined');
 
-    // 🎯 MEJORA 2: Cambiar .insert() por .upsert()
-    // Aunque limpies la tabla antes, el UPSERT es más seguro si hay duplicados en el mismo Excel
+    // 🎯 MEJORA 2: Usar .insert() simple
+    // Quitamos .upsert() y el onConflict porque tu tabla no tiene llave primaria única en osatomo
+    // Como borraste todo antes, el .insert() es seguro y no fallará.
     const { error } = await supabaseClient
         .from('os_asignadas')
-        .upsert(registros, { onConflict: 'osatomo' }); 
+        .insert(registros); 
 
     if (error) {
         console.error('❌ Error en batch:', error);
-        // 🎯 MEJORA 3: Detalle de error más claro
+        // 🎯 MEJORA 3: Detalle de error más claro para diagnóstico
         throw new Error(`Error en bloque ${i}-${i + BATCH_SIZE}: ${error.message}`);
     }
 
