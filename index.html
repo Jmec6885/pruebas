@@ -9477,253 +9477,233 @@ function dibujarMarcadores(mapa, ordenes) {
 
 
 // ========================================
-// 🗺️ INICIALIZAR MAPA LEAFLET (COMPLETO CON FILTROS POR ESTADO Y CÍRCULO DE RADIO)
+// 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN COMPLETA SIN RECORTES + CORRECCIONES)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-    const mapaDiv = document.getElementById('mapaLeaflet');
- 
-    if (!mapaDiv) {
-        console.error('❌ Div del mapa no encontrado');
-        return;
-    }
+    const mapaDiv = document.getElementById('mapaLeaflet');
+ 
+    if (!mapaDiv) {
+        console.error('❌ Div del mapa no encontrado');
+        return;
+    }
 
-    // Limpiar mapa anterior
-    if (window.mapaLeafletInstance) {
-        window.mapaLeafletInstance.remove();
-    }
+    // Limpiar mapa anterior
+    if (window.mapaLeafletInstance) {
+        window.mapaLeafletInstance.remove();
+    }
 
-    // Crear mapa
-    const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
-    window.mapaLeafletInstance = mapa;
+    // Crear mapa
+    const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
+    window.mapaLeafletInstance = mapa;
 
-    // Capa de mapa
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(mapa);
+    // Capa de mapa
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(mapa);
 
-    // ========================================
-    // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
-    // ========================================
-     const circuloRadio = L.circle([latCentro, lngCentro], {
-        radius: radioKm * 1000,
-        color: '#3b82f6',
-        weight: 3,
-        opacity: 0.8,
-        fillOpacity: 0.15,
-        fillColor: '#3b82f6'
-    }).addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px;">
-            <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
-            <strong>Radio:</strong> ${radioKm} km<br>
-            <strong>OS en radio:</strong> ${osEnRadio.length}
-        </div>
-    `)
-    .openPopup();
+    // ========================================
+    // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
+    // ========================================
+     const circuloRadio = L.circle([latCentro, lngCentro], {
+        radius: radioKm * 1000,
+        color: '#3b82f6',
+        weight: 3,
+        opacity: 0.8,
+        fillOpacity: 0.15,
+        fillColor: '#3b82f6'
+    }).addTo(mapa)
+    .bindPopup(`
+        <div style="min-width: 200px;">
+            <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
+            <strong>Radio:</strong> ${radioKm} km<br>
+            <strong>OS en radio:</strong> ${osEnRadio.length}
+        </div>
+    `)
+    .openPopup();
 
-    // ✅ Guardar referencia al círculo
-    window.circuloRadio = circuloRadio;
+    window.circuloRadio = circuloRadio;
 
+    // ========================================
+    // ✅ MARCADOR "0" PARA PUNTO DE PARTIDA (VERDE)
+    // ========================================
+    const iconoVerde = L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(76,175,80,0.6);
+            border: 4px solid white;
+        ">0</div>`, // Cambiado 🎯 por 0 para seguir la ruta
+        iconSize: [50, 50],
+        iconAnchor: [25, 50]
+    });
 
-    // ✅ Guardar referencia al círculo para actualizarlo después
-    window.circuloRadio = circuloRadio;
+    const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoVerde })
+    .addTo(mapa)
+    .bindPopup(`
+        <div style="min-width: 200px;">
+            <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA (0)</strong><br>
+            <strong>OS:</strong> ${osCentro.OSATMO}<br>
+            <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
+        </div>
+    `)
+    .on('click', function() {
+        const osCentroCompleto = {
+            ...osCentro,
+            lat: latCentro,
+            lng: lngCentro,
+            distancia: 0,
+            esRegulada: false,
+            tieneDeudaAlta: false
+        };
+ 
+        const tipoOS = (osCentroCompleto.Tipo_de_OS || '').toLowerCase();
+        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
+        const deuda = parseFloat(osCentroCompleto.Deuda) || 0;
+        let labelEstado;
+ 
+        if (deuda > 500) {
+            labelEstado = 'DEUDA ALTA (>$500)';
+        } else if (deuda >= 100 && deuda <= 500) {
+            labelEstado = 'DEUDA MEDIA ($100-$500)';
+        } else if (deuda >= 50 && deuda < 100) {
+            labelEstado = 'DEUDA BAJA ($50-$100)';
+        } else if (osCentroCompleto.Estado_ATOMO === 'Asignada') {
+            labelEstado = 'OS ASIGNADA';
+        } else if (esRegulada) {
+            labelEstado = 'OS REGULADA';
+        } else {
+            labelEstado = 'OS NO REGULADA';
+        }
+ 
+        mostrarDetalleOSEnPanel(osCentroCompleto, labelEstado);
+    });
 
-    // ========================================
-    // ✅ MARCADOR VERDE PARA LA OS DE REFERENCIA
-    // ========================================
-    const iconoVerde = L.divIcon({
-        className: 'custom-marker',
-        html: `<div style="
-            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 20px;
-            box-shadow: 0 4px 12px rgba(76,175,80,0.6);
-            border: 4px solid white;
-        ">🎯</div>`,
-        iconSize: [50, 50],
-        iconAnchor: [25, 50]
-    });
+    // ========================================
+    // ✅ INICIALIZAR AGRUPACIONES
+    // ========================================
+    window.markersPorTipologia = {};
+    window.markersPorEstado = {
+        'centro': [markerCentro],
+        'asignada': [],
+        'regulada': [],
+        'no_regulada': [],
+        'deuda_alta': [],
+        'deuda_media': [],
+        'deuda_baja': []
+    };
 
-    // ✅ MODIFICAR EL MARCADOR DEL CENTRO
-const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoVerde })
-    .addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px;">
-            <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA</strong><br>
-            <strong>OS:</strong> ${osCentro.OSATMO}<br>
-            <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
-        </div>
-    `)
-    // ✅ AÑADIR EVENTO DE CLIC PARA MOSTRAR DETALLES
-    .on('click', function() {
-        // Crear un objeto OS completo para el centro
-        const osCentroCompleto = {
-            ...osCentro,
-            lat: latCentro,
-            lng: lngCentro,
-            distancia: 0,
-            esRegulada: false,
-            tieneDeudaAlta: false
-        };
- 
-        // Determinar labelEstado
-        const tipoOS = (osCentroCompleto.Tipo_de_OS || '').toLowerCase();
-        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-        const deuda = parseFloat(osCentroCompleto.Deuda) || 0;
-        let labelEstado;
- 
-        if (deuda > 500) {
-            labelEstado = 'DEUDA ALTA (>$500)';
-        } else if (deuda >= 100 && deuda <= 500) {
-            labelEstado = 'DEUDA MEDIA ($100-$500)';
-        } else if (deuda >= 50 && deuda < 100) {
-            labelEstado = 'DEUDA BAJA ($50-$100)';
-        } else if (osCentroCompleto.Estado_ATOMO === 'Asignada') {
-            labelEstado = 'OS ASIGNADA';
-        } else if (esRegulada) {
-            labelEstado = 'OS REGULADA';
-        } else {
-            labelEstado = 'OS NO REGULADA';
-        }
- 
-        // Mostrar detalles
-        mostrarDetalleOSEnPanel(osCentroCompleto, labelEstado);
-    });
+    const bounds = L.latLngBounds();
+    bounds.extend([latCentro, lngCentro]);
 
-    // ========================================
-    // ✅ INICIALIZAR AGRUPACIONES
-    // ========================================
-    window.markersPorTipologia = {};
-    window.markersPorEstado = {
-        'centro': [markerCentro],
-        'asignada': [],
-        'regulada': [],
-        'no_regulada': [],
-        'deuda_alta': [],
-        'deuda_media': [],
-        'deuda_baja': []
-    };
+    // ========================================
+    // ✅ CREAR MARCADORES NUMERADOS PARA EL RESTO
+    // ========================================
+    osEnRadio.forEach((os, index) => {
+        if (os.OSATMO === osCentro.OSATMO) {
+            return;
+        }
 
-    const bounds = L.latLngBounds();
-    bounds.extend([latCentro, lngCentro]);
+        // --- CORRECCIÓN DE COORDENADAS (BUSCA AMBOS NOMBRES) ---
+        const lat = parseFloat(os.Latitud || os.lat);
+        const lng = parseFloat(os.Longitud || os.lng);
 
-    // ========================================
-    // CREAR MARCADORES NUMERADOS PARA EL RESTO
-    // ========================================
-    osEnRadio.forEach((os, index) => {
-        // ✅ Saltar la OS de referencia (ya tiene marcador verde)
-        if (os.OSATMO === osCentro.OSATMO) {
-            return;
-        }
+        if (isNaN(lat) || isNaN(lng)) return; 
 
-        const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-        const deuda = parseFloat(os.Deuda) || 0;
- 
-        // Determinar estado y color
-        let colorFondo, labelEstado, estadoKey;
- 
-        if (deuda > 500) {
-            colorFondo = '#fdd835'; // Amarillo
-            labelEstado = 'DEUDA ALTA (>$500)';
-            estadoKey = 'deuda_alta';
-        } else if (deuda >= 100 && deuda <= 500) {
-            colorFondo = '#ff9800'; // Naranja
-            labelEstado = 'DEUDA MEDIA ($100-$500)';
-            estadoKey = 'deuda_media';
-        } else if (deuda >= 50 && deuda < 100) {
-            colorFondo = '#f48fb1'; // Rosado
-            labelEstado = 'DEUDA BAJA ($50-$100)';
-            estadoKey = 'deuda_baja';
-        } else if (os.Estado_ATOMO === 'Asignada') {
-            colorFondo = '#ff9800'; // Naranja
-            labelEstado = 'OS ASIGNADA';
-            estadoKey = 'asignada';
-        } else if (esRegulada) {
-            colorFondo = '#f44336'; // Rojo
-            labelEstado = 'OS REGULADA';
-            estadoKey = 'regulada';
-        } else {
-            colorFondo = '#2196f3'; // Azul
-            labelEstado = 'OS NO REGULADA';
-            estadoKey = 'no_regulada';
-        }
+        const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
+        const esRegulada = (os.Condicion?.toUpperCase() === 'REGULADA') || (tipoOS.includes('regulad') && !tipoOS.includes('no'));
+        const deuda = parseFloat(os.Deuda) || 0;
+ 
+        let colorFondo, labelEstado, estadoKey;
+ 
+        if (deuda > 500) {
+            colorFondo = '#fdd835'; // Amarillo
+            labelEstado = 'DEUDA ALTA (>$500)';
+            estadoKey = 'deuda_alta';
+        } else if (deuda >= 100 && deuda <= 500) {
+            colorFondo = '#ff9800'; // Naranja
+            labelEstado = 'DEUDA MEDIA ($100-$500)';
+            estadoKey = 'deuda_media';
+        } else if (deuda >= 50 && deuda < 100) {
+            colorFondo = '#f48fb1'; // Rosado
+            labelEstado = 'DEUDA BAJA ($50-$100)';
+            estadoKey = 'deuda_baja';
+        } else if (os.Estado_ATOMO === 'Asignada' || os.Estado_SAP === 'ASIGNADA') {
+            colorFondo = '#ff9800'; // Naranja
+            labelEstado = 'OS ASIGNADA';
+            estadoKey = 'asignada';
+        } else if (esRegulada) {
+            colorFondo = '#f44336'; // Rojo
+            labelEstado = 'OS REGULADA';
+            estadoKey = 'regulada';
+        } else {
+            colorFondo = '#2196f3'; // Azul
+            labelEstado = 'OS NO REGULADA';
+            estadoKey = 'no_regulada';
+        }
 
-        // Crear icono numerado
-        const icono = L.divIcon({
-            className: 'custom-marker',
-            html: `<div style="
-                background: ${colorFondo};
-                color: white;
-                width: 35px;
-                height: 35px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                font-size: 14px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                border: 3px solid white;
-            ">${os.numeroOrden || index + 1}</div>`,
-            iconSize: [35, 35],
-            iconAnchor: [17.5, 35]
-        });
+        const icono = L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+                background: ${colorFondo};
+                color: white;
+                width: 35px;
+                height: 35px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                border: 3px solid white;
+            ">${os.numeroOrden || index + 1}</div>`,
+            iconSize: [35, 35],
+            iconAnchor: [17.5, 35]
+        });
 
-        const marker = L.marker([os.lat, os.lng], { icon: icono })
-            .addTo(mapa)
-            .bindPopup(`
-                <div style="min-width: 250px;">
-                    <strong style="color: ${colorFondo};">#${os.numeroOrden || index + 1} - ${labelEstado}</strong><br>
-                    <strong>OS:</strong> ${os.OSATMO}<br>
-                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
-                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                    <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                            style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-                        📋 Ver Detalle Completo
-                    </button>
-                </div>
-            `);
+        const marker = L.marker([lat, lng], { icon: icono })
+            .addTo(mapa)
+            .bindPopup(`
+                <div style="min-width: 250px;">
+                    <strong style="color: ${colorFondo};">#${os.numeroOrden || index + 1} - ${labelEstado}</strong><br>
+                    <strong>OS:</strong> ${os.OSATMO}<br>
+                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
+                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                    <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
+                            style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                        📋 Ver Detalle Completo
+                    </button>
+                </div>
+            `);
 
-        // ✅ AGRUPAR POR ESTADO
-        window.markersPorEstado[estadoKey].push(marker);
+        window.markersPorEstado[estadoKey].push(marker);
+        bounds.extend([lat, lng]);
 
-        bounds.extend([os.lat, os.lng]);
+        const tip = os.Tipologia || 'Sin tipología';
+        if (!window.markersPorTipologia[tip]) {
+            window.markersPorTipologia[tip] = [];
+        }
+        window.markersPorTipologia[tip].push(marker);
+    });
 
-        // Agrupar por tipología
-        const tip = os.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologia[tip]) {
-            window.markersPorTipologia[tip] = [];
-        }
-        window.markersPorTipologia[tip].push(marker);
-    });
+    if (bounds.isValid()) {
+        mapa.fitBounds(bounds, { padding: [50, 50] });
+    }
 
-    // Ajustar vista
-    mapa.fitBounds(bounds, { padding: [50, 50] });
+    L.control.scale().addTo(mapa);
 
-    // ✅ Añadir control de escala
-    L.control.scale().addTo(mapa);
-
-    console.log(`✅ Mapa inicializado con ${osEnRadio.length} marcadores y círculo de ${radioKm} km`);
-    console.log('📊 Agrupación por estado:', {
-        centro: window.markersPorEstado.centro.length,
-        asignada: window.markersPorEstado.asignada.length,
-        regulada: window.markersPorEstado.regulada.length,
-        no_regulada: window.markersPorEstado.no_regulada.length,
-        deuda_alta: window.markersPorEstado.deuda_alta.length,
-        deuda_media: window.markersPorEstado.deuda_media.length,
-        deuda_baja: window.markersPorEstado.deuda_baja.length
-    });
+    console.log(`✅ Mapa inicializado con ${osEnRadio.length} marcadores.`);
 }
-
 
 
  	// ========================================
