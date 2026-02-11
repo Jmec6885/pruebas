@@ -4462,7 +4462,7 @@ function transformarUsuarioAUnidad(usuario) {
 
 
 async function cargarInterfazKMLRuta() {
-    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta');
+    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta (Modo Carga Total)');
     
     // ✅ DEFINICIÓN DE CHUNKARRAY
     const chunkArray = (arr, size) => {
@@ -4478,7 +4478,7 @@ async function cargarInterfazKMLRuta() {
 
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
-    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
+    searchGrid.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div><p style="text-align:center;">Cargando universo de órdenes...</p>';
     resultsContainer.innerHTML = '';
 
     try {
@@ -4486,42 +4486,61 @@ async function cargarInterfazKMLRuta() {
         const rol = currentUser?.rol;
 
         // 1️⃣ OBTENER TODAS LAS ASIGNACIONES ACTUALES
-        // (Necesitamos el mapa global de asignaciones para saber qué descartar)
         const { data: asignaciones, error: errorAsignadas } = await supabaseClient
             .from('os_asignadas')
             .select('osatomo, Unidad, Estado, Tipologia');
 
         if (errorAsignadas) throw errorAsignadas;
 
-        // 2️⃣ OBTENER EL UNIVERSO DE PENDIENTES (Sugerencias potenciales)
-        // Traemos un bloque grande de la tabla 'OS Pendientes' para buscar sugerencias cerca de tu ruta
-        const { data: todasLasPendientes, error: errorPendientes } = await supabaseClient
-            .from('OS Pendientes')
-            .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
-            .limit(2000); // Aumentamos el límite para asegurar que encuentre OS libres
+        // 2️⃣ OBTENER EL UNIVERSO COMPLETO DE PENDIENTES (De mil en mil)
+        let todasLasPendientes = [];
+        let r_inicio = 0;
+        let r_fin = 999;
+        let hayMas = true;
 
-        if (errorPendientes) throw errorPendientes;
+        console.log("⏳ Iniciando descarga por lotes de 'OS Pendientes'...");
+
+        while (hayMas) {
+            const { data: lote, error: errorLote } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
+                .range(r_inicio, r_fin);
+
+            if (errorLote) throw errorLote;
+
+            if (lote && lote.length > 0) {
+                todasLasPendientes.push(...lote);
+                console.log(`📦 Lote cargado: ${r_inicio} a ${r_fin}. Total actual: ${todasLasPendientes.length}`);
+                
+                if (lote.length < 1000) {
+                    hayMas = false; // Ya no hay más registros
+                } else {
+                    r_inicio += 1000;
+                    r_fin += 1000;
+                }
+            } else {
+                hayMas = false;
+            }
+        }
 
         // 🔍 LOG DE AUDITORÍA: VALIDAR SI LA OS 11195544 EXISTE EN PENDIENTES
         const osEncontrada = todasLasPendientes.find(p => String(p.OSATMO).trim() === '11195544');
         if (osEncontrada) {
             console.group("🎯 AUDITORÍA CARGA: OS 11195544");
-            console.log("Estado: Existe en tabla Pendientes");
+            console.log("Estado: ¡ENCONTRADA EN UNIVERSO TOTAL!");
             console.log("Unidad asignada en tabla:", `"${osEncontrada.Unidad}"`);
             console.log("Tipología:", osEncontrada.Tipologia);
             console.log("Tiene Coordenadas:", !!(osEncontrada.Coordenadas || osEncontrada.Coordendasgis));
             console.groupEnd();
         } else {
-            console.warn("⚠️ AUDITORÍA CARGA: OS 11195544 NO encontrada en las 2000 pendientes descargadas.");
+            console.error(`❌ AUDITORÍA CARGA: OS 11195544 NO encontrada en los ${todasLasPendientes.length} registros.`);
         }
 
         // 3️⃣ CRUCE Y FILTRADO: SOLO MIS ASIGNADAS
-        // Filtramos las asignaciones para que solo queden las de la unidad logueada
         const misAsignacionesPropias = asignaciones
             .filter(asig => String(asig.Unidad).trim().toUpperCase() === miUnidad.trim().toUpperCase())
             .map(asig => {
                 const idAsignada = String(asig.osatomo).trim();
-                // Buscamos el detalle (coordenadas) en la lista de pendientes
                 const detalle = todasLasPendientes.find(p => String(p.OSATMO).trim() === idAsignada);
                 
                 return {
@@ -4536,15 +4555,12 @@ async function cargarInterfazKMLRuta() {
             });
 
         // ✅ 4️⃣ ASIGNACIÓN A VARIABLES GLOBALES
-        // window.osAsignadasKML: Solo contiene tus órdenes (puntos rojos/azules)
         window.osAsignadasKML = misAsignacionesPropias;
-        
-        // window.todasLasPendientesKML: Contiene el universo de búsqueda (para las sugerencias verdes)
         window.todasLasPendientesKML = todasLasPendientes; 
 
         console.log(`✅ Sesión: ${miUnidad}`);
         console.log(`📋 Mis OS Propias: ${misAsignacionesPropias.length}`);
-        console.log(`🔍 Universo de Pendientes cargado: ${todasLasPendientes.length}`);
+        console.log(`🔍 Universo de Pendientes Total: ${todasLasPendientes.length}`);
 
         // 5️⃣ RENDERIZADO
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
@@ -4555,7 +4571,6 @@ async function cargarInterfazKMLRuta() {
                 searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para la unidad ${miUnidad}</div>`;
                 return;
             }
-            // Llamamos a generarMapaKMLRuta pasando tus asignadas
             generarMapaKMLRuta(misAsignacionesPropias, miUnidad);
         }
 
@@ -4564,6 +4579,7 @@ async function cargarInterfazKMLRuta() {
         searchGrid.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
 }
+
 
 // ========================================
 // 🗺️ INTERFAZ GENERACIÓN KML RUTA (OPTIMIZADA)
