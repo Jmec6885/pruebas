@@ -787,17 +787,18 @@ async function confirmarDescansoPersonalizadoATTF() {
 }
 
 function verificarHorarioPermitido(rol, userData = null) {
-    // ✅ Obtener fecha/hora de El Salvador (UTC-6)
-    const ahora = new Date();
-    const offsetElSalvador = -6 * 60; // UTC-6 en minutos
-    const offsetLocal = ahora.getTimezoneOffset(); // Offset del navegador
-    const diff = offsetElSalvador - offsetLocal;
-    const fechaSV = new Date(ahora.getTime() + diff * 60 * 1000);
+    // ✅ Obtener fecha/hora exacta de El Salvador (Sincronización SV)
+    const opciones = { timeZone: 'America/El_Salvador', hour12: false };
+    const ahoraSVString = new Date().toLocaleString('en-US', opciones);
+    const fechaSV = new Date(ahoraSVString);
     
-    const fechaHoy = `${fechaSV.getFullYear()}-${String(fechaSV.getMonth() + 1).padStart(2, '0')}-${String(fechaSV.getDate()).padStart(2, '0')}`;
+    // Extraer datos normalizados
+    const fechaHoy = fechaSV.getFullYear() + '-' + 
+                     String(fechaSV.getMonth() + 1).padStart(2, '0') + '-' + 
+                     String(fechaSV.getDate()).padStart(2, '0');
     const horaActual = fechaSV.getHours();
     const minutoActual = fechaSV.getMinutes();
-    const diaActual = fechaSV.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
+    const diaActual = fechaSV.getDay(); // 0=Domingo, 1=Lunes...
     
     console.log('🔍 Verificando horario (El Salvador):', {
         fecha: fechaHoy,
@@ -907,37 +908,39 @@ function verificarHorarioPermitido(rol, userData = null) {
         };
     }
     
-    // 🔹 ATTF: Turnos rotativos (6am-2pm, 10am-6pm, 2pm-10pm, 6pm-2am, 10pm-6am)
-    if (rol === 'ATTF') {
-        if (diaActual === 0) {
-            return {
-                permitido: false,
-                mensaje: 'El rol ATTF no tiene acceso los domingos.\nAcceso permitido: Lunes a Sábado en turnos programados'
-            };
+    // 🔹 ATTF: Turnos rotativos (Ajuste para cobertura total)
+if (rol === 'ATTF') {
+    if (diaActual === 0) {
+        return { permitido: false, mensaje: 'Acceso no permitido los domingos.' };
+    }
+    
+    const minutosActuales = (horaActual * 60) + minutoActual;
+
+    const turnosATTF = [
+        { inicio: 6*60,  fin: 14*60, nombre: '6:00 AM - 2:00 PM' },
+        { inicio: 10*60, fin: 18*60, nombre: '10:00 AM - 6:00 PM' },
+        { inicio: 14*60, fin: 22*60, nombre: '2:00 PM - 10:00 PM' },
+        // Turnos que cruzan medianoche (usamos lógica de "o"):
+        { nocturno: true, inicio: 18*60, fin: 2*60,  nombre: '6:00 PM - 2:00 AM' },
+        { nocturno: true, inicio: 22*60, fin: 6*60,  nombre: '10:00 PM - 6:00 AM' }
+    ];
+    
+    const enTurno = turnosATTF.some(turno => {
+        if (!turno.nocturno) {
+            return minutosActuales >= turno.inicio && minutosActuales < turno.fin;
+        } else {
+            // Lógica para turnos que pasan de las 00:00 (ej: 22:00 a 06:00)
+            return minutosActuales >= turno.inicio || minutosActuales < turno.fin;
         }
-        
-        const turnosATTF = [
-            { inicio: 6, fin: 14, nombre: '6:00 AM - 2:00 PM' },
-            { inicio: 10, fin: 18, nombre: '10:00 AM - 6:00 PM' },
-            { inicio: 14, fin: 22, nombre: '2:00 PM - 10:00 PM' },
-            { inicio: 18, fin: 24, nombre: '6:00 PM - 2:00 AM' },
-            { inicio: 22, fin: 24, nombre: '10:00 PM - 6:00 AM' },
-            { inicio: 0, fin: 6, nombre: '10:00 PM - 6:00 AM (cont.)' }
-        ];
-        
-        const enTurno = turnosATTF.some(turno => {
-            if (turno.inicio < turno.fin) {
-                return horaActual >= turno.inicio && horaActual < turno.fin;
-            } else {
-                // Turno que cruza medianoche (ej: 22:00 - 06:00)
-                return horaActual >= turno.inicio || horaActual < turno.fin;
-            }
-        });
-        
-        if (enTurno) {
-            console.log('✅ Acceso permitido para ATTF (en turno activo)');
-            return { permitido: true };
-        }
+    });
+
+    if (enTurno) return { permitido: true };
+    
+    return {
+        permitido: false,
+        mensaje: `No te encuentras en un turno activo.\nHora actual: ${String(horaActual).padStart(2, '0')}:${String(minutoActual).padStart(2, '0')}`
+    };
+}
         
         const turnosTexto = turnosATTF
             .filter(t => t.inicio < t.fin)
