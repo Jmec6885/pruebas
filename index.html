@@ -8267,114 +8267,120 @@ function toggleTodasTipologias() {
 
 
 // ========================================
-// 💾 GUARDAR FILTROS (SUSTITUYE LOS ANTERIORES)
+// 💾 GUARDAR FILTROS (VERSIÓN CORREGIDA - IDENTIDAD TOTAL)
 // ========================================
 async function guardarFiltrosMapa() {
-    if (currentUser.rol !== 'Administrador') {
-        alert('⚠️ Solo administradores pueden modificar filtros');
-        return;
-    }
+    if (currentUser.rol !== 'Administrador') {
+        alert('⚠️ Solo administradores pueden modificar filtros');
+        return;
+    }
 
-    // 1️⃣ Obtener rangos seleccionados
-   // ✅ CORRECCIÓN: Filtrar SOLO rangos válidos al guardar
-const rangosCheckboxes = document.querySelectorAll('.checkbox-rango-unidad:checked');
-const rangos = Array.from(rangosCheckboxes)
-  .map(cb => cb.value)
-  .filter(valor =>
-    // ✅ SOLO aceptar rangos válidos
-    (valor.includes('-') || valor.startsWith('>')) &&
-    !valor.includes('CL-') // Excluir unidades
-  );
+    const tipologias = [];
+    const rangos = [];
 
-    rangosCheckboxes.forEach(cb => {
-        if (cb.checked && cb.value) {
-            const valor = cb.value;
-            // Detectar si es rango o tipología
-            if (valor.includes('-') || valor.startsWith('>')) {
-                rangos.push(valor);
-            } else if (!['todosRangos', 'todasTipologias'].includes(cb.id)) {
-                tipologias.push(valor);
-            }
-        }
-    });
+    // 1️⃣ Obtener checkboxes seleccionados
+    const checkboxes = document.querySelectorAll('.checkbox-rango-unidad:checked');
+    
+    checkboxes.forEach(cb => {
+        if (cb.value && !['todosRangos', 'todasTipologias'].includes(cb.id)) {
+            const valor = cb.value;
+            
+            // Detectar si es un Rango (ej: 0-5, >30)
+            if (valor.includes('-') || valor.startsWith('>')) {
+                // Solo aceptamos rangos que no sean nombres de unidades
+                if (!valor.includes('CL-')) {
+                    rangos.push(valor.trim());
+                }
+            } else {
+                // Es una TIPOLOGÍA: Aplicamos normalización estricta
+                // Quitamos espacios extra y aseguramos mayúsculas para que coincida con OS Pendientes
+                const tipologiaLimpia = valor.trim().replace(/\s+/g, ' ').toUpperCase();
+                tipologias.push(tipologiaLimpia);
+            }
+        }
+    });
 
-    // 2️⃣ Obtener radio
-    const radioKm = parseInt(document.getElementById('radioKm').value);
+    // 2️⃣ Obtener radio
+    const radioInput = document.getElementById('radioKm');
+    const radioKm = radioInput ? parseInt(radioInput.value) : 3;
 
-    // 3️⃣ Validaciones
-    if (radioKm < 1 || radioKm > 20) {
-        alert('⚠️ El radio debe estar entre 1 y 20 km');
-        return;
-    }
+    // 3️⃣ Validaciones
+    if (isNaN(radioKm) || radioKm < 1 || radioKm > 20) {
+        alert('⚠️ El radio debe estar entre 1 y 20 km');
+        return;
+    }
 
-    // 4️⃣ Confirmación
-    const confirmar = confirm(
-        `¿SUSTITUIR configuración de filtros?\\n\\n` +
-        `📊 NUEVOS VALORES:\\n` +
-        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\\n` +
-        `• Tipologías: ${tipologias.length} seleccionada(s)\\n` +
-        `• Radio: ${radioKm} km\\n\\n` +
-        `⚠️ Esto REEMPLAZARÁ los filtros actuales para TODAS las unidades.\\n\\n` +
-        `✅ SÍ - Guardar nuevos filtros\\n` +
-        `❌ NO - Cancelar`
-    );
+    if (tipologias.length === 0 && rangos.length === 0) {
+        alert('⚠️ Debe seleccionar al menos una tipología o un rango');
+        return;
+    }
 
-    if (!confirmar) return;
+    // 4️⃣ Confirmación
+    const confirmar = confirm(
+        `¿SUSTITUIR configuración de filtros?\n\n` +
+        `📊 NUEVOS VALORES:\n` +
+        `• Rangos: ${rangos.length > 0 ? rangos.join(', ') : 'Ninguno'}\n` +
+        `• Tipologías: ${tipologias.length} seleccionada(s)\n` +
+        `• Radio: ${radioKm} km\n\n` +
+        `⚠️ Esto REEMPLAZARÁ los filtros actuales para TODAS las unidades.\n\n` +
+        `✅ SÍ - Guardar nuevos filtros\n` +
+        `❌ NO - Cancelar`
+    );
 
-    try {
-        // ✅ CAMBIO CLAVE: Guardar arrays o NULL (no arrays vacíos)
-        const rangosAGuardar = rangos.length > 0 ? rangos : null;
-        const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
- 
-        console.log('💾 Guardando filtros:', {
-            rangos: rangosAGuardar,
-            tipologias: tipologiasAGuardar,
-            radioKm: radioKm
-        });
+    if (!confirmar) return;
 
-        const { error } = await supabaseClient
-            .from('filtros_mapa')
-            .update({
-                rangos: rangosAGuardar,
-                tipologias: tipologiasAGuardar,
-                radio_km: radioKm,
-                fecha_actualizacion: new Date().toISOString()
-            })
-            .eq('id', 1);
+    try {
+        // ✅ FORMATEO FINAL: Guardar como Array limpio o NULL
+        const rangosAGuardar = rangos.length > 0 ? rangos : null;
+        const tipologiasAGuardar = tipologias.length > 0 ? tipologias : null;
+ 
+        console.log('💾 Enviando a Supabase:', {
+            rangos: rangosAGuardar,
+            tipologias: tipologiasAGuardar,
+            radio_km: radioKm
+        });
 
-        if (error) {
-            console.error('❌ Error guardando:', error);
-            alert('❌ Error al guardar: ' + error.message);
-            return;
-        }
+        // 5️⃣ Ejecutar Actualización en Supabase
+        const { error } = await supabaseClient
+            .from('filtros_mapa')
+            .update({
+                rangos: rangosAGuardar,
+                tipologias: tipologiasAGuardar,
+                radio_km: radioKm,
+                fecha_actualizacion: new Date().toISOString()
+            })
+            .eq('id', 1);
 
-        // ✅ Verificar qué se guardó
-        const { data: verificar } = await supabaseClient
-            .from('filtros_mapa')
-            .select('*')
-            .eq('id', 1)
-            .single();
+        if (error) {
+            console.error('❌ Error guardando:', error);
+            alert('❌ Error al guardar en base de datos: ' + error.message);
+            return;
+        }
 
-        console.log('✅ Filtros guardados en BD:', verificar);
+        // ✅ 6️⃣ Verificación y Sincronización
+        const { data: verificar } = await supabaseClient
+            .from('filtros_mapa')
+            .select('*')
+            .eq('id', 1)
+            .single();
 
-        // 6️⃣ Mensaje de éxito
-        alert(
-            `✅ Filtros actualizados correctamente\\n\\n` +
-            `📊 NUEVA CONFIGURACIÓN:\\n` +
-            `• Rangos: ${rangos.length}\\n` +
-            `• Tipologías: ${tipologias.length}\\n` +
-            `• Radio: ${radioKm} km\\n\\n` +
-            `Las unidades verán los cambios de inmediato.`
-        );
+        console.log('✅ Verificación exitosa en BD:', verificar);
 
-        console.log('✅ Filtros guardados:', { rangos, tipologias, radioKm });
+        // Mensaje de éxito detallado
+        alert(
+            `✅ Filtros actualizados correctamente\n\n` +
+            `📊 CONFIGURACIÓN ACTIVA:\n` +
+            `• Rangos: ${rangos.length}\n` +
+            `• Tipologías: ${tipologias.length}\n` +
+            `• Radio: ${radioKm} km\n\n` +
+            `El sistema de rutas ahora reconocerá estas tipologías exactamente.`
+        );
 
-    } catch (err) {
-        console.error('Error guardando filtros:', err);
-        alert('❌ Error de conexión');
-    }
+    } catch (err) {
+        console.error('❌ Error crítico en guardarFiltrosMapa:', err);
+        alert('❌ Error de conexión o de ejecución');
+    }
 }
-
 
 async function buscarYMostrarMapaAdmin() {
     const osIngresada = document.getElementById('buscarOSAdmin').value.trim();
