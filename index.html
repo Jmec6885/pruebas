@@ -8760,70 +8760,94 @@ function parsearCoordenadas(coordString) {
 
 
 // ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION BLINDADA)
+// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION ESTRICTA CON LOGS)
 // ========================================
 function validarFiltrosOS(os, filtros) {
-    const normalizar = (texto) => {
-        return (texto || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
-    };
+    // Normalización mínima: Solo tildes y espacios extremos. Respeta palabras y puntos.
+    const normalizar = (texto) => {
+        return (texto || "").toString()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Quita solo tildes
+            .trim()                          // Quita espacios inicio/final
+            .toUpperCase();
+    };
 
-    // --- 🛡️ 1. PASE LIBRE: PRIORIDADES DE NEGOCIO ---
-    // Estas pasan SIEMPRE (Solo se les aplica el filtro de Radio en el motor)
-    const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
-    const esRegulada = tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no');
-    const deudaTotal = parseFloat(os.Deuda) || 0;
-    const esDeudaAlta = deudaTotal >= 500; // Requisito: Mayor o igual a 500
+    const osID = os.OSATMO || "Sin ID";
 
-    if (esRegulada || esDeudaAlta) {
-        // console.log(`✅ OS ${os.OSATMO} pasa por PRIORIDAD (Regulada/Deuda)`);
-        return true;
-    }
+    // --- 🛡️ 1. PASE LIBRE: PRIORIDADES DE NEGOCIO ---
+    const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
+    const esRegulada = tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no');
+    const deudaTotal = parseFloat(os.Deuda) || 0;
+    const esDeudaAlta = deudaTotal >= 500;
 
-    // --- 🛡️ 2. REQUISITOS OBLIGATORIOS PARA EL RESTO (NO PRIORITARIAS) ---
-    // Si no es prioridad, DEBE estar libre y en estado Registrada
-    const unidad = (os.Unidad || "").trim();
-    const estado = (os.Estado_ATOMO || "").trim().toUpperCase();
+    if (esRegulada || esDeudaAlta) {
+        console.log(`%c✅ OS ${osID} pasa por PRIORIDAD (Regulada/Deuda)`, "color: #4caf50; font-weight: bold;");
+        return true;
+    }
 
-    const estaLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
-    const esRegistrada = estado === "REGISTRADA";
+    // --- 🛡️ 2. REQUISITOS OBLIGATORIOS PARA EL RESTO ---
+    const unidad = (os.Unidad || "").trim();
+    const estado = (os.Estado_ATOMO || "").trim().toUpperCase();
+    const estaLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
+    const esRegistrada = estado === "REGISTRADA";
 
-    if (!estaLibre || !esRegistrada) {
-        return false; // Bloqueo inmediato: Ya tiene técnico o no está registrada
-    }
+    if (!estaLibre || !esRegistrada) {
+        return false; 
+    }
 
-    // --- 🛡️ 3. FILTRO DE TABLA (LO QUE GUARDAS EN FILTROS_MAPA) ---
-    if (!filtros) return false;
+    // --- 🛡️ 3. FILTRO DE TABLA (ESTRICTO) ---
+    if (!filtros) return false;
 
-    const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
-    const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
+    const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
+    const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
 
-    // Si no configuraste nada en la tabla, las OS comunes no pasan
-    if (!tipologiasActivas && !rangosActivos) return false;
+    if (!tipologiasActivas && !rangosActivos) return false;
 
-    // A. Validación de Tipología (Estricta contra tu tabla)
-    let tipOk = true;
-    if (tipologiasActivas) {
-        const tipOS_Actual = normalizar(os.Tipologia);
-        tipOk = tipologiasActivas.some(t => {
-            const tNorm = normalizar(t);
-            return tipOS_Actual.includes(tNorm) || tNorm.includes(tipOS_Actual);
-        });
-    }
+    // A. Validación de Tipología (Comparación Estricta)
+    let tipOk = true;
+    if (tipologiasActivas) {
+        const tipOS_Actual = normalizar(os.Tipologia);
+        
+        tipOk = tipologiasActivas.some(t => {
+            const tNorm = normalizar(t);
+            const coincide = tipOS_Actual === tNorm;
+            
+            // Log de ayuda si la tipología se parece pero no es igual
+            if (!coincide && tipOS_Actual.includes("MEDIDOR") && tNorm.includes("MEDIDOR")) {
+                console.log(`%c🔍 Comparando: [${tipOS_Actual}] vs [${tNorm}] ❌ No coinciden`, "color: #888;");
+            }
+            
+            return coincide;
+        });
 
-    // B. Validación de Rango (Estricta contra tu tabla)
-    let rangoOk = true;
-    if (rangosActivos) {
-        if (!os['Fecha Gen.']) return false;
-        const dias = calcularDias(os['Fecha Gen.']);
-        const miRango = determinarRango(dias);
-        rangoOk = rangosActivos.includes(miRango);
-    }
+        if (!tipOk) {
+            // console.log(`🚫 OS ${osID} no coincide con ninguna tipología del filtro`);
+            return false;
+        }
+    }
 
-    const resultado = tipOk && rangoOk;
-    // if (resultado) console.log(`✅ OS ${os.OSATMO} pasa por FILTRO DE TABLA`);
- 
-    return resultado;
+    // B. Validación de Rango (Antigüedad)
+    let rangoOk = true;
+    if (rangosActivos) {
+        if (!os['Fecha Gen.']) return false;
+        const dias = calcularDias(os['Fecha Gen.']);
+        const miRango = determinarRango(dias);
+        rangoOk = rangosActivos.includes(miRango);
+        
+        if (!rangoOk) {
+            console.log(`🚫 OS ${osID} fuera de rango de días (${miRango})`);
+            return false;
+        }
+    }
+
+    const resultado = tipOk && rangoOk;
+    if (resultado) {
+        console.log(`%c🎯 OS ${osID} cumple filtros de tabla: ${os.Tipologia}`, "color: #2196f3; font-weight: bold;");
+    }
+ 
+    return resultado;
 }
+
 
 // ========================================
 // 💾 GUARDAR FILTROS (ADMIN GLOBAL / DESPACHO PERSONAL) - CON FECHA DE VIGENCIA
