@@ -4561,60 +4561,85 @@ renovarSesion(); // ← AGREGAR
 
 
 // ========================================
-// 🗺️ INTERFAZ GENERACIÓN KML RUTA
+// 🗺️ INTERFAZ GENERACIÓN KML RUTA (OPTIMIZADA)
 // ========================================
 function generarInterfazAdminKMLRuta(unidades, osAsignadas) {
-    console.log('🎨 Generando interfaz KML con unidades:', unidades);
+    console.log('🎨 ==========================================');
+    console.log('🎨 GENERANDO INTERFAZ KML');
+    console.log('🎨 Unidades disponibles:', unidades?.length || 0);
+    console.log('🎨 Total OS asignadas:', osAsignadas?.length || 0);
+    console.log('🎨 ==========================================');
+
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
 
-    // Limpiar contenedor de resultados previos
-    resultsContainer.innerHTML = '';
+    // 1. Limpieza de contenedores para evitar duplicados visuales
+    if (resultsContainer) resultsContainer.innerHTML = '';
+    if (!searchGrid) return console.error('❌ No se encontró el contenedor searchGrid');
 
+    // 2. Guardar datos globalmente (Sincronizado con el resto del sistema)
+    window.osAsignadasKML = osAsignadas;
+
+    // 3. Generar HTML con estructura limpia y profesional
     searchGrid.innerHTML = `
-        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
-            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-            <h1 class="titulo-degradado">CLESA</h1>
-            <p class="subtitulo">📍 Generación de KML por Unidad</p>
+        <div class="result-card" style="background: #ffffff; border: 2px solid #4caf50; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" 
+                     alt="Logo CLESA" style="height: 60px; margin-bottom: 10px;">
+                <h2 style="color: #2e7d32; margin: 0; font-size: 24px; font-weight: 800;">CLESA</h2>
+                <p style="color: #64748b; font-size: 14px; margin-top: 5px;">📍 Generación de KML por Unidad</p>
+            </div>
 
-            <div class="form-group">
-                <label style="font-weight: 600; color: #2d3748;">📍 Seleccionar Unidad:</label>
-                <select id="selectUnidadKML" onchange="actualizarResumenUnidadKML()" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 20px;">
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 700; color: #334155; margin-bottom: 8px;">
+                    📍 Seleccionar Unidad Responsable:
+                </label>
+                <select id="selectUnidadKML" 
+                        onchange="actualizarResumenUnidadKML()" 
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #cbd5e1; font-size: 15px; background-color: #f8fafc; cursor: pointer;">
                     <option value="">-- Seleccione una unidad --</option>
-                    ${unidades.map(u => `<option value="${u}">${u}</option>`).join('')}
+                    ${unidades.sort().map(u => `<option value="${u}">${u}</option>`).join('')}
                 </select>
             </div>
 
-            <div id="containerSelectorOS" style="display: none; margin-top: 15px;">
-                <label style="font-weight: 600; color: #2d3748;">🚩 Seleccionar Punto de Partida (Requerido): <span style="color:red">*</span></label>
-                <select id="selectPuntoPartidaAdmin" style="width: 100%; padding: 15px; border-radius: 12px; border: 2px solid #e1e5e9; font-size: 16px;">
+            <div id="containerSelectorOS" style="display: none; margin-bottom: 20px; padding: 15px; background: #fff7ed; border-radius: 8px; border: 1px solid #fdba74;">
+                <label style="display: block; font-weight: 700; color: #9a3412; margin-bottom: 8px;">
+                    🚩 OS Punto de Partida (Referencia): <span style="color:red">*</span>
+                </label>
+                <select id="selectPuntoPartidaAdmin" 
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #fdba74; font-size: 15px;">
                     <option value="">-- Seleccione OS de partida --</option>
                 </select>
+                <small style="color: #c2410c; display: block; margin-top: 5px;">* Esta OS será el centro de la ruta generada.</small>
             </div>
 
-            <div id="resumenUnidadKML" style="display: none; background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #4caf50;">
-                <strong style="color: #2e7d32;">📊 Resumen de OS Asignadas:</strong>
-                <div id="contenidoResumenKML" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+            <div id="resumenUnidadKML" style="display: none; background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #22c55e;">
+                <strong style="color: #166534; display: block; margin-bottom: 5px;">📊 Resumen de OS Asignadas:</strong>
+                <div id="contenidoResumenKML" style="font-size: 14px; color: #374151; line-height: 1.5;"></div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('lector')" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 10px;">
+                <button class="btn" onclick="generarKMLAdminPorUnidad('lector')" 
+                        style="background: #10b981; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     📥 KML Lector
                 </button>
-                <button class="btn btn-secondary" onclick="generarKMLAdminPorUnidad('gis')" style="background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);">
+                
+                <button class="btn" onclick="generarKMLAdminPorUnidad('gis')" 
+                        style="background: #3b82f6; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     📥 KML GIS
                 </button>
-                <button class="btn btn-secondary" onclick="generarMapaAdminKMLRuta()" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);">
+                
+                <button class="btn" onclick="generarMapaAdminKMLRuta()" 
+                        style="background: #f59e0b; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     🗺️ Ver Mapa
                 </button>
             </div>
         </div>
     `;
-
-    // Guardar datos globalmente para que otras funciones puedan acceder
-    window.osAsignadasKML = osAsignadas;
-}
- 
+} 
 
 // ========================================
 // 📊 ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
