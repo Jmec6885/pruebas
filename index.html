@@ -8482,7 +8482,7 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
 }
 
 // ========================================
-// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (VERSION FINAL CORREGIDA)
+// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (VERSION CORREGIDA)
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
@@ -8497,36 +8497,43 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     try {
         // 1. CARGAR FILTROS UNIVERSALES
         let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
+        
         if (!filtrosAplicar) {
             console.warn('⚠️ Filtros no encontrados, usando valores por defecto');
             filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
         }
+        
         window.filtrosAplicados = filtrosAplicar;
-	// ✅ LOG DE FILTROS APLICADOS
-console.log('📋 ==========================================');
-console.log('📋 FILTROS CARGADOS DESDE TABLA');
-console.log('📋 ==========================================');
-console.table({
-    'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
-    'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
-    'Radio (km)': radioConfigurado,
-    'Fecha programada': filtrosUnidadHoy?.fecha_programada || 'Sin fecha (filtro base)'
-});
-console.log('📋 ==========================================');
+
+        // ✅ CORRECCIÓN: Definir la variable antes de usarla en el log
         const radioKm = filtrosAplicar.radio_km || 3;
 
+        // ✅ LOG DE FILTROS APLICADOS (CORREGIDO)
+        console.log('📋 ==========================================');
+        console.log('📋 FILTROS CARGADOS DESDE TABLA');
+        console.log('📋 ==========================================');
+        console.table({
+            'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
+            'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
+            'Radio (km)': radioKm, // Antes decía radioConfigurado (error)
+            'Unidad': unidadFiltro
+        });
+        console.log('📋 ==========================================');
+
         // 2. Coordenadas del Punto Central
+        // CORRECCIÓN: Asegurar que existan coordenadas antes de hacer split
         const coordsCentroStr = osCentro.Coordenadas || osCentro.Coordendasgis;
+        if (!coordsCentroStr) throw new Error("La OS de referencia no tiene coordenadas.");
+
         const [latCentro, lngCentro] = coordsCentroStr.split(',').map(c => parseFloat(c.trim()));
 
-        // 3. 🛡️ CARGAR OS ASIGNADAS (La "Lista Negra" de las 9:00 AM)
+        // 3. 🛡️ CARGAR OS ASIGNADAS
         console.log('📥 Sincronizando OS asignadas para bloqueo...');
         const { data: osAsignadasBD } = await supabaseClient.from('os_asignadas').select('osatomo');
-        // Usamos Set para que la búsqueda sea instantánea
         const osAsignadasSet = new Set(osAsignadasBD?.map(a => String(a.osatomo).trim()) || []);
         console.log(`✅ ${osAsignadasSet.size} OS bloqueadas por estar asignadas.`);
 
-        // 4. CARGAR OS PENDIENTES (La base de las 7:00 AM)
+        // 4. CARGAR OS PENDIENTES (Paginado)
         let todasOSRegistradas = [];
         let offset = 0;
         const BATCH_SIZE = 1000;
@@ -8543,41 +8550,37 @@ console.log('📋 ==========================================');
             offset += BATCH_SIZE;
         }
 
-        // 5. 🔍 PROCESAMIENTO Y FILTRADO (El Cruce de Tablas)
+        // 5. 🔍 PROCESAMIENTO Y FILTRADO
         const osFinalesParaFiltrar = []; 
         let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, prohibidas: 0 };
 
         for (const os of todasOSRegistradas) {
             const osatmoActual = String(os.OSATMO).trim();
 
-            // A. Saltar si es la misma OS central
             if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
 
-            // B. 🛡️ EL MURO: Bloqueo si ya está en la tabla de ASIGNADAS (Cruce 7am vs 9am)
             if (osAsignadasSet.has(osatmoActual)) {
                 stats.asignadasOcultas++;
-                continue; // ❌ Se ignora: ya tiene dueño aunque Pendientes diga "Registrada"
+                continue; 
             }
 
-            // C. Coordenadas y Radio
             const cStr = os.Coordenadas || os.Coordendasgis;
             if (!cStr || !cStr.includes(',')) { stats.sinCoords++; continue; }
+            
             const [lat, lng] = cStr.split(',').map(c => parseFloat(c.trim()));
             const dist = calcularDistancia(latCentro, lngCentro, lat, lng);
+            
             if (dist > radioKm) { stats.fueraRadio++; continue; }
 
-            // D. Identificar Prioridades (Pase Directo VIP)
             const tipoOS = (os.Tipo_de_OS || '').toUpperCase();
             const deuda = parseFloat(os.Deuda) || 0;
             const esPrioritaria = (tipoOS.includes('REGULADA') && !tipoOS.includes('NO REGULADA')) || deuda >= 500;
 
             if (esPrioritaria) {
-                // Las prioritarias pasan solo con validar el radio y que no estén asignadas
                 osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: true });
                 continue;
             }
 
-            // E. 🛡️ REGLA: Filtro de Estado para las órdenes COMUNES (Mantenimiento, etc.)
             const unidad = (os.Unidad || "").trim();
             const estadoAtomo = (os.Estado_ATOMO || "").trim().toUpperCase();
             
@@ -8591,11 +8594,9 @@ console.log('📋 ==========================================');
             }
         }
 
-        // 🚩 6. FILTRADO FINAL (Comparación contra tu tabla filtros_mapa)
+        // 🚩 6. FILTRADO FINAL
         let osConFiltros = osFinalesParaFiltrar.filter(os => {
-            // Prioridades (VIP) pasan siempre
             if (os.esPrioritaria) return true;
-            // El resto debe cumplir tus filtros guardados (Tipología/Rango)
             return validarFiltrosOS(os, filtrosAplicar);
         });
 
