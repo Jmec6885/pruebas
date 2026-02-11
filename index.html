@@ -5217,6 +5217,34 @@ const detallePorRango = {};
 
         // ✅ Bucle de procesamiento
         osPendientes.forEach((os) => {
+// ========================================
+// 🕵️ DEBUG ESPECÍFICO PARA OS 11195544
+// ========================================
+if (String(os.OSATMO).trim() === '11195544') {
+    const coordsPrueba = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+    const distPrueba = coordsPrueba ? calcularDistancia(latCentro, lngCentro, coordsPrueba.lat, coordsPrueba.lng) : 'SIN COORD';
+    const uOS_Prueba = (os.Unidad || "").trim().toUpperCase();
+    const tipOS_Norm_Prueba = (os.Tipologia || "").toString().toUpperCase().trim().replace(/\s+/g, ' ');
+    const rangoOS_Prueba = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
+
+    console.group("🚨 AUDITORÍA OS 11195544");
+    console.log("📍 Coordenadas:", coordsPrueba);
+    console.log("📏 Distancia calculada:", distPrueba, "km (Radio actual:", radioConfigurado, "km)");
+    console.log("👤 Unidad en Base de Datos:", `"${uOS_Prueba}"`);
+    console.log("📋 Tipología en Base de Datos:", `"${tipOS_Norm_Prueba}"`);
+    console.log("📅 Rango calculado:", rangoOS_Prueba);
+    
+    // Verificación de filtros
+    const tipologiasFiltroLista = (window.filtrosAplicados.tipologias || "").split(',').map(t => t.trim().toUpperCase());
+    const tipOk = tipologiasFiltroLista.some(f => tipOS_Norm_Prueba.includes(f) || f.includes(tipOS_Norm_Prueba));
+    console.log("🔍 ¿Pasa filtro Tipología?:", tipOk);
+    console.log("📋 Filtros cargados actualmente:", tipologiasFiltroLista);
+    
+    const esDeOtro = uOS_Prueba !== "" && uOS_Prueba !== "---" && uOS_Prueba !== "SIN UNIDAD" && uOS_Prueba !== miUnidadNorm;
+    console.log("🚫 ¿Rechazada por Unidad Ocupada?:", esDeOtro);
+    console.groupEnd();
+}
+// ========================================
     contadorTotal++;
 
     // --- A. FILTROS BASE (Coordenadas y Radio) ---
