@@ -1165,13 +1165,13 @@ async function login() {
             return;
         }
         
-        // 3. Verificar inactividad (automático)
+        // 3. Verificar inactividad
         const checkInactividad = await verificarInactividad(data);
         if (checkInactividad.inactivo) {
             await supabaseClient
                 .from('usuarios')
                 .update({ 
-                    bloqueado: true,
+                    Bloqueado: true, // Según tu esquema es con B mayúscula
                     razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
                 })
                 .eq('id', data.id);
@@ -1187,51 +1187,55 @@ async function login() {
         }
 
         // ==========================================================
-        // 5. GESTIÓN DE SESIÓN ÚNICA (EL BLOQUE QUE PREGUNTASTE)
+        // 5. GESTIÓN DE SESIÓN ÚNICA (CORREGIDO PARA TU TABLA)
         // ==========================================================
-        const sessionToken = Math.random().toString(36).substring(2); // Genera token único
+        const newToken = Math.random().toString(36).substring(2); 
         const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
 
-        // Actualizamos Supabase con UN SOLO LLAMADO para mayor eficiencia
+        // Actualizamos Supabase (sessiontoken SIN guion bajo según tu esquema)
         const { error: updateError } = await supabaseClient
             .from('usuarios')
             .update({
                 sessionactiva: true,
-                session_token: sessionToken, // ⚠️ IMPORTANTE: Usar el mismo nombre que en la DB
+                sessiontoken: newToken, 
                 ultimaconexion: ahoraSV,
-                ultima_actividad: new Date().toISOString()
+                ultima_actividad: ahoraSV
             })
             .eq('id', data.id);
 
         if (updateError) throw updateError;
 
-        // ACTUALIZAR LOCALMENTE (Para que coincida con la DB)
-        data.session_token = sessionToken; 
+        // ACTUALIZAR LOCALMENTE
+        data.sessiontoken = newToken; 
         currentUser = data;
 
-        // Guardar en Storage para persistencia tras F5
+        // Guardar en Storage para que no te saque al refrescar
         localStorage.setItem('usuario_logueado', JSON.stringify(currentUser));
         sessionStorage.setItem('cleca_user_session', JSON.stringify({
             user: currentUser,
             timestamp: Date.now()
         }));
 
-        // Guardar datos offline (asegura que el token se guarde en IndexedDB si lo usas)
         guardarDatosOffline(); 
 
         console.log(`👤 Rol detectado: ${data.rol}`);
 
         // 6. Redirigir según rol
         if (data.rol === 'ATTF') {
+            // Ocultamos login de inmediato para evitar parpadeos
+            document.getElementById('loginSection').style.display = 'none';
+
             const tHoy = localStorage.getItem('turno_hoy');
             const tManana = localStorage.getItem('turno_manana');
 
+            // Si faltan turnos, mandamos a configurar
             if (!tHoy || !tManana) {
-                console.log("⚠️ Turnos incompletos. Iniciando configuración dinámica.");
-                document.getElementById('loginSection').style.display = 'none';
+                console.log("⚠️ Turnos faltantes. Redirigiendo a configuración.");
                 mostrarConfiguracionInicialATTF(); 
                 return; 
             }
+            
+            // Si tiene turnos, entra al menú principal de ATTF
             accederMenuATTF();
             return;
         }
@@ -1241,7 +1245,7 @@ async function login() {
             return;
         }
         
-        // Para otros roles: acceso directo al menú de tablas
+        // Para otros roles (Admin, etc.)
         document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
         document.getElementById('userInfo').classList.remove('hidden');
         document.getElementById('loginSection').style.display = 'none';
@@ -1252,10 +1256,9 @@ async function login() {
 
     } catch (err) {
         console.error('Error de login:', err);
-        alert('Error de conexión o de sesión. Por favor intente nuevamente.');
+        alert('Error de conexión con la base de datos. Por favor intente nuevamente.');
     }
 }
-
 
     // ========================================
 // 🆕 FUNCIÓN AUXILIAR: Validar fecha máxima de descanso
@@ -3015,102 +3018,122 @@ function iniciarVerificacionSesion() {
     if (!currentUser) return;
 
     try {
-      // ⚠️ ASEGÚRATE: Que los nombres aquí sean IGUALES a las columnas de Supabase
+      // 🛡️ Sincronizado con tu tabla Supabase: sessiontoken (sin guion bajo)
       const { data, error } = await supabaseClient
         .from('usuarios')
-        .select('sessionactiva, session_token, ultimaconexion') // Cambié sessiontoken por session_token
+        .select('sessionactiva, sessiontoken, ultimaconexion') 
         .eq('id', currentUser.id)
         .single();
 
-      if (error || !data) return;
+      if (error || !data) {
+          console.error('Error al obtener datos de sesión:', error);
+          return;
+      }
 
       // 🛡️ VALIDACIÓN DE SESIÓN ÚNICA
-      // Usamos comparación estricta y verificamos que ambos existan
-      if (data.session_token && currentUser.session_token) {
-          if (data.session_token !== currentUser.session_token) {
+      // Comparamos el token de la DB con el que tenemos en memoria (currentUser)
+      if (data.sessiontoken && currentUser.sessiontoken) {
+          if (data.sessiontoken !== currentUser.sessiontoken) {
+            console.warn('⚠️ Conflicto de tokens detectado.');
             alert('⚠️ Seguridad: Su sesión ha sido iniciada en otro dispositivo o navegador.');
             logout();
             return;
           }
       }
 
-      // Si la sesión está marcada como inactiva en DB
+      // Si la sesión fue desactivada manualmente desde la DB
       if (data.sessionactiva === false) {
+          console.log('🚫 Sesión marcada como inactiva en el servidor.');
           logout();
           return;
       }
 
-      // 🕒 VALIDACIÓN DE TIEMPO
-      const ultima = new Date(data.ultimaconexion);
-      const ahora = new Date();
-      const diffMin = (ahora - ultima) / 1000 / 60;
+      // 🕒 VALIDACIÓN DE TIEMPO (Inactividad de 45 minutos)
+      if (data.ultimaconexion) {
+          const ultima = new Date(data.ultimaconexion);
+          const ahora = new Date();
+          const diffMin = (ahora - ultima) / 1000 / 60;
 
-      if (diffMin > 45) {
-        alert('⌛ Su sesión ha expirado por inactividad (45 min).');
-        logout();
+          if (diffMin > 45) {
+            alert('⌛ Su sesión ha expirado por inactividad (45 min).');
+            logout();
+          }
       }
+
     } catch (err) {
-      console.error('Error verificando sesión:', err);
+      console.error('Error crítico verificando sesión:', err);
     }
   }, 30000); // Se ejecuta cada 30 segundos
 }
+
 
 async function renovarSesion() {
     if (!currentUser || !currentUser.id) return;
 
     try {
-        // Obtenemos la fecha actual formateada
+        // Obtenemos la fecha actual formateada según tu lógica de El Salvador
         const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
 
         const { error } = await supabaseClient
             .from('usuarios')
             .update({ 
                 ultimaconexion: ahoraSV,
-                sessionactiva: true // Aprovechamos para asegurar que sigue activa
+                sessionactiva: true 
             })
             .eq('id', currentUser.id)
-            // 🛡️ SEGURIDAD EXTRA: Solo actualiza si el token coincide
-            .eq('session_token', currentUser.session_token); 
+            // 🛡️ SEGURIDAD: Solo actualiza si el token en DB es igual al que tenemos en el navegador
+            // Cambiado de 'session_token' a 'sessiontoken' (según tu tabla)
+            .eq('sessiontoken', currentUser.sessiontoken); 
 
         if (error) {
-            console.warn('⚠️ No se pudo renovar sesión (posible inicio en otro dispositivo)');
-            // Si el update falla por el token, es mejor no hacer nada y dejar que el verificador lo saque
+            console.warn('⚠️ No se pudo renovar sesión. El token podría haber cambiado en otro dispositivo.');
         } else {
-            console.log('🔄 Sesión renovada:', ahoraSV);
+            console.log('🔄 Sesión renovada con éxito:', ahoraSV);
         }
     } catch (err) {
         console.error('Error crítico en renovarSesion:', err);
     }
 }
 
-
 async function logout() {
     console.log("🚫 Cerrando sesión...");
     
-    // 1. Limpiar ABSOLUTAMENTE TODO el rastro local
+    // 1. Limpiamos la memoria del navegador de forma exhaustiva
+    // Borramos datos de sesión y el objeto de usuario
     sessionStorage.clear(); 
     localStorage.removeItem('usuario_logueado');
     localStorage.removeItem('cleca_user_session');
-    // Nota: NO borramos turno_hoy ni turno_manana a menos que tú lo decidas
+    
+    // OPCIONAL: Si quieres que al cerrar sesión también se borren los turnos 
+    // registrados del ATTF, descomenta las siguientes dos líneas:
+    // localStorage.removeItem('turno_hoy');
+    // localStorage.removeItem('turno_manana');
 
     if (currentUser) {
         try {
+            // 2. Notificamos a Supabase para liberar la sesión
+            // Usamos 'sessiontoken' sin guion bajo como en tu esquema de tabla
             await supabaseClient
                 .from('usuarios')
                 .update({ 
                     sessionactiva: false, 
-                    session_token: null 
+                    sessiontoken: null 
                 })
                 .eq('id', currentUser.id);
+
+            console.log("✅ Sesión desactivada en el servidor.");
         } catch (e) {
-            console.error("Error al marcar sessionactiva como false", e);
+            console.error("❌ Error al desactivar sesión en servidor:", e);
         }
     }
 
+    // 3. Reset de variables globales y recarga de la aplicación
     currentUser = null;
+    selectedTable = null;
+    
+    // Forzamos la recarga para volver a la pantalla de login limpia
     window.location.reload();
 }
-
 
 
    function generarCamposBusqueda(config) {
@@ -13784,13 +13807,17 @@ function verFoto(link) {
 
 // === FUNCIÓN PARA GUARDAR DATOS OFFLINE ===
 function guardarDatosOffline() {
-    if (currentUser) {
-        sessionStorage.setItem('cleca_user_session', JSON.stringify({
-            user: currentUser,
-            timestamp: Date.now()
-        }));
-    }
+    if (currentUser) {
+        // Nos aseguramos de que el token esté presente en el objeto antes de guardar
+        console.log("💾 Guardando sesión persistente para:", currentUser.usuario);
+        
+        sessionStorage.setItem('cleca_user_session', JSON.stringify({
+            user: currentUser,
+            timestamp: Date.now()
+        }));
+    }
 }
+
 
 // === FUNCIÓN PARA VERIFICAR DATOS OFFLINE CORREGIDA ===
 function verificarDatosOffline() {
@@ -13798,19 +13825,23 @@ function verificarDatosOffline() {
     if (sessionData) {
         const data = JSON.parse(sessionData);
         const tiempoTranscurrido = (Date.now() - data.timestamp) / 1000 / 60;
- 
+
+        // Si la sesión tiene menos de 45 minutos
         if (tiempoTranscurrido < 45) {
             currentUser = data.user;
             
-            // 🛡️ NUEVO CANDADO DE SEGURIDAD PARA ATTF
+            // 🛡️ RE-ACTIVAR VIGILANCIA DE SESIÓN ÚNICA
+            // Esto es vital para que siga comparando el 'sessiontoken' tras un F5
+            iniciarVerificacionSesion();
+
+            // 🛡️ CANDADO DE SEGURIDAD PARA ATTF
             if (currentUser.rol === 'ATTF') {
                 console.log('🔄 Restaurando sesión ATTF - Validando turnos...');
                 
-                // Usamos la función robusta que creamos antes
-                // Ella se encargará de ocultar el login y verificar si hay turnos registrados
+                // Redirige al flujo de turnos o al menú si ya están llenos
                 accederMenuATTF(); 
                 
-                // Iniciamos la verificación de corte de turno
+                // Reiniciar verificación de corte de turno
                 setInterval(verificarCorteTurno, 5 * 60 * 1000);
                 return true; 
             }
@@ -13820,15 +13851,16 @@ function verificarDatosOffline() {
             document.getElementById('userInfo').classList.remove('hidden');
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('tableSelectionSection').style.display = 'block';
- 
+
             console.log('🔄 Restaurando sesión - Filtrando tablas para rol:', currentUser.rol);
             mostrarTablasSegunRol();
- 
+
             return true;
         }
     }
     return false;
 }
+
 
 /**
  * CONFIGURACIÓN MAESTRA DE ACCESOS
