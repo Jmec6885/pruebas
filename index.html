@@ -6010,7 +6010,7 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
         if (vecinoMasCercano) {
             vecinoMasCercano.numeroOrden = orden++;
             vecinoMasCercano.distancia = minDistancia;
-            rutaFinal.push(vecinoMasCercano);
+            rutaFinal.push({ ...vecinoMasCercano, numeroOrden: orden++ });
             puntoActual = vecinoMasCercano;
             puntosNoVisitados.splice(vecinoIndex, 1);
         } else break;
@@ -9138,27 +9138,23 @@ function extraerCoordenadas(os) {
 
 
 
-// 1. Tu función original (No la toques)
-function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return parseFloat((R * c).toFixed(2));
-}
-
-// 2. EL ALIAS (Esto es lo que evita que el mapa falle)
-const calcularDistancia = calcularDistanciaKm;
-
-// 3. El parseador de coordenadas (Indispensable)
 function parsearCoordenadas(coordString) {
-    if (!coordString || typeof coordString !== 'string' || !coordString.includes(',')) return null;
-    const partes = coordString.split(',').map(c => parseFloat(c.trim()));
-    if (isNaN(partes[0]) || isNaN(partes[1])) return null;
-    return { lat: partes[0], lng: partes[1] };
+    // 1. Verificación básica de existencia y tipo
+    if (!coordString || typeof coordString !== 'string') return null;
+    
+    // 2. Limpieza de caracteres invisibles o espacios
+    const limpia = coordString.trim();
+    if (!limpia.includes(',')) return null;
+
+    // 3. Extracción y validación
+    const partes = limpia.split(',').map(c => parseFloat(c.trim()));
+    
+    // 4. Validación de rango (Latitud debe estar entre -90 y 90)
+    // Esto evita que el mapa salte al infinito si los datos están mal puestos
+    if (isNaN(partes[0]) || isNaN(partes[1])) return null;
+    if (Math.abs(partes[0]) > 90 || Math.abs(partes[1]) > 180) return null;
+
+    return { lat: partes[0], lng: partes[1] };
 }
 
 
@@ -9747,22 +9743,19 @@ function filtrarPorEstado(estado) {
 
     // 2. Procesar visibilidad de marcadores
     Object.entries(window.markersPorEstado).forEach(([key, markersArray]) => {
-        const debeMostrarse = (estado === 'todas' || key === estado);
+        const debeMostrarse = (estado === 'todas' || key.toLowerCase() === estado.toLowerCase());
 
-        markersArray.forEach(marker => {
-            if (debeMostrarse) {
-                if (!mapa.hasLayer(marker)) {
-                    mapa.addLayer(marker);
-                }
-                bounds.extend(marker.getLatLng());
-                hayMarcadoresVisibles = true;
-            } else {
-                if (mapa.hasLayer(marker)) {
-                    mapa.removeLayer(marker);
-                }
-            }
-        });
+    markersArray.forEach(marker => {
+        if (debeMostrarse) {
+            if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+            bounds.extend(marker.getLatLng());
+            hayMarcadoresVisibles = true;
+        } else {
+            if (mapa.hasLayer(marker)) mapa.removeLayer(marker);
+        }
     });
+});
+
 
     // 3. Ajustar vista SOLO si hay marcadores válidos (Evita el error de consola)
     if (hayMarcadoresVisibles) {
