@@ -671,68 +671,80 @@ const TURNOS_ATTF = {
 };
 
 
-// ========================================
-// 🔄 Permitir cambiar fechas de descanso manualmente (ATTF)
-// ========================================
-function cambiarFechasDescansoATTF() {
-  const loginSection = document.getElementById('loginSection');
-  if (!loginSection) return;
-
-  // Pedir fechas manualmente
-  const fechaInicio = prompt("📅 Ingrese fecha de inicio de descanso (YYYY-MM-DD):");
-  const fechaFin = prompt("📅 Ingrese fecha de fin de descanso (YYYY-MM-DD):");
-
-  if (!fechaInicio || !fechaFin) {
-    alert("⚠️ Ambas fechas son obligatorias");
-    return;
-  }
-
-  // Validar formato básico
-  const regex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!regex.test(fechaInicio) || !regex.test(fechaFin)) {
-    alert("⚠️ Formato de fecha inválido. Use YYYY-MM-DD");
-    return;
-  }
-
-  // Guardar temporalmente
-  window.fechasDescansoPersonalizadas = { inicio: fechaInicio, fin: fechaFin };
-
-  // Mostrar vista de confirmación con estas fechas
-  const turnoRegreso = document.getElementById('turnoRegreso')?.value || '';
-  const turnoRegresoObj = TURNOS_ATTF[turnoRegreso];
-
-  loginSection.innerHTML = `
-    <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-    <h1 class="titulo-degradado">CLESA</h1>
-    <p class="subtitulo">Confirmar Descanso Personalizado</p>
+/function cambiarFechasDescansoATTF() {
+    // ✅ Usamos el contenedor visible
+    const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
     
-    <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
-      <strong>📅 Fechas seleccionadas:</strong><br>
-      <div style="font-size: 18px; font-weight: 600; color: #2d3748;">
-        Inicio: ${fechaInicio}<br>
-        Fin: ${fechaFin}
-      </div>
-    </div>
+    if (!targetSection) return;
 
-    <div class="form-group">
-      <label>Turno de REGRESO:</label>
-      <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-        <option value="">-- Seleccione --</option>
-        ${Object.entries(TURNOS_ATTF).map(([key, turno]) =>
-          `<option value="${key}" ${turnoRegreso === key ? 'selected' : ''}>${turno.nombre}</option>`
-        ).join('')}
-      </select>
-    </div>
+    // Obtener la fecha de mañana como mínimo para el calendario
+    const mañana = new Date();
+    mañana.setDate(mañana.getDate() + 1);
+    const minDate = mañana.toISOString().split('T')[0];
 
-    <div class="action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-      <button class="btn" onclick="confirmarDescansoPersonalizadoATTF()" style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
-        ✅ Aceptar
-      </button>
-      <button class="btn btn-secondary" onclick="mostrarForzarDescansoATTF()">
-        ↩️ Volver
-      </button>
-    </div>
-  `;
+    targetSection.innerHTML = `
+        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <h2 class="titulo-degradado" style="text-align: center;">Ajustar Descanso</h2>
+            <p style="text-align: center; color: #666; font-size: 14px;">Selecciona manualmente tus días de descanso</p>
+            
+            <div style="margin-top: 20px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🗓️ Fecha de Inicio:</label>
+                    <input type="date" id="fechaInicioInput" min="${minDate}" class="form-control" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🗓️ Fecha de Fin:</label>
+                    <input type="date" id="fechaFinInput" min="${minDate}" class="form-control" 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🔙 Turno de REGRESO:</label>
+                    <select id="turnoRegresoInput" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                        <option value="">-- Seleccione --</option>
+                        ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
+                            `<option value="${key}">${turno.nombre}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn" onclick="procesarCambioFechasManual()" style="background: #4caf50; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    ✅ Aplicar
+                </button>
+                <button class="btn" onclick="mostrarForzarDescansoATTF()" style="background: #e2e8f0; color: #475569; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
+                    ↩️ Volver
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+
+function procesarCambioFechasManual() {
+    const inicio = document.getElementById('fechaInicioInput').value;
+    const fin = document.getElementById('fechaFinInput').value;
+    const regreso = document.getElementById('turnoRegresoInput').value;
+
+    if (!inicio || !fin || !regreso) {
+        alert("⚠️ Por favor completa todos los campos.");
+        return;
+    }
+
+    if (new Date(inicio) > new Date(fin)) {
+        alert("⚠️ La fecha de inicio no puede ser mayor a la fecha de fin.");
+        return;
+    }
+
+    // Guardar para que confirmarDescansoPersonalizadoATTF pueda leerlo
+    window.fechasDescansoPersonalizadas = { inicio, fin };
+    window.turnoRegresoManual = regreso; // Guardamos el regreso seleccionado
+
+    // Proceder a la confirmación final
+    confirmarDescansoPersonalizadoATTF();
 }
 
 async function confirmarDescansoPersonalizadoATTF() {
