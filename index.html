@@ -1215,32 +1215,21 @@ guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_tok
 console.log(`👤 Rol detectado: ${data.rol}`);
 
 if (data.rol === 'ATTF') {
-    currentUser = data; // Guardamos el usuario para que las siguientes funciones sepan quién es
+    currentUser = data; [cite_start]// Guardamos el usuario globalmente [cite: 609]
     
     const tHoy = localStorage.getItem('turno_hoy');
     const tManana = localStorage.getItem('turno_manana');
 
+    // Validación: Si faltan turnos, usamos la función que INYECTA el HTML
     if (!tHoy || !tManana) {
-        console.log("⚠️ Turnos incompletos. Mostrando interfaz de selección.");
+        console.log("⚠️ Turnos incompletos. Iniciando configuración dinámica.");
         
-        // 1. Ocultar el login
-        document.getElementById('loginSection').style.display = 'none';
-        
-        // 2. Mostrar la sección donde el usuario elige los turnos
-        // Busca el ID real de tu contenedor de turnos, suele ser algo como:
-        const seccionTurnos = document.getElementById('seccionProgramacionTurnos');
-        if (seccionTurnos) {
-            seccionTurnos.style.display = 'block';
-            seccionTurnos.classList.remove('hidden');
-        } else {
-            // Si usas un modal de Bootstrap:
-            // $('#modalTurnos').modal('show');
-            console.error("No se encontró el contenedor seccionProgramacionTurnos");
-        }
+        // En lugar de buscar 'seccionProgramacionTurnos', usamos la función experta:
+        mostrarConfiguracionInicialATTF(); 
         return; 
     }
 
-    accederMenuATTF(); 
+    accederMenuATTF(); [cite_start]// Si ya tiene todo, entra al menú [cite: 615]
     return;
 }
 
@@ -1862,35 +1851,66 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 
 function accederMenuATTF() {
-    // 1. OBTENER TURNOS DE LOCALSTORAGE
+    console.log('🔐 Validando acceso al menú ATTF...');
+
+    // 1. RECUPERACIÓN DE SESIÓN (Prevención de errores por F5)
+    // Si la variable en memoria se borró, la reconstruimos desde el almacenamiento
+    if (!currentUser) {
+        const sessionStore = localStorage.getItem('usuario_logueado');
+        if (sessionStore) {
+            currentUser = JSON.parse(sessionStore);
+            console.log('🔄 Sesión recuperada desde storage para:', currentUser.usuario);
+        } else {
+            console.error('❌ No hay datos de usuario. Re-dirigiendo al login.');
+            location.reload(); // Si no hay usuario en ningún lado, forzamos login
+            return;
+        }
+    }
+
+    // 2. OBTENER TURNOS DE LOCALSTORAGE
     const turnoHoy = localStorage.getItem('turno_hoy');
     const turnoManana = localStorage.getItem('turno_manana');
 
-    // 2. VALIDACIÓN ESTRICTA: ¿Falta alguno de los dos?
+    // 3. VALIDACIÓN ESTRICTA DE TURNOS
     if (!turnoHoy || !turnoManana || turnoHoy === "" || turnoManana === "") {
         console.warn('⚠️ Intento de acceso sin completar turnos.');
         alert("⚠️ Debes registrar tu turno de HOY y de MAÑANA antes de ingresar al menú.");
         
-        // Lo mandamos de vuelta a la sección donde se eligen turnos
-        // Ajusta este ID según sea tu sección de turnos
-        document.getElementById('seccionTurnos').style.display = 'block'; 
-        document.getElementById('tableSelectionSection').style.display = 'none';
-        return; // <--- IMPORTANTE: Detiene la ejecución aquí
+        // Regresamos al flujo de configuración inicial
+        mostrarConfiguracionInicialATTF();
+        
+        // Aseguramos que el menú de tablas esté oculto
+        const tableSec = document.getElementById('tableSelectionSection');
+        if (tableSec) tableSec.style.display = 'none';
+        return; 
     }
 
-    // 3. SI PASA LA VALIDACIÓN, DAR ACCESO
-    document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
-    document.getElementById('userInfo').classList.remove('hidden');
-    document.getElementById('loginSection').style.display = 'none';
-    
-    // Mostramos la selección de tablas solo porque ya validamos los turnos
-    document.getElementById('tableSelectionSection').style.display = 'block';
-    
-    mostrarTablasSegunRol();
-    iniciarVerificacionSesion();
-    guardarDatosOffline();
-    
-    console.log('✅ Acceso concedido al menú ATTF (Turnos validados)');
+    // 4. SI PASA LA VALIDACIÓN, DAR ACCESO AL MENÚ
+    try {
+        // Actualizar interfaz con el nombre del usuario
+        const userLabel = document.getElementById('currentUser');
+        if (userLabel) userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+
+        // Gestión de visibilidad de secciones
+        document.getElementById('userInfo').classList.remove('hidden');
+        document.getElementById('loginSection').style.display = 'none';
+        
+        // Mostrar selección de tablas
+        const tableSelection = document.getElementById('tableSelectionSection');
+        if (tableSelection) {
+            tableSelection.style.display = 'block';
+            tableSelection.classList.remove('hidden');
+        }
+
+        // Ejecutar procesos de fondo necesarios
+        mostrarTablasSegunRol();
+        iniciarVerificacionSesion();
+        guardarDatosOffline();
+        
+        console.log('✅ Acceso concedido al menú ATTF (Turnos validados)');
+    } catch (error) {
+        console.error('❌ Error crítico al renderizar el menú:', error);
+    }
 }
 
 
