@@ -4980,7 +4980,7 @@ function actualizarSeleccionTipologiasUnidad() {
     todasCheckbox.checked = todosMarcados;
 }
 
-// Función para generar el campo de búsqueda/selector en "Mapa de Rutas"
+
 // Función para generar el campo de búsqueda/selector en "Mapa de Rutas"
 async function generarCampoMapaRutas(unidad) {
     const rol = currentUser?.rol;
@@ -8363,77 +8363,87 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
 
 
 
-// ========================================
-// 👷 INTERFAZ UNIDADES CON FILTROS DE DEUDA (CORREGIDO)
-// ========================================
-async function generarInterfazUnidadMapaRutas(filtros, osAsignadas) {
-    const searchGrid = document.getElementById('searchGrid');
-    const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
+async function buscarYMostrarMapaUnidad() {
+    // ... (Tu lógica para obtener la OS seleccionada y filtrar por radio km) ...
+    
+    // Suponiendo que 'ordenesCercanas' son los datos que vas a pintar:
+    const searchResults = document.getElementById('searchResults');
+    searchResults.innerHTML = '<div id="mapUnidad" style="height: 500px; border-radius:15px;"></div>';
+    
+    const map = L.map('mapUnidad').setView([latPartida, lonPartida], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // Normalizar osAsignadas
-    const osAsignadasFlat = (osAsignadas || []).flat ? osAsignadas.flat() : [].concat(...osAsignadas || []);
+    // --- AQUÍ INSERTAS LA LÓGICA DE AGRUPAMIENTO ---
+    
+    // 1. Agrupamos las OS que tienen la misma ubicación
+    const coordenadasAgrupadas = ordenesCercanas.reduce((acc, os) => {
+        // Extraemos lat y lon (asegúrate que los nombres coincidan con tu objeto os)
+        // Algunos de tus objetos usan 'latitud'/'longitud' y otros vienen en 'Coordenadas'
+        let lat, lon;
+        if (os.Coordenadas && os.Coordenadas.includes(',')) {
+            [lat, lon] = os.Coordenadas.split(',').map(c => parseFloat(c.trim()));
+        } else {
+            lat = parseFloat(os.latitud);
+            lon = parseFloat(os.longitud);
+        }
+        
+        if (!isNaN(lat) && !isNaN(lon)) {
+            const key = `${lat.toFixed(6)}_${lon.toFixed(6)}`;
+            if (!acc[key]) acc[key] = [];
+            acc[key].push({...os, lat, lon}); // Guardamos lat/lon procesados
+        }
+        return acc;
+    }, {});
 
-    const normalized = osAsignadasFlat.map(os => ({
-        ...os,
-        osatomo: (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim(),
-        Tipologia: os.Tipologia || os.Tipología || os.tipologia || os.Tipo_de_OS || '',
-        Coordenadas: (os.Coordenadas || os.Coordendasgis || os.Coordenadasgis || os.coordenadas || '').toString().trim(),
-        Unidad: os.Unidad || os.unidad || ''
-    }));
+    // 2. Dibujamos un solo marcador por ubicación
+    Object.values(coordenadasAgrupadas).forEach(grupo => {
+        const primera = grupo[0];
+        
+        const marcador = L.marker([primera.lat, primera.lon], { 
+            icon: iconoSegunEstado(primera.estado || primera.Estado) 
+        }).addTo(map);
 
-    const osDeUnidad = normalized.filter(os => os.Unidad === miUnidad);
+        if (grupo.length > 1) {
+            // ✅ CASO: Múltiples órdenes en el mismo punto exacto
+            let listadoHTML = `
+                <div style="max-height:180px; overflow-y:auto; min-width:200px; font-family: sans-serif;">
+                    <strong style="color: #1976d2;">📍 ${grupo.length} Órdenes encontradas:</strong><hr style="margin: 5px 0;">`;
+            
+            grupo.forEach(os => {
+                const comentarioVerificado = os.comentario || os.Comentario || os.observaciones || "Sin comentario";
+                const numOS = os.osatomo || os.osatom || "N/A";
 
-    if (!osDeUnidad || osDeUnidad.length === 0) {
-        searchGrid.innerHTML = `
-            <div class="result-card" style="background: #fff3cd;">
-                <div class="result-header">⚠️ Sin OS Asignadas</div>
-                <p style="text-align: center;">No tienes OS asignadas para ${miUnidad}</p>
-            </div>`;
-        return;
-    }
+                listadoHTML += `
+                    <div style="border-bottom:1px solid #eee; padding: 8px 0;">
+                        <b>OS:</b> ${numOS}<br>
+                        <small style="color: #666; display: block; margin-bottom: 5px;">${comentarioVerificado}</small>
+                        <button onclick="verDetalleOrden('${numOS}')" 
+                                style="background:#1976d2; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; width:100%; font-size:12px;">
+                            Ver Ficha
+                        </button>
+                    </div>`;
+            });
+            listadoHTML += `</div>`;
+            marcador.bindPopup(listadoHTML);
+        } else {
+            // ✅ CASO: Orden única
+            const comentarioUnico = primera.comentario || primera.Comentario || "Sin comentario";
+            const numOSUnico = primera.osatomo || primera.osatom || "N/A";
 
-    // ✅ CORRECCIÓN: Generar opciones solo con OS válidas
-    const optionsHtml = osDeUnidad
-        .filter(os => os.osatomo && os.osatomo.trim() !== '')
-        .map(os => `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia || 'Sin tipología'}</option>`)
-        .join('');
-
-    if (optionsHtml === '') {
-        searchGrid.innerHTML = `
-            <div class="result-card" style="background: #ffebee;">
-                <div class="result-header">⚠️ Sin OS Válidas</div>
-                <p style="text-align: center;">
-                    Las OS de ${miUnidad} no tienen números válidos.<br>
-                    <strong>Debug:</strong> ${osDeUnidad.length} OS cargadas.
-                </p>
-            </div>`;
-        return;
-    }
-
-    searchGrid.innerHTML = `
-        <div class="result-card" style="background: #e3f2fd;">
-            <div class="result-header">🔍 Buscar OS Asignada - ${miUnidad}</div>
- 
-            <div class="form-group">
-                <label for="selectOSBusqueda">Seleccione OS de Partida:</label>
-                <select id="selectOSBusqueda" style="width:100%; padding:12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione una OS --</option>
-                    ${optionsHtml}
-                </select>
-                <small style="color: #666; display:block; margin-top:8px;">
-                    ${osDeUnidad.length} OS disponibles | Radio: ${filtros.radio_km || 3} km
-                </small>
-            </div>
- 
-            <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="buscarYMostrarMapaUnidad()">
-                    🗺️ Mostrar Mapa
-                </button>
-            </div>
-        </div>`;
-
-    console.log('✅ Interfaz de unidad generada correctamente');
+            marcador.bindPopup(`
+                <div style="font-family: sans-serif; width: 160px;">
+                    <b style="color: #1976d2;">OS: ${numOSUnico}</b><br>
+                    <p style="margin: 5px 0; font-size: 12px; color: #444;">${comentarioUnico}</p>
+                    <button onclick="verDetalleOrden('${numOSUnico}')" 
+                            style="background:#1976d2; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; width:100%; font-size:12px;">
+                        Ver Ficha Completa
+                    </button>
+                </div>
+            `);
+        }
+    });
 }
+
 
  	// ✅ FUNCIÓN DE DEBUG (agregar temporalmente)
 function debugSelectOSBusqueda() {
@@ -8730,96 +8740,76 @@ async function guardarFiltrosMapa() {
     }
 }
 
-async function buscarYMostrarMapaAdmin() {
-    const osIngresada = document.getElementById('buscarOSAdmin').value.trim();
-    if (!osIngresada) {
-        alert('⚠️ Por favor ingrese un número de OS');
-        return;
-    }
- 
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
- 
-    try {
-        // 1️⃣ Intentar buscar la unidad en os_asignadas (solo informativo, NO bloqueante)
-        let unidadDetectada = null;
-        const { data: asignacion } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo, Unidad')
-            .eq('osatomo', osIngresada)
-            .maybeSingle();
- 
-        if (asignacion) {
-            console.log(`✅ OS encontrada en asignaciones. Unidad: ${asignacion.Unidad}`);
-            unidadDetectada = asignacion.Unidad;
+async function cargarYMostrarMapa(osCentro, unidadFiltro) {
+    const resultsContainer = document.getElementById('searchResults');
+    const [latCentro, lonCentro] = osCentro.Coordenadas.split(',').map(c => parseFloat(c.trim()));
 
- 	// 🆕 Para Despacho, verificar si tiene filtros configurados para esta unidad
-if (currentUser.rol === 'Despacho' && unidadDetectada) {
-    const { data: filtrosUnidad } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadDetectada)
-        .maybeSingle();
- 
-    if (!filtrosUnidad) {
-        const confirmar = confirm(
-            `⚠️ No tienes filtros configurados para ${unidadDetectada}\\n\\n` +
-            `Se usarán los filtros globales.\\n\\n` +
-            `¿Deseas configurar filtros específicos primero?`
-        );
-        if (confirmar) {
-            volverATablas();
-            return;
-        }
-    }
+    resultsContainer.innerHTML = `
+        <div class="result-card">
+            <div class="result-header">🗺️ Mapa de OS Cercanas</div>
+            <div id="mapAdmin" style="height: 500px; border-radius: 12px; margin-top: 15px;"></div>
+        </div>`;
+
+    const map = L.map('mapAdmin').setView([latCentro, lonCentro], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    // 1. OBTENER TODAS LAS OS CERCANAS (Aquí va tu lógica de Supabase de siempre)
+    // Supongamos que el resultado es 'data'
+    const { data: ordenesCercanas } = await supabaseClient.from('OS Pendientes').select('*'); // (Simplificado)
+
+    // 2. ✅ AGRUPAR POR COORDENADAS PARA EVITAR PUNTOS ENCIMADOS
+    const coordenadasAgrupadas = ordenesCercanas.reduce((acc, os) => {
+        let lat, lon;
+        const coords = os.Coordenadas || os.Coordendasgis || "";
+        if (coords.includes(',')) {
+            [lat, lon] = coords.split(',').map(c => parseFloat(c.trim()));
+        }
+
+        if (!isNaN(lat) && !isNaN(lon)) {
+            const key = `${lat.toFixed(6)}_${lon.toFixed(6)}`;
+            if (!acc[key]) acc[key] = [];
+            acc[key].push({...os, lat, lon});
+        }
+        return acc;
+    }, {});
+
+    // 3. ✅ DIBUJAR MARCADORES
+    Object.values(coordenadasAgrupadas).forEach(grupo => {
+        const primera = grupo[0];
+        const marcador = L.marker([primera.lat, primera.lon], { 
+            icon: iconoSegunEstado(primera.Estado || primera.estado) 
+        }).addTo(map);
+
+        if (grupo.length > 1) {
+            // CASO VARIAS ÓRDENES
+            let html = `<div style="max-height:150px; overflow-y:auto; min-width:180px;">
+                        <strong>📍 ${grupo.length} Órdenes aquí:</strong><hr>`;
+            grupo.forEach(os => {
+                const numOS = os.OSATMO || os.osatomo || "N/A";
+                // CORRECCIÓN COMENTARIO: Validar todos los nombres posibles
+                const coment = os.Comentario || os.comentario || os.Observaciones || "Sin comentario";
+                
+                html += `
+                    <div style="border-bottom:1px solid #eee; padding:5px 0;">
+                        <b>OS:</b> ${numOS}<br>
+                        <small>${coment}</small><br>
+                        <button onclick="verDetalleOrden('${numOS}')" style="width:100%; margin-top:5px; font-size:10px;">Ver Ficha</button>
+                    </div>`;
+            });
+            html += `</div>`;
+            marcador.bindPopup(html);
+        } else {
+            // CASO ÚNICO
+            const numOS = primera.OSATMO || primera.osatomo || "N/A";
+            const coment = primera.Comentario || primera.comentario || "Sin comentario";
+            marcador.bindPopup(`
+                <b>OS:</b> ${numOS}<br>
+                <b>Comentario:</b> ${coment}<br>
+                <button onclick="verDetalleOrden('${numOS}')">Ver Ficha</button>
+            `);
+        }
+    });
 }
-
-        } else {
-            console.log('ℹ️ OS no encontrada en asignaciones, buscando en pendientes...');
-        }
- 
-        // 2️⃣ Buscar DATOS REALES en OS Pendientes (La fuente de verdad)
-        const { data: osCentro } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('OSATMO', osIngresada)
-            .maybeSingle();
-
-        // SI NO EXISTE EN PENDIENTES -> ERROR FINAL
-        if (!osCentro) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #ffebee;">
-                    <div class="result-header">❌ OS No Encontrada</div>
-                    <p style="text-align: center;">La OS "${osIngresada}" no existe en la tabla de OS Pendientes.</p>
-                </div>`;
-            return;
-        }
- 
-        // Si no teníamos unidad de la tabla asignada, usamos la de OS Pendientes
-        if (!unidadDetectada && osCentro.Unidad) {
-            unidadDetectada = osCentro.Unidad;
-        }
-
-        // Validar coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordendasgis;
-        if (!coordenadas || !coordenadas.includes(',')) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd;">
-                    <div class="result-header">⚠️ Sin Coordenadas</div>
-                    <p style="text-align: center;">La OS "${osIngresada}" existe pero no tiene coordenadas válidas.</p>
-                </div>`;
-            return;
-        }
- 
-        // Cargar mapa (pasamos la unidad detectada para el contexto)
-        await cargarYMostrarMapa(osCentro, unidadDetectada);
-
-    } catch (err) {
-        console.error('Error:', err);
-        resultsContainer.innerHTML = '<div class="result-card">❌ Error de conexión al buscar OS</div>';
-    }
-}
-
 
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD) - CORREGIDO
