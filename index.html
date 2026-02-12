@@ -1216,21 +1216,24 @@ guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_tok
 console.log(`👤 Rol detectado: ${data.rol}`);
 
 if (data.rol === 'ATTF') {
-    currentUser = data; // Guardamos el usuario globalmente
-    
+    currentUser = data;
+    localStorage.setItem('usuario_logueado', JSON.stringify(data));
+
     const tHoy = localStorage.getItem('turno_hoy');
     const tManana = localStorage.getItem('turno_manana');
 
     if (!tHoy || !tManana) {
         console.log("⚠️ Turnos incompletos. Iniciando configuración dinámica.");
+        
+        // 🛠️ AGREGA ESTA LÍNEA: Asegura que el login desaparezca
+        document.getElementById('loginSection').style.display = 'none';
+        
         mostrarConfiguracionInicialATTF(); 
         return; 
     }
-
-    accederMenuATTF(); // Si ya tiene todo, entra al menú
+    accederMenuATTF();
     return;
 }
-
 if (data.rol === 'Poda') {
     loginPoda(data); 
     return;
@@ -2294,6 +2297,23 @@ function mostrarTablasSegunRol() {
     if (!currentUser || !currentUser.rol) {
         console.log('❌ currentUser no está disponible');
         return;
+    }
+
+// 🛡️ FILTRO DE SEGURIDAD PARA ATTF (Evita saltarse turnos al actualizar)
+    if (currentUser.rol === 'ATTF') {
+        const tHoy = localStorage.getItem('turno_hoy');
+        const tManana = localStorage.getItem('turno_manana');
+
+        if (!tHoy || !tManana) {
+            console.warn('⚠️ Acceso denegado: Faltan turnos en el storage.');
+            
+            // Ocultamos el menú por si acaso se estaba viendo
+            document.getElementById('tableSelectionSection').style.display = 'none';
+            
+            // Forzamos a que aparezca la selección de turnos
+            mostrarConfiguracionInicialATTF();
+            return; // <--- Bloqueamos el resto de la función
+        }
     }
 
     console.log('🔍 Filtrando tablas para rol:', currentUser.rol);
@@ -13734,35 +13754,43 @@ function guardarDatosOffline() {
     }
 }
 
-// === FUNCIÓN PARA VERIFICAR DATOS OFFLINE ===
+// === FUNCIÓN PARA VERIFICAR DATOS OFFLINE CORREGIDA ===
 function verificarDatosOffline() {
-    const sessionData = sessionStorage.getItem('cleca_user_session');
-    if (sessionData) {
-        const data = JSON.parse(sessionData);
-        const tiempoTranscurrido = (Date.now() - data.timestamp) / 1000 / 60;
- 
-        if (tiempoTranscurrido < 45) {
-            currentUser = data.user;
-            document.getElementById('currentUser').textContent = `Bienvenido, ${data.user.usuario}`;
-            document.getElementById('userInfo').classList.remove('hidden');
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('tableSelectionSection').style.display = 'block';
- 
-            // NUEVO: Filtrar tablas según rol al restaurar sesión
-            console.log('🔄 Restaurando sesión - Filtrando tablas para rol:', currentUser.rol);
-            mostrarTablasSegunRol();
- 
-            // Reiniciar verificación de corte de turno si es ATTF
-            if (currentUser.rol === 'ATTF' && currentUser.turnoAsignado) {
-                setInterval(verificarCorteTurno, 5 * 60 * 1000);
-            }
- 
-            return true;
-        }
-    }
-    return false;
-}
+    const sessionData = sessionStorage.getItem('cleca_user_session');
+    if (sessionData) {
+        const data = JSON.parse(sessionData);
+        const tiempoTranscurrido = (Date.now() - data.timestamp) / 1000 / 60;
+ 
+        if (tiempoTranscurrido < 45) {
+            currentUser = data.user;
+            
+            // 🛡️ NUEVO CANDADO DE SEGURIDAD PARA ATTF
+            if (currentUser.rol === 'ATTF') {
+                console.log('🔄 Restaurando sesión ATTF - Validando turnos...');
+                
+                // Usamos la función robusta que creamos antes
+                // Ella se encargará de ocultar el login y verificar si hay turnos registrados
+                accederMenuATTF(); 
+                
+                // Iniciamos la verificación de corte de turno
+                setInterval(verificarCorteTurno, 5 * 60 * 1000);
+                return true; 
+            }
 
+            // --- FLUJO PARA OTROS ROLES (Admin, Supervisor, etc.) ---
+            document.getElementById('currentUser').textContent = `Bienvenido, ${data.user.usuario}`;
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('tableSelectionSection').style.display = 'block';
+ 
+            console.log('🔄 Restaurando sesión - Filtrando tablas para rol:', currentUser.rol);
+            mostrarTablasSegunRol();
+ 
+            return true;
+        }
+    }
+    return false;
+}
 
 /**
  * CONFIGURACIÓN MAESTRA DE ACCESOS
