@@ -5120,10 +5120,14 @@ const fuenteDatos = window.osAsignadasKML || window.osKMLData || [];
 const miUnidadNorm = unidadSeleccionada.trim().toUpperCase();
 
 // Filtramos estrictamente: Solo órdenes donde la Unidad coincida con el usuario actual
+// --- AHORA (CON LIMPIEZA) ---
+const miUnidadLimpiaComparar = unidadSeleccionada.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
 const misAsignadasReales = fuenteDatos.filter(os => {
-    // Verificamos 'Unidad' o 'unidad' (por si el Excel cambió las minúsculas/mayúsculas)
-    const uOS = (os.Unidad || os.unidad || "").toString().trim().toUpperCase();
-    return uOS === miUnidadNorm;
+    const uOS = (os.Unidad || os.unidad || "").toString();
+    const uOSLimpia = uOS.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    // Comparamos versiones limpias para que encuentre tus órdenes aunque tengan guiones
+    return uOSLimpia === miUnidadLimpiaComparar;
 });
 
 console.log(`✅ ${misAsignadasReales.length} OS encontradas para mi unidad (${miUnidadNorm})`);
@@ -5265,7 +5269,7 @@ if (String(os.OSATMO).trim() === '11195544') {
     console.log("🔍 ¿Pasa filtro Tipología?:", tipOk);
     console.log("📋 Filtros cargados actualmente:", tipologiasFiltroLista);
     
-    const esDeOtro = uOS_Prueba !== "" && uOS_Prueba !== "---" && uOS_Prueba !== "SIN UNIDAD" && uOS_Prueba !== miUnidadNorm;
+    const esDeOtro = uOS_Prueba !== "" && uOS_Limpia !== "---" && uOS_Prueba !== "SIN UNIDAD" && uOS_Prueba !== miUnidadNorm;
     console.log("🚫 ¿Rechazada por Unidad Ocupada?:", esDeOtro);
     console.groupEnd();
 }
@@ -5279,69 +5283,75 @@ if (String(os.OSATMO).trim() === '11195544') {
     const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
     if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-   // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD (Para KML Ruta) ---
-const uOS = (os.Unidad || "").trim().toUpperCase();
+  // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD (Normalización de Guiones a Vacío) ---
+const uOS_Original = (os.Unidad || "").toString();
 const idOS = String(os.OSATMO).trim();
 
-// 1. Definimos qué textos significan que la OS NO tiene dueño aún
-// Esto permite que aparezcan en KML Ruta como sugerencias
-const unidadesVacias = ["", "---", "SIN UNIDAD", "NULL", "POR ASIGNAR", "PENDIENTE", "SIN ASIGNAR"];
+// 🔥 NORMALIZACIÓN: Eliminamos guiones y basura para que "---" sea igual a ""
+const uOS_Limpia = uOS_Original.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+const miUnidadLimpia = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-// 2. ¿Está realmente ocupada por otro técnico?
-// Es de otro SI NO está en la lista de vacías Y TAMPOCO es mi unidad (la del KML actual)
-const esDeOtro = !unidadesVacias.includes(uOS) && uOS !== miUnidadNorm;
+// 1. Identificamos si la OS está disponible (Reguladas o sin asignar)
+const estaLibre = uOS_Limpia === "" || uOS_Limpia === "PENDIENTE" || uOS_Limpia === "SINUNIDAD" || uOS_Limpia === "NULL";
 
-// 3. Verificación contra el set global de asignaciones
+// 2. ¿Es una orden que ya me pertenece?
+const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS) || (uOS_Limpia === miUnidadLimpia && uOS_Limpia !== "");
+
+// 3. Verificación de seguridad contra asignaciones globales
 const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
-const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS);
 
-// 🚩 LÓGICA DE EXCLUSIÓN PARA KML RUTA:
+// 🚩 LÓGICA DE EXCLUSIÓN: Si no está libre y no es mía, es de alguien más
+const esDeOtro = !estaLibre && !esAsignadaAMi;
+
 if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
     if (esDeOtro) {
-        contadorUnidadInvalida++; // Estas son órdenes de otros compañeros
+        contadorUnidadInvalida++; 
     } else {
-        contadorDuplicados++; // Estas ya están en el sistema de asignación activa
+        contadorDuplicados++; 
     }
-    return; // ⛔ NO se incluyen como sugerencia en el KML
+    return; // ⛔ Se descarta por pertenecer a otra unidad
 }
 
-// 3. Si llegó aquí, la OS está "libre" para ti o ya es tuya. 
-// Procesamos el rango para el diagnóstico final.
+// 4. Procesable: Calculamos rango para diagnóstico
 const rangoOS = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
 diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
 
-    // --- C. DETERMINACIÓN DE PRIORIDADES ---
+
+// --- C. DETERMINACIÓN DE PRIORIDADES ---
 const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
 const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
 const valorDeuda = parseFloat(os.Deuda || 0);
 const esDeudaAlta = valorDeuda >= 500;
 
-// 📊 Contar OS en radio por tipo
 if (esRegulada) contadorReguladas_EnRadio++;
 else contadorNoReguladas_EnRadio++;
 
 const esPrioridad = esRegulada || esDeudaAlta;
 
-// --- D. FILTROS DE TABLA ---
+
+// --- D. FILTROS DE TABLA (COINCIDENCIA EXCLUSIVA Y EXACTA) ---
 let cumpleFiltrosTabla = false;
 
-// Solo aplicamos filtros de tabla a las OS que NO son prioridad (Reguladas/Deuda Alta)
-// porque las prioridades ya fueron aceptadas arriba
 if (!esPrioridad) {
-    const tipOS_Norm = normalizarTexto(os.Tipologia);
+    // Normalizamos solo para quitar acentos/espacios extra, manteniendo la frase exacta
+    const tipOS_Actual = normalizarTexto(os.Tipologia);
     
-    // Usamos || [] para evitar que el .map falle si la columna está nula en la DB
-    const tipologiasFiltro = (filtrosAplicar.tipologias || []).map(t => normalizarTexto(t));
+    // Obtenemos tipologías del filtro (Array)
+    let tipologiasFiltro = filtrosAplicar.tipologias || [];
+    if (typeof tipologiasFiltro === 'string') {
+        tipologiasFiltro = tipologiasFiltro.split(',').map(t => t.trim());
+    }
+    
+    // 🔥 COMPARACIÓN EXCLUSIVA: Debe ser igual (===), no parecida.
+    const tipOk = tipologiasFiltro.length === 0 || tipologiasFiltro.some(f => normalizarTexto(f) === tipOS_Actual);
+    
     const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
-
-    // LÓGICA: Si la lista de filtros está vacía, se considera "OK" (no filtra esa categoría)
-    // Si la lista TIENE datos, entonces debe coincidir.
-    const tipOk = tipologiasFiltro.length === 0 || tipologiasFiltro.some(f => tipOS_Norm.includes(f));
     const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
 
-    // Para que aparezca en el mapa por "Filtro de Tabla", debe cumplir ambas
     cumpleFiltrosTabla = tipOk && rangoOk;
 }
+
+
 // --- E. DECISIÓN FINAL ---
 if (esPrioridad || cumpleFiltrosTabla) {
     
@@ -5496,62 +5506,75 @@ function determinarRangoDias(fechaGen) {
 }
 
  	// ========================================
-// 📊 ACTUALIZAR RESUMEN UNIDAD KML
+// 📊 ACTUALIZAR RESUMEN UNIDAD KML (VALIDADA CON LIMPIEZA)
 // ========================================
 function actualizarResumenUnidadKML() {
-    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
-    const resumenDiv = document.getElementById('resumenUnidadKML');
-    const contenidoDiv = document.getElementById('contenidoResumenKML');
- 
-    // 🆕 Elementos del nuevo selector
-    const containerOS = document.getElementById('containerSelectorOS');
-    const selectOS = document.getElementById('selectPuntoPartidaAdmin');
- 
-    if (!unidadSeleccionada) {
-        resumenDiv.style.display = 'none';
-        if(containerOS) containerOS.style.display = 'none';
-        return;
-    }
- 
-    // Filtrar OS de la unidad seleccionada desde la variable global cargada
-    const osUnidad = window.osAsignadasKML.filter(os => os.Unidad === unidadSeleccionada);
- 
-    // 🆕 LLENAR EL SELECTOR DE OS
-    if (selectOS && containerOS) {
-        // Limpiar opciones anteriores
-        selectOS.innerHTML = '<option value="">-- Seleccione OS de partida --</option>';
- 
-        // Filtrar OS que tengan número válido para mostrar
-        const osParaLista = osUnidad.filter(os => os.OSATMO || os.osatomo);
- 
-        // Generar opciones concatenadas
-        osParaLista.forEach(os => {
-            const numero = os.OSATMO || os.osatomo;
-            const tipo = os.Tipologia || 'Sin tipología';
-            const option = document.createElement('option');
-            option.value = numero;
-            option.textContent = `${numero} - ${tipo}`;
-            selectOS.appendChild(option);
-        });
- 
-        containerOS.style.display = 'block';
-    }
+    const unidadSeleccionada = document.getElementById('selectUnidadKML').value;
+    const resumenDiv = document.getElementById('resumenUnidadKML');
+    const contenidoDiv = document.getElementById('contenidoResumenKML');
+ 
+    const containerOS = document.getElementById('containerSelectorOS');
+    const selectOS = document.getElementById('selectPuntoPartidaAdmin');
+ 
+    if (!unidadSeleccionada) {
+        resumenDiv.style.display = 'none';
+        if(containerOS) containerOS.style.display = 'none';
+        return;
+    }
 
-    // Lógica existente del resumen
-    const conCoordenadasLector = osUnidad.filter(os =>
-        os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
-    );
-    const conCoordenadasGIS = osUnidad.filter(os =>
-        os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
-    );
- 
-    contenidoDiv.innerHTML = `
-        • Total de OS Asignadas: <strong>${osUnidad.length}</strong><br>
-        • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
-        • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong>
-    `;
-    resumenDiv.style.display = 'block';
+    // ✅ PASO 1: Normalizamos la unidad del selector (Quitar guiones para comparar)
+    const unidadSelLimpia = unidadSeleccionada.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+ 
+    // ✅ PASO 2: Filtrado con "Limpieza de Guiones" en ambos lados
+    const osUnidad = window.osAsignadasKML.filter(os => {
+        const uOS = (os.Unidad || os.unidad || "").toString();
+        // Limpiamos los guiones de la base de datos (Ej: "---CL-EYB-PAC-03---" -> "CLEYBPAC03")
+        const uOSLimpia = uOS.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        
+        // Comparamos versiones limpias
+        return uOSLimpia === unidadSelLimpia;
+    });
+ 
+    // 🆕 LLENAR EL SELECTOR DE OS
+    if (selectOS && containerOS) {
+        selectOS.innerHTML = '<option value="">-- Seleccione OS de partida --</option>';
+ 
+        // Solo mostramos en la lista las que tienen coordenadas (para que sirvan de centro)
+        const osParaLista = osUnidad.filter(os => {
+            const num = os.OSATMO || os.osatomo;
+            const coords = (os.Coordenadas || os.Coordendasgis || "");
+            return num && coords.includes(',');
+        });
+ 
+        osParaLista.forEach(os => {
+            const numero = os.OSATMO || os.osatomo;
+            const tipo = os.Tipologia || 'Sin tipología';
+            const option = document.createElement('option');
+            option.value = numero;
+            option.textContent = `${numero} - ${tipo}`;
+            selectOS.appendChild(option);
+        });
+ 
+        containerOS.style.display = osParaLista.length > 0 ? 'block' : 'none';
+    }
+
+    // Lógica del resumen basada en el nuevo filtro limpio
+    const conCoordenadasLector = osUnidad.filter(os =>
+        os.Coordenadas && os.Coordenadas.trim() !== '' && os.Coordenadas.includes(',')
+    );
+    const conCoordenadasGIS = osUnidad.filter(os =>
+        os.Coordendasgis && os.Coordendasgis.trim() !== '' && os.Coordendasgis.includes(',')
+    );
+ 
+    contenidoDiv.innerHTML = `
+        • Total de OS Detectadas: <strong>${osUnidad.length}</strong><br>
+        • Con Coordenadas Lector: <strong>${conCoordenadasLector.length}</strong><br>
+        • Con Coordenadas GIS: <strong>${conCoordenadasGIS.length}</strong><br>
+        <small style="color: #2e7d32;">✔ Filtro de normalización aplicado (Inmune a guiones)</small>
+    `;
+    resumenDiv.style.display = 'block';
 }
+
 
 
  	// ========================================
@@ -6735,7 +6758,7 @@ function aplicarFiltroUnidad() {
 
     // Validar que la unidad exista
     const unidadesDisponibles = [...new Set(window.osPendientes_Original.map(os => os.Unidad))];
-    if (!unidadesDisponibles.includes(unidadSeleccionada)) {
+    if (!unidadesDisponibles..find(unidadSeleccionada)) {
         alert(`La unidad "${unidadSeleccionada}" no existe en los datos`);
         return;
     }
@@ -13575,224 +13598,208 @@ function verificarDatosOffline() {
 }
 
 
-// === FUNCIÓN PARA SELECCIONAR TABLA ===
+/**
+ * CONFIGURACIÓN MAESTRA DE ACCESOS
+ * Define qué roles pueden entrar a qué módulos.
+ */
+const PERMISOS_MODULOS = {
+    'cargar_asignaciones': ['Administrador', 'Despacho'],
+    'mapa_rutas':          ['Administrador', 'Despacho'], // Solo estos dos según tu instrucción
+    'usuarios':            ['Administrador'],
+    'detalle_os':          ['Administrador', 'Supervisor'],
+    'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'],
+    'kml_rutas':           ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
+    'os_pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'os_cerradas':         ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura'],
+    'tx_cortes':           ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'] // Agregado Tx y Cortes
+};
+
+/**
+ * Selecciona y valida el acceso a las tablas/módulos
+ */
 function seleccionarTabla(tableName) {
-renovarSesion(); // ← AGREGAR ESTA LÍNEA
-  console.log("🔍 seleccionarTabla llamado con:", JSON.stringify(tableName));
- 
- if (tableName === 'cargar_asignaciones') {
-  const rolesPermitidos = ['Administrador', 'Despacho'];
-  if (!rolesPermitidos.includes(currentUser.rol)) {
-    alert('⚠️ Solo Administradores y Despacho pueden cargar asignaciones');
-    return;
-  }
-  cargarInterfazAsignaciones();
+    renovarSesion();
+    const rolActual = currentUser.rol;
+    
+    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
 
-  // ✅ Mostrar la sección de búsqueda
-  document.getElementById('tableSelectionSection').style.display = 'none';
-  document.getElementById('searchSection').style.display = 'block';
+    // 1. VALIDACIÓN DE PERMISOS DINÁMICA
+    const rolesPermitidos = PERMISOS_MODULOS[tableName];
+    
+    if (!rolesPermitidos) {
+        console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
+    } else if (!rolesPermitidos.includes(rolActual)) {
+        alert(`⚠️ Acceso Denegado: Su rol de '${rolActual}' no tiene permisos para el módulo ${tableName.replace('_', ' ').toUpperCase()}.`);
+        return;
+    }
 
-  return;
+    // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
+    switch (tableName) {
+        case 'cargar_asignaciones':
+            cargarInterfazAsignaciones();
+            break;
+            
+        case 'mapa_rutas':
+            // Aquí puedes disparar una función inicializadora si es necesario
+            console.log("📍 Inicializando Mapa de Rutas...");
+            break;
+
+        case 'kml_rutas':
+            // Lógica específica para KML si existe
+            break;
+    }
+
+    // 3. ACTUALIZAR INTERFAZ VISUAL
+    const config = tableConfigs[tableName];
+    if (config) {
+        selectedTable = tableName;
+        document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
+        generarCamposBusqueda(config);
+        
+        // Cambio de vista
+        document.getElementById('tableSelectionSection').style.display = 'none';
+        document.getElementById('searchSection').style.display = 'block';
+    } else {
+        console.error("❌ Error: Configuración visual no encontrada para", tableName);
+        alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
+    }
 }
 
-    // 🆕 VALIDACIÓN: Bloquear módulos prohibidos para Consulta/Contratista
-    if (currentUser.rol === 'Consulta' || currentUser.rol === 'Contratista') {
-        const modulosProhibidos = ['usuarios', 'detalle_os'];
-        if (modulosProhibidos.includes(tableName)) {
-            alert('⚠️ Su rol no tiene acceso a este módulo');
-            return;
-        }
-    }
-
-    // Validar acceso para Lectura
-    if (currentUser.rol === 'Lectura' && tableName !== 'consultas_servicios') {
-        alert('Su rol solo permite acceso a Consultas de Servicios');
-        return;
-    }
- 
-    // Validar acceso a Detalle OS
-    if (tableName === 'detalle_os') {
-        if (currentUser.rol !== 'Administrador' && currentUser.rol !== 'Supervisor') {
-            alert('⚠️ Solo Administradores y Supervisores pueden acceder a Detalle OS');
-            return;
-        }
-    }
- 
-    // 🆕 Validar acceso a IPR
-    if (tableName === 'retiro_medidores') {
-        const rolesPermitidos = ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'];
-        if (!rolesPermitidos.includes(currentUser.rol)) {
-            alert('⚠️ Su rol no tiene acceso al módulo IPR');
-            return;
-        }
-    }
-
- 	// 🗺️ Validar acceso a Mapa de Rutas
-if (tableName === 'mapa_rutas') {
-    const rolesPermitidos = ['Administrador', 'Contratista', 'Consulta', 'Despacho'];
-    if (!rolesPermitidos.includes(currentUser.rol)) {
-        alert('⚠️ Su rol no tiene acceso al Mapa de Rutas');
-        return;
-    }
-}
-
- 	// 📤 Validar acceso a Cargar Asignaciones
-if (tableName === 'cargar_asignaciones') {
-  const rolesPermitidos = ['Administrador', 'Despacho'];
-  if (!rolesPermitidos.includes(currentUser.rol)) {
-    alert('⚠️ Solo Administradores y Despacho pueden cargar asignaciones');
-    return;
-  }
-  cargarInterfazAsignaciones();
-  // ✅ Mostrar la interfaz de carga
-  document.getElementById('tableSelectionSection').style.display = 'none';
-  document.getElementById('searchSection').style.display = 'block';
-  return;
-}
-
-
-    // Seleccionar tabla y mostrar interfaz
-    selectedTable = tableName;
-    const config = tableConfigs[tableName];
-    document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
-    generarCamposBusqueda(config);
-    document.getElementById('tableSelectionSection').style.display = 'none';
-    document.getElementById('searchSection').style.display = 'block';
-}
-
-
-// === INICIALIZACIÓN AL CARGAR LA PÁGINA ===
+// ==========================================================
+// 🚀 INICIALIZACIÓN Y EVENTOS
+// ==========================================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Página cargada - Inicializando sistema...');
- 
-    // 1. Verificar sesión offline
-    if (!verificarDatosOffline()) {
-        document.getElementById('loginSection').style.display = 'block';
-        console.log('📝 Mostrando formulario de login');
-    }
- 
-    // 2. Asignar evento al botón de login
-    const loginButton = document.getElementById('loginButton');
-    if (loginButton) {
-        console.log('✅ Botón de login encontrado y conectado');
-        loginButton.onclick = function() {
-            console.log('🖱️ Click detectado en botón de login');
-            login();
-        };
-    } else {
-        console.error('❌ ERROR: Botón de login NO encontrado en el DOM');
-    }
+    console.log('🚀 Sistema de Consultas Campo Inicializado');
+
+    // Validación de sesión
+    if (!verificarDatosOffline()) {
+        const loginSec = document.getElementById('loginSection');
+        if (loginSec) loginSec.style.display = 'block';
+    }
+
+    // Conector del botón de Login
+    const loginButton = document.getElementById('loginButton');
+    if (loginButton) {
+        loginButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            login();
+        });
+    }
 });
+
 
 // ========================================
 // 🧹 LIMPIAR FILTROS OBSOLETOS (Automático silencioso)
 // ========================================
 async function limpiarFiltrosObsoletos() {
-    try {
-        const fechaLimite = new Date();
-        fechaLimite.setDate(fechaLimite.getDate() - 2);
-        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
- 
-        const {  filtrosViejos, error: errorSelect } = await supabaseClient
-            .from('filtros_por_unidad')
-            .select('id, Unidad, fecha_programada')
-            .lt('fecha_programada', fechaLimiteStr);
- 
-        if (errorSelect || !filtrosViejos || filtrosViejos.length === 0) {
-            console.log('✅ No hay filtros obsoletos para eliminar');
-            return;
-        }
- 
-        const { error: errorDelete } = await supabaseClient
-            .from('filtros_por_unidad')
-            .delete()
-            .lt('fecha_programada', fechaLimiteStr);
- 
-        if (errorDelete) {
-            console.error('❌ Error eliminando filtros:', errorDelete);
-            return;
-        }
- 
-        console.log(`🗑️ ${filtrosViejos.length} filtro(s) obsoleto(s) eliminado(s)`);
- 
-    } catch (err) {
-        console.error('❌ Error en limpieza automática de filtros:', err);
-    }
+    try {
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+
+        // ✅ CORRECCIÓN: Usar data: filtrosViejos
+        const { data: filtrosViejos, error: errorSelect } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('id')
+            .lt('fecha_programada', fechaLimiteStr);
+
+        if (errorSelect) {
+            console.error('❌ Error buscando filtros obsoletos:', errorSelect);
+            return;
+        }
+
+        if (!filtrosViejos || filtrosViejos.length === 0) {
+            console.log('✅ No hay filtros obsoletos para eliminar');
+            return;
+        }
+
+        const { error: errorDelete } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .lt('fecha_programada', fechaLimiteStr);
+
+        if (errorDelete) {
+            console.error('❌ Error eliminando filtros:', errorDelete);
+            return;
+        }
+
+        console.log(`🗑️ ${filtrosViejos.length} filtro(s) obsoleto(s) eliminado(s) de forma automática`);
+
+    } catch (err) {
+        console.error('❌ Error en limpieza automática de filtros:', err);
+    }
 }
+
 
 // ========================================
 // 🗑️ LIMPIAR FILTROS OBSOLETOS (Con confirmación)
 // ========================================
 async function limpiarFiltrosObsoletosConConfirmacion() {
-    try {
-        const fechaLimite = new Date();
-        fechaLimite.setDate(fechaLimite.getDate() - 2);
-        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
- 
-        // ✅ CORRECCIÓN: Se usa { data, error } porque Supabase devuelve 'data'
-        const { data: filtrosViejos, error } = await supabaseClient
-            .from('filtros_por_unidad')
-            .select('id, Unidad, fecha_programada, configurado_por')
-            .lt('fecha_programada', fechaLimiteStr);
- 
-        if (error) {
-            console.error('❌ Error buscando filtros viejos:', error);
-            alert('❌ Error al buscar filtros obsoletos');
-            return;
-        }
- 
-        if (!filtrosViejos || filtrosViejos.length === 0) {
-            alert('✅ No hay filtros obsoletos para eliminar');
-            return;
-        }
- 
-        // Agrupar por fecha para mejor visualización
-        const resumen = filtrosViejos.reduce((acc, filtro) => {
-            const fecha = filtro.fecha_programada;
-            if (!acc[fecha]) acc[fecha] = { unidades: [], cantidad: 0 };
-            acc[fecha].unidades.push(filtro.Unidad);
-            acc[fecha].cantidad++;
-            return acc;
-        }, {});
- 
-        // Construir mensaje de confirmación
-        let mensaje = `🗑️ LIMPIEZA DE FILTROS OBSOLETOS\\n\\n`;
-        mensaje += `Se encontraron ${filtrosViejos.length} filtros anteriores a ${fechaLimiteStr}:\\n\\n`;
- 
-        Object.entries(resumen).forEach(([fecha, data]) => {
-            mensaje += `📅 ${fecha}: ${data.cantidad} filtro(s)\\n`;
-            if (data.unidades.length <= 5) {
-                mensaje += `   → ${data.unidades.join(', ')}\\n`;
-            } else {
-                mensaje += `   → ${data.unidades.slice(0, 3).join(', ')}, y ${data.unidades.length - 3} más\\n`;
-            }
-        });
- 
-        mensaje += `\\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER\\n`;
-        mensaje += `¿Deseas eliminar estos ${filtrosViejos.length} filtros obsoletos?`;
- 
-        const confirmar = confirm(mensaje);
-        if (!confirmar) return;
+    try {
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
 
-        // Eliminar filtros
-        const { error: errorDelete } = await supabaseClient
-            .from('filtros_por_unidad')
-            .delete()
-            .lt('fecha_programada', fechaLimiteStr);
- 
-        if (errorDelete) {
-            console.error('❌ Error eliminando filtros:', errorDelete);
-            alert('❌ Error al eliminar filtros obsoletos');
-            return;
-        }
- 
-        alert(`✅ ${filtrosViejos.length} filtro(s) eliminado(s) correctamente`);
- 
-    } catch (err) {
-        console.error('❌ Error en limpieza de filtros:', err);
-        alert('❌ Error inesperado en la aplicación');
-    }
+        const { data: filtrosViejos, error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('id, Unidad, fecha_programada')
+            .lt('fecha_programada', fechaLimiteStr);
+
+        if (error) {
+            console.error('❌ Error buscando filtros viejos:', error);
+            alert('❌ Error al buscar filtros obsoletos');
+            return;
+        }
+
+        if (!filtrosViejos || filtrosViejos.length === 0) {
+            alert('✅ No hay filtros obsoletos para eliminar');
+            return;
+        }
+
+        const resumen = filtrosViejos.reduce((acc, filtro) => {
+            const fecha = filtro.fecha_programada;
+            if (!acc[fecha]) acc[fecha] = { unidades: [], cantidad: 0 };
+            acc[fecha].unidades.push(filtro.Unidad);
+            acc[fecha].cantidad++;
+            return acc;
+        }, {});
+
+        // ✅ CORRECCIÓN: Usar \n simple para saltos de línea
+        let mensaje = `🗑️ LIMPIEZA DE FILTROS OBSOLETOS\n\n`;
+        mensaje += `Se encontraron ${filtrosViejos.length} filtros anteriores a ${fechaLimiteStr}:\n\n`;
+
+        Object.entries(resumen).forEach(([fecha, data]) => {
+            mensaje += `📅 ${fecha}: ${data.cantidad} filtro(s)\n`;
+            if (data.unidades.length <= 5) {
+                mensaje += `   → ${data.unidades.join(', ')}\n`;
+            } else {
+                mensaje += `   → ${data.unidades.slice(0, 3).join(', ')}... (+${data.unidades.length - 3} más)\n`;
+            }
+        });
+
+        mensaje += `\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER\n`;
+        mensaje += `¿Deseas eliminar estos ${filtrosViejos.length} registros?`;
+
+        if (!confirm(mensaje)) return;
+
+        const { error: errorDelete } = await supabaseClient
+            .from('filtros_por_unidad')
+            .delete()
+            .lt('fecha_programada', fechaLimiteStr);
+
+        if (errorDelete) {
+            throw errorDelete;
+        }
+
+        alert(`✅ ${filtrosViejos.length} filtro(s) eliminado(s) correctamente`);
+
+    } catch (err) {
+        console.error('❌ Error en limpieza de filtros:', err);
+        alert('❌ Error al procesar la eliminación');
+    }
 }
+
 
 </script>
 </body>
