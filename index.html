@@ -2000,92 +2000,103 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
 
-    // 1. RECUPERACIÓN DE SESIÓN (Prevención de errores por F5)
+    // 1. RECUPERACIÓN DE SESIÓN
     if (!currentUser) {
         const sessionStore = localStorage.getItem('cleca_user_session') || localStorage.getItem('usuario_logueado');
         if (sessionStore) {
             currentUser = JSON.parse(sessionStore).user || JSON.parse(sessionStore);
-            console.log('🔄 Sesión recuperada desde storage para:', currentUser.usuario);
         } else {
-            console.error('❌ No hay datos de usuario. Re-dirigiendo al login.');
             location.reload(); 
             return;
         }
     }
 
-    // 2. OBTENER TURNOS
+    // 2. VALIDACIÓN DE TURNOS
     const turnoHoy = localStorage.getItem('turno_hoy');
     const turnoManana = localStorage.getItem('turno_manana');
 
-    // 3. VALIDACIÓN ESTRICTA
     if (!turnoHoy || !turnoManana || turnoHoy === "null" || turnoManana === "null") {
-        console.warn('⚠️ Intento de acceso sin completar turnos.');
-        alert("⚠️ Debes registrar tu turno de HOY y de MAÑANA antes de ingresar al menú.");
-        
-        // Regresamos al flujo de configuración inicial
         mostrarConfiguracionInicialATTF();
         return; 
     }
 
-    // 4. SI PASA LA VALIDACIÓN, DAR ACCESO AL MENÚ
+    // 3. ⚡ LIMPIEZA TOTAL DE INTERFAZ
     try {
-        // Actualizar interfaz
-        const userLabel = document.getElementById('currentUser');
-        if (userLabel) userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+        // A. Ocultar elementos de configuración y login
+        if (document.getElementById('loginSection')) document.getElementById('loginSection').style.display = 'none';
+        
+        const configSec = document.getElementById('configuracionInicialATTF');
+        if (configSec) {
+            configSec.innerHTML = ''; 
+            configSec.style.display = 'none';
+        }
 
-        // ✅ PASO CRÍTICO: OCULTAR LOGIN Y MOSTRAR PADRE
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('userInfo').classList.remove('hidden');
-
-        // 🔥 ESTO ES LO QUE FALTA PARA QUITAR EL BLANCO:
-        // Aseguramos que el contenedor SEARCH esté visible, ya que contiene a las tablas
+        // B. Limpiar el contenedor de búsqueda y quitar letreros sobrantes
         const searchSection = document.getElementById('searchSection');
         if (searchSection) {
             searchSection.style.display = 'block';
             searchSection.classList.remove('hidden');
+            
+            // Borramos el texto "Consultar Información" si existe
+            const titulos = searchSection.querySelectorAll('h2, h3, p, label');
+            titulos.forEach(el => {
+                if (el.textContent.trim().includes('Consultar Información')) {
+                    el.style.display = 'none';
+                }
+            });
         }
 
-        // Mostrar selección de tablas (Hijo)
+        // C. Mostrar Módulos y Tablas
         const tableSelection = document.getElementById('tableSelectionSection');
         if (tableSelection) {
             tableSelection.style.display = 'block';
             tableSelection.classList.remove('hidden');
         }
 
-        // Ocultar el área de configuración de turnos si estaba abierta
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) configSec.style.display = 'none';
+        const menuModulos = document.getElementById('menuModulosATTF');
+        if (menuModulos) {
+            menuModulos.style.display = 'block';
+            menuModulos.classList.remove('hidden');
+        }
 
-        // Ejecutar procesos de fondo
+        // D. Identidad de usuario
+        const userLabel = document.getElementById('currentUser');
+        if (userLabel) userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+        if (document.getElementById('userInfo')) document.getElementById('userInfo').classList.remove('hidden');
+
+        // 4. EJECUTAR PROCESOS DE FONDO
         mostrarTablasSegunRol();
         iniciarVerificacionSesion();
         
-        console.log('✅ Acceso concedido al menú ATTF (Turnos validados)');
-
-        // OPCIONAL: Si quieres que entre directo al MAPA una vez validados los turnos:
-        // seleccionarTabla('mapa_rutas');
+        console.log('✅ Menú ATTF renderizado correctamente.');
 
     } catch (error) {
-        console.error('❌ Error crítico al renderizar el menú:', error);
+        console.error('❌ Error al renderizar el menú:', error);
     }
 }
 
-
-
 function mostrarForzarDescansoATTF() {
-    // 1. Buscamos el contenedor
+    // 1. Buscamos los contenedores
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+    const menuPrincipal = document.getElementById('menuModulosATTF') || document.querySelector('.main-menu-container');
+
     if (!targetSection) {
         console.error("No se encontró contenedor para el Descanso Obligatorio.");
         return;
     }
 
-    // 2. ⚡ LIMPIEZA: Borramos cualquier contenido previo (menús o formularios)
+    // 2. ⚡ CRÍTICO: Ocultamos el menú principal para que no se vea doble (Pantalla limpia)
+    if (menuPrincipal) {
+        menuPrincipal.style.display = 'none';
+    }
+
+    // 3. ⚡ LIMPIEZA: Vaciamos el contenedor y lo preparamos
     targetSection.innerHTML = ''; 
     targetSection.style.display = 'block';
+    targetSection.style.paddingBottom = '50px'; // Espacio extra abajo
     targetSection.classList.remove('hidden');
 
-    // 3. Lógica de fechas (Tu código original)
+    // 4. Lógica de fechas
     const ahora = new Date();
     const fechaManana = new Date(ahora);
     fechaManana.setDate(fechaManana.getDate() + 1);
@@ -2095,28 +2106,28 @@ function mostrarForzarDescansoATTF() {
     fechaPasado.setDate(fechaPasado.getDate() + 2);
     const fechaPasadoStr = fechaPasado.toISOString().split('T')[0];
 
-    // 4. Inyectamos la interfaz limpia
+    // 5. Inyectamos la interfaz
     targetSection.innerHTML = `
-        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto;">
+        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto; border-top: 5px solid #1a73e8;">
             <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 80px; display: block; margin: 0 auto;">
-            <h2 class="titulo-degradado" style="text-align: center;">Descanso Obligatorio</h2>
+            <h2 class="titulo-degradado" style="text-align: center; color: #1a73e8; margin-top: 15px;">Descanso Obligatorio</h2>
             
-            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107; color: #856404;">
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107; color: #856404; font-size: 14px; line-height: 1.4;">
                 <strong>⚠️ Ciclo Completado</strong><br>
                 Has cumplido 5 turnos consecutivos. Debes programar tu descanso de 2 días.
             </div>
             
             <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-                <strong style="color: #0d47a1;">📅 Días de descanso:</strong><br><br>
-                <div style="font-size: 18px; font-weight: 600; color: #2d3748; text-align: center;">
+                <strong style="color: #0d47a1;">📅 Días de descanso:</strong><br>
+                <div style="font-size: 17px; font-weight: 600; color: #2d3748; text-align: center; margin-top: 10px;">
                     🗓️ 1° Día: ${fechaManaanaStr}<br>
                     🗓️ 2° Día: ${fechaPasadoStr}
                 </div>
             </div>
             
             <div class="form-group">
-                <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de REGRESO:</label>
-                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                <label style="font-weight: bold; display: block; margin-bottom: 8px; color: #4a5568;">🔄 Turno de REGRESO:</label>
+                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: white; font-size: 16px;">
                     <option value="">-- Seleccione --</option>
                     ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
                         `<option value="${key}">${turno.nombre}</option>`
@@ -2125,17 +2136,17 @@ function mostrarForzarDescansoATTF() {
             </div>
             
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-                <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="background: #1a73e8; color: white; padding: 15px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer;">
+                <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="background: #1a73e8; color: white; padding: 15px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; font-size: 16px;">
                     ✅ Confirmar y Salir
                 </button>
-                <button class="btn-link" onclick="cambiarFechasDescansoATTF()" style="background: none; border: none; color: #2196f3; cursor: pointer; text-decoration: underline; font-size: 14px;">
+                <button class="btn-link" onclick="cambiarFechasDescansoATTF()" style="background: none; border: none; color: #2196f3; cursor: pointer; text-decoration: underline; font-size: 14px; padding: 5px;">
                     📅 Cambiar fechas manualmente
                 </button>
             </div>
         </div>
     `;
 
-    // 5. Guardar en variables globales (Tu código original)
+    // 6. Guardamos en globales para la confirmación
     window.fechasDescansoAutomaticas = {
         inicio: fechaManaanaStr,
         fin: fechaPasadoStr
@@ -2144,71 +2155,69 @@ function mostrarForzarDescansoATTF() {
     
 
 async function confirmarDescansoObligatorioATTF() {
-    const turnoRegreso = document.getElementById('turnoRegreso').value;
+    const turnoRegreso = document.getElementById('turnoRegreso')?.value;
     
     if (!turnoRegreso) {
-        alert('Por favor seleccione el turno de regreso');
+        alert('⚠️ Por favor seleccione el turno de regreso');
         return;
     }
-    
-    const fechaInicio = window.fechasDescansoAutomaticas.inicio;
-    const fechaFin = window.fechasDescansoAutomaticas.fin;
-    const turnoRegresoObj = TURNOS_ATTF[turnoRegreso];
-    
-    const confirmar = confirm(
-        `¿Confirmas tu descanso obligatorio?\n\n` +
-        `📅 Descanso: ${fechaInicio} y ${fechaFin}\n` +
-        `🔙 Regreso: ${turnoRegresoObj.nombre}\n\n` +
-        `✅ SÍ - Guardar y acceder`
-    );
-    
-    if (!confirmar) return;
-    
-    const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
+
+    const { inicio, fin } = window.fechasDescansoAutomaticas || {};
+    if (!inicio || !fin) {
+        alert('❌ Error: No se encontraron las fechas de descanso.');
+        return;
+    }
+
+    // Calcular fecha de regreso real (Día después del fin)
+    const fechaRegresoDate = new Date(fin + 'T00:00:00');
     fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
     const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
-    
+
     try {
+        // 1. Guardar en Base de Datos (Supabase)
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
-                descanso_fecha_inicio: fechaInicio,
-                descanso_fecha_fin: fechaFin,
+                descanso_fecha_inicio: inicio,
+                descanso_fecha_fin: fin,
                 turno_regreso: turnoRegreso,
                 fecha_turno_regreso: fechaRegreso,
                 contador_turnos: 0,
                 estado_ciclo: 'ciclo_normal',
-                turno_manana: 'DESCANSO', // ✅ En lugar de null, ponemos un texto identificador
-                fecha_turno_manana: fechaInicio,
+                turno_manana: 'descanso',
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
-        
+
         if (error) throw error;
 
-        // ✅ PASO CLAVE: Actualizar LocalStorage para que accederMenuATTF() no nos bloquee
-        localStorage.setItem('turno_hoy', 'DESCANSO');
-        localStorage.setItem('turno_manana', 'DESCANSO');
+        // ⚡ 2. ACTUALIZAR LOCALSTORAGE (Para persistencia al reingresar)
+        localStorage.setItem('turno_manana', 'descanso');
+        localStorage.setItem('descanso_inicio', inicio);
+        localStorage.setItem('descanso_fin', fin);
         localStorage.setItem('turnos_configurados', 'true');
 
-        // Limpiar variable temporal
-        delete window.fechasDescansoAutomaticas;
+        // ⚡ 3. LIMPIAR LA INTERFAZ (Elimina el problema de las imágenes encimadas)
+        const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+        if (targetSection) {
+            targetSection.innerHTML = ''; // Borra físicamente el cuadro
+            targetSection.style.display = 'none'; // Oculta el contenedor
+        }
+
+        // ⚡ 4. ASEGURAR QUE EL MENÚ SE VEA
+        const menuPrincipal = document.getElementById('menuModulosATTF');
+        if (menuPrincipal) menuPrincipal.style.display = 'block';
+
+        alert('✅ Descanso obligatorio confirmado');
         
-        console.log("✅ Descanso guardado. Accediendo al sistema...");
-
-        // Forzamos la limpieza visual antes de entrar
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) configSec.style.display = 'none';
-
-        // Entrar al menú
+        // 5. Ir al menú
         accederMenuATTF();
 
     } catch (err) {
-        console.error('Error al confirmar descanso:', err);
-        alert('Error guardando: ' + err.message);
+        console.error('❌ Error al confirmar descanso:', err);
+        alert('❌ Error al guardar en base de datos: ' + err.message);
     }
 }
-
 
 async function loginPoda(userData) {
     console.log('🌳 Iniciando flujo Poda');
