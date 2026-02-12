@@ -2512,9 +2512,7 @@ const tableConfigs = {
     'usuarios': {
         title: 'Gestión de Usuarios',
         icon: '👥',
-        fields: [
-            { key: 'usuario', label: 'Usuario', type: 'like' }
-        ],
+        fields: [{ key: 'usuario', label: 'Usuario', type: 'like' }],
         resultFields: ['usuario', 'rol', 'activo', 'bloqueado'],
         actions: [],
         esAdmin: true
@@ -2533,8 +2531,7 @@ const tableConfigs = {
         fields: [],
         resultFields: [],
         actions: [],
-        esDetalleOS: true,
-        rolesPermitidos: ['Administrador', 'Supervisor']
+        esDetalleOS: true
     },
     'retiro_medidores': {
         title: 'IPR - Retiro de Medidores',
@@ -2542,8 +2539,7 @@ const tableConfigs = {
         fields: [],
         resultFields: [],
         actions: [],
-        esIPR: true,
-        rolesPermitidos: ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']
+        esIPR: true
     },
     'mapa_rutas': {
         title: 'Mapa de Rutas',
@@ -2551,8 +2547,7 @@ const tableConfigs = {
         fields: [],
         resultFields: [],
         actions: [],
-        esMapaRutas: true,
-        rolesPermitidos: ['Administrador', 'Contratista', 'Consulta']
+        esMapaRutas: true
     },
     'cargar_asignaciones': {
         title: 'Cargar Asignaciones (Admin)',
@@ -2563,7 +2558,6 @@ const tableConfigs = {
         esAdmin: true
     }
 };
-
 
 
 	// ✅ Función para traer todos los datos de una tabla (Paginación automática)
@@ -5029,7 +5023,7 @@ async function generarMapaUnidadConFiltros(incluirAsignadas = true) {
     const resultsContainer = document.getElementById('searchResults');
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
  
-    const HOY = new Date().toISOString().split('T')[0];
+    
  
     try {
        // ✅ 1️⃣ Buscar filtros (Sincronizado con El Salvador)
@@ -5175,7 +5169,7 @@ if (window.osPartidaSeleccionada) {
 
         // --- AÑADE ESTO PARA DEFINIR LAT Y LNG ---
         const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
-        const partes = coordsTexto.split(',').map(c => parseFloat(c.trim()));
+if (!coordsTexto || !coordsTexto.includes(',')) throw new Error("La OS de partida no tiene coordenadas válidas (Lat, Lng)");
         const latCentro = partes[0];
         const lngCentro = partes[1];
 
@@ -5212,181 +5206,162 @@ const osatmosAsignadosGlobal = new Set(
 );
 console.log(`✅ ${osatmosAsignadosGlobal.size} OS asignadas globalmente`);
  
-        // ✅ 6️⃣ FILTRAR OS EN RADIO
-        console.log('🔍 APLICANDO FILTROS A OS EN RADIO');
-        console.log('🔍 Filtros activos:', {
-            tipologias: filtrosAplicar.tipologias,
-            rangos: filtrosAplicar.rangos,
-            radio: radioConfigurado + ' km'
-        });
-
-        console.log('🔍 ==========================================');
- 
-        const osEnRadio = [];
-        const osatmosAsignados = new Set(
-            osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
-        );
-
-        // Inicialización de contadores (SOLO UNA VEZ)
-        let contadorTotal = 0, contadorFiltradas = 0, contadorReguladas = 0, contadorDeudaAlta = 0;
-        let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
-        let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
-        const diagnosticoRangos = {};
-// 📊 Contadores adicionales para reporte detallado
-let contadorReguladas_EnRadio = 0, contadorReguladas_Pasaron = 0;
-let contadorNoReguladas_EnRadio = 0, contadorNoReguladas_Pasaron = 0;
-const detallePorRango = {};
-
-        console.log('🚨 INICIANDO forEach - Total OS a procesar:', osPendientes.length);
-        console.log(`📋 ${osatmosAsignados.size} OS asignadas para excluir duplicados`);
-        console.log(`📋 Unidad seleccionada: ${unidadSeleccionada}`);
-
-        // Función de normalización blindada
-        const normalizarTexto = (t) => (t || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
-
-        // ✅ Bucle de procesamiento
-        osPendientes.forEach((os) => {
-// ========================================
-// 🕵️ DEBUG ESPECÍFICO PARA OS 11195544
-// ========================================
-if (String(os.OSATMO).trim() === '11195544') {
-    const coordsPrueba = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    const distPrueba = coordsPrueba ? calcularDistancia(latCentro, lngCentro, coordsPrueba.lat, coordsPrueba.lng) : 'SIN COORD';
-    const uOS_Prueba = (os.Unidad || "").trim().toUpperCase();
-    const tipOS_Norm_Prueba = (os.Tipologia || "").toString().toUpperCase().trim().replace(/\s+/g, ' ');
-    const rangoOS_Prueba = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
-
-    console.group("🚨 AUDITORÍA OS 11195544");
-    console.log("📍 Coordenadas:", coordsPrueba);
-    console.log("📏 Distancia calculada:", distPrueba, "km (Radio actual:", radioConfigurado, "km)");
-    console.log("👤 Unidad en Base de Datos:", `"${uOS_Prueba}"`);
-    console.log("📋 Tipología en Base de Datos:", `"${tipOS_Norm_Prueba}"`);
-    console.log("📅 Rango calculado:", rangoOS_Prueba);
-    
-    // Verificación de filtros
-    const tipologiasFiltroLista = (window.filtrosAplicados.tipologias || "").split(',').map(t => t.trim().toUpperCase());
-    const tipOk = tipologiasFiltroLista.some(f => tipOS_Norm_Prueba.includes(f) || f.includes(tipOS_Norm_Prueba));
-    console.log("🔍 ¿Pasa filtro Tipología?:", tipOk);
-    console.log("📋 Filtros cargados actualmente:", tipologiasFiltroLista);
-    
-    const esDeOtro = uOS_Prueba !== "" && uOS_Limpia !== "---" && uOS_Prueba !== "SIN UNIDAD" && uOS_Prueba !== miUnidadNorm;
-    console.log("🚫 ¿Rechazada por Unidad Ocupada?:", esDeOtro);
-    console.groupEnd();
-}
-// ========================================
-    contadorTotal++;
-
-   // --- A. FILTROS BASE (Coordenadas y Radio) ---
-    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    if (!coords) { contadorSinCoordenadas++; return; }
-
-    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
-
-    // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DISPONIBILIDAD ---
-    const uOS_Original = (os.Unidad || "").toString().trim();
-    const idOS = String(os.OSATMO || os.osatomo || "").trim();
-
-    // 🔥 NORMALIZACIÓN CRÍTICA: Eliminamos todo lo que no sea letra o número
-    // Esto hace que "---", "   ", o "- - -" se conviertan en ""
-    const uOS_Limpia = uOS_Original.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    const miUnidadLimpia = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-
-    // 1. Identificamos si la OS está disponible (Ahora detecta cadenas de guiones como vacío)
-    const estaLibre = uOS_Limpia === "" || 
-                      uOS_Limpia === "PENDIENTE" || 
-                      uOS_Limpia === "SINUNIDAD" || 
-                      uOS_Limpia === "NULL";
-
-    // 2. ¿Es una orden que ya me pertenece? (Asignada en memoria o coincide unidad limpia)
-    const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS) || 
-                          (uOS_Limpia === miUnidadLimpia && uOS_Limpia !== "");
-
-    // 3. Verificación contra asignaciones de otros (Global)
-    const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
-
-    // 🚩 LÓGICA DE EXCLUSIÓN: 
-    // Si NO está libre y NO es mía, entonces realmente pertenece a OTRA unidad (ej. "PAC-01")
-    const esDeOtro = !estaLibre && !esAsignadaAMi;
-
-    if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
-        if (esDeOtro) {
-            contadorUnidadInvalida++; 
-        } else {
-            contadorDuplicados++; 
-        }
-        return; // ⛔ Se descarta correctamente
-    }
-
-    // 4. Procesable: Calculamos rango para diagnóstico
-    const rangoOS = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
-    diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
-
-
-    // --- C. DETERMINACIÓN DE PRIORIDADES ---
-    const valorTipo = (os.Tipo_de_OS || os.tipo_os || "").toUpperCase();
-    const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
-    const valorDeuda = parseFloat(os.Deuda || os.deuda || 0);
-    const esDeudaAlta = valorDeuda >= 500;
-
-    if (esRegulada) contadorReguladas_EnRadio++;
-    else contadorNoReguladas_EnRadio++;
-
-    const esPrioridad = esRegulada || esDeudaAlta;
-
-
-    // --- D. FILTROS DE TABLA (COINCIDENCIA EXCLUSIVA) ---
-    let cumpleFiltrosTabla = false;
-
-    if (!esPrioridad) {
-        const tipOS_Actual = normalizarTexto(os.Tipologia || os.tipologia || "");
-        
-        let tipologiasFiltro = filtrosAplicar.tipologias || [];
-        if (typeof tipologiasFiltro === 'string') {
-            tipologiasFiltro = tipologiasFiltro.split(',').map(t => t.trim());
-        }
-        
-        const tipOk = tipologiasFiltro.length === 0 || 
-                      tipologiasFiltro.some(f => normalizarTexto(f) === tipOS_Actual);
-        
-        const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
-        const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
-
-        cumpleFiltrosTabla = tipOk && rangoOk;
-    }
-
-
-    // --- E. DECISIÓN FINAL Y ASIGNACIÓN DE ESTADO ---
-    if (esPrioridad || cumpleFiltrosTabla) {
-        
-        let estadoFinal = 'no_regulada';
-        if (esRegulada) {
-            estadoFinal = 'regulada';
-            contadorReguladas++;
-            contadorReguladas_Pasaron++;
-        } else if (esDeudaAlta) {
-            estadoFinal = 'deuda_alta';
-            contadorDeudaAlta++;
-        } else {
-            contadorFiltradas++;
-            contadorNoReguladas_Pasaron++;
-        }
-
-        if (!detallePorRango[rangoOS]) detallePorRango[rangoOS] = 0;
-        detallePorRango[rangoOS]++;
-
-        osEnRadio.push({
-            ...os,
-            lat: coords.lat,
-            lng: coords.lng,
-            distancia: dist,
-            esExtra: true,
-            estado: estadoFinal
+        // ========================================
+        // ✅ 6️⃣ FILTRAR OS EN RADIO (UNIFICADO Y AUDITADO)
+        // ========================================
+        console.log('🔍 APLICANDO FILTROS A OS EN RADIO');
+        console.log('🔍 Filtros activos:', {
+            tipologias: filtrosAplicar.tipologias,
+            rangos: filtrosAplicar.rangos,
+            radio: radioConfigurado + ' km'
         });
-    } else {
-        contadorSinFiltro++;
-    }
-});
+
+        const osEnRadio = [];
+        const osatmosAsignadosUnidad = new Set(
+            osAsignadasUnidad.map(os => String(os.osatomo || os.OSATMO).trim())
+        );
+
+        // Inicialización de contadores
+        let contadorTotal = 0, contadorFiltradas = 0, contadorReguladas = 0, contadorDeudaAlta = 0;
+        let contadorFueraRadio = 0, contadorUnidadInvalida = 0, contadorDuplicados = 0;
+        let contadorSinCoordenadas = 0, contadorSinFiltro = 0;
+        let contadorReguladas_EnRadio = 0, contadorReguladas_Pasaron = 0;
+        let contadorNoReguladas_EnRadio = 0, contadorNoReguladas_Pasaron = 0;
+        const diagnosticoRangos = {};
+        const detallePorRango = {};
+
+        // 🔥 UNIFICACIÓN DE UNIVERSOS (Supabase + Memoria/Excel)
+        const universoUnificado = [
+            ...osPendientes,
+            ...(window.universoParaFiltrarKML || [])
+        ];
+
+        // Eliminamos duplicados reales por ID para no procesar dos veces la misma OS
+        const idsUnicos = new Set();
+        const osAPrecesarFinal = universoUnificado.filter(os => {
+            const id = String(os.OSATMO || os.osatomo || "").trim();
+            if (!id || idsUnicos.has(id)) return false;
+            idsUnicos.add(id);
+            return true;
+        });
+
+        console.log(`🚀 Universo unificado listo: ${osAPrecesarFinal.length} órdenes únicas.`);
+        console.log(`📋 Unidad seleccionada para comparación: ${unidadSeleccionada}`);
+
+        const normalizarTexto = (t) => (t || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+
+        // 🔄 INICIO DEL PROCESAMIENTO
+        osAPrecesarFinal.forEach((os) => {
+            
+            // ========================================
+            // 🕵️ DEBUG ESPECÍFICO PARA OS 11195544
+            // ========================================
+            if (String(os.OSATMO || os.osatomo).trim() === '11195544') {
+                const coordsPrueba = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+                const uOS_Prueba = (os.Unidad || "").trim();
+                const uOS_Limpia_Prueba = uOS_Prueba.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+                const miUnidadLimpia_Prueba = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+                
+                const estaLibre_Prueba = uOS_Limpia_Prueba === "" || uOS_Limpia_Prueba === "PENDIENTE" || uOS_Limpia_Prueba === "SINUNIDAD";
+                const esMia_Prueba = uOS_Limpia_Prueba === miUnidadLimpia_Prueba && uOS_Limpia_Prueba !== "";
+
+                console.group("🚨 AUDITORÍA INTEGRAL OS 11195544");
+                console.log("👤 Unidad Original en BD:", `"${uOS_Prueba}"`);
+                console.log("🧼 Unidad Normalizada:", `"${uOS_Limpia_Prueba}"`);
+                console.log("🔓 ¿Se considera LIBRE?:", estaLibre_Prueba ? "SI ✅ (Pasa por vacio/guiones)" : "NO ❌");
+                console.log("🙋 ¿Es de mi Unidad?:", esMia_Prueba ? "SI ✅" : "NO");
+                console.log("🚫 ¿Rechazada por Otro?:", (!estaLibre_Prueba && !esMia_Prueba) ? "SÍ ⛔" : "NO ✅");
+                
+                if (coordsPrueba) {
+                    const distPrueba = calcularDistancia(latCentro, lngCentro, coordsPrueba.lat, coordsPrueba.lng);
+                    console.log("📏 Distancia:", distPrueba.toFixed(2), "km (Radio:", radioConfigurado, "km)");
+                    console.log("📍 ¿En radio?:", distPrueba <= radioConfigurado ? "SÍ ✅" : "NO ❌");
+                }
+                console.groupEnd();
+            }
+
+            contadorTotal++;
+
+            // --- A. FILTROS BASE (Coordenadas y Radio) ---
+            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+            if (!coords) { contadorSinCoordenadas++; return; }
+
+            const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+            if (dist > radioConfigurado) { contadorFueraRadio++; return; }
+
+            // --- B. NORMALIZACIÓN DE DISPONIBILIDAD ---
+            const uOS_Original = (os.Unidad || "").toString().trim();
+            const idOS = String(os.OSATMO || os.osatomo || "").trim();
+            const uOS_Limpia = uOS_Original.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+            const miUnidadLimpia = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+            const estaLibre = uOS_Limpia === "" || uOS_Limpia === "PENDIENTE" || uOS_Limpia === "SINUNIDAD" || uOS_Limpia === "NULL";
+            const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS) || 
+                                 (uOS_Limpia === miUnidadLimpia && uOS_Limpia !== "");
+            const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
+
+            const esDeOtro = !estaLibre && !esAsignadaAMi;
+
+            if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
+                if (esDeOtro) contadorUnidadInvalida++; else contadorDuplicados++;
+                return; 
+            }
+
+            // --- C. DETERMINACIÓN DE PRIORIDADES ---
+            const rangoOS = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
+            const valorTipo = (os.Tipo_de_OS || os.tipo_os || "").toUpperCase();
+            const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
+            const valorDeuda = parseFloat(os.Deuda || os.deuda || 0);
+            const esDeudaAlta = valorDeuda >= 500;
+
+            if (esRegulada) contadorReguladas_EnRadio++; else contadorNoReguladas_EnRadio++;
+            const esPrioridad = esRegulada || esDeudaAlta;
+
+            // --- D. FILTROS DE TABLA ---
+            let cumpleFiltrosTabla = false;
+            if (!esPrioridad) {
+                const tipOS_Actual = normalizarTexto(os.Tipologia || os.tipologia || "");
+                let tipologiasFiltro = filtrosAplicar.tipologias || [];
+                if (typeof tipologiasFiltro === 'string') tipologiasFiltro = tipologiasFiltro.split(',').map(t => t.trim());
+                
+                const tipOk = tipologiasFiltro.length === 0 || tipologiasFiltro.some(f => normalizarTexto(f) === tipOS_Actual);
+                const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
+                const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
+
+                cumpleFiltrosTabla = tipOk && rangoOk;
+            }
+
+            // --- E. DECISIÓN FINAL ---
+            if (esPrioridad || cumpleFiltrosTabla) {
+                let estadoFinal = 'no_regulada';
+                if (esRegulada) {
+                    estadoFinal = 'regulada';
+                    contadorReguladas++;
+                    contadorReguladas_Pasaron++;
+                } else if (esDeudaAlta) {
+                    estadoFinal = 'deuda_alta';
+                    contadorDeudaAlta++;
+                } else {
+                    contadorFiltradas++;
+                    contadorNoReguladas_Pasaron++;
+                }
+
+                if (!detallePorRango[rangoOS]) detallePorRango[rangoOS] = 0;
+                detallePorRango[rangoOS]++;
+
+                osEnRadio.push({
+                    ...os,
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    distancia: dist,
+                    esExtra: true,
+                    estado: estadoFinal
+                });
+            } else {
+                contadorSinFiltro++;
+            }
+        });
+
 
         /// ✅ LOG FINAL CON TABLA COMPLETA
 console.log('📊 ==========================================');
@@ -5831,36 +5806,42 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             btn.style.opacity = '0.7';
         }
         
-        // ✅ Sincronización crucial de variables globales
+        // 1. Sincronización de variables globales
         window.osPartidaSeleccionada = osPartida;
         window.currentUnidadKML = unidad; 
 
         console.log('--- 🚀 INICIANDO PROCESO DE FILTRADO KML RUTA ---');
-        console.log('📍 OS Centro elegida:', osPartida);
-        console.log('👤 Unidad logueada:', unidad);
 
-        // 🔍 VALIDACIÓN PREVIA DE DATOS
-        // Si por alguna razón la lista de pendientes se perdió, intentamos recuperarla
-        if (!window.todasLasPendientesKML || window.todasLasPendientesKML.length === 0) {
-            console.warn("⚠️ El universo de pendientes no está en memoria. Recargando...");
-            // Opcional: Podrías llamar a una función de recarga aquí
-        }
+        // 2. 🔥 UNIÓN CRUCIAL DE ARRAYS (Aquí es donde se "funden" tus 13 OS con las 11,000 pendientes)
+        // Creamos una variable global temporal que el motor leerá
+        window.universoParaFiltrarKML = [
+            ...(window.osAsignadasKML || []), 
+            ...(window.todasLasPendientesKML || [])
+        ];
 
-        // 🎯 LOG DE AUDITORÍA FINAL ANTES DE ENTRAR AL MOTOR DE FILTRADO
-        if (window.todasLasPendientesKML) {
-            const check = window.todasLasPendientesKML.find(p => String(p.OSATMO).trim() === '11195544');
-            if (check) {
-                console.log("✅ AUDITORÍA: La OS 11195544 está en el buffer de entrada. Entrando a generarMapaUnidadConFiltros...");
-            } else {
-                console.error("❌ ERROR CRÍTICO: La OS 11195544 NO llegó a esta etapa. Revisa cargarInterfazKMLRuta.");
-            }
+        console.log(`📦 Universo Total a procesar: ${window.universoParaFiltrarKML.length} registros.`);
+
+        // 3. 🕵️ AUDITORÍA DE SEGURIDAD PARA LA OS 11195544
+        const check = window.universoParaFiltrarKML.find(p => String(p.OSATMO || p.osatomo).trim() === '11195544');
+        
+        if (check) {
+            const uOriginal = check.Unidad || "VACÍO";
+            // Normalización rápida para el log
+            const uLimpia = uOriginal.replace(/[^a-zA-Z0-9]/g, "");
+            
+            console.group("✅ AUDITORÍA PRE-FILTRADO (OS 11195544)");
+            console.log("Estado: PRESENTE en el universo de unión");
+            console.log("Unidad en BD:", `"${uOriginal}"`);
+            console.log("Resultado limpieza:", uLimpia === "" ? "LIBRE (Vacio) ✅" : `OCUPADA por ${uLimpia} ❌`);
+            console.groupEnd();
+        } else {
+            console.error("❌ ERROR CRÍTICO: La OS 11195544 NO existe en el universo unido.");
         }
 
         /**
-         * 🔥 LLAMADA AL MOTOR DE RENDERIZADO
-         * IMPORTANTE: 'generarMapaUnidadConFiltros' debe estar programada para leer:
-         * 1. window.osAsignadasKML (Tus órdenes propias)
-         * 2. window.todasLasPendientesKML (Las sugerencias potenciales)
+         * 4. 🔥 LLAMADA AL MOTOR DE RENDERIZADO
+         * IMPORTANTE: Asegúrate de que dentro de 'generarMapaUnidadConFiltros'
+         * la línea del forEach diga: window.universoParaFiltrarKML.forEach(os => { ... })
          */
         await generarMapaUnidadConFiltros(true); 
 
@@ -5877,6 +5858,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
         }
     }
 }
+
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
@@ -13619,16 +13601,16 @@ function verificarDatosOffline() {
  * Define qué roles pueden entrar a qué módulos.
  */
 const PERMISOS_MODULOS = {
-    'cargar_asignaciones': ['Administrador', 'Despacho'],
-    'mapa_rutas':          ['Administrador', 'Despacho'], // Solo estos dos según tu instrucción
-    'usuarios':            ['Administrador'],
-    'detalle_os':          ['Administrador', 'Supervisor'],
-    'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'],
-    'kml_rutas':           ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
-    'os_pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
-    'os_cerradas':         ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura'],
-    'tx_cortes':           ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'] // Agregado Tx y Cortes
+    'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'TX y Cortes':         ['Administrador', 'Supervisor', 'ATTF', 'Contratista', 'Consulta', 'Despacho'],
+    'usuarios':            ['Administrador'],
+    'kml_ruta':            ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'],
+    'detalle_os':          ['Administrador', 'Supervisor'],
+    'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'Contratista', 'Consulta'],
+    'mapa_rutas':          ['Administrador', 'Despacho'],
+    'cargar_asignaciones': ['Administrador', 'Despacho']
 };
 
 /**
@@ -13638,71 +13620,39 @@ function seleccionarTabla(tableName) {
     renovarSesion();
     const rolActual = currentUser.rol;
     
-    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
-
-    // 1. VALIDACIÓN DE PERMISOS DINÁMICA
+    // 1. Capa de Seguridad (Por si acceden por consola)
     const rolesPermitidos = PERMISOS_MODULOS[tableName];
-    
-    if (!rolesPermitidos) {
-        console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
-    } else if (!rolesPermitidos.includes(rolActual)) {
-        alert(`⚠️ Acceso Denegado: Su rol de '${rolActual}' no tiene permisos para el módulo ${tableName.replace('_', ' ').toUpperCase()}.`);
+    if (!rolesPermitidos || !rolesPermitidos.includes(rolActual)) {
+        alert(`🚫 Acceso Denegado: Su rol '${rolActual}' no tiene permisos.`);
         return;
     }
 
-    // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
-    switch (tableName) {
-        case 'cargar_asignaciones':
-            cargarInterfazAsignaciones();
-            break;
-            
-        case 'mapa_rutas':
-            // Aquí puedes disparar una función inicializadora si es necesario
-            console.log("📍 Inicializando Mapa de Rutas...");
-            break;
+    // 2. Limpieza de interfaz de resultados previos
+    const resultsContainer = document.getElementById('searchResults');
+    if (resultsContainer) resultsContainer.innerHTML = '';
 
-        case 'kml_rutas':
-            // Lógica específica para KML si existe
-            break;
+    // 3. Lógica específica
+    switch (tableName) {
+        case 'cargar_asignaciones': cargarInterfazAsignaciones(); break;
+        case 'mapa_rutas': console.log("🗺️ Cargando Mapa..."); break;
     }
 
-    // 3. ACTUALIZAR INTERFAZ VISUAL
+    // 4. Cambio de Vista
     const config = tableConfigs[tableName];
     if (config) {
         selectedTable = tableName;
         document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
-        generarCamposBusqueda(config);
         
-        // Cambio de vista
+        // Solo genera campos si el módulo no es una herramienta especial (Mapa/Carga)
+        if (config.fields && config.fields.length > 0) {
+            generarCamposBusqueda(config);
+        }
+        
         document.getElementById('tableSelectionSection').style.display = 'none';
         document.getElementById('searchSection').style.display = 'block';
-    } else {
-        console.error("❌ Error: Configuración visual no encontrada para", tableName);
-        alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 }
-
-// ==========================================================
-// 🚀 INICIALIZACIÓN Y EVENTOS
-// ==========================================================
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Sistema de Consultas Campo Inicializado');
-
-    // Validación de sesión
-    if (!verificarDatosOffline()) {
-        const loginSec = document.getElementById('loginSection');
-        if (loginSec) loginSec.style.display = 'block';
-    }
-
-    // Conector del botón de Login
-    const loginButton = document.getElementById('loginButton');
-    if (loginButton) {
-        loginButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            login();
-        });
-    }
-});
 
 
 // ========================================
