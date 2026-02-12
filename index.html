@@ -1215,18 +1215,31 @@ guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_tok
 console.log(`👤 Rol detectado: ${data.rol}`);
 
 if (data.rol === 'ATTF') {
-    // 🛡️ BLOQUEO DE SEGURIDAD (Aquí integramos la validación)
+    currentUser = data; // Guardamos el usuario para que las siguientes funciones sepan quién es
+    
     const tHoy = localStorage.getItem('turno_hoy');
     const tManana = localStorage.getItem('turno_manana');
 
-    // Si le falta CUALQUIERA de los dos, no lo dejamos pasar al menú
     if (!tHoy || !tManana) {
-        console.log("⚠️ Turnos incompletos en local. Forzando registro.");
-        mostrarProgramarTurnoHoy(data); // Lo mandamos a que empiece el flujo desde hoy
-        return; // IMPORTANTE: Cortamos la ejecución aquí
+        console.log("⚠️ Turnos incompletos. Mostrando interfaz de selección.");
+        
+        // 1. Ocultar el login
+        document.getElementById('loginSection').style.display = 'none';
+        
+        // 2. Mostrar la sección donde el usuario elige los turnos
+        // Busca el ID real de tu contenedor de turnos, suele ser algo como:
+        const seccionTurnos = document.getElementById('seccionProgramacionTurnos');
+        if (seccionTurnos) {
+            seccionTurnos.style.display = 'block';
+            seccionTurnos.classList.remove('hidden');
+        } else {
+            // Si usas un modal de Bootstrap:
+            // $('#modalTurnos').modal('show');
+            console.error("No se encontró el contenedor seccionProgramacionTurnos");
+        }
+        return; 
     }
 
-    // Si ya tiene los dos en localStorage, significa que ya cumplió el proceso
     accederMenuATTF(); 
     return;
 }
