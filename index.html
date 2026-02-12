@@ -4729,23 +4729,25 @@ function toggleSeccionTipologiasUnidad() {
 }
 
 
- 	// 🔍 FUNCIÓN PARA EXTRAER LATITUD Y LONGITUD DE CUALQUIER CAMPO
-function parsearCoordenadas(coordString) {
-    if (!coordString || typeof coordString !== 'string' || !coordString.includes(',')) {
-        return null;
-    }
- 
-    try {
-        const partes = coordString.split(',').map(c => parseFloat(c.trim()));
-        // Manejar formatos [lat, lng] o [lng, lat] si fuera necesario,
-        // pero aquí asumimos estándar: latitud primero.
-        if (isNaN(partes[0]) || isNaN(partes[1])) return null;
- 
-        return { lat: partes[0], lng: partes[1] };
-    } catch (e) {
-        return null;
-    }
+ 	function parsearCoordenadas(coordString) {
+    // 1. Verificación básica de existencia y tipo
+    if (!coordString || typeof coordString !== 'string') return null;
+    
+    // 2. Limpieza de caracteres invisibles o espacios
+    const limpia = coordString.trim();
+    if (!limpia.includes(',')) return null;
+
+    // 3. Extracción y validación
+    const partes = limpia.split(',').map(c => parseFloat(c.trim()));
+    
+    // 4. Validación de rango (Latitud entre -90/90 y Longitud entre -180/180)
+    // Esto es lo que evita que el mapa "explote" con datos basura
+    if (isNaN(partes[0]) || isNaN(partes[1])) return null;
+    if (Math.abs(partes[0]) > 90 || Math.abs(partes[1]) > 180) return null;
+
+    return { lat: partes[0], lng: partes[1] };
 }
+
 
 
 // ========================================
@@ -9136,26 +9138,36 @@ function extraerCoordenadas(os) {
     };
 }
 
+// ==========================================
+// 🛡️ MOTOR GEOGRÁFICO GLOBAL (Corregido)
+// ==========================================
 
+// 1. Función base (Usamos 'function' para asegurar disponibilidad global)
+function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
+    // Protección contra datos nulos en el universo de 11k órdenes
+    if (lat1 === undefined || lat2 === undefined || isNaN(lat1) || isNaN(lat2)) return Infinity;
 
-function parsearCoordenadas(coordString) {
-    // 1. Verificación básica de existencia y tipo
-    if (!coordString || typeof coordString !== 'string') return null;
-    
-    // 2. Limpieza de caracteres invisibles o espacios
-    const limpia = coordString.trim();
-    if (!limpia.includes(',')) return null;
-
-    // 3. Extracción y validación
-    const partes = limpia.split(',').map(c => parseFloat(c.trim()));
-    
-    // 4. Validación de rango (Latitud debe estar entre -90 y 90)
-    // Esto evita que el mapa salte al infinito si los datos están mal puestos
-    if (isNaN(partes[0]) || isNaN(partes[1])) return null;
-    if (Math.abs(partes[0]) > 90 || Math.abs(partes[1]) > 180) return null;
-
-    return { lat: partes[0], lng: partes[1] };
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return parseFloat((R * c).toFixed(2));
 }
+
+// 2. EL ALIAS GLOBAL (Cambiamos 'const' por asignación global)
+// Esto garantiza que cualquier parte del código encuentre la función
+window.calcularDistancia = calcularDistanciaKm;
+var calcularDistancia = calcularDistanciaKm; 
+
+// 3. El parseador de coordenadas (Mejorado)
+
+
+console.log("✅ Motor de distancias y coordenadas listo para procesar universo de OS.");
+
+
 
 
 /// ========================================
