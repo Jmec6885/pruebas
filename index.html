@@ -672,37 +672,35 @@ const TURNOS_ATTF = {
 
 
 function cambiarFechasDescansoATTF() {
-    // ✅ Usamos el contenedor visible
+    // 1. Buscamos el contenedor principal
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-    
     if (!targetSection) return;
 
-    // Obtener la fecha de mañana como mínimo para el calendario
+    // 2. ⚡ CRÍTICO: Limpiar el contenido previo para que no se encime
+    targetSection.innerHTML = ''; 
+
     const mañana = new Date();
     mañana.setDate(mañana.getDate() + 1);
     const minDate = mañana.toISOString().split('T')[0];
 
+    // 3. Inyectamos la interfaz limpia
     targetSection.innerHTML = `
-        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto;">
             <h2 class="titulo-degradado" style="text-align: center;">Ajustar Descanso</h2>
             <p style="text-align: center; color: #666; font-size: 14px;">Selecciona manualmente tus días de descanso</p>
             
             <div style="margin-top: 20px;">
                 <div class="form-group" style="margin-bottom: 15px;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🗓️ Fecha de Inicio:</label>
-                    <input type="date" id="fechaInicioInput" min="${minDate}" class="form-control" 
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    <label>🗓️ Fecha de Inicio:</label>
+                    <input type="date" id="fechaInicioInput" min="${minDate}" class="form-control">
                 </div>
-
                 <div class="form-group" style="margin-bottom: 15px;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🗓️ Fecha de Fin:</label>
-                    <input type="date" id="fechaFinInput" min="${minDate}" class="form-control" 
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    <label>🗓️ Fecha de Fin:</label>
+                    <input type="date" id="fechaFinInput" min="${minDate}" class="form-control">
                 </div>
-
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">🔙 Turno de REGRESO:</label>
-                    <select id="turnoRegresoInput" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    <label>🔙 Turno de REGRESO:</label>
+                    <select id="turnoRegresoInput" class="form-control">
                         <option value="">-- Seleccione --</option>
                         ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
                             `<option value="${key}">${turno.nombre}</option>`
@@ -712,17 +710,12 @@ function cambiarFechasDescansoATTF() {
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <button class="btn" onclick="procesarCambioFechasManual()" style="background: #4caf50; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    ✅ Aplicar
-                </button>
-                <button class="btn" onclick="mostrarForzarDescansoATTF()" style="background: #e2e8f0; color: #475569; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                    ↩️ Volver
-                </button>
+                <button class="btn" onclick="procesarCambioFechasManual()" style="background: #4caf50; color: white;">✅ Aplicar</button>
+                <button class="btn" onclick="mostrarForzarDescansoATTF()" style="background: #e2e8f0; color: #475569;">↩️ Volver</button>
             </div>
         </div>
     `;
 }
-
 
 function procesarCambioFechasManual() {
     const inicio = document.getElementById('fechaInicioInput').value;
@@ -734,69 +727,95 @@ function procesarCambioFechasManual() {
         return;
     }
 
+    // Validación lógica de fechas
     if (new Date(inicio) > new Date(fin)) {
-        alert("⚠️ La fecha de inicio no puede ser mayor a la fecha de fin.");
+        alert("⚠️ La fecha de inicio no puede ser posterior a la de fin.");
         return;
     }
 
-    // Guardar para que confirmarDescansoPersonalizadoATTF pueda leerlo
     window.fechasDescansoPersonalizadas = { inicio, fin };
-    window.turnoRegresoManual = regreso; // Guardamos el regreso seleccionado
+    window.turnoRegresoManual = regreso; 
 
-    // Proceder a la confirmación final
     confirmarDescansoPersonalizadoATTF();
 }
 
+
 async function confirmarDescansoPersonalizadoATTF() {
-  const turnoRegreso = document.getElementById('turnoRegreso').value;
-  if (!turnoRegreso) {
-    alert('⚠️ Seleccione el turno de regreso');
-    return;
-  }
+    // 🔍 1. Obtener el turno de forma flexible (Evita errores de lectura)
+    const turnoRegreso = window.turnoRegresoManual || 
+                         document.getElementById('turnoRegreso')?.value || 
+                         document.getElementById('turnoRegresoInput')?.value;
 
-  const { inicio, fin } = window.fechasDescansoPersonalizadas || {};
-  if (!inicio || !fin) {
-    alert('⚠️ No hay fechas seleccionadas');
-    return;
-  }
+    if (!turnoRegreso) {
+        alert('⚠️ Seleccione el turno de regreso');
+        return;
+    }
 
-  const confirmar = confirm(
-    `¿Confirmar descanso personalizado?\n` +
-    `📅 Inicio: ${inicio}\n` +
-    `📅 Fin: ${fin}\n` +
-    `🔙 Regreso: ${TURNOS_ATTF[turnoRegreso]?.nombre || '---'}`
-  );
+    const { inicio, fin } = window.fechasDescansoPersonalizadas || {};
+    if (!inicio || !fin) {
+        alert('⚠️ No hay fechas seleccionadas');
+        return;
+    }
 
-  if (!confirmar) return;
+    // 🔍 2. Confirmación al usuario
+    const confirmar = confirm(
+        `¿Confirmar descanso personalizado?\n` +
+        `📅 Inicio: ${inicio}\n` +
+        `📅 Fin: ${fin}\n` +
+        `🔙 Regreso: ${TURNOS_ATTF[turnoRegreso]?.nombre || '---'}`
+    );
 
-  // Guardar en base de datos
-  const fechaRegresoDate = new Date(fin + 'T00:00:00');
-  fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
-  const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
+    if (!confirmar) return;
 
-  const { error } = await supabaseClient
-    .from('usuarios')
-    .update({
-      descanso_fecha_inicio: inicio,
-      descanso_fecha_fin: fin,
-      turno_regreso: turnoRegreso,
-      fecha_turno_regreso: fechaRegreso,
-      contador_turnos: 0,
-      estado_ciclo: 'ciclo_normal',
-      turno_manana: null,
-      fecha_turno_manana: null,
-      ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
-    })
-    .eq('id', currentUser.id);
+    try {
+        console.log(`💾 Guardando Descanso: ${inicio} al ${fin}...`);
 
-  if (error) {
-    alert('❌ Error: ' + error.message);
-    return;
-  }
+        // Calcular fecha de regreso real (Día después del fin)
+        const fechaRegresoDate = new Date(fin + 'T00:00:00');
+        fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+        const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
 
-  alert('✅ Descanso personalizado guardado');
-  accederMenuATTF();
+        // 🔍 3. Guardar en Supabase
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({
+                descanso_fecha_inicio: inicio,
+                descanso_fecha_fin: fin,
+                turno_regreso: turnoRegreso,
+                fecha_turno_regreso: fechaRegreso,
+                contador_turnos: 0,
+                estado_ciclo: 'ciclo_normal',
+                turno_manana: 'descanso', 
+                fecha_turno_manana: null,
+                ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+            })
+            .eq('id', currentUser.id);
+
+        if (error) throw error;
+
+        // 🔍 4. ACTUALIZAR LOCALSTORAGE (Evita el regreso al Paso 1)
+        localStorage.setItem('turno_manana', 'descanso');
+        localStorage.setItem('descanso_inicio', inicio);
+        localStorage.setItem('descanso_fin', fin);
+
+        // 🔍 5. LIMPIAR LA INTERFAZ (Elimina la pantalla de abajo)
+        const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+        if (targetSection) {
+            targetSection.innerHTML = ''; // Borra el formulario
+            targetSection.style.display = 'none'; // Oculta el contenedor
+        }
+
+        alert('✅ Descanso guardado correctamente');
+        
+        // 🔍 6. Ir al menú directamente (Ahora entrará limpio)
+        accederMenuATTF();
+
+    } catch (error) {
+        console.error("❌ Error en el proceso final:", error);
+        alert('❌ Error al guardar: ' + error.message);
+    }
 }
+
 
 // ============================================================
 // 🛠️ FUNCIÓN GLOBAL PARA PROCESAR EL DESCANSO (SOLUCIÓN ERROR)
@@ -2054,10 +2073,19 @@ function accederMenuATTF() {
 
 
 function mostrarForzarDescansoATTF() {
-    // ✅ CORRECCIÓN: Usar el contenedor que SÍ está visible
+    // 1. Buscamos el contenedor
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-    
-    // Calcular fechas automáticamente
+    if (!targetSection) {
+        console.error("No se encontró contenedor para el Descanso Obligatorio.");
+        return;
+    }
+
+    // 2. ⚡ LIMPIEZA: Borramos cualquier contenido previo (menús o formularios)
+    targetSection.innerHTML = ''; 
+    targetSection.style.display = 'block';
+    targetSection.classList.remove('hidden');
+
+    // 3. Lógica de fechas (Tu código original)
     const ahora = new Date();
     const fechaManana = new Date(ahora);
     fechaManana.setDate(fechaManana.getDate() + 1);
@@ -2066,50 +2094,48 @@ function mostrarForzarDescansoATTF() {
     const fechaPasado = new Date(ahora);
     fechaPasado.setDate(fechaPasado.getDate() + 2);
     const fechaPasadoStr = fechaPasado.toISOString().split('T')[0];
-    
-    if (targetSection) {
-        // Aseguramos que el contenedor padre esté visible
-        targetSection.style.display = 'block';
-        targetSection.classList.remove('hidden');
 
-        targetSection.innerHTML = `
-            <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-                <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 80px; display: block; margin: 0 auto;">
-                <h2 class="titulo-degradado" style="text-align: center;">Descanso Obligatorio</h2>
-                
-                <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107; color: #856404;">
-                    <strong>⚠️ Ciclo Completado</strong><br>
-                    Has cumplido 5 turnos consecutivos. Debes programar tu descanso de 2 días.
+    // 4. Inyectamos la interfaz limpia
+    targetSection.innerHTML = `
+        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto;">
+            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 80px; display: block; margin: 0 auto;">
+            <h2 class="titulo-degradado" style="text-align: center;">Descanso Obligatorio</h2>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ffc107; color: #856404;">
+                <strong>⚠️ Ciclo Completado</strong><br>
+                Has cumplido 5 turnos consecutivos. Debes programar tu descanso de 2 días.
+            </div>
+            
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                <strong style="color: #0d47a1;">📅 Días de descanso:</strong><br><br>
+                <div style="font-size: 18px; font-weight: 600; color: #2d3748; text-align: center;">
+                    🗓️ 1° Día: ${fechaManaanaStr}<br>
+                    🗓️ 2° Día: ${fechaPasadoStr}
                 </div>
-                
-                <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-                    <strong style="color: #0d47a1;">📅 Días de descanso:</strong><br><br>
-                    <div style="font-size: 18px; font-weight: 600; color: #2d3748; text-align: center;">
-                        🗓️ 1° Día: ${fechaManaanaStr}<br>
-                        🗓️ 2° Día: ${fechaPasadoStr}
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de REGRESO:</label>
-                    <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
-                        <option value="">-- Seleccione --</option>
-                        ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
-                            `<option value="${key}">${turno.nombre}</option>`
-                        ).join('')}
-                    </select>
-                </div>
-                
-                <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="width: 100%; margin-top: 20px; background: #1a73e8; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+            </div>
+            
+            <div class="form-group">
+                <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de REGRESO:</label>
+                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9;">
+                    <option value="">-- Seleccione --</option>
+                    ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
+                        `<option value="${key}">${turno.nombre}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                <button class="btn" onclick="confirmarDescansoObligatorioATTF()" style="background: #1a73e8; color: white; padding: 15px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer;">
                     ✅ Confirmar y Salir
                 </button>
+                <button class="btn-link" onclick="cambiarFechasDescansoATTF()" style="background: none; border: none; color: #2196f3; cursor: pointer; text-decoration: underline; font-size: 14px;">
+                    📅 Cambiar fechas manualmente
+                </button>
             </div>
-        `;
-    } else {
-        console.error("No se encontró contenedor para el Descanso Obligatorio.");
-    }
-    
-    // Guardar en variables globales
+        </div>
+    `;
+
+    // 5. Guardar en variables globales (Tu código original)
     window.fechasDescansoAutomaticas = {
         inicio: fechaManaanaStr,
         fin: fechaPasadoStr
