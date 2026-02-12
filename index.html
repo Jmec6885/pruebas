@@ -13958,13 +13958,17 @@ const PERMISOS_MODULOS = {
 /**
  * Selecciona y valida el acceso a las tablas/módulos
  */
+/**
+ * Selecciona y valida el acceso a las tablas/módulos
+ * Versión Corregida para evitar pantalla en blanco en Carga de Asignaciones
+ */
 function seleccionarTabla(tableName) {
     renovarSesion();
     const rolActual = currentUser.rol;
     
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
 
-    // 1. VALIDACIÓN DE PERMISOS DINÁMICA
+    // 1. VALIDACIÓN DE PERMISOS DINÁMICA (Tu código original)
     const rolesPermitidos = PERMISOS_MODULOS[tableName];
     
     if (!rolesPermitidos) {
@@ -13977,27 +13981,32 @@ function seleccionarTabla(tableName) {
     // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
         case 'cargar_asignaciones':
+            // ✅ PRIMERO: Ocultamos el menú y mostramos la sección de búsqueda
+            document.getElementById('tableSelectionSection').style.display = 'none';
+            document.getElementById('searchSection').style.display = 'block';
+            
+            // ✅ SEGUNDO: Limpiamos el grid antes de inyectar la interfaz de carga
+            document.getElementById('searchGrid').innerHTML = '';
+            
+            // ✅ TERCERO: Cargamos la interfaz de archivos
             cargarInterfazAsignaciones();
-            break;
+            
+            // 🚩 CRÍTICO: Usamos 'return' para evitar que el Punto 3 (abajo) 
+            // genere campos de búsqueda y borre lo que acabamos de hacer.
+            return; 
             
         case 'mapa_rutas':
-            // Aquí puedes disparar una función inicializadora si es necesario
             console.log("📍 Inicializando Mapa de Rutas...");
-            break;
-
-        case 'kml_rutas':
-            // Lógica específica para KML si existe
             break;
     }
 
-    // 3. ACTUALIZAR INTERFAZ VISUAL
+    // 3. ACTUALIZAR INTERFAZ VISUAL (Solo para módulos de consulta estándar)
     const config = tableConfigs[tableName];
     if (config) {
         selectedTable = tableName;
         document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
         generarCamposBusqueda(config);
         
-        // Cambio de vista
         document.getElementById('tableSelectionSection').style.display = 'none';
         document.getElementById('searchSection').style.display = 'block';
     } else {
