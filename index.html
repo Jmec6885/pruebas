@@ -1212,18 +1212,29 @@ guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_tok
             .eq('id', data.id);
 
         // 7. Redirigir según rol
-        console.log(`👤 Rol detectado: ${data.rol}`);
-        
-        if (data.rol === 'ATTF') {
-            loginATTF(data); // Nueva función (próximo bloque)
-            return;
-        }
-        
-        if (data.rol === 'Poda') {
-            loginPoda(data); // Nueva función (próximo bloque)
-            return;
-        }
+console.log(`👤 Rol detectado: ${data.rol}`);
 
+if (data.rol === 'ATTF') {
+    // 🛡️ BLOQUEO DE SEGURIDAD (Aquí integramos la validación)
+    const tHoy = localStorage.getItem('turno_hoy');
+    const tManana = localStorage.getItem('turno_manana');
+
+    // Si le falta CUALQUIERA de los dos, no lo dejamos pasar al menú
+    if (!tHoy || !tManana) {
+        console.log("⚠️ Turnos incompletos en local. Forzando registro.");
+        mostrarProgramarTurnoHoy(data); // Lo mandamos a que empiece el flujo desde hoy
+        return; // IMPORTANTE: Cortamos la ejecución aquí
+    }
+
+    // Si ya tiene los dos en localStorage, significa que ya cumplió el proceso
+    accederMenuATTF(); 
+    return;
+}
+
+if (data.rol === 'Poda') {
+    loginPoda(data); 
+    return;
+}
        
         // Para otros roles: acceso directo
         document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
@@ -1422,6 +1433,7 @@ async function confirmarTurnoHoyATTF() {
 
     // ✅ Guardamos en memoria temporal
     window.turnoHoySeleccionado = turnoHoyKey;
+localStorage.setItem('turno_hoy', turnoHoyKey);
 
     // 🚩 IMPORTANTE: Limpiamos cualquier rastro de turno_manana previo en memoria 
     // para forzar a que el usuario lo seleccione sí o sí en el siguiente paso.
@@ -1617,7 +1629,6 @@ async function confirmarTurnoMananaATTF() {
     
     const ahora = new Date();
     const fechaHoy = getFechaHoyElSalvador();
-    // Recuperamos lo que seleccionamos en el Paso 1
     const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
 
     if (turnoManana !== 'descanso') {
@@ -1629,24 +1640,28 @@ async function confirmarTurnoMananaATTF() {
         const confirmar = confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turno.nombre}?\n\n✅ SÍ - Guardar y acceder\n❌ NO - Corregir`);
         if (!confirmar) return;
         
-        // Calcular fecha de mañana
-        const fechaManana = new Date(ahora);
-        fechaManana.setDate(fechaManana.getDate() + 1);
-        const fechaMananaStr = fechaManana.toISOString().split('T')[0];
+        // 🎯 CORRECCIÓN DE FECHA (ZONA HORARIA EL SALVADOR)
+        const manana = new Date(ahora);
+        manana.setDate(manana.getDate() + 1);
+        const fechaMananaStr = getFechaLocalISO(manana); // <--- Cambio aquí
         
         const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
         const nuevoContador = contadorActual + 1;
+
+        // 🛡️ SEGURO DE VIDA LOCAL
+        localStorage.setItem('turno_hoy', turnoHoy);
+        localStorage.setItem('turno_manana', turnoManana);
         
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
                 turno_hoy: turnoHoy,
-                fecha_turno_hoy: fechaHoy, // Registra que hoy ya se configuró
+                fecha_turno_hoy: fechaHoy,
                 turno_manana: turnoManana,
                 fecha_turno_manana: fechaMananaStr,
                 contador_turnos: nuevoContador,
                 estado_ciclo: 'ciclo_normal',
-                descanso_fecha_inicio: null, // Limpia descansos previos
+                descanso_fecha_inicio: null,
                 descanso_fecha_fin: null,
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
                 ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
@@ -1654,6 +1669,7 @@ async function confirmarTurnoMananaATTF() {
             .eq('id', currentUser.id);
         
         if (error) {
+            localStorage.removeItem('turno_manana');
             alert('Error guardando configuración: ' + error.message);
             return;
         }
@@ -1673,7 +1689,6 @@ async function confirmarTurnoMananaATTF() {
             return;
         }
         
-        // Validar que no se pase del día 6
         const validacion = validarFechaDescansoMaxima(fechaInicio, fechaHoy);
         if (!validacion.valido) {
             alert(validacion.mensaje);
@@ -1690,24 +1705,25 @@ async function confirmarTurnoMananaATTF() {
         
         if (!confirmar) return;
         
-        // Calcular fecha de regreso real
+        // 🎯 CORRECCIÓN DE FECHA REGRESO (ZONA HORARIA EL SALVADOR)
         const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
-        const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
+        const fechaRegreso = getFechaLocalISO(fechaRegresoDate); // <--- Cambio aquí
+
+        localStorage.setItem('turno_hoy', turnoHoy);
+        localStorage.setItem('turno_manana', 'descanso'); 
         
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
                 turno_hoy: turnoHoy,
-                fecha_turno_hoy: fechaHoy, // Registra que hoy ya se configuró
+                fecha_turno_hoy: fechaHoy,
                 descanso_fecha_inicio: fechaInicio,
                 descanso_fecha_fin: fechaFin,
                 turno_regreso: turnoRegreso,
                 fecha_turno_regreso: fechaRegreso,
-                contador_turnos: 0, // Reset de ciclo
+                contador_turnos: 0,
                 estado_ciclo: 'ciclo_normal',
-                // 🎯 IMPORTANTE: Llenamos turno_manana con 'descanso' para que 
-                // la función login() sepa que ya terminaste el proceso por hoy.
                 turno_manana: 'descanso', 
                 fecha_turno_manana: fechaInicio,
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
@@ -1716,12 +1732,20 @@ async function confirmarTurnoMananaATTF() {
             .eq('id', currentUser.id);
         
         if (error) {
+            localStorage.removeItem('turno_manana');
             alert('Error guardando descanso: ' + error.message);
             return;
         }
         
         accederMenuATTF();
     }
+}
+
+function getFechaLocalISO(fechaObjeto) {
+    const tzo = -6; // Offset de El Salvador
+    const pad = n => (n < 10 ? '0' : '') + n;
+    const localDate = new Date(fechaObjeto.getTime() + (tzo * 60 * 60 * 1000));
+    return `${localDate.getUTCFullYear()}-${pad(localDate.getUTCMonth() + 1)}-${pad(localDate.getUTCDate())}`;
 }
 
 	// ========================================
@@ -1825,17 +1849,37 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 
 function accederMenuATTF() {
+    // 1. OBTENER TURNOS DE LOCALSTORAGE
+    const turnoHoy = localStorage.getItem('turno_hoy');
+    const turnoManana = localStorage.getItem('turno_manana');
+
+    // 2. VALIDACIÓN ESTRICTA: ¿Falta alguno de los dos?
+    if (!turnoHoy || !turnoManana || turnoHoy === "" || turnoManana === "") {
+        console.warn('⚠️ Intento de acceso sin completar turnos.');
+        alert("⚠️ Debes registrar tu turno de HOY y de MAÑANA antes de ingresar al menú.");
+        
+        // Lo mandamos de vuelta a la sección donde se eligen turnos
+        // Ajusta este ID según sea tu sección de turnos
+        document.getElementById('seccionTurnos').style.display = 'block'; 
+        document.getElementById('tableSelectionSection').style.display = 'none';
+        return; // <--- IMPORTANTE: Detiene la ejecución aquí
+    }
+
+    // 3. SI PASA LA VALIDACIÓN, DAR ACCESO
     document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
     document.getElementById('userInfo').classList.remove('hidden');
     document.getElementById('loginSection').style.display = 'none';
+    
+    // Mostramos la selección de tablas solo porque ya validamos los turnos
     document.getElementById('tableSelectionSection').style.display = 'block';
     
     mostrarTablasSegunRol();
     iniciarVerificacionSesion();
     guardarDatosOffline();
     
-    console.log('✅ Acceso concedido al menú ATTF');
+    console.log('✅ Acceso concedido al menú ATTF (Turnos validados)');
 }
+
 
 
 function mostrarForzarDescansoATTF() {
@@ -5458,8 +5502,19 @@ console.log('📊 ==========================================');
         console.log(`🗺️ Total en Mapa: ${osParaMapa.length}`);
         console.log('🗺️ ==========================================');
 
-        // ✅ 4. Dibujar el mapa
-        generarMapaLeaflet(osCentro, osParaMapa, latCentro, lngCentro, radioConfigurado);
+        // 🔥 PASO NUEVO: OPTIMIZACIÓN DE RUTA (Vecino más cercano + 2-OPT)
+        console.log("🔄 Optimizando secuencia de visita para ruta lógica...");
+        
+        // Esta función devolverá el mismo array pero reordenado y con el campo .numeroOrden actualizado
+        const osParaMapaOrdenada = optimizarRutaVecinoCercano(
+            osParaMapa, 
+            window.osPartidaSeleccionada || (osCentro.osatomo || osCentro.OSATMO),
+            { lat: latCentro, lng: lngCentro } // El punto de origen (Marcador Verde)
+        );
+
+        // ✅ 4. Dibujar el mapa con la ruta ya ORDENADA
+        // Nota: Ahora pasamos 'osParaMapaOrdenada' en lugar de 'osParaMapa'
+        generarMapaLeaflet(osCentro, osParaMapaOrdenada, latCentro, lngCentro, radioConfigurado);
 
     } catch (err) {
         console.error('❌ ERROR EN generarMapaUnidadConFiltros:', err);
@@ -5876,9 +5931,9 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
+ * Incluye auditoría de validación lógica en consola.
  */
 function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas = null) {
-    // Función auxiliar para leer IDs de forma consistente
     const getOSId = (os) => String(os.OSATMO || os.osatomo || os.OSATOMO || '').trim();
     
     console.log('--- 🛠️ INICIANDO OPTIMIZACIÓN DE RUTA ---');
@@ -5919,13 +5974,13 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
         numeroOrden: 1
     };
 
-    // 5️⃣ Preparar lista de puntos a visitar (Excluyendo el de partida para evitar duplicados)
+    // 5️⃣ Preparar lista de puntos a visitar (Limpieza estricta de coordenadas)
     const puntosNoVisitados = osData
         .filter(os => getOSId(os) !== getOSId(osPartida)) 
         .map(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
-            if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
+            if (lat === null || isNaN(lat)) return null;
             return { ...os, lat, lng };
         })
         .filter(os => os !== null);
@@ -5962,10 +6017,8 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
     }
 
     const distInicialTotal = rutaFinal.reduce((sum, os) => sum + (os.distancia || 0), 0);
-    console.log(`📏 Distancia inicial (Vecino Cercano): ${distInicialTotal.toFixed(2)} km`);
 
     // 7️⃣ MEJORA 2-OPT (Refinamiento de cruces)
-    console.log('🔄 Aplicando refinamiento 2-OPT para desenredar ruta...');
     let mejorado = true;
     let iteraciones = 0;
     let mejorasRealizadas = 0;
@@ -5977,16 +6030,12 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
 
         for (let i = 0; i < rutaFinal.length - 2; i++) {
             for (let j = i + 2; j < rutaFinal.length - 1; j++) {
-                
-                // Tramo A: i -> i+1  |  Tramo B: j -> j+1
                 const d_i_next = calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[i+1].lat, rutaFinal[i+1].lng);
                 const d_j_next = calcularDistanciaKm(rutaFinal[j].lat, rutaFinal[j].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
-                
-                // Nueva opción: i -> j  |  i+1 -> j+1
                 const d_i_j = calcularDistanciaKm(rutaFinal[i].lat, rutaFinal[i].lng, rutaFinal[j].lat, rutaFinal[j].lng);
                 const d_next_next = calcularDistanciaKm(rutaFinal[i+1].lat, rutaFinal[i+1].lng, rutaFinal[j+1].lat, rutaFinal[j+1].lng);
 
-                if (d_i_j + d_next_next < d_i_next + d_j_next - 0.001) {
+                if (d_i_j + d_next_next < d_i_next + d_j_next - 0.0001) {
                     const segmentoInvertido = rutaFinal.slice(i + 1, j + 1).reverse();
                     rutaFinal.splice(i + 1, j - i, ...segmentoInvertido);
                     mejorado = true;
@@ -6001,23 +6050,28 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
     // 8️⃣ Recalcular números de orden y distancias finales
     rutaFinal.forEach((os, i) => {
         os.numeroOrden = i + 1;
-        if (i > 0) {
-            os.distancia = calcularDistanciaKm(rutaFinal[i-1].lat, rutaFinal[i-1].lng, os.lat, os.lng);
-        }
+        os.distancia = (i === 0) ? 0 : calcularDistanciaKm(rutaFinal[i-1].lat, rutaFinal[i-1].lng, os.lat, os.lng);
     });
 
     const distFinalTotal = rutaFinal.reduce((sum, os) => sum + (os.distancia || 0), 0);
-    const ahorro = distInicialTotal - distFinalTotal;
 
-    // LOG FINAL DE VALIDACIÓN
+    // 🛡️ BLOQUE DE AUDITORÍA LOGÍSTICA
+    console.log('📋 --- AUDITORÍA DE SECUENCIA LÓGICA ---');
+    console.table(rutaFinal.map(os => ({
+        Orden: os.numeroOrden,
+        OS: getOSId(os),
+        Tipologia: (os.Tipologia || os.tipologia || '').substring(0, 20),
+        'Dist. Tramo (km)': os.distancia.toFixed(2),
+        'Coord': `${os.lat.toFixed(4)},${os.lng.toFixed(4)}`
+    })));
+
     console.log('--- ✅ OPTIMIZACIÓN COMPLETADA ---');
-    console.log(`📊 Mejoras aplicadas: ${mejorasRealizadas} desenredos.`);
-    console.log(`🛣️  Distancia Final: ${distFinalTotal.toFixed(2)} km`);
-    console.log(`✨ Ahorro logrado: ${ahorro.toFixed(2)} km (${((ahorro/distInicialTotal)*100).toFixed(1)}%)`);
+    console.log(`🛣️  Distancia Final: ${distFinalTotal.toFixed(2)} km (Ahorro: ${(distInicialTotal - distFinalTotal).toFixed(2)} km)`);
     console.log('----------------------------------');
 
     return rutaFinal;
 }
+
 
 // ========================================
 // 📍 GENERAR RUTA DESDE UN PUNTO FIJO (COMPLETO Y MEJORADO)
@@ -9467,17 +9521,19 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     `;
 
     // 5. Inicialización diferida
-    setTimeout(() => {
-        if (document.getElementById('mapaLeaflet')) {
-            try {
-                inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
-                if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
-            } catch (error) {
-                console.error('❌ Error inicializando mapa:', error);
-            }
+   setTimeout(() => {
+    if (document.getElementById('mapaLeaflet')) {
+        try {
+            // CAMBIO AQUÍ: Asegúrate de pasar 'osValidadasParaMapa' 
+            // que ya viene con el .numeroOrden inyectado por la optimización
+            inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
+            
+            if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
+        } catch (error) {
+            console.error('❌ Error inicializando mapa:', error);
         }
-    }, 300);
-
+    }
+}, 300);
     window.datosMapaExportar = osValidadasParaMapa;
 }
 
@@ -9560,33 +9616,39 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
                 const deuda = parseFloat(os.Deuda) || 0;
  
                 let colorFondo, labelEstado, estadoKey;
- 
-                if (deuda > 500) {
-                    colorFondo = '#fdd835'; // Amarillo
-                    labelEstado = 'DEUDA ALTA (>$500)';
-                    estadoKey = 'deuda_alta';
-                } else if (deuda >= 100 && deuda <= 500) {
-                    colorFondo = '#ff9800'; // Naranja
-                    labelEstado = 'DEUDA MEDIA ($100-$500)';
-                    estadoKey = 'deuda_media';
-                } else if (deuda >= 50 && deuda < 100) {
-                    colorFondo = '#f48fb1'; // Rosado
-                    labelEstado = 'DEUDA BAJA ($50-$100)';
-                    estadoKey = 'deuda_baja';
-                } else if (os.Estado_ATOMO === 'Asignada') {
-                    colorFondo = '#ff9800'; // Naranja
-                    labelEstado = 'OS ASIGNADA';
-                    estadoKey = 'asignada';
-                } else if (esRegulada) {
-                    colorFondo = '#f44336'; // Rojo
-                    labelEstado = 'OS REGULADA';
-                    estadoKey = 'regulada';
-                } else {
-                    colorFondo = '#2196f3'; // Azul
-                    labelEstado = 'OS NO REGULADA';
-                    estadoKey = 'no_regulada';
-                }
- 
+
+        // 1. PRIORIDAD: ¿Está asignada a alguien? (Incluyendo tu propia unidad)
+        const estaAsignada = os.Estado_ATOMO === 'Asignada' || 
+                             os.Estado_SAP === 'ASIGNADA' || 
+                             (os.Unidad && os.Unidad.trim() !== "" && !os.Unidad.includes("---"));
+
+        if (estaAsignada) {
+            colorFondo = '#ff9800'; // Naranja
+            labelEstado = 'OS ASIGNADA';
+            estadoKey = 'asignada'; // <--- Siempre en singular para coincidir con el botón
+        } 
+        // 2. SEGUNDA PRIORIDAD: Deudas (Solo si no está asignada o si prefieres ver deuda antes que asignación)
+        else if (deuda > 500) {
+            colorFondo = '#fdd835'; 
+            labelEstado = 'DEUDA ALTA (>$500)';
+            estadoKey = 'deuda_alta';
+        } else if (deuda >= 100 && deuda <= 500) {
+            colorFondo = '#ff9800'; 
+            labelEstado = 'DEUDA MEDIA ($100-$500)';
+            estadoKey = 'deuda_media';
+        } else if (deuda >= 50 && deuda < 100) {
+            colorFondo = '#f48fb1'; 
+            labelEstado = 'DEUDA BAJA ($50-$100)';
+            estadoKey = 'deuda_baja';
+        } else if (esRegulada) {
+            colorFondo = '#f44336'; 
+            labelEstado = 'OS REGULADA';
+            estadoKey = 'regulada';
+        } else {
+            colorFondo = '#2196f3'; 
+            labelEstado = 'OS NO REGULADA';
+            estadoKey = 'no_regulada';
+        } 
                 // ✅ Crear icono numerado
                 const icono = L.divIcon({
                     className: 'custom-marker',
@@ -9623,6 +9685,9 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
                             </button>
                         </div>
                     `);
+if (os.OSATMO === 'PON_AQUI_UN_NUMERO_QUE_FALLE') {
+    console.log(`Análisis OS ${os.OSATMO}: Deuda=${deuda}, Asignada=${estaAsignada}, Key asignada=${estadoKey}`);
+}
  
                 // ✅ AGRUPAR POR ESTADO
                 window.markersPorEstado[estadoKey].push(marker);
@@ -9958,6 +10023,25 @@ function dibujarMarcadores(mapa, ordenes) {
 }
 
 
+// 1. PRIMERO: Definir la función de validación
+    function puedeAccederAlMenu() {
+        const turnoHoy = localStorage.getItem('turno_hoy');
+        const turnoManana = localStorage.getItem('turno_manana');
+        const rol = localStorage.getItem('user_rol');
+
+        // Si es ATFF, AMBOS deben existir
+        if (rol === 'ATFF') {
+            return (turnoHoy && turnoHoy !== "" && turnoManana && turnoManana !== "");
+        }
+        return true; 
+    }
+
+    // 2. SEGUNDO: Ejecutar el guardia INMEDIATAMENTE
+    if (!puedeAccederAlMenu()) {
+        alert("⚠️ Acción denegada: Debes completar el turno de hoy y mañana para continuar.");
+        window.location.href = 'index.html'; // O tu página de login/turnos
+    }
+
 // ========================================
 // 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN COMPLETA SIN RECORTES + CORRECCIONES)
 // ========================================
@@ -10163,27 +10247,34 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         contadorProcesadas++;
         estadisticas[estadoKey]++;
 
-        const icono = L.divIcon({
+        const iconoConNumero = L.divIcon({
             className: 'custom-marker',
-            html: `<div style="
-                background: ${colorFondo};
-                color: white;
-                width: 35px;
-                height: 35px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                font-size: 14px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                border: 3px solid white;
-            ">${os.numeroOrden || index + 1}</div>`,
-            iconSize: [35, 35],
-            iconAnchor: [17.5, 35]
+            html: `
+                <div style="
+                    background-color: ${colorFondo};
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                ">
+                    <span style="
+                        transform: rotate(45deg); 
+                        color: white; 
+                        font-weight: bold; 
+                        font-size: 13px;
+                    ">${os.numeroOrden || index + 1}</span>
+                </div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 32] // Punto inferior de la gota
         });
 
-        const marker = L.marker([lat, lng], { icon: icono })
+        // ✅ CREAR MARCADOR USANDO EL NUEVO ICONO
+        const marker = L.marker([lat, lng], { icon: iconoConNumero })
             .addTo(mapa)
             .bindPopup(`
                 <div style="min-width: 250px;">
@@ -13811,6 +13902,9 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
         alert('❌ Error al procesar la eliminación');
     }
 }
+
+
+
 
 
 </script>
