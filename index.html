@@ -1203,6 +1203,7 @@ ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
             .eq('id', data.id);
 
         currentUser = { ...data, session_token: sessionToken };
+localStorage.setItem('usuario_logueado', JSON.stringify(currentUser));
 guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_token
         
         // 6. Actualizar timestamp de actividad
@@ -1215,21 +1216,18 @@ guardarDatosOffline(); // ← Asegúrate de que esta función guarde session_tok
 console.log(`👤 Rol detectado: ${data.rol}`);
 
 if (data.rol === 'ATTF') {
-    currentUser = data; [cite_start]// Guardamos el usuario globalmente [cite: 609]
+    currentUser = data; // Guardamos el usuario globalmente
     
     const tHoy = localStorage.getItem('turno_hoy');
     const tManana = localStorage.getItem('turno_manana');
 
-    // Validación: Si faltan turnos, usamos la función que INYECTA el HTML
     if (!tHoy || !tManana) {
         console.log("⚠️ Turnos incompletos. Iniciando configuración dinámica.");
-        
-        // En lugar de buscar 'seccionProgramacionTurnos', usamos la función experta:
         mostrarConfiguracionInicialATTF(); 
         return; 
     }
 
-    accederMenuATTF(); [cite_start]// Si ya tiene todo, entra al menú [cite: 615]
+    accederMenuATTF(); // Si ya tiene todo, entra al menú
     return;
 }
 
