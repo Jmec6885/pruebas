@@ -5149,35 +5149,44 @@ if (misAsignadasReales.length === 0) {
 // Para el resto de la función (el centro del mapa), usaremos esta variable
 const osAsignadasUnidad = misAsignadasReales;
  
-        // ✅ 4️⃣ Encontrar OS centro
-        console.log('📍 Buscando OS centro con coordenadas...');
- 
-        let osCentro;
+        // ========================================
+// ✅ 4️⃣ Encontrar OS centro y definir Coordenadas Base
+// ========================================
+console.log('📍 Buscando OS centro con coordenadas...');
+
+let osCentro;
 if (window.osPartidaSeleccionada) {
-    // Buscamos en misAsignadasReales usando ambos nombres posibles
     osCentro = osAsignadasUnidad.find(os => 
         String(os.osatomo || os.OSATMO) === String(window.osPartidaSeleccionada)
     );
 }
- 
-        if (!osCentro) {
-            osCentro = osAsignadasUnidad.find(os => {
-                const coords = os.Coordenadas || os.Coordendasgis;
-                return coords && coords.includes(',');
-            });
-        }
- 
-        if (!osCentro) {
-            console.error('❌ No se encontró OS centro con coordenadas');
-            resultsContainer.innerHTML = `<div class="result-card" style="background: #fff3cd;">⚠️ No hay OS base con coordenadas</div>`;
-            return;
-        }
 
-        // --- AÑADE ESTO PARA DEFINIR LAT Y LNG ---
-        const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
-if (!coordsTexto || !coordsTexto.includes(',')) throw new Error("La OS de partida no tiene coordenadas válidas (Lat, Lng)");
-        const latCentro = partes[0];
-        const lngCentro = partes[1];
+if (!osCentro) {
+    osCentro = osAsignadasUnidad.find(os => {
+        const coords = os.Coordenadas || os.Coordendasgis;
+        return coords && coords.includes(',');
+    });
+}
+
+if (!osCentro) {
+    console.error('❌ No se encontró OS centro con coordenadas');
+    resultsContainer.innerHTML = `<div class="result-card" style="background: #fff3cd;">⚠️ No hay OS base con coordenadas válida en su unidad</div>`;
+    return;
+}
+
+// 🛠️ CORRECCIÓN AQUÍ: Definición de 'partes', 'latCentro' y 'lngCentro'
+const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
+const partes = coordsTexto.split(','); // <--- AQUÍ SE CREA LA VARIABLE 'partes'
+
+if (partes.length !== 2) {
+    throw new Error("La OS de partida tiene un formato de coordenadas inválido. Debe ser 'Lat, Lng'");
+}
+
+const latCentro = parseFloat(partes[0].trim());
+const lngCentro = parseFloat(partes[1].trim());
+
+console.log(`📍 Punto de origen definido en: ${latCentro}, ${lngCentro} (OS: ${osCentro.osatomo || osCentro.OSATMO})`);
+
 
 
         // ========================================
@@ -5791,17 +5800,26 @@ function generarMapaKMLSoloAsignadas(unidad) {
 
 
 
-// ========================================
-// 🎯 CONTROLADOR: APLICAR FILTROS DESDE KML RUTA
-// ========================================
 async function generarMapaKMLConFiltrosGuardados(unidad) {
     const btn = document.getElementById('btnAplicarFiltro');
     const select = document.getElementById('selectPuntoPartidaKML');
     const osPartida = select?.value;
 
+    // 1. Validación de selección
     if (!osPartida) {
         alert('⚠️ Por favor, seleccione una Orden de Servicio (OS) como punto de partida.');
         select?.focus();
+        return;
+    }
+
+    // 🕵️ VALIDACIÓN PREVENTIVA DE COORDENADAS (Lo que faltaba)
+    const fuente = window.osAsignadasKML || [];
+    const osDataPartida = fuente.find(os => String(os.OSATMO || os.osatomo).trim() === String(osPartida).trim());
+    
+    const coordsValidas = osDataPartida?.Coordenadas || osDataPartida?.Coordendasgis;
+    
+    if (!coordsValidas || !coordsValidas.includes(',')) {
+        alert('❌ Error: La OS seleccionada como punto de partida no tiene coordenadas válidas. Por favor seleccione otra.');
         return;
     }
 
@@ -5812,14 +5830,13 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             btn.style.opacity = '0.7';
         }
         
-        // 1. Sincronización de variables globales
+        // Sincronización de variables globales
         window.osPartidaSeleccionada = osPartida;
         window.currentUnidadKML = unidad; 
 
         console.log('--- 🚀 INICIANDO PROCESO DE FILTRADO KML RUTA ---');
 
-        // 2. 🔥 UNIÓN CRUCIAL DE ARRAYS (Aquí es donde se "funden" tus 13 OS con las 11,000 pendientes)
-        // Creamos una variable global temporal que el motor leerá
+        // 2. Unión de universos
         window.universoParaFiltrarKML = [
             ...(window.osAsignadasKML || []), 
             ...(window.todasLasPendientesKML || [])
@@ -5827,28 +5844,20 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
 
         console.log(`📦 Universo Total a procesar: ${window.universoParaFiltrarKML.length} registros.`);
 
-        // 3. 🕵️ AUDITORÍA DE SEGURIDAD PARA LA OS 11195544
+        // 3. Auditoría de seguridad para la OS 11195544
         const check = window.universoParaFiltrarKML.find(p => String(p.OSATMO || p.osatomo).trim() === '11195544');
         
         if (check) {
             const uOriginal = check.Unidad || "VACÍO";
-            // Normalización rápida para el log
             const uLimpia = uOriginal.replace(/[^a-zA-Z0-9]/g, "");
             
             console.group("✅ AUDITORÍA PRE-FILTRADO (OS 11195544)");
-            console.log("Estado: PRESENTE en el universo de unión");
             console.log("Unidad en BD:", `"${uOriginal}"`);
-            console.log("Resultado limpieza:", uLimpia === "" ? "LIBRE (Vacio) ✅" : `OCUPADA por ${uLimpia} ❌`);
+            console.log("Status:", uLimpia === "" ? "LIBRE ✅" : `OCUPADA ❌`);
             console.groupEnd();
-        } else {
-            console.error("❌ ERROR CRÍTICO: La OS 11195544 NO existe en el universo unido.");
         }
 
-        /**
-         * 4. 🔥 LLAMADA AL MOTOR DE RENDERIZADO
-         * IMPORTANTE: Asegúrate de que dentro de 'generarMapaUnidadConFiltros'
-         * la línea del forEach diga: window.universoParaFiltrarKML.forEach(os => { ... })
-         */
+        // 4. Ejecución del motor (Donde corregimos el error de 'partes')
         await generarMapaUnidadConFiltros(true); 
 
         console.log('--- ✅ PROCESO FINALIZADO CON ÉXITO ---');
@@ -5864,7 +5873,6 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
         }
     }
 }
-
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
