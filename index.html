@@ -897,7 +897,7 @@ function verificarHorarioPermitido(rol, userData = null) {
     // ========================================
     
     // 🔹 Roles con acceso ILIMITADO (todos los días, todas las horas)
-    const rolesIlimitados = ['Administrador', 'Supervisor', 'ATFF'];
+    const rolesIlimitados = ['Administrador', 'Supervisor', 'ATTF'];
     if (rolesIlimitados.includes(rol)) {
         console.log(`✅ Rol ${rol} tiene acceso ILIMITADO`);
         return { permitido: true };
