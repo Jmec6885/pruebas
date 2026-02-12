@@ -1221,25 +1221,34 @@ async function login() {
         console.log(`👤 Rol detectado: ${data.rol}`);
 
         // 6. Redirigir según rol
+        // ... (dentro de la función login, después de validar el usuario) ...
+
         if (data.rol === 'ATTF') {
-            // Ocultamos login de inmediato para evitar parpadeos
-            document.getElementById('loginSection').style.display = 'none';
+    // 1. OCULTAR LOGIN Y MOSTRAR CONTENEDOR DE CONFIGURACIÓN DE INMEDIATO
+    document.getElementById('loginSection').style.display = 'none';
+    
+    const configSection = document.getElementById('configuracionInicialATTF');
+    if (configSection) {
+        configSection.style.display = 'block'; 
+        configSection.classList.remove('hidden');
+    }
+    // --------------------------------------------------------------------
 
-            const tHoy = localStorage.getItem('turno_hoy');
-            const tManana = localStorage.getItem('turno_manana');
+    const tHoy = localStorage.getItem('turno_hoy');
+    const tManana = localStorage.getItem('turno_manana');
 
-            // Si faltan turnos, mandamos a configurar
-            if (!tHoy || !tManana) {
-                console.log("⚠️ Turnos faltantes. Redirigiendo a configuración.");
-                mostrarConfiguracionInicialATTF(); 
-                return; 
-            }
-            
-            // Si tiene turnos, entra al menú principal de ATTF
-            accederMenuATTF();
-            return;
-        }
-
+    if (!tHoy || !tManana) {
+        console.log("⚠️ Redirigiendo a configuración de turnos...");
+        
+        // Al llamar a esta función, ella se encarga de mostrar el Paso 1 (Hoy)
+        mostrarConfiguracionInicialATTF(); 
+        return; 
+    }
+    
+    // Si ya tiene turnos, accederMenuATTF ocultará la configuración y mostrará el menú
+    accederMenuATTF();
+    return;
+}
         if (data.rol === 'Poda') {
             loginPoda(data); 
             return;
@@ -1416,6 +1425,7 @@ function mostrarConfiguracionInicialATTF() {
 async function confirmarTurnoHoyATTF() {
     const turnoHoyKey = document.getElementById('turnoHoy').value;
 
+    // 1. Validación inicial
     if (!turnoHoyKey) {
         alert('Por favor seleccione su turno de hoy');
         return;
@@ -1426,6 +1436,7 @@ async function confirmarTurnoHoyATTF() {
     
     let confirmar = true; 
 
+    // 2. Confirmación visual si hay varias opciones
     if (numOpciones > 1) {
         const turnoHoy = TURNOS_ATTF[turnoHoyKey];
         confirmar = confirm(
@@ -1435,62 +1446,104 @@ async function confirmarTurnoHoyATTF() {
     
     if (!confirmar) return;
 
-    // ✅ Guardamos en memoria temporal
-    window.turnoHoySeleccionado = turnoHoyKey;
-localStorage.setItem('turno_hoy', turnoHoyKey);
+    try {
+        // 3. ACTUALIZACIÓN EN SUPABASE (El paso que faltaba)
+        // Guardamos la fecha y el turno en la base de datos para que sea persistente
+        const hoySV = getFechaElSalvador(); // Asegúrate de tener esta función
+        const fechaHoyISO = hoySV.toISOString().split('T')[0];
 
-    // 🚩 IMPORTANTE: Limpiamos cualquier rastro de turno_manana previo en memoria 
-    // para forzar a que el usuario lo seleccione sí o sí en el siguiente paso.
-    window.turnoMananaSeleccionado = null;
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({ 
+                turno_hoy: turnoHoyKey,
+                fecha_turno_hoy: fechaHoyISO,
+                ultima_actividad: new Date().toISOString()
+            })
+            .eq('id', currentUser.id);
 
-    // Pasar al paso 2: Programar Mañana
-    // NOTA: Aquí NO llamamos a accederMenuATTF(), el usuario sigue bloqueado en la pantalla de selección.
-    mostrarProgramarTurnoManana(true); 
+        if (error) throw error;
+
+        // 4. GUARDADO EN MEMORIA LOCAL (Para acceso rápido)
+        window.turnoHoySeleccionado = turnoHoyKey;
+        localStorage.setItem('turno_hoy', turnoHoyKey);
+        localStorage.setItem('fecha_turno_hoy', fechaHoyISO);
+
+        // Limpiar rastro de mañana para forzar selección
+        window.turnoMananaSeleccionado = null;
+        localStorage.removeItem('turno_manana'); 
+
+        console.log("✅ Turno de hoy guardado en DB y LocalStorage.");
+
+        // 5. PASAR AL PASO 2
+        // Ahora que la DB está actualizada, es seguro mostrar el siguiente paso
+        mostrarProgramarTurnoManana(true); 
+
+    } catch (err) {
+        console.error('Error al guardar turno de hoy:', err);
+        alert('Hubo un error al guardar tu turno. Por favor, intenta de nuevo.');
+    }
 }
 
 
 
+
 // ========================================
-// 🔧 FUNCIÓN AUXILIAR CORREGIDA: Obtener turnos consecutivos
+// 🔧 FUNCIÓN AUXILIAR BLINDADA: Obtener turnos consecutivos
 // ========================================
 function getTurnoConsecutivo(turnoHoyKey) {
-    // Definir todos los turnos consecutivos bloqueados para cada turno
+    // 🛡️ Seguridad: Si el valor de la tabla es null o undefined, 
+    // evitamos que la función rompa el resto del código.
+    if (!turnoHoyKey) return [];
+
+    // Definición de reglas según la operativa de CLESA
+    // Asegúrate de que los nombres ("turno3", etc.) coincidan con los IDs 
+    // que guardas en la columna 'turno_hoy' de tu tabla 'usuarios'.
     const relaciones = {
-       "turno3": ["turno1", "turno4"]  // Si trabajas 10-6, NO puedes 6-2 ni 8-4
+        "turno3": ["turno1", "turno4"], // Ejemplo: Saliente de noche no puede entrar a mañana
+        "turno1": ["turno3"],           // Ejemplo: Mañana no puede doblar a noche inmediata
+        // Puedes agregar más restricciones aquí abajo:
+        // "turno2": ["turno3"], 
     };
     
-    // Retornar array de turnos bloqueados (o array vacío si no hay)
-    return relaciones[turnoHoyKey] || [];
+    // Buscamos si el turno actual tiene restricciones
+    const bloqueados = relaciones[turnoHoyKey] || [];
+    
+    // Log de depuración para ver en consola qué está pasando
+    if (bloqueados.length > 0) {
+        console.log(`🚫 Restricción para ${turnoHoyKey}: Bloqueando opciones ${bloqueados.join(', ')}`);
+    }
+
+    return bloqueados;
 }
 
+
 function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
-    const loginSection = document.getElementById('loginSection');
+    // 1. Identificamos dónde vamos a mostrar la información
+    // Usamos loginSection porque es donde estás construyendo tu interfaz dinámica
+    const container = document.getElementById('loginSection');
     
-    // 🎯 CAMBIO: Determinar el título según el contexto
+    // Aseguramos que el contenedor sea visible
+    container.style.display = 'block';
+    
+    // 🎯 LÓGICA DE TÍTULOS (Tu código original)
     let paso, instruccion;
     const contadorActual = parseInt(currentUser?.contador_turnos) || 0;
     
     if (mostrarOpcionDescanso) {
-        // Primera vez - Con opción descanso
         paso = "Paso 2 de 2";
         instruccion = "Selecciona tu turno de MAÑANA o configura DESCANSO";
     } else {
-        // Días 1-4 - Sin opción descanso
         paso = `Programar Turno (Día ${contadorActual + 1} → ${contadorActual + 2})`;
         instruccion = "Selecciona tu turno de MAÑANA";
     }
     
-    // Obtener el turno de HOY seleccionado
     const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno_hoy;
-    
-    // 🎯 CAMBIO: Obtener array de turnos consecutivos bloqueados
     const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
     
     let opcionesHTML = '';
     
     // Generar opciones de turnos
     Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-        // 🎯 CAMBIO: Verificar si está en el array de consecutivos
         if (turnosConsecutivos.includes(key)) {
             opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
         } else {
@@ -1498,39 +1551,40 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
         }
     });
     
-    // 🎯 CAMBIO: Solo agregar opción descanso si está permitido (primera vez)
     if (mostrarOpcionDescanso) {
         opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
     }
     
-    loginSection.innerHTML = `
-        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-        <h1 class="titulo-degradado">CLESA</h1>
-        <p class="subtitulo">${paso}</p>
-        
-        <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-            <strong>${instruccion}</strong>
+    // 2. INYECCIÓN DEL HTML (Tu diseño original mejorado)
+    container.innerHTML = `
+        <div class="card-configuracion" style="animation: fadeIn 0.5s;">
+            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+            <h1 class="titulo-degradado">CLESA</h1>
+            <p class="subtitulo" id="pasoActual">${paso}</p>
+            
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3; text-align: left;">
+                <strong class="paso-info">${instruccion}</strong>
+            </div>
+            
+            <div class="form-group" style="text-align: left;">
+                <label style="font-weight: bold; display: block; margin-bottom: 8px;">Turno de MAÑANA:</label>
+                <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione --</option>
+                    ${opcionesHTML}
+                </select>
+            </div>
+            
+            <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
+            
+            <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; width: 100%; display: none;">
+                ✅ Confirmar y Acceder
+            </button>
+            <button class="btn-danger" onclick="logout()" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer;">
+                Cancelar
+            </button>
         </div>
-        
-        <div class="form-group">
-            <label>Turno de MAÑANA:</label>
-            <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                <option value="">-- Seleccione --</option>
-                ${opcionesHTML}
-            </select>
-        </div>
-        
-        <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
-        
-        <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; display: none;">
-            ✅ Confirmar y Acceder
-        </button>
-        <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px;">
-            Cancelar
-        </button>
     `;
 }
-
 
 
 
@@ -13819,37 +13873,58 @@ function guardarDatosOffline() {
 }
 
 
-// === FUNCIÓN PARA VERIFICAR DATOS OFFLINE CORREGIDA ===
-function verificarDatosOffline() {
+/function verificarDatosOffline() {
     const sessionData = sessionStorage.getItem('cleca_user_session');
+    
     if (sessionData) {
         const data = JSON.parse(sessionData);
         const tiempoTranscurrido = (Date.now() - data.timestamp) / 1000 / 60;
 
-        // Si la sesión tiene menos de 45 minutos
+        // 1. Validar tiempo de sesión (45 minutos)
         if (tiempoTranscurrido < 45) {
             currentUser = data.user;
             
-            // 🛡️ RE-ACTIVAR VIGILANCIA DE SESIÓN ÚNICA
-            // Esto es vital para que siga comparando el 'sessiontoken' tras un F5
+            // 2. Ocultar el login de entrada para evitar pantalla blanca
+            const loginSection = document.getElementById('loginSection');
+            if (loginSection) loginSection.style.display = 'none';
+
+            // 3. Re-activar vigilancia de sesión única
             iniciarVerificacionSesion();
 
-            // 🛡️ CANDADO DE SEGURIDAD PARA ATTF
+            // 🛡️ BLOQUE PARA ROL ATTF
             if (currentUser.rol === 'ATTF') {
-                console.log('🔄 Restaurando sesión ATTF - Validando turnos...');
+                console.log('🔄 Restaurando sesión ATTF - Verificando estado de turnos...');
                 
-                // Redirige al flujo de turnos o al menú si ya están llenos
+                // 🚩 ELIMINADO: setInterval(verificarCorteTurno...) para evitar el ReferenceError
+                // que congela la pantalla si la función no existe.
+
+                const tHoy = localStorage.getItem('turno_hoy');
+                const tManana = localStorage.getItem('turno_manana');
+
+                // Si no hay turnos registrados, forzamos la pantalla de configuración
+                if (!tHoy || !tManana) {
+                    console.log("⚠️ Faltan turnos en LocalStorage. Cargando Paso 1...");
+                    
+                    // Aseguramos que el contenedor de configuración sea visible
+                    const configSection = document.getElementById('configuracionInicialATTF');
+                    if (configSection) {
+                        configSection.style.display = 'block';
+                        configSection.classList.remove('hidden');
+                    }
+
+                    // Iniciamos el flujo visual desde el Paso 1
+                    mostrarConfiguracionInicialATTF();
+                    return true;
+                }
+
+                // Si ya tiene todo, entra al menú principal
                 accederMenuATTF(); 
-                
-                // Reiniciar verificación de corte de turno
-                setInterval(verificarCorteTurno, 5 * 60 * 1000);
                 return true; 
             }
 
             // --- FLUJO PARA OTROS ROLES (Admin, Supervisor, etc.) ---
             document.getElementById('currentUser').textContent = `Bienvenido, ${data.user.usuario}`;
             document.getElementById('userInfo').classList.remove('hidden');
-            document.getElementById('loginSection').style.display = 'none';
             document.getElementById('tableSelectionSection').style.display = 'block';
 
             console.log('🔄 Restaurando sesión - Filtrando tablas para rol:', currentUser.rol);
@@ -13860,6 +13935,7 @@ function verificarDatosOffline() {
     }
     return false;
 }
+
 
 
 /**
