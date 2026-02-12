@@ -6748,6 +6748,9 @@ function generarTablaTipologiaVsRango(osFiltradas) {
  	// ========================================
 // 🔍 APLICAR FILTRO POR UNIDAD
 // ========================================
+// ========================================
+// 🔍 APLICAR FILTRO POR UNIDAD (CORREGIDO)
+// ========================================
 function aplicarFiltroUnidad() {
     const unidadSeleccionada = document.getElementById('filtroUnidad').value.trim();
 
@@ -6756,42 +6759,54 @@ function aplicarFiltroUnidad() {
         return;
     }
 
-    // Validar que la unidad exista
-    const unidadesDisponibles = [...new Set(window.osPendientes_Original.map(os => os.Unidad))];
-    if (!unidadesDisponibles..find(unidadSeleccionada)) {
+    // ✅ Normalizamos la entrada del usuario para comparar (Quitar guiones)
+    const unidadBusquedaLimpia = unidadSeleccionada.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+    // 1. Obtener unidades únicas de los datos originales
+    const unidadesDisponibles = [...new Set(window.osPendientes_Original.map(os => (os.Unidad || "").toString()))];
+
+    // ✅ CORRECCIÓN DE LA LÍNEA DEL ERROR:
+    // Usamos .find() correctamente con una función flecha y limpieza de guiones
+    const unidadRealEncontrada = unidadesDisponibles.find(u => {
+        const uLimpia = u.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        return uLimpia === unidadBusquedaLimpia;
+    });
+
+    if (!unidadRealEncontrada) {
         alert(`La unidad "${unidadSeleccionada}" no existe en los datos`);
         return;
     }
 
-    console.log(`🔍 Filtrando por unidad: ${unidadSeleccionada}`);
+    console.log(`🔍 Filtrando por unidad real encontrada: ${unidadRealEncontrada}`);
 
-    // 1. Filtrar datos estructurados (Reguladas/No Reguladas)
+    // 2. Filtrar datos estructurados (Usando la unidad real encontrada en la BD)
     const datosFiltrados = {
         reguladas: {},
         noReguladas: {}
     };
 
     ['reguladas', 'noReguladas'].forEach(tipo => {
-        if (window.datosDetalleOS_Original[tipo][unidadSeleccionada]) {
-            datosFiltrados[tipo][unidadSeleccionada] = window.datosDetalleOS_Original[tipo][unidadSeleccionada];
+        if (window.datosDetalleOS_Original[tipo][unidadRealEncontrada]) {
+            datosFiltrados[tipo][unidadRealEncontrada] = window.datosDetalleOS_Original[tipo][unidadRealEncontrada];
         }
     });
 
-    // 2. Filtrar array plano de OS (Esto es lo que usa la tabla de Tipologías)
-    const osFiltradas = window.osPendientes_Original.filter(os => os.Unidad === unidadSeleccionada);
+    // 3. Filtrar array plano (Usando comparación limpia para seguridad total)
+    const osFiltradas = window.osPendientes_Original.filter(os => {
+        const uOS = (os.Unidad || "").toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        return uOS === unidadBusquedaLimpia;
+    });
 
     if (osFiltradas.length === 0) {
         alert(`No se encontraron OS para la unidad: ${unidadSeleccionada}`);
         return;
     }
 
-    // 3. Actualizar datos globales de la sesión actual
+    // 4. Actualizar datos globales y regenerar
     window.datosDetalleOS = datosFiltrados;
-
-    // 4. Llamar a la regeneración de tablas pasando los datos de la unidad
-    // La función regenerarTablasFiltradas ahora incluirá la tabla de tipologías filtrada
-    regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidadSeleccionada);
+    regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidadRealEncontrada);
 }
+
 
 
  	// ========================================
