@@ -817,43 +817,57 @@ async function confirmarDescansoPersonalizadoATTF() {
 }
 
 
-// ============================================================
-// 🛠️ FUNCIÓN GLOBAL PARA PROCESAR EL DESCANSO (SOLUCIÓN ERROR)
-// ============================================================
 window.confirmarDescansoAutomaticoATTF = async function(fechaIni, fechaFin) {
     console.log("📡 Procesando confirmación de descanso:", { fechaIni, fechaFin });
     
-    // Validar que tengamos el turno guardado en el paso anterior
-    const turnoMañana = window.turnoMañanaSeleccionado;
-    
-    // El objeto currentUser ya debe estar disponible si se llamó desde el flujo de login
+    // 1. Validar sesión
     if (!currentUser || !currentUser.id) {
-        alert("Error: No hay sesión de usuario activa para actualizar. Por favor reintente.");
+        alert("Error: No hay sesión de usuario activa.");
         location.reload();
         return;
     }
 
-    if (!turnoMañana) {
-        alert("Error: No se detectó el turno de mañana. Por favor reintente.");
-        return;
-    }
+    // 2. Obtener el turno (si no hay uno seleccionado, usamos 'descanso' por defecto)
+    const turnoMañana = window.turnoMañanaSeleccionado || 'descanso';
 
     try {
+        // 3. Guardar en Base de Datos
         const { error } = await supabaseClient
             .from('usuarios')
             .update({ 
                 descanso_fecha_inicio: fechaIni,
                 descanso_fecha_fin: fechaFin,
                 turno_manana: turnoMañana,
-                estado_ciclo: 'en_descanso', // Actualizamos el estado según tu tabla
+                estado_ciclo: 'en_descanso', 
                 ultima_actividad: new Date().toISOString()
             })
             .eq('id', currentUser.id);
 
         if (error) throw error;
 
-        alert("✅ Descanso y turno de mañana confirmados.");
-        window.location.reload(); // Recarga para entrar al sistema ya validado
+        // ✨ PASO CLAVE: Guardar localmente para que accederMenuATTF() sepa que ya terminaste
+        localStorage.setItem('turno_hoy', 'DESCANSO');
+        localStorage.setItem('turno_manana', turnoMañana);
+        localStorage.setItem('descanso_confirmado', 'true');
+
+        // 4. LIMPIEZA TOTAL DE INTERFAZ (Para que no salga nada abajo)
+        const configSec = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+        if (configSec) {
+            configSec.innerHTML = ''; // Borra la tarjeta de descanso físicamente
+            configSec.style.display = 'none'; // Oculta el contenedor
+        }
+
+        // 5. ENTRAR AL MENÚ DIRECTAMENTE (Sin recargar la página)
+        console.log("✅ Descanso guardado. Accediendo al menú...");
+        
+        // Si tienes una función para mostrar el menú, llámala aquí
+        if (typeof accederMenuATTF === 'function') {
+            accederMenuATTF();
+        } else {
+            // Si no, forzamos la visibilidad del menú
+            const menu = document.getElementById('menuModulosATTF');
+            if (menu) menu.style.display = 'block';
+        }
 
     } catch (err) {
         console.error("❌ Error al confirmar descanso:", err);
@@ -2000,7 +2014,7 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
 
-    // 1. RECUPERACIÓN DE SESIÓN
+    // 1. RECUPERACIÓN DE SESIÓN (Seguridad)
     if (!currentUser) {
         const sessionStore = localStorage.getItem('cleca_user_session') || localStorage.getItem('usuario_logueado');
         if (sessionStore) {
@@ -2011,55 +2025,61 @@ function accederMenuATTF() {
         }
     }
 
-    // 2. VALIDACIÓN DE TURNOS
+    // 2. VALIDACIÓN DE TURNOS (Evita el bucle al Paso 1)
     const turnoHoy = localStorage.getItem('turno_hoy');
     const turnoManana = localStorage.getItem('turno_manana');
 
     if (!turnoHoy || !turnoManana || turnoHoy === "null" || turnoManana === "null") {
+        console.warn('⚠️ Turnos no encontrados, redirigiendo a configuración.');
         mostrarConfiguracionInicialATTF();
         return; 
     }
 
-    // 3. ⚡ LIMPIEZA TOTAL DE INTERFAZ
+    // 3. ⚡ LIMPIEZA TOTAL Y RENDERIZADO DE INTERFAZ
     try {
-        // A. Ocultar elementos de configuración y login
-        if (document.getElementById('loginSection')) document.getElementById('loginSection').style.display = 'none';
-        
+        // A. OCULTAR TODO LO QUE NO SEA EL MENÚ (Quita el cuadro de descanso de abajo)
+        const loginSec = document.getElementById('loginSection');
+        if (loginSec) loginSec.style.display = 'none';
+
         const configSec = document.getElementById('configuracionInicialATTF');
         if (configSec) {
-            configSec.innerHTML = ''; 
+            configSec.innerHTML = ''; // Borra el contenido físicamente para que no salga abajo
             configSec.style.display = 'none';
         }
 
-        // B. Limpiar el contenedor de búsqueda y quitar letreros sobrantes
-        const searchSection = document.getElementById('searchSection');
-        if (searchSection) {
-            searchSection.style.display = 'block';
-            searchSection.classList.remove('hidden');
-            
-            // Borramos el texto "Consultar Información" si existe
-            const titulos = searchSection.querySelectorAll('h2, h3, p, label');
-            titulos.forEach(el => {
-                if (el.textContent.trim().includes('Consultar Información')) {
-                    el.style.display = 'none';
-                }
-            });
-        }
-
-        // C. Mostrar Módulos y Tablas
-        const tableSelection = document.getElementById('tableSelectionSection');
-        if (tableSelection) {
-            tableSelection.style.display = 'block';
-            tableSelection.classList.remove('hidden');
-        }
-
+        // B. MOSTRAR EL MENÚ PRINCIPAL Y MÓDULOS
         const menuModulos = document.getElementById('menuModulosATTF');
         if (menuModulos) {
             menuModulos.style.display = 'block';
             menuModulos.classList.remove('hidden');
         }
 
-        // D. Identidad de usuario
+        // C. CONFIGURAR SECCIÓN DE BÚSQUEDA Y TÍTULO
+        const searchSection = document.getElementById('searchSection');
+        if (searchSection) {
+            searchSection.style.display = 'block';
+            searchSection.classList.remove('hidden');
+            
+            // Recuperar el título "Consultar Información" correctamente
+            // Primero intentamos por clase específica, si no, lo buscamos en el DOM
+            let titulo = searchSection.querySelector('.titulo-consulta') || 
+                         Array.from(searchSection.querySelectorAll('h2, h3'))
+                              .find(el => el.textContent.includes('Consultar'));
+            
+            if (titulo) {
+                titulo.style.display = 'block';
+                titulo.textContent = 'Consultar Información';
+            }
+        }
+
+        // D. MOSTRAR LOS 3 BOTONES DE MÓDULOS (Consultas, TX, IPR)
+        const tableSelection = document.getElementById('tableSelectionSection');
+        if (tableSelection) {
+            tableSelection.style.display = 'block';
+            tableSelection.classList.remove('hidden');
+        }
+
+        // E. IDENTIDAD DE USUARIO
         const userLabel = document.getElementById('currentUser');
         if (userLabel) userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
         if (document.getElementById('userInfo')) document.getElementById('userInfo').classList.remove('hidden');
@@ -2068,10 +2088,10 @@ function accederMenuATTF() {
         mostrarTablasSegunRol();
         iniciarVerificacionSesion();
         
-        console.log('✅ Menú ATTF renderizado correctamente.');
+        console.log('✅ Menú ATTF renderizado: Interfaz limpia y títulos recuperados.');
 
     } catch (error) {
-        console.error('❌ Error al renderizar el menú:', error);
+        console.error('❌ Error crítico al renderizar el menú:', error);
     }
 }
 
@@ -3355,25 +3375,61 @@ async function renovarSesion() {
     }
 }
 
+async function verificarSesionReal() {
+    const session = localStorage.getItem('cleca_user_session');
+    if (!session) return;
+
+    try {
+        const user = JSON.parse(session).user || JSON.parse(session);
+
+        // Consultamos estado y si la sesión sigue marcada como activa en la DB
+        const { data, error } = await supabaseClient
+            .from('usuarios')
+            .select('estado_ciclo, sessionactiva')
+            .eq('id', user.id)
+            .single();
+
+        // 🚨 SI EL USUARIO FUE BLOQUEADO, RESETEADO O CERRÓ SESIÓN EN OTRO LADO:
+        if (error || !data || data.sessionactiva === false) {
+            console.warn("⚠️ Sesión invalidada por el servidor o usuario inexistente.");
+            
+            // Limpiamos TODO para que no pueda volver a entrar por caché
+            localStorage.removeItem('cleca_user_session');
+            localStorage.removeItem('usuario_logueado');
+            localStorage.removeItem('turno_hoy');
+            localStorage.removeItem('turno_manana');
+            
+            alert("Tu sesión ha expirado o ha sido invalidada. Por favor, ingresa de nuevo.");
+            location.reload();
+        }
+    } catch (e) {
+        console.error("Error validando sesión:", e);
+    }
+}
+
+
+
 
 async function logout() {
-    console.log("🚫 Cerrando sesión...");
+    console.log("🚫 Cerrando sesión y limpiando caché...");
     
-    // 1. Limpiamos la memoria del navegador de forma exhaustiva
-    // Borramos datos de sesión y el objeto de usuario
-    sessionStorage.clear(); 
-    localStorage.removeItem('usuario_logueado');
+    // 1. LIMPIEZA TOTAL DEL NAVEGADOR (LocalStorage + SessionStorage)
+    // Borramos credenciales
     localStorage.removeItem('cleca_user_session');
+    localStorage.removeItem('usuario_logueado');
     
-    // OPCIONAL: Si quieres que al cerrar sesión también se borren los turnos 
-    // registrados del ATTF, descomenta las siguientes dos líneas:
-    // localStorage.removeItem('turno_hoy');
-    // localStorage.removeItem('turno_manana');
+    // Borramos el progreso de turnos y descansos (ESTO EVITA EL INGRESO AUTOMÁTICO)
+    localStorage.removeItem('turno_hoy');
+    localStorage.removeItem('turno_manana');
+    localStorage.removeItem('descanso_confirmado');
+    localStorage.removeItem('turno_hoy_registrado'); 
 
-    if (currentUser) {
+    // Limpiamos cualquier rastro en sessionStorage por si acaso
+    sessionStorage.clear();
+
+    // 2. DESACTIVAR EN LA BASE DE DATOS (Seguridad en el Servidor)
+    if (currentUser && currentUser.id) {
         try {
-            // 2. Notificamos a Supabase para liberar la sesión
-            // Usamos 'sessiontoken' sin guion bajo como en tu esquema de tabla
             await supabaseClient
                 .from('usuarios')
                 .update({ 
@@ -3381,20 +3437,21 @@ async function logout() {
                     sessiontoken: null 
                 })
                 .eq('id', currentUser.id);
-
-            console.log("✅ Sesión desactivada en el servidor.");
+            console.log("✅ Sesión desactivada en servidor.");
         } catch (e) {
-            console.error("❌ Error al desactivar sesión en servidor:", e);
+            console.error("❌ Error al notificar al servidor:", e);
         }
     }
 
-    // 3. Reset de variables globales y recarga de la aplicación
+    // 3. RESET DE VARIABLES Y RECARGA
     currentUser = null;
-    selectedTable = null;
     
-    // Forzamos la recarga para volver a la pantalla de login limpia
+    // Usar clear() al final si quieres asegurar que NO quede nada de nada
+    // localStorage.clear(); 
+
     window.location.reload();
 }
+
 
 
    function generarCamposBusqueda(config) {
