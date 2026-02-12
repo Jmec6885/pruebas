@@ -5276,115 +5276,116 @@ if (String(os.OSATMO).trim() === '11195544') {
 // ========================================
     contadorTotal++;
 
-    // --- A. FILTROS BASE (Coordenadas y Radio) ---
-    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
-    if (!coords) { contadorSinCoordenadas++; return; }
+   // --- A. FILTROS BASE (Coordenadas y Radio) ---
+    const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+    if (!coords) { contadorSinCoordenadas++; return; }
 
-    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
-    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
+    const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
+    if (dist > radioConfigurado) { contadorFueraRadio++; return; }
 
-  // --- B. EXTRACCIÓN Y DATOS DE DISPONIBILIDAD (Normalización de Guiones a Vacío) ---
-const uOS_Original = (os.Unidad || "").toString();
-const idOS = String(os.OSATMO).trim();
+    // --- B. EXTRACCIÓN Y NORMALIZACIÓN DE DISPONIBILIDAD ---
+    const uOS_Original = (os.Unidad || "").toString().trim();
+    const idOS = String(os.OSATMO || os.osatomo || "").trim();
 
-// 🔥 NORMALIZACIÓN: Eliminamos guiones y basura para que "---" sea igual a ""
-const uOS_Limpia = uOS_Original.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-const miUnidadLimpia = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    // 🔥 NORMALIZACIÓN CRÍTICA: Eliminamos todo lo que no sea letra o número
+    // Esto hace que "---", "   ", o "- - -" se conviertan en ""
+    const uOS_Limpia = uOS_Original.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    const miUnidadLimpia = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-// 1. Identificamos si la OS está disponible (Reguladas o sin asignar)
-const estaLibre = uOS_Limpia === "" || uOS_Limpia === "PENDIENTE" || uOS_Limpia === "SINUNIDAD" || uOS_Limpia === "NULL";
+    // 1. Identificamos si la OS está disponible (Ahora detecta cadenas de guiones como vacío)
+    const estaLibre = uOS_Limpia === "" || 
+                      uOS_Limpia === "PENDIENTE" || 
+                      uOS_Limpia === "SINUNIDAD" || 
+                      uOS_Limpia === "NULL";
 
-// 2. ¿Es una orden que ya me pertenece?
-const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS) || (uOS_Limpia === miUnidadLimpia && uOS_Limpia !== "");
+    // 2. ¿Es una orden que ya me pertenece? (Asignada en memoria o coincide unidad limpia)
+    const esAsignadaAMi = misAsignadasReales.some(mia => String(mia.osatomo || mia.OSATMO).trim() === idOS) || 
+                          (uOS_Limpia === miUnidadLimpia && uOS_Limpia !== "");
 
-// 3. Verificación de seguridad contra asignaciones globales
-const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
+    // 3. Verificación contra asignaciones de otros (Global)
+    const estaAsignadaGlobal = osatmosAsignadosGlobal.has(idOS);
 
-// 🚩 LÓGICA DE EXCLUSIÓN: Si no está libre y no es mía, es de alguien más
-const esDeOtro = !estaLibre && !esAsignadaAMi;
+    // 🚩 LÓGICA DE EXCLUSIÓN: 
+    // Si NO está libre y NO es mía, entonces realmente pertenece a OTRA unidad (ej. "PAC-01")
+    const esDeOtro = !estaLibre && !esAsignadaAMi;
 
-if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
-    if (esDeOtro) {
-        contadorUnidadInvalida++; 
+    if (esDeOtro || (estaAsignadaGlobal && !esAsignadaAMi)) {
+        if (esDeOtro) {
+            contadorUnidadInvalida++; 
+        } else {
+            contadorDuplicados++; 
+        }
+        return; // ⛔ Se descarta correctamente
+    }
+
+    // 4. Procesable: Calculamos rango para diagnóstico
+    const rangoOS = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
+    diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
+
+
+    // --- C. DETERMINACIÓN DE PRIORIDADES ---
+    const valorTipo = (os.Tipo_de_OS || os.tipo_os || "").toUpperCase();
+    const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
+    const valorDeuda = parseFloat(os.Deuda || os.deuda || 0);
+    const esDeudaAlta = valorDeuda >= 500;
+
+    if (esRegulada) contadorReguladas_EnRadio++;
+    else contadorNoReguladas_EnRadio++;
+
+    const esPrioridad = esRegulada || esDeudaAlta;
+
+
+    // --- D. FILTROS DE TABLA (COINCIDENCIA EXCLUSIVA) ---
+    let cumpleFiltrosTabla = false;
+
+    if (!esPrioridad) {
+        const tipOS_Actual = normalizarTexto(os.Tipologia || os.tipologia || "");
+        
+        let tipologiasFiltro = filtrosAplicar.tipologias || [];
+        if (typeof tipologiasFiltro === 'string') {
+            tipologiasFiltro = tipologiasFiltro.split(',').map(t => t.trim());
+        }
+        
+        const tipOk = tipologiasFiltro.length === 0 || 
+                      tipologiasFiltro.some(f => normalizarTexto(f) === tipOS_Actual);
+        
+        const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
+        const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
+
+        cumpleFiltrosTabla = tipOk && rangoOk;
+    }
+
+
+    // --- E. DECISIÓN FINAL Y ASIGNACIÓN DE ESTADO ---
+    if (esPrioridad || cumpleFiltrosTabla) {
+        
+        let estadoFinal = 'no_regulada';
+        if (esRegulada) {
+            estadoFinal = 'regulada';
+            contadorReguladas++;
+            contadorReguladas_Pasaron++;
+        } else if (esDeudaAlta) {
+            estadoFinal = 'deuda_alta';
+            contadorDeudaAlta++;
+        } else {
+            contadorFiltradas++;
+            contadorNoReguladas_Pasaron++;
+        }
+
+        if (!detallePorRango[rangoOS]) detallePorRango[rangoOS] = 0;
+        detallePorRango[rangoOS]++;
+
+        osEnRadio.push({
+            ...os,
+            lat: coords.lat,
+            lng: coords.lng,
+            distancia: dist,
+            esExtra: true,
+            estado: estadoFinal
+        });
     } else {
-        contadorDuplicados++; 
+        contadorSinFiltro++;
     }
-    return; // ⛔ Se descarta por pertenecer a otra unidad
-}
-
-// 4. Procesable: Calculamos rango para diagnóstico
-const rangoOS = determinarRangoDias(os['Fecha Gen.'] || os.fecha_generacion);
-diagnosticoRangos[rangoOS] = (diagnosticoRangos[rangoOS] || 0) + 1;
-
-
-// --- C. DETERMINACIÓN DE PRIORIDADES ---
-const valorTipo = (os.Tipo_de_OS || "").toUpperCase();
-const esRegulada = valorTipo.includes("REGULADA") && !valorTipo.includes("NO REGULADA");
-const valorDeuda = parseFloat(os.Deuda || 0);
-const esDeudaAlta = valorDeuda >= 500;
-
-if (esRegulada) contadorReguladas_EnRadio++;
-else contadorNoReguladas_EnRadio++;
-
-const esPrioridad = esRegulada || esDeudaAlta;
-
-
-// --- D. FILTROS DE TABLA (COINCIDENCIA EXCLUSIVA Y EXACTA) ---
-let cumpleFiltrosTabla = false;
-
-if (!esPrioridad) {
-    // Normalizamos solo para quitar acentos/espacios extra, manteniendo la frase exacta
-    const tipOS_Actual = normalizarTexto(os.Tipologia);
-    
-    // Obtenemos tipologías del filtro (Array)
-    let tipologiasFiltro = filtrosAplicar.tipologias || [];
-    if (typeof tipologiasFiltro === 'string') {
-        tipologiasFiltro = tipologiasFiltro.split(',').map(t => t.trim());
-    }
-    
-    // 🔥 COMPARACIÓN EXCLUSIVA: Debe ser igual (===), no parecida.
-    const tipOk = tipologiasFiltro.length === 0 || tipologiasFiltro.some(f => normalizarTexto(f) === tipOS_Actual);
-    
-    const rangosFiltro = (filtrosAplicar.rangos || []).map(r => r.trim());
-    const rangoOk = rangosFiltro.length === 0 || rangosFiltro.includes(rangoOS);
-
-    cumpleFiltrosTabla = tipOk && rangoOk;
-}
-
-
-// --- E. DECISIÓN FINAL ---
-if (esPrioridad || cumpleFiltrosTabla) {
-    
-    let estadoFinal = 'no_regulada';
-    if (esRegulada) {
-        estadoFinal = 'regulada';
-        contadorReguladas++;
-        contadorReguladas_Pasaron++; // 📊 Contador adicional
-    } else if (esDeudaAlta) {
-        estadoFinal = 'deuda_alta';
-        contadorDeudaAlta++;
-    } else {
-        contadorFiltradas++;
-        contadorNoReguladas_Pasaron++; // 📊 Contador adicional
-    }
-
-    // 📊 Registrar por rango
-    if (!detallePorRango[rangoOS]) detallePorRango[rangoOS] = 0;
-    detallePorRango[rangoOS]++;
-
-    osEnRadio.push({
-        ...os,
-        lat: coords.lat,
-        lng: coords.lng,
-        distancia: dist,
-        esExtra: true,
-        estado: estadoFinal
-    });
-} else {
-    contadorSinFiltro++;
-}
-
-    
 });
 
         /// ✅ LOG FINAL CON TABLA COMPLETA
