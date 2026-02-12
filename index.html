@@ -3068,66 +3068,96 @@ function generarKMLString(ubicaciones) {
 
 
 function iniciarVerificacionSesion() {
-  setInterval(async () => {
-    if (!currentUser) return;
-
-    try {
-      // 🛡️ Sincronizado con tu tabla Supabase: sessiontoken (sin guion bajo)
-      const { data, error } = await supabaseClient
-        .from('usuarios')
-        .select('sessionactiva, sessiontoken, ultimaconexion') 
-        .eq('id', currentUser.id)
-        .single();
-
-      if (error || !data) {
-          console.error('Error al obtener datos de sesión:', error);
-          return;
-      }
-
-      // 🛡️ VALIDACIÓN DE SESIÓN ÚNICA
-      // Comparamos el token de la DB con el que tenemos en memoria (currentUser)
-      if (data.sessiontoken && currentUser.sessiontoken) {
-          if (data.sessiontoken !== currentUser.sessiontoken) {
-            console.warn('⚠️ Conflicto de tokens detectado.');
-            alert('⚠️ Seguridad: Su sesión ha sido iniciada en otro dispositivo o navegador.');
-            logout();
-            return;
-          }
-      }
-
-      // Si la sesión fue desactivada manualmente desde la DB
-      if (data.sessionactiva === false) {
-          console.log('🚫 Sesión marcada como inactiva en el servidor.');
-          logout();
-          return;
-      }
-
-      // 🕒 VALIDACIÓN DE TIEMPO (Inactividad de 45 minutos)
-      if (data.ultimaconexion) {
-          const ultima = new Date(data.ultimaconexion);
-          const ahora = new Date();
-          const diffMin = (ahora - ultima) / 1000 / 60;
-
-          if (diffMin > 45) {
-            alert('⌛ Su sesión ha expirado por inactividad (45 min).');
-            logout();
-          }
-      }
-
-    } catch (err) {
-      console.error('Error crítico verificando sesión:', err);
+    // 1️⃣ INTENTO DE RECUPERACIÓN INICIAL:
+    // Si currentUser es null (pasó un F5), intentamos rescatarlo antes de iniciar el intervalo
+    if (!currentUser) {
+        const savedSession = localStorage.getItem('cleca_user_session');
+        if (savedSession) {
+            try {
+                const session = JSON.parse(savedSession);
+                currentUser = session.user;
+                console.log("🛡️ Verificador: Usuario restaurado desde memoria.");
+            } catch (e) {
+                console.error("🛡️ Verificador: Error al parsear sesión guardada.");
+            }
+        }
     }
-  }, 30000); // Se ejecuta cada 30 segundos
+
+    // Iniciamos el ciclo de revisión cada 30 segundos
+    setInterval(async () => {
+        // Si después de intentar recuperar sigue sin haber usuario, no hacemos nada
+        if (!currentUser) return;
+
+        try {
+            // 2️⃣ CONSULTA A SUPABASE
+            const { data, error } = await supabaseClient
+                .from('usuarios')
+                .select('sessionactiva, sessiontoken, ultimaconexion') 
+                .eq('id', currentUser.id)
+                .maybeSingle(); // Usamos maybeSingle para evitar errores si el usuario fue borrado
+
+            if (error || !data) {
+                console.error('Error al obtener datos de sesión en servidor:', error);
+                return;
+            }
+
+            // 3️⃣ VALIDACIÓN DE SESIÓN ÚNICA (Token)
+            // Si el token en la DB es distinto al que tenemos nosotros, significa
+            // que alguien más inició sesión en otro lugar.
+            if (data.sessiontoken && currentUser.sessiontoken) {
+                if (data.sessiontoken !== currentUser.sessiontoken) {
+                    console.warn('⚠️ SEGURIDAD: Token duplicado detectado.');
+                    alert('⚠️ Seguridad: Se detectó un inicio de sesión en otro dispositivo. Esta sesión se cerrará.');
+                    logout();
+                    return;
+                }
+            }
+
+            // 4️⃣ VALIDACIÓN DE ESTADO ACTIVO
+            if (data.sessionactiva === false) {
+                console.log('🚫 Sesión desactivada por el administrador.');
+                logout();
+                return;
+            }
+
+            // 5️⃣ VALIDACIÓN DE TIEMPO (Inactividad de 45 minutos)
+            if (data.ultimaconexion) {
+                // Parseamos la fecha teniendo en cuenta que viene de Supabase (UTC)
+                const ultima = new Date(data.ultimaconexion);
+                const ahora = new Date();
+                const diffMin = (ahora - ultima) / 1000 / 60;
+
+                if (diffMin > 45) {
+                    console.warn('⌛ Expiración por tiempo:', diffMin.toFixed(1), 'minutos');
+                    alert('⌛ Su sesión ha expirado por inactividad (45 min).');
+                    logout();
+                }
+            }
+
+        } catch (err) {
+            console.error('Error crítico en el bucle de verificación:', err);
+        }
+    }, 30000); // 30 segundos es un tiempo ideal para balancear seguridad y consumo de datos
 }
 
-
 async function renovarSesion() {
+    // 1️⃣ RECONSTRUCCIÓN DE MEMORIA: Si no hay currentUser, intentamos recuperarlo del storage
+    if (!currentUser) {
+        const sessionData = localStorage.getItem('cleca_user_session');
+        if (sessionData) {
+            const { user } = JSON.parse(sessionData);
+            currentUser = user;
+            console.log("👤 Usuario recuperado desde LocalStorage");
+        }
+    }
+
+    // Si después de intentar recuperar no hay nada, abortamos
     if (!currentUser || !currentUser.id) return;
 
     try {
-        // Obtenemos la fecha actual formateada según tu lógica de El Salvador
         const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
 
+        // 2️⃣ ACTUALIZACIÓN EN BASE DE DATOS
         const { error } = await supabaseClient
             .from('usuarios')
             .update({ 
@@ -3135,15 +3165,43 @@ async function renovarSesion() {
                 sessionactiva: true 
             })
             .eq('id', currentUser.id)
-            // 🛡️ SEGURIDAD: Solo actualiza si el token en DB es igual al que tenemos en el navegador
-            // Cambiado de 'session_token' a 'sessiontoken' (según tu tabla)
             .eq('sessiontoken', currentUser.sessiontoken); 
 
         if (error) {
-            console.warn('⚠️ No se pudo renovar sesión. El token podría haber cambiado en otro dispositivo.');
-        } else {
-            console.log('🔄 Sesión renovada con éxito:', ahoraSV);
+            console.warn('⚠️ Error en DB: El token podría haber cambiado.');
+            // Si hay error de token, probablemente inició sesión en otro lado
+            return;
         }
+
+        console.log('🔄 Sesión renovada en servidor:', ahoraSV);
+
+        // 3️⃣ 🔥 SOLUCIÓN AL "PANTALLAZO EN BLANCO":
+        // Si el usuario está logueado pero la pantalla está en blanco (loginSection visible), forzamos la interfaz
+        if (document.getElementById('loginSection').style.display !== 'none') {
+            console.log("🛠️ Reconstruyendo interfaz visual...");
+            
+            // Ocultar login y mostrar info de usuario
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('currentUser').textContent = `${currentUser.usuario} (${currentUser.rol})`;
+
+            // Lógica específica por Rol para mostrar el contenedor correcto
+            if (currentUser.rol === 'ATTF') {
+                const searchSection = document.getElementById('searchSection');
+                searchSection.style.display = 'block'; // <--- ESTO QUITA EL BLANCO
+
+                // Si no hay turnos, cargar paso 1, si hay, cargar mapa
+                if (!localStorage.getItem('turnos_configurados')) {
+                    generarInterfazTurnosPaso1();
+                } else {
+                    seleccionarTabla('mapa_rutas');
+                }
+            } else {
+                // Admin / Despacho
+                document.getElementById('tableSelectionSection').style.display = 'block';
+            }
+        }
+
     } catch (err) {
         console.error('Error crítico en renovarSesion:', err);
     }
@@ -10211,24 +10269,45 @@ function dibujarMarcadores(mapa, ordenes) {
 }
 
 
-// 1. PRIMERO: Definir la función de validación
-    function puedeAccederAlMenu() {
-        const turnoHoy = localStorage.getItem('turno_hoy');
-        const turnoManana = localStorage.getItem('turno_manana');
-        const rol = localStorage.getItem('user_rol');
+// 1. PRIMERO: Definir la función de validación corregida
+function puedeAccederAlMenu() {
+    // Buscamos en los mismos lugares donde guardamos (ser consistentes)
+    const turnoHoy = localStorage.getItem('turno_hoy');
+    const turnoManana = localStorage.getItem('turno_manana');
+    
+    // IMPORTANTE: Sacamos el rol del objeto currentUser que ya rescatamos
+    const rol = currentUser ? currentUser.rol : localStorage.getItem('user_rol');
 
-        // Si es ATFF, AMBOS deben existir
-        if (rol === 'ATFF') {
-            return (turnoHoy && turnoHoy !== "" && turnoManana && turnoManana !== "");
-        }
-        return true; 
+    // CORRECCIÓN: Rol es ATTF (con doble T)
+    if (rol === 'ATTF') {
+        // Validamos que existan y no sean nulos
+        const tieneTurnos = (turnoHoy && turnoHoy !== "null" && turnoManana && turnoManana !== "null");
+        
+        console.log("🛡️ Guardia ATTF - ¿Tiene turnos?:", tieneTurnos);
+        return tieneTurnos;
     }
+    
+    return true; // Administradores y otros pasan directo
+}
 
-    // 2. SEGUNDO: Ejecutar el guardia INMEDIATAMENTE
+// 2. SEGUNDO: El Guardia ya no te expulsa, te redirige internamente
+function ejecutarGuardiaNavegacion() {
     if (!puedeAccederAlMenu()) {
-        alert("⚠️ Acción denegada: Debes completar el turno de hoy y mañana para continuar.");
-        window.location.href = 'index.html'; // O tu página de login/turnos
+        console.warn("🚫 Acceso restringido: Redirigiendo a configuración de turnos.");
+        
+        // En lugar de recargar la página (que causa el blanco), 
+        // llamamos a la función que dibuja los botones.
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('searchSection').style.display = 'block';
+        
+        if (typeof generarInterfazTurnosPaso1 === 'function') {
+            generarInterfazTurnosPaso1();
+        }
+        return false;
     }
+    return true;
+}
+
 
 // ========================================
 // 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN COMPLETA SIN RECORTES + CORRECCIONES)
