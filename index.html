@@ -1284,37 +1284,9 @@ async function login() {
                 searchSection.classList.remove('hidden');
             }
 
-            // 3. Revisar turnos
-            const tHoy = localStorage.getItem('turno_hoy');
-            const tManana = localStorage.getItem('turno_manana');
-
-            // Validar si los turnos son nulos o vacíos
-            if (!tHoy || !tManana || tHoy === "null" || tHoy === "") {
-                console.log("⚠️ Faltan turnos. Cargando Paso 1...");
-                
-                // Forzamos la visibilidad del área de configuración
-                const configSection = document.getElementById('configuracionInicialATTF');
-                if (configSection) {
-                    configSection.style.display = 'block';
-                    configSection.classList.remove('hidden');
-                }
-
-                // Llamada segura a la función de dibujo
-                if (typeof mostrarConfiguracionInicialATTF === 'function') {
-                    mostrarConfiguracionInicialATTF();
-                } else if (typeof generarInterfazTurnosPaso1 === 'function') {
-                    generarInterfazTurnosPaso1();
-                } else {
-                    console.error("❌ Error: No se encontró la función para dibujar turnos.");
-                    alert("Error de sistema: No se pudo cargar la configuración de turnos.");
-                }
-            } else {
-                console.log("✅ Turnos detectados. Accediendo al Menú/Mapa...");
-                accederMenuATTF();
-            }
-            return;
-        }
-
+            // ✅ CORRECTO - Delegar toda la lógica a loginATTF
+loginATTF(data);
+return;
         if (data.rol === 'Poda') {
             loginPoda(data); 
             return;
