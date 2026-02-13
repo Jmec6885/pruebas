@@ -1363,11 +1363,15 @@ async function loginATTF(userData) {
   console.log('👷 Iniciando flujo ATTF para:', userData.usuario);
   const fechaHoy = getFechaHoyElSalvador();
   const horaActual = new Date().getHours();
-
-  // ✅ ACTUALIZAR última_actividad al ingresar
-  await supabaseClient.from('usuarios').update({ 
-    ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
-  }).eq('id', userData.id);
+  
+  // ✅ ACTUALIZAR última_actividad al hacer login
+  try {
+    await supabaseClient.from('usuarios').update({ 
+      ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
+    }).eq('id', userData.id);
+  } catch (err) {
+    console.error('⚠️ Error actualizando ultima_actividad:', err);
+  }
 
   // 1. Verificar descanso programado (Prioridad Máxima)
   if (verificarDiaDescanso(userData)) {
@@ -1375,57 +1379,76 @@ async function loginATTF(userData) {
     logout();
     return;
   }
-
-  // 2. VALIDACIÓN PRINCIPAL: ¿Tiene turno de HOY configurado para hoy?
-  const tieneHoyAlDia = userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy;
-  const tieneTurnoManana = userData.turno_manana && userData.turno_manana !== "null" && userData.turno_manana !== "";
-  const tieneDescansoActivo = userData.descanso_fecha_inicio && userData.descanso_fecha_inicio >= fechaHoy;
-
-  // ✅ CASO 1: TIENE HOY + (MAÑANA o DESCANSO) = ENTRAR AL MENÚ
-  if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
-    if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-      const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
-      alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
-      logout();
-      return;
-    }
-    console.log("✅ Turno de hoy configurado. Accediendo al menú...");
-    accederMenuATTF();
-    return;
-  }
-
-  // ✅ CASO 2: NO TIENE HOY = PASO 1 (Configurar turno de hoy)
-  if (!tieneHoyAlDia) {
-    console.log('🔧 No tiene turno de hoy configurado. Paso 1...');
-    mostrarConfiguracionInicialATTF();
-    return;
-  }
-
-  // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-  console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
   
-  // Verificar si ya completó 5 turnos
-  const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-  if (contadorTurnos >= 5) {
-    mostrarForzarDescansoATTF();
-  } else {
-    mostrarProgramarTurnoMañanaConDescanso(userData);
+  // ✅ 2. VALIDACIÓN PRINCIPAL
+const tieneHoyAlDia = userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy;
+const tieneTurnoManana = userData.turno_manana && 
+                         userData.turno_manana !== "null" && 
+                         userData.turno_manana !== "" &&
+                         userData.turno_manana !== "descanso";
+const tieneDescansoActivo = userData.descanso_fecha_inicio && 
+                            userData.descanso_fecha_inicio >= fechaHoy;
+
+console.log('📊 Estado:', { 
+  tieneHoyAlDia, 
+  tieneTurnoManana, 
+  tieneDescansoActivo,
+  turno_manana: userData.turno_manana 
+});
+
+// ✅ CASO 1: TIENE HOY + (MAÑANA o DESCANSO) = ENTRAR AL MENÚ
+if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
+  if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+    const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
+    alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
+    logout();
+    return;
   }
+  console.log("✅ Turno configurado. Accediendo al menú...");
+  accederMenuATTF();
   return;
+}
+
+// ✅ CASO 2: NO TIENE HOY = PASO 1
+if (!tieneHoyAlDia) {
+  console.log('🔧 No tiene turno de hoy. Paso 1...');
+  mostrarConfiguracionInicialATTF();
+  return;
+}
+
+// ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+if (contadorTurnos >= 5) {
+  mostrarForzarDescansoATTF();
+} else {
+  mostrarProgramarTurnoMañanaConDescanso(userData);
+}
+return;
 }
 
 
 function calcularDiasSinActividad(ultimaActividad) {
-    if (!ultimaActividad) return 999; // Sin registro previo
-    
-    const ahora = new Date();
-    const ultima = new Date(ultimaActividad);
-    const diffMs = ahora - ultima;
-    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    return diffDias;
+  if (!ultimaActividad) return 999;
+  
+  // ✅ Normalizar ambas fechas a El Salvador (UTC-6)
+  const ahoraSV = getFechaElSalvador();
+  const ultimaSV = new Date(ultimaActividad);
+  
+  // ✅ Extraer solo la fecha (sin hora) para comparar días
+  const hoyStr = getFechaHoyElSalvador();
+  const ultimaStr = formatearFechaElSalvador(ultimaSV);
+  
+  // ✅ Calcular diferencia en días
+  const hoyDate = new Date(hoyStr + 'T00:00:00');
+  const ultimaDate = new Date(ultimaStr + 'T00:00:00');
+  
+  const diffMs = hoyDate - ultimaDate;
+  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  console.log(`📅 Días sin actividad: ${diffDias} (Hoy: ${hoyStr}, Última: ${ultimaStr})`);
+  return diffDias;
 }
-
 
 
 function mostrarConfiguracionInicialATTF() {
