@@ -2063,87 +2063,93 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
+    console.log('📊 currentUser:', {
+        usuario: currentUser?.usuario,
+        turno_hoy: currentUser?.turno_hoy,
+        fecha_turno_hoy: currentUser?.fecha_turno_hoy,
+        turno_manana: currentUser?.turno_manana
+    });
 
     // 1. RECUPERACIÓN DE SESIÓN (Seguridad)
     if (!currentUser) {
         const sessionStore = localStorage.getItem('cleca_user_session') || localStorage.getItem('usuario_logueado');
         if (sessionStore) {
             currentUser = JSON.parse(sessionStore).user || JSON.parse(sessionStore);
+            console.log('✅ Sesión restaurada desde storage');
         } else {
+            console.warn('❌ No hay sesión guardada, recargando...');
             location.reload(); 
             return;
         }
     }
 
-    // 2. VALIDACIÓN DE TURNOS (Evita el bucle al Paso 1)
-    const turnoHoy = localStorage.getItem('turno_hoy');
-    const turnoManana = localStorage.getItem('turno_manana');
+    // ✅ ELIMINADO: Validación de localStorage (redundante - ya validó loginATTF)
 
-    if (!turnoHoy || !turnoManana || turnoHoy === "null" || turnoManana === "null") {
-        console.warn('⚠️ Turnos no encontrados, redirigiendo a configuración.');
-        mostrarConfiguracionInicialATTF();
-        return; 
-    }
-
-    // 3. ⚡ LIMPIEZA TOTAL Y RENDERIZADO DE INTERFAZ
+    // 2. ⚡ LIMPIEZA TOTAL Y RENDERIZADO DE INTERFAZ
     try {
-        // A. OCULTAR TODO LO QUE NO SEA EL MENÚ (Quita el cuadro de descanso de abajo)
+        console.log('🧹 Limpiando interfaz...');
+        
+        // A. OCULTAR LOGIN Y CONFIGURACIÓN
         const loginSec = document.getElementById('loginSection');
-        if (loginSec) loginSec.style.display = 'none';
+        if (loginSec) {
+            loginSec.style.display = 'none';
+            console.log('✅ loginSection oculto');
+        }
 
         const configSec = document.getElementById('configuracionInicialATTF');
         if (configSec) {
-            configSec.innerHTML = ''; // Borra el contenido físicamente para que no salga abajo
+            configSec.innerHTML = '';
             configSec.style.display = 'none';
+            console.log('✅ configuracionInicialATTF limpio y oculto');
         }
 
-        // B. MOSTRAR EL MENÚ PRINCIPAL Y MÓDULOS
+        // B. MOSTRAR MENÚ PRINCIPAL
         const menuModulos = document.getElementById('menuModulosATTF');
         if (menuModulos) {
             menuModulos.style.display = 'block';
             menuModulos.classList.remove('hidden');
+            console.log('✅ menuModulosATTF visible');
         }
 
-        // C. CONFIGURAR SECCIÓN DE BÚSQUEDA Y TÍTULO
+        // C. CONFIGURAR SECCIÓN DE BÚSQUEDA
         const searchSection = document.getElementById('searchSection');
         if (searchSection) {
             searchSection.style.display = 'block';
             searchSection.classList.remove('hidden');
-            
-            // Recuperar el título "Consultar Información" correctamente
-            // Primero intentamos por clase específica, si no, lo buscamos en el DOM
-            let titulo = searchSection.querySelector('.titulo-consulta') || 
-                         Array.from(searchSection.querySelectorAll('h2, h3'))
-                              .find(el => el.textContent.includes('Consultar'));
-            
-            if (titulo) {
-                titulo.style.display = 'block';
-                titulo.textContent = 'Consultar Información';
-            }
+            console.log('✅ searchSection visible');
         }
 
-        // D. MOSTRAR LOS 3 BOTONES DE MÓDULOS (Consultas, TX, IPR)
+        // D. MOSTRAR BOTONES DE MÓDULOS
         const tableSelection = document.getElementById('tableSelectionSection');
         if (tableSelection) {
             tableSelection.style.display = 'block';
             tableSelection.classList.remove('hidden');
+            console.log('✅ tableSelectionSection visible');
         }
 
         // E. IDENTIDAD DE USUARIO
         const userLabel = document.getElementById('currentUser');
-        if (userLabel) userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
-        if (document.getElementById('userInfo')) document.getElementById('userInfo').classList.remove('hidden');
+        if (userLabel) {
+            userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+            console.log('✅ Etiqueta de usuario actualizada');
+        }
+        
+        if (document.getElementById('userInfo')) {
+            document.getElementById('userInfo').classList.remove('hidden');
+        }
 
-        // 4. EJECUTAR PROCESOS DE FONDO
+        // 3. EJECUTAR PROCESOS DE FONDO
+        console.log('⚙️ Ejecutando procesos de fondo...');
         mostrarTablasSegunRol();
         iniciarVerificacionSesion();
         
-        console.log('✅ Menú ATTF renderizado: Interfaz limpia y títulos recuperados.');
+        console.log('✅✅✅ Menú ATTF renderizado correctamente ✅✅✅');
 
     } catch (error) {
         console.error('❌ Error crítico al renderizar el menú:', error);
     }
 }
+
 
 function mostrarForzarDescansoATTF() {
     // 1. Buscamos los contenedores
