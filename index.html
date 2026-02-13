@@ -1049,75 +1049,49 @@ if (rol === 'ATTF') {
 
 
 async function verificarInactividad(userData) {
-    // 1. Si no hay registro de actividad previa, inicializamos con la hora de El Salvador
     if (!userData.ultima_actividad) {
-        const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
+        // Primera vez, actualizar timestamp
         await supabaseClient
             .from('usuarios')
-            .update({ ultima_actividad: ahoraSV })
+            .update({ ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+				 })
             .eq('id', userData.id);
         return { inactivo: false };
     }
     
-    // 2. Cálculo de tiempo (Usando la fecha local del dispositivo vs fecha guardada)
     const ahora = new Date();
-    // Importante: Asegurarse de que el parseo de la fecha de la BD sea correcto
-    const ultimaActividad = new Date(userData.ultima_activity_db || userData.ultima_actividad);
+    const ultimaActividad = new Date(userData.ultima_actividad);
+    const diasInactivo = Math.floor((ahora - ultimaActividad) / (1000 * 60 * 60 * 24));
     
-    // Calculamos la diferencia en milisegundos y convertimos a días
-    const diferenciaMs = ahora.getTime() - ultimaActividad.getTime();
-    const diasInactivo = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
+    console.log(`⏰ Días sin actividad: ${diasInactivo}`);
     
-    console.log(`⏰ Análisis de seguridad: ${userData.usuario} lleva ${diasInactivo} días sin actividad.`);
-    
-    // 3. Excepción para roles administrativos o de supervisión
-    if (userData.rol === 'Supervisor' || userData.rol === 'Admin') {
+    // Supervisor sin límite
+    if (userData.rol === 'Supervisor') {
         return { inactivo: false };
     }
     
-    // 4. Lógica de Bloqueo (Límite: 5 días)
+    // Todos los demás roles: 5 días
     if (diasInactivo >= 5) {
-        console.warn("🚫 Umbral de inactividad superado. Procediendo a bloqueo de seguridad.");
-        
-        const motivo = `Inactividad prolongada de ${diasInactivo} días.`;
-        
-        // Actualizamos la base de datos para bloquear el acceso futuro
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({ 
-                razon_bloqueo: motivo,
-                sessionactiva: false, // Forzamos cierre de sesión en todos los dispositivos
-                sessiontoken: null,    // Invalidamos el token actual
-                activo: false          // Opcional: Desactivar cuenta
-            })
-            .eq('id', userData.id);
-            
-        if (error) console.error("Error al ejecutar bloqueo por inactividad:", error);
-
-        // Limpiamos rastro local para que el F5 no lo reviva
-        localStorage.removeItem('cleca_user_session');
-        localStorage.removeItem('usuario_logueado');
+    // Bloquear usuario
+    await supabaseClient
+        .from('usuarios')
+        .update({ 
+            razon_bloqueo: `Inactividad de ${diasInactivo} días`,
+            sessionactiva: false,
+            sessiontoken: null
+        })
+        .eq('id', userData.id);
         
         return { 
             inactivo: true, 
             dias: diasInactivo,
-            mensaje: `❌ ACCESO DENEGADO\n\nTu cuenta ha sido bloqueada por inactividad de ${diasInactivo} días.\n\nPor favor, contacta al administrador para rehabilitar tu acceso.`
+            mensaje: `Usuario bloqueado por inactividad de ${diasInactivo} días.\n\nContacte al administrador para desbloquear su cuenta.`
         };
-    }
-    
-    // 5. Si está activo, aprovechamos para actualizar su "ultima_actividad" 
-    // solo si ha pasado más de 1 hora (para no saturar la BD de updates)
-    const minutosDesdeUltima = diferenciaMs / (1000 * 60);
-    if (minutosDesdeUltima > 60) {
-        supabaseClient
-            .from('usuarios')
-            .update({ ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador()) })
-            .eq('id', userData.id)
-            .then(() => console.log("✅ Timestamp de actividad actualizado"));
     }
     
     return { inactivo: false };
 }
+
 
 
 function verificarDiaDescanso(userData) {
@@ -1203,7 +1177,7 @@ function validarVentanaTurno(codigoTurno, horaActual) {
 async function login() {
     console.log('🔐 Ejecutando login...');
     
-    // 1. LIMPIEZAS PREVENTIVAS (Mantenimiento de BD local/remota)
+    // Limpiar datos viejos antes de iniciar
     await limpiarTurnosViejos();
     await limpiarDiasDescansoViejos();
 
@@ -1216,7 +1190,7 @@ async function login() {
     }
 
     try {
-        // 2. AUTENTICAR USUARIO
+        // 1. Autenticar usuario
         const { data, error } = await supabaseClient
             .from('usuarios')
             .select('*')
@@ -1230,34 +1204,40 @@ async function login() {
             return;
         }
         
-        // 3. VERIFICAR BLOQUEO MANUAL
+        // 2. Verificar bloqueo manual
         if (data.razon_bloqueo && data.razon_bloqueo.trim() !== '') {
             alert(`🚫 Usuario bloqueado\n\nMotivo: ${data.razon_bloqueo}`);
             return;
         }
         
-        // 4. VERIFICAR INACTIVIDAD
+        // 3. Verificar inactividad
         const checkInactividad = await verificarInactividad(data);
         if (checkInactividad.inactivo) {
-            await supabaseClient.from('usuarios').update({ 
-                Bloqueado: true, 
-                razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
-            }).eq('id', data.id);
+            await supabaseClient
+                .from('usuarios')
+                .update({ 
+                    Bloqueado: true, // Según tu esquema es con B mayúscula
+                    razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
+                })
+                .eq('id', data.id);
             alert(checkInactividad.mensaje);
             return;
         }
 
-        // 5. VERIFICAR HORARIO PERMITIDO
+        // 4. Verificar horario permitido
         const verificacion = verificarHorarioPermitido(data.rol, data);
         if (!verificacion.permitido) {
             alert(verificacion.mensaje);
             return;
         }
 
-        // 6. GESTIÓN DE SESIÓN ÚNICA (Token y Tiempos de El Salvador)
+        // ==========================================================
+        // 5. GESTIÓN DE SESIÓN ÚNICA (CORREGIDO PARA TU TABLA)
+        // ==========================================================
         const newToken = Math.random().toString(36).substring(2); 
         const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
 
+        // Actualizamos Supabase (sessiontoken SIN guion bajo según tu esquema)
         const { error: updateError } = await supabaseClient
             .from('usuarios')
             .update({
@@ -1270,11 +1250,11 @@ async function login() {
 
         if (updateError) throw updateError;
 
-        // Actualizar objeto local
+        // ACTUALIZAR LOCALMENTE
         data.sessiontoken = newToken; 
         currentUser = data;
 
-        // 7. PERSISTENCIA LOCAL (Storage)
+        // Guardar en Storage para que no te saque al refrescar
         localStorage.setItem('usuario_logueado', JSON.stringify(currentUser));
         sessionStorage.setItem('cleca_user_session', JSON.stringify({
             user: currentUser,
@@ -1285,92 +1265,62 @@ async function login() {
 
         console.log(`👤 Rol detectado: ${data.rol}`);
 
-        // ==========================================================
-        // 8. REDIRECCIÓN INTELIGENTE SEGÚN ROL
-        // ==========================================================
-        
-        if (data.rol === 'ATTF') {
-    console.log("🛠️ Iniciando lógica inteligente para ATTF...");
-    
-    // A. Preparación de Interfaz Básica
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('userInfo').classList.remove('hidden');
-    document.getElementById('currentUser').textContent = `${data.usuario} (ATTF)`;
+        // 6. Redirigir según rol
+        // ... (dentro de la función login, después de validar el usuario) ...
 
-    const hoy = new Date().toISOString().split('T')[0];
-    
-    // B. VALIDACIÓN DE ESTADO (Cíclica)
-    // 1. ¿Tiene turno de hoy? (Priorizamos lo que viene de la BD de Supabase)
-    const tieneTurnoHoy = (data.fecha_turno_hoy === hoy && data.turno_hoy && data.turno_hoy !== "null");
-    
-    // 2. ¿Ya escogió el de mañana en la BD?
-    const tieneTurnoManana = (data.turno_manana && data.turno_manana !== "null" && data.turno_manana !== "");
+       if (data.rol === 'ATTF') {
+            console.log("🛠️ Iniciando interfaz para ATTF...");
+            
+            // 1. Ocultar Login y mostrar Info de Usuario
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('currentUser').textContent = `${data.usuario} (ATTF)`;
 
-    // C. REDIRECCIÓN SEGÚN FALTANTES
-    if (tieneTurnoHoy && !tieneTurnoManana) {
-        console.log("⏩ Hoy está cubierto, pero falta programar Mañana. Enviando a Paso 2...");
-        
-        // Sincronizamos localmente para que el sistema sepa quién es y qué hace hoy
-        localStorage.setItem('turno_hoy', data.turno_hoy);
-        localStorage.setItem('unidad_asignada', data.turno_actual || ""); 
-        localStorage.setItem('descanso_confirmado', 'true');
+            // 2. Asegurar que el contenedor principal esté visible
+            // IMPORTANTE: Verifica si tu ID es 'searchSection' o 'configuracionInicialATTF'
+            const searchSection = document.getElementById('searchSection');
+            if (searchSection) {
+                searchSection.style.display = 'block';
+                searchSection.classList.remove('hidden');
+            }
 
-        // Mostrar contenedores necesarios
-        const configSection = document.getElementById('configuracionInicialATTF');
-        if (configSection) configSection.style.display = 'block';
+            // 3. Revisar turnos
+            const tHoy = localStorage.getItem('turno_hoy');
+            const tManana = localStorage.getItem('turno_manana');
 
-        // Disparamos Paso 2
-        if (typeof generarInterfazTurnosPaso2 === 'function') {
-            generarInterfazTurnosPaso2(); 
-        } else {
-            console.error("❌ No se encontró generarInterfazTurnosPaso2");
-            mostrarConfiguracionInicialATTF(); // Fallback
+            // Validar si los turnos son nulos o vacíos
+            if (!tHoy || !tManana || tHoy === "null" || tHoy === "") {
+                console.log("⚠️ Faltan turnos. Cargando Paso 1...");
+                
+                // Forzamos la visibilidad del área de configuración
+                const configSection = document.getElementById('configuracionInicialATTF');
+                if (configSection) {
+                    configSection.style.display = 'block';
+                    configSection.classList.remove('hidden');
+                }
+
+                // Llamada segura a la función de dibujo
+                if (typeof mostrarConfiguracionInicialATTF === 'function') {
+                    mostrarConfiguracionInicialATTF();
+                } else if (typeof generarInterfazTurnosPaso1 === 'function') {
+                    generarInterfazTurnosPaso1();
+                } else {
+                    console.error("❌ Error: No se encontró la función para dibujar turnos.");
+                    alert("Error de sistema: No se pudo cargar la configuración de turnos.");
+                }
+            } else {
+                console.log("✅ Turnos detectados. Accediendo al Menú/Mapa...");
+                accederMenuATTF();
+            }
+            return;
         }
-
-    } else if (tieneTurnoHoy && tieneTurnoManana) {
-        console.log("✅ Ciclo completo (Hoy y Mañana listos). Acceso directo al Menú.");
-        
-        // Sincronización completa
-        localStorage.setItem('turno_hoy', data.turno_hoy);
-        localStorage.setItem('turno_manana', data.turno_manana);
-        localStorage.setItem('unidad_asignada', data.turno_actual || "");
-        localStorage.setItem('pasos_completados', 'true');
-
-        if (typeof accederMenuATTF === 'function') {
-            accederMenuATTF();
-        } else {
-            // Fallback manual si la función falla
-            document.getElementById('searchSection').style.display = 'block';
-            document.getElementById('tableSelectionSection').style.display = 'block';
-        }
-
-    } else {
-        console.log("🆕 No hay registros válidos para hoy. Iniciando desde Paso 1...");
-        
-        // Limpiamos rastro por seguridad
-        localStorage.removeItem('turno_hoy');
-        localStorage.removeItem('turno_manana');
-
-        const configSection = document.getElementById('configuracionInicialATTF');
-        if (configSection) configSection.style.display = 'block';
-
-        if (typeof mostrarConfiguracionInicialATTF === 'function') {
-            mostrarConfiguracionInicialATTF();
-        } else {
-            generarInterfazTurnosPaso1();
-        }
-    }
-    return;
-}
-
-
 
         if (data.rol === 'Poda') {
             loginPoda(data); 
             return;
         }
         
-        // --- Otros Roles (Admin, Supervisor, etc.) ---
+        // Para otros roles (Admin, etc.)
         document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
         document.getElementById('userInfo').classList.remove('hidden');
         document.getElementById('loginSection').style.display = 'none';
@@ -1380,11 +1330,10 @@ async function login() {
         mostrarTablasSegunRol();
 
     } catch (err) {
-        console.error('❌ Error de login:', err);
-        alert('Error de conexión o de sistema. Por favor intente nuevamente.');
+        console.error('Error de login:', err);
+        alert('Error de conexión con la base de datos. Por favor intente nuevamente.');
     }
 }
-
 
     // ========================================
 // 🆕 FUNCIÓN AUXILIAR: Validar fecha máxima de descanso
@@ -1411,80 +1360,62 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 }
 
 async function loginATTF(userData) {
-    console.log('👷 Validando flujo inteligente para ATTF:', userData.usuario);
+    console.log('👷 Validando flujo ATTF');
     
     const ahora = new Date();
-    const fechaHoy = getFechaHoyElSalvador(); // YYYY-MM-DD
+    const fechaHoy = getFechaHoyElSalvador();
     const horaActual = ahora.getHours();
     
-    // 1. VERIFICACIÓN DE DESCANSO (Prioridad Máxima)
-    // Si hoy está dentro del rango de descanso guardado en BD
+    // 1. Verificar si está en día de descanso
     if (verificarDiaDescanso(userData)) {
-        alert('🗓️ Te encuentras en tu periodo de descanso obligatorio.\nAcceso restringido hasta tu fecha de regreso.');
+        alert('Hoy es uno de tus días de descanso. No puedes acceder al sistema.');
         logout();
         return;
     }
 
-    // 2. DETECCIÓN DE RELEVO DE TURNO (Carga local vs BD)
-    // Verificamos si la rotación del DOMContentLoaded ya hizo su magia
-    const turnoHoyRotado = localStorage.getItem('turno_hoy');
-    const fechaUltimaConfig = localStorage.getItem('fecha_ultima_config');
-    
-    // Si el turno en BD es viejo pero en Local tenemos el relevo de "Mañana"
-    let turnoRealHoy = userData.turno_hoy;
-    if (userData.fecha_turno_hoy !== fechaHoy && turnoHoyRotado && fechaUltimaConfig === fechaHoy) {
-        turnoRealHoy = turnoHoyRotado;
-        console.log("🔄 Usando turno relevado de ayer:", turnoRealHoy);
-    }
+    // 2. VALIDACIÓN CRÍTICA: ¿Ya configuró TODO hoy?
+    // Si tiene turno de hoy Y ya tiene programado el de mañana (o descanso), PASA DIRECTO
+    const yaConfiguroManana = (userData.turno_manana && userData.fecha_turno_manana) || 
+                             (userData.descanso_fecha_inicio);
 
-    // 3. VALIDACIÓN: ¿CICLO COMPLETO? (Hoy + Mañana listos)
-    const tieneHoy = (turnoRealHoy && (userData.fecha_turno_hoy === fechaHoy || fechaUltimaConfig === fechaHoy));
-    const tieneManana = (userData.turno_manana && userData.turno_manana !== "null" && userData.turno_manana !== "descanso");
-
-    if (tieneHoy && tieneManana) {
-        console.log("✅ Ciclo completo detectado. Validando ventana horaria...");
+    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy && yaConfiguroManana) {
+        console.log("✅ Configuración diaria completa. Validando ventana horaria...");
         
-        if (!validarVentanaTurno(turnoRealHoy, horaActual)) {
-            const info = TURNOS_ATTF[turnoRealHoy] || { nombre: turnoRealHoy };
-            alert(`⚠️ No estás en horario de servicio.\nTu turno programado: ${info.nombre}`);
+        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+            const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
+            alert(`No estás en el horario de tu turno programado (${turnoInfo.nombre}).`);
             logout();
             return;
         }
         
-        // Sincronizamos local antes de entrar
-        localStorage.setItem('turno_hoy', turnoRealHoy);
+        // Acceso directo al menú sin preguntas
         accederMenuATTF();
         return;
     }
 
-    // 4. FLUJO DE "PASO 2" (Tiene hoy, pero le falta mañana)
-    // Este es el caso más común: entra cada día y el sistema le pide el de mañana
-    if (tieneHoy && !tieneManana) {
-        console.log('⏩ Turno de hoy validado. Solicitando programación de mañana...');
+    // 3. Verificar si necesita configuración inicial (Día 1 o después de inactividad)
+    const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
+    
+    if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1 || !userData.turno_hoy) {
+        console.log('🔧 Requiere configuración inicial (Paso 1 y 2)');
+        mostrarConfiguracionInicialATTF();
+        return;
+    }
+
+    // 4. Si tiene turno de hoy pero NO ha programado mañana (entró y se salió a medias)
+    if (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy && !yaConfiguroManana) {
+        console.log('⚠️ Turno de hoy detectado pero falta programar mañana');
         
-        const contador = parseInt(userData.contador_turnos) || 0;
-        
-        // Si ya trabajó 5 días, no le pedimos turno de mañana, le obligamos a descanso
-        if (contador >= 5) {
-            console.log("🚨 Límite de 5 días alcanzado. Forzando descanso.");
-            if (typeof mostrarForzarDescansoATTF === 'function') {
-                mostrarForzarDescansoATTF();
-            } else {
-                generarInterfazTurnosPaso2(); // La función interna debería manejar el bloqueo
-            }
+        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+        if (contadorTurnos >= 5) {
+            mostrarForzarDescansoATTF();
         } else {
-            // Le pedimos el turno de mañana (Paso 2)
-            if (typeof generarInterfazTurnosPaso2 === 'function') {
-                generarInterfazTurnosPaso2();
-            } else {
-                mostrarProgramarTurnoMañanaConDescanso(userData);
-            }
+            mostrarProgramarTurnoMañanaConDescanso(userData);
         }
         return;
     }
 
-    // 5. CASO INICIAL O ERROR (Falta turno de hoy)
-    console.log('🔧 Datos incompletos o nuevo ciclo. Enviando a Paso 1.');
+    // 5. Por defecto, si algo falta, configurar
     mostrarConfiguracionInicialATTF();
 }
 
@@ -1506,11 +1437,9 @@ function mostrarConfiguracionInicialATTF() {
     const ahora = new Date();
     const horaActual = ahora.getHours();
     
-    // 1. RECUPERAR DATOS PREVIOS (La clave de la agilidad para el relevo)
-    const turnoPrevioHoy = localStorage.getItem('turno_hoy');
-    
-    // 2. DETERMINAR TURNOS DISPONIBLES POR HORARIO
+    // Determinar qué turnos están disponibles según la hora
     const turnosDisponibles = [];
+    
     Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
         if (turno.esTurnoNocturno) {
             if (horaActual >= turno.ventanaBotonInicio && horaActual < 24) {
@@ -1523,25 +1452,25 @@ function mostrarConfiguracionInicialATTF() {
         }
     });
     
-    // Si no hay turnos por hora, pero el sistema ya traía uno (rotación), 
-    // permitimos que continúe para no bloquear al usuario.
-    if (turnosDisponibles.length === 0 && (!turnoPrevioHoy || turnoPrevioHoy === "null")) {
-        alert('⚠️ No hay turnos disponibles en este horario.\n\nIntenta ingresar en el horario de tu turno correspondiente.');
+    if (turnosDisponibles.length === 0) {
+        alert('No hay turnos disponibles en este horario.\n\nIntenta ingresar en el horario de tu turno correspondiente.');
         logout();
         return;
     }
     
-    // 3. GESTIÓN DE INTERFAZ (DOM)
+    // ✅ CORRECCIÓN CRÍTICA: Cambiar loginSection por el contenedor de configuración
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
     const loginSection = document.getElementById('loginSection');
 
     if (targetSection) {
+        // 1. Ocultamos el login definitivamente
         if (loginSection) loginSection.style.display = 'none';
         
+        // 2. Mostramos el contenedor de destino
         targetSection.style.display = 'block';
         targetSection.classList.remove('hidden');
         
-        // 4. DIBUJAR INTERFAZ (Tu diseño original con lógica de selección)
+        // 3. Dibujamos la interfaz en el contenedor visible
         targetSection.innerHTML = `
             <div class="card-configuracion" style="max-width: 400px; margin: 20px auto; padding: 25px; background: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center;">
                 <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 100px; margin-bottom: 15px;">
@@ -1550,24 +1479,19 @@ function mostrarConfiguracionInicialATTF() {
                 
                 <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3; text-align: left;">
                     <strong style="color: #1976d2;">Paso 1 de 2:</strong><br>
-                    <span style="font-size: 14px;">Confirma tu turno de <b>HOY</b></span>
+                    <span style="font-size: 14px;">Selecciona tu turno de <b>HOY</b></span>
                 </div>
                 
                 <div class="form-group" style="text-align: left; margin-bottom: 20px;">
                     <label style="font-weight: bold; display: block; margin-bottom: 8px; color: #374151;">🌞 Turno de HOY:</label>
                     <select id="turnoHoy" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d1d5db; font-size: 16px; background-color: #f9fafb;">
                         <option value="">-- Seleccione su turno --</option>
-                        ${turnosDisponibles.map(t => {
-                            const selected = (t.key === turnoPrevioHoy) ? 'selected' : '';
-                            return `<option value="${t.key}" ${selected}>${t.nombre}</option>`;
-                        }).join('')}
-                        ${(turnoPrevioHoy && !turnosDisponibles.find(t => t.key === turnoPrevioHoy)) ? 
-                            `<option value="${turnoPrevioHoy}" selected>${turnoPrevioHoy} (Programado previamente)</option>` : ''}
+                        ${turnosDisponibles.map(t => `<option value="${t.key}">${t.nombre}</option>`).join('')}
                     </select>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <button id="btnContinuarPaso2" class="btn" onclick="confirmarTurnoHoyATTF()" style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); color: white; padding: 14px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 16px;">
+                    <button class="btn" onclick="confirmarTurnoHoyATTF()" style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); color: white; padding: 14px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-size: 16px;">
                         Continuar al Paso 2 →
                     </button>
                     <button class="btn-link" onclick="logout()" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 14px; text-decoration: underline; margin-top: 5px;">
@@ -1576,25 +1500,21 @@ function mostrarConfiguracionInicialATTF() {
                 </div>
             </div>
         `;
-
-        // 5. LOG DE SEGUIMIENTO
-        if (turnoPrevioHoy && turnoPrevioHoy !== "null") {
-            console.log("⏭️ El sistema ha pre-seleccionado el turno relevado: " + turnoPrevioHoy);
-        }
-
     } else {
-        console.error("❌ ERROR: No se encontró el contenedor 'configuracionInicialATTF' o 'searchSection' en el HTML.");
+        console.error("❌ ERROR: No se encontró el contenedor 'configuracionInicialATTF' en el HTML.");
+        // Fallback de emergencia por si el desarrollador olvidó el div
+        alert("Error de interfaz. Por favor contacte a soporte.");
     }
 }
 
 
 async function confirmarTurnoHoyATTF() {
-    // 🔍 Buscamos el elemento en el DOM
+    // 🔍 Buscamos el ID correcto (el que se dibujó en el Paso 1)
     const selectElement = document.getElementById('turnoHoy') || document.getElementById('turnoHoySeleccionado');
     const turnoHoyKey = selectElement?.value;
 
     if (!turnoHoyKey) {
-        alert('⚠️ Por favor seleccione su turno de hoy');
+        alert('Por favor seleccione su turno de hoy');
         return;
     }
 
@@ -1603,93 +1523,78 @@ async function confirmarTurnoHoyATTF() {
     if (!confirm(`¿Confirmas que tu turno de HOY es:\n\n${turnoHoy.nombre}?`)) return;
 
     try {
+        // Mostrar un pequeño indicador de carga si tienes uno, o cambiar el texto del botón
         console.log("⏳ Guardando turno de hoy en base de datos...");
 
-        // 1. Manejo de Fechas (Aseguramos sincronía con El Salvador)
         const hoySV = getFechaElSalvador(); 
         const fechaHoyISO = hoySV.toISOString().split('T')[0];
 
-        // 2. Persistencia en Base de Datos
         const { error } = await supabaseClient
             .from('usuarios')
             .update({ 
                 turno_hoy: turnoHoyKey,
                 fecha_turno_hoy: fechaHoyISO,
-                // IMPORTANTE: Limpiamos mañana en la BD para que no haya datos incongruentes
-                turno_manana: null, 
-                fecha_turno_manana: null,
-                ultima_actividad: formatearFechaCompletaElSalvador(hoySV)
+                ultima_actividad: new Date().toISOString()
             })
             .eq('id', currentUser.id);
 
         if (error) throw error;
 
-        // 3. ACTUALIZACIÓN DEL OBJETO GLOBAL (Crítico para el siguiente paso)
-        // Si no actualizamos currentUser aquí, el Paso 2 usará datos viejos
-        currentUser.turno_hoy = turnoHoyKey;
-        currentUser.fecha_turno_hoy = fechaHoyISO;
-
-        // 4. GUARDADO LOCAL (Persistencia selectiva)
+        // GUARDADO LOCAL
         window.turnoHoySeleccionado = turnoHoyKey;
         localStorage.setItem('turno_hoy', turnoHoyKey);
         localStorage.setItem('fecha_turno_hoy', fechaHoyISO);
 
-        // Limpiamos rastro de mañana para obligar a que el Paso 2 sea una elección nueva
+        // Limpiar mañana para evitar saltos de lógica
         localStorage.removeItem('turno_manana'); 
-        localStorage.removeItem('fecha_turno_manana');
 
-        console.log("✅ Turno de hoy guardado exitosamente.");
+        console.log("✅ Turno de hoy guardado.");
 
-        // 5. PREPARACIÓN DE DATOS PARA EL PASO 2
-        // Usamos una copia limpia para evitar referencias circulares
+        // 🚀 PASAR AL PASO 2:
+        // Pasamos el objeto necesario para que la función de "Mañana" sepa qué filtrar
         const userDataParaSiguientePaso = {
-            ...currentUser, // Pasamos todo el objeto actualizado
             turno_hoy: turnoHoyKey,
-            contador_turnos: parseInt(currentUser.contador_turnos) || 0
+            contador_turnos: currentUser.contador_turnos || 0
         };
 
-        // 6. LIMPIEZA VISUAL ANTES DE CAMBIAR
-        const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-        if (targetSection) {
-            targetSection.innerHTML = '<div style="text-align:center; padding:20px;">Cargando Paso 2...</div>';
-        }
-
-        // 7. EJECUCIÓN DEL PASO 2
+        // Llamamos a la función que ya ajustamos para que use el contenedor visible
         if (typeof mostrarProgramarTurnoMañanaConDescanso === 'function') {
             mostrarProgramarTurnoMañanaConDescanso(userDataParaSiguientePaso);
-        } else if (typeof generarInterfazTurnosPaso2 === 'function') {
-            generarInterfazTurnosPaso2(userDataParaSiguientePaso);
         } else {
-            console.error("❌ No se encontró la función para el Paso 2");
-            alert("Error al cargar el siguiente paso. Por favor refresque la página.");
+            // Si tu función se llama distinto, ajústalo aquí:
+            mostrarProgramarTurnoManana(true); 
         }
 
     } catch (err) {
-        console.error('❌ Error crítico al guardar turno hoy:', err);
-        alert('Error de conexión: No se pudo guardar el turno en la nube. Verifica tu conexión.');
+        console.error('Error crítico al guardar turno hoy:', err);
+        alert('Error de conexión: No se pudo guardar el turno.');
     }
 }
 
 
+
 // ========================================
-// 🔧 FUNCIÓN AUXILIAR: Obtener restricciones de turnos
+// 🔧 FUNCIÓN AUXILIAR BLINDADA: Obtener turnos consecutivos
 // ========================================
 function getTurnoConsecutivo(turnoHoyKey) {
-    // 🛡️ Mantenemos el nombre original para no romper las llamadas existentes
-    if (!turnoHoyKey || turnoHoyKey === "null") return [];
+    // 🛡️ Seguridad: Si el valor de la tabla es null o undefined, 
+    // evitamos que la función rompa el resto del código.
+    if (!turnoHoyKey) return [];
 
-    // Definición de reglas de bloqueo (Reglas de Clesa)
-    // Key: El turno que el técnico hace HOY.
-    // Value: Turnos que NO puede elegir para MAÑANA.
+    // Definición de reglas según la operativa de CLESA
+    // Asegúrate de que los nombres ("turno3", etc.) coincidan con los IDs 
+    // que guardas en la columna 'turno_hoy' de tu tabla 'usuarios'.
     const relaciones = {
-        "turno3": ["turno1", "turno4"], // Ejemplo: Saliente de noche bloquea mañana
-        "turno1": ["turno3"],           // Ejemplo: Mañana no puede doblar a noche
-        // "turno2": ["turno_especial"], // Puedes seguir añadiendo aquí
+        "turno3": ["turno1", "turno4"], // Ejemplo: Saliente de noche no puede entrar a mañana
+        "turno1": ["turno3"],           // Ejemplo: Mañana no puede doblar a noche inmediata
+        // Puedes agregar más restricciones aquí abajo:
+        // "turno2": ["turno3"], 
     };
     
-    // Obtenemos los bloqueados
+    // Buscamos si el turno actual tiene restricciones
     const bloqueados = relaciones[turnoHoyKey] || [];
     
+    // Log de depuración para ver en consola qué está pasando
     if (bloqueados.length > 0) {
         console.log(`🚫 Restricción para ${turnoHoyKey}: Bloqueando opciones ${bloqueados.join(', ')}`);
     }
@@ -1699,18 +1604,18 @@ function getTurnoConsecutivo(turnoHoyKey) {
 
 
 function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
+    // 1. Identificamos dónde vamos a mostrar la información
+    // Usamos loginSection porque es donde estás construyendo tu interfaz dinámica
     const container = document.getElementById('loginSection');
+    
+    // Aseguramos que el contenedor sea visible
     container.style.display = 'block';
     
-    // 1. LÓGICA DE TÍTULOS Y CONTADOR
+    // 🎯 LÓGICA DE TÍTULOS (Tu código original)
     let paso, instruccion;
     const contadorActual = parseInt(currentUser?.contador_turnos) || 0;
     
-    // Si ya trabajó 5 días, forzamos el título de descanso obligatorio
-    if (contadorActual >= 5) {
-        paso = "DESCANSO OBLIGATORIO";
-        instruccion = "Has completado tus 5 turnos. Debes programar tu descanso.";
-    } else if (mostrarOpcionDescanso) {
+    if (mostrarOpcionDescanso) {
         paso = "Paso 2 de 2";
         instruccion = "Selecciona tu turno de MAÑANA o configura DESCANSO";
     } else {
@@ -1718,56 +1623,50 @@ function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
         instruccion = "Selecciona tu turno de MAÑANA";
     }
     
-    // 2. FILTRADO DE TURNOS (Usando tu función getTurnoConsecutivo)
     const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno_hoy;
-    const turnosProhibidos = getTurnoConsecutivo(turnoHoyKey);
+    const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
     
     let opcionesHTML = '';
     
-    // Si el contador es < 5, mostramos los turnos normales
-    if (contadorActual < 5) {
-        Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-            if (turnosProhibidos.includes(key)) {
-                // Opción deshabilitada con estilo visual claro
-                opcionesHTML += `<option value="${key}" disabled style="background: #f8d7da; color: #721c24;">${turno.nombre} (🚫 Restricción de descanso)</option>`;
-            } else {
-                opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
-            }
-        });
+    // Generar opciones de turnos
+    Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
+        if (turnosConsecutivos.includes(key)) {
+            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+        } else {
+            opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+        }
+    });
+    
+    if (mostrarOpcionDescanso) {
+        opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
     }
     
-    // 3. OPCIÓN DE DESCANSO (Solo si el contador lo permite o es obligatorio)
-    if (mostrarOpcionDescanso || contadorActual >= 5) {
-        opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold; color: #856404;">🏖️ PROGRAMAR DESCANSO</option>`;
-    }
-    
-    // 4. INYECCIÓN DEL HTML
+    // 2. INYECCIÓN DEL HTML (Tu diseño original mejorado)
     container.innerHTML = `
-        <div class="card-configuracion" style="animation: fadeIn 0.5s; max-width: 400px; margin: auto; text-align: center;">
-            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 100px;">
-            <h1 class="titulo-degradado" style="margin-top: 10px;">CLESA</h1>
-            <p class="subtitulo" id="pasoActual" style="font-weight: bold; color: #1976d2;">${paso}</p>
+        <div class="card-configuracion" style="animation: fadeIn 0.5s;">
+            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+            <h1 class="titulo-degradado">CLESA</h1>
+            <p class="subtitulo" id="pasoActual">${paso}</p>
             
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #2196f3; text-align: left;">
-                <strong style="font-size: 14px; color: #0d47a1;">${instruccion}</strong>
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3; text-align: left;">
+                <strong class="paso-info">${instruccion}</strong>
             </div>
             
             <div class="form-group" style="text-align: left;">
-                <label style="font-weight: bold; display: block; margin-bottom: 8px; color: #374151;">Turno de MAÑANA:</label>
-                <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d1d5db; font-size: 16px;">
-                    <option value="">-- Seleccione una opción --</option>
+                <label style="font-weight: bold; display: block; margin-bottom: 8px;">Turno de MAÑANA:</label>
+                <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione --</option>
                     ${opcionesHTML}
                 </select>
             </div>
             
-            <div id="seccionDescanso" style="display: none; margin-top: 20px; animation: slideDown 0.3s;"></div>
+            <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
             
-            <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; width: 100%; display: none; background: #28a745; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer;">
-                ✅ Confirmar y Finalizar
+            <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; width: 100%; display: none;">
+                ✅ Confirmar y Acceder
             </button>
-            
-            <button class="btn-danger" onclick="logout()" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #dc3545; background: white; color: #dc3545; cursor: pointer;">
-                Cancelar sesión
+            <button class="btn-danger" onclick="logout()" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer;">
+                Cancelar
             </button>
         </div>
     `;
@@ -1780,82 +1679,73 @@ function verificarSeleccionDescanso() {
     const seccionDescanso = document.getElementById('seccionDescanso');
     const btnConfirmar = document.getElementById('btnConfirmarManana');
     
-    // Si el usuario elige la opción de la palmera 🏖️
     if (turnoManana === 'descanso') {
+        // 🎯 CAMBIO: Calcular límites de fechas (día 2 hasta día 6)
         const ahora = new Date();
+        const fechaHoy = getFechaHoyElSalvador();
         
-        // --- CÁLCULO DE LIMITES (Regla de los 5 días) ---
-        // Fecha mínima: Mañana (Día 2 del ciclo actual)
+        // Fecha mínima: Mañana (día 2)
         const fechaMinima = new Date(ahora);
         fechaMinima.setDate(fechaMinima.getDate() + 1);
         const fechaMinimaStr = fechaMinima.toISOString().split('T')[0];
         
-        // Fecha máxima: Día 6 (Límite máximo de trabajo antes del descanso)
+        // Fecha máxima: Día 6 (5 días después de hoy)
         const fechaMaxima = new Date(ahora);
         fechaMaxima.setDate(fechaMaxima.getDate() + 5);
         const fechaMaximaStr = fechaMaxima.toISOString().split('T')[0];
         
-        // Mostrar contenedor y construir interfaz de descanso
+        // Mostrar calendario y turno de regreso
         seccionDescanso.style.display = 'block';
-        seccionDescanso.style.marginTop = '20px';
-        
         seccionDescanso.innerHTML = `
-            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #ffc107; text-align: left;">
-                <strong style="color: #856404; font-size: 14px;">📅 Programación de Descanso:</strong>
-                <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
-                    Define cuándo inicias tu descanso (máximo día 6). Se asignarán 2 días consecutivos.
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+                <strong>Configura tu descanso:</strong>
+                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
+                    ⚠️ El inicio de descanso debe ser entre <strong>mañana</strong> (día 2) y máximo <strong>5 días después</strong> (día 6).
                 </p>
             </div>
             
-            <div class="form-group" style="margin-bottom: 15px; text-align: left;">
-                <label style="font-weight: bold; font-size: 14px; color: #374151;">🏝️ Primer día de descanso:</label>
+            <div class="form-group">
+                <label>Primer día de descanso:</label>
                 <input type="date" 
                        id="fechaDescansoInicio" 
                        class="form-control" 
                        min="${fechaMinimaStr}" 
                        max="${fechaMaximaStr}"
                        onchange="calcularFechaFin()" 
-                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d1d5db; font-size: 16px; margin-top: 5px;">
-                <small style="color: #1976d2;">Válido del ${fechaMinimaStr} al ${fechaMaximaStr}</small>
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                <small style="color: #666;">Mínimo: ${fechaMinimaStr} | Máximo: ${fechaMaximaStr}</small>
             </div>
             
-            <div class="form-group" style="margin-bottom: 15px; text-align: left;">
-                <label style="font-weight: bold; font-size: 14px; color: #374151;">🗓️ Segundo día de descanso:</label>
+            <div class="form-group">
+                <label>Segundo día de descanso:</label>
                 <input type="date" 
                        id="fechaDescansoFin" 
                        class="form-control" 
                        readonly 
-                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f3f4f6; color: #6b7280; margin-top: 5px;">
-                <small style="color: #666;">Día consecutivo automático</small>
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
+                <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
             </div>
             
-            <div class="form-group" style="margin-bottom: 15px; text-align: left;">
-                <label style="font-weight: bold; font-size: 14px; color: #374151;">🔄 Turno al REGRESAR:</label>
-                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d1d5db; font-size: 16px; margin-top: 5px;">
-                    <option value="">-- Seleccione turno de regreso --</option>
+            <div class="form-group">
+                <label>Turno de REGRESO (post-descanso):</label>
+                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
+                    <option value="">-- Seleccione --</option>
                     ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
                         `<option value="${key}">${turno.nombre}</option>`
                     ).join('')}
                 </select>
-                <small style="color: #666;">Turno que harás el tercer día</small>
             </div>
         `;
-        
         btnConfirmar.style.display = 'block';
-        btnConfirmar.innerHTML = '✅ Confirmar Descanso y Finalizar';
-
     } else if (turnoManana) {
-        // Si elige un turno normal para mañana
         seccionDescanso.style.display = 'none';
-        seccionDescanso.innerHTML = ''; // Limpiamos para evitar IDs duplicados
         btnConfirmar.style.display = 'block';
-        btnConfirmar.innerHTML = '✅ Confirmar Turno Mañana';
     } else {
-        // Si no hay nada seleccionado
         seccionDescanso.style.display = 'none';
         btnConfirmar.style.display = 'none';
     }
 }
+
 
 
 function calcularFechaFin() {
@@ -1874,138 +1764,139 @@ function calcularFechaFin() {
 
 
 async function confirmarTurnoMananaATTF() {
+    // 1. Validaciones Iniciales
     const selectManana = document.getElementById('turnoManana');
-    if (!selectManana) return;
-    const turnoManana = selectManana.value;
-    
-    if (!turnoManana) {
-        alert('⚠️ Por favor seleccione el turno de mañana o configure su descanso.');
+    if (!selectManana) {
+        console.error("❌ No se encontró el elemento 'turnoManana'");
         return;
     }
-    
-    const ahora = getFechaElSalvador();
-    const fechaHoyISO = getFechaHoyElSalvador();
-    const turnoHoy = window.turnoHoySeleccionado || currentUser.turno_hoy;
 
-    // --- CASO 1: TURNO NORMAL (Continúa el ciclo) ---
+    const turnoManana = selectManana.value;
+    if (!turnoManana) {
+        alert('Por favor seleccione el turno de mañana');
+        return;
+    }
+
+    const ahora = getFechaElSalvador();
+    const fechaHoy = getFechaHoyElSalvador();
+    const turnoHoy = window.turnoHoySeleccionado || (currentUser ? currentUser.turno_hoy : null);
+
+    if (!turnoHoy) {
+        alert("Error: No se detectó el turno de hoy. Reintente el paso 1.");
+        return;
+    }
+
+    // --- CASO 1: TURNO NORMAL ---
     if (turnoManana !== 'descanso') {
-        const turnoInfo = TURNOS_ATTF[turnoManana];
-        if (!confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turnoInfo.nombre}?`)) return;
-        
-        // Calculamos fecha de mañana
+        const turno = TURNOS_ATTF[turnoManana];
+        if (!confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turno.nombre}?`)) return;
+
         const manana = new Date(ahora);
         manana.setDate(manana.getDate() + 1);
         const fechaMananaStr = getFechaLocalISO(manana);
-        
-        // Incrementamos contador de turnos (importante para el límite de 5)
-        const contadorActual = parseInt(currentUser.contador_turnos) || 0;
+
+        const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
         const nuevoContador = contadorActual + 1;
 
         try {
-            console.log("🚀 Sincronizando turno de mañana...");
-            
+            console.log("⏳ Guardando turno normal en Supabase...");
             const { error } = await supabaseClient
                 .from('usuarios')
                 .update({
                     turno_hoy: turnoHoy,
-                    fecha_turno_hoy: fechaHoyISO,
+                    fecha_turno_hoy: fechaHoy,
                     turno_manana: turnoManana,
                     fecha_turno_manana: fechaMananaStr,
                     contador_turnos: nuevoContador,
                     estado_ciclo: 'ciclo_normal',
-                    descanso_fecha_inicio: null, // Limpiamos por si venía de un descanso
+                    descanso_fecha_inicio: null,
                     descanso_fecha_fin: null,
-                    ultimaconexion: formatearFechaCompletaElSalvador(ahora),
-                    ultima_actividad: formatearFechaCompletaElSalvador(ahora)
+                    ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+                    ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
                 })
                 .eq('id', currentUser.id);
-            
+
             if (error) throw error;
 
-            // Persistencia Local Exitosa
+            // Guardado Local exitoso
             localStorage.setItem('turno_hoy', turnoHoy);
             localStorage.setItem('turno_manana', turnoManana);
-            localStorage.setItem('config_completada', 'true');
 
-            finalizarConfiguracionYEntrar();
-            
+            // Limpieza visual y acceso
+            cerrarConfiguracionYEntrar();
+
         } catch (err) {
-            console.error("Error al guardar turno mañana:", err);
-            alert('Error de conexión: ' + err.message);
+            console.error('Error en Caso 1:', err);
+            alert('Error al guardar: ' + err.message);
         }
-        
-    } else {
-        // --- CASO 2: CONFIGURACIÓN DE DESCANSO ---
+
+    } 
+    // --- CASO 2: DESCANSO ---
+    else {
         const fechaInicio = document.getElementById('fechaDescansoInicio')?.value;
         const fechaFin = document.getElementById('fechaDescansoFin')?.value;
         const turnoRegreso = document.getElementById('turnoRegreso')?.value;
-        
+
         if (!fechaInicio || !fechaFin || !turnoRegreso) {
-            alert('⚠️ Por favor complete todos los campos del descanso y el turno de regreso.');
+            alert('Por favor complete todos los campos del descanso');
             return;
         }
 
-        if (!confirm(`¿Confirmas la programación de tu descanso del ${fechaInicio} al ${fechaFin}?`)) return;
-        
-        // Calculamos fecha de regreso (día después de que termina el descanso)
+        if (!confirm(`¿Confirmas tu configuración de descanso?\nInicio: ${fechaInicio}\nFin: ${fechaFin}`)) return;
+
         const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
         const fechaRegresoStr = getFechaLocalISO(fechaRegresoDate);
 
         try {
-            console.log("🏖️ Registrando periodo de descanso...");
-            
+            console.log("⏳ Guardando configuración de descanso en Supabase...");
             const { error } = await supabaseClient
                 .from('usuarios')
                 .update({
                     turno_hoy: turnoHoy,
-                    fecha_turno_hoy: fechaHoyISO,
-                    turno_manana: 'descanso', 
-                    fecha_turno_manana: fechaInicio,
+                    fecha_turno_hoy: fechaHoy,
                     descanso_fecha_inicio: fechaInicio,
                     descanso_fecha_fin: fechaFin,
                     turno_regreso: turnoRegreso,
                     fecha_turno_regreso: fechaRegresoStr,
-                    contador_turnos: 0, // El descanso resetea el ciclo de 5 días
-                    estado_ciclo: 'en_descanso',
-                    ultimaconexion: formatearFechaCompletaElSalvador(ahora),
-                    ultima_actividad: formatearFechaCompletaElSalvador(ahora)
+                    contador_turnos: 0, // El descanso reinicia el contador
+                    estado_ciclo: 'ciclo_normal',
+                    turno_manana: 'descanso',
+                    fecha_turno_manana: fechaInicio,
+                    ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+                    ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
                 })
                 .eq('id', currentUser.id);
-            
+
             if (error) throw error;
 
-            // Persistencia Local
             localStorage.setItem('turno_hoy', turnoHoy);
             localStorage.setItem('turno_manana', 'descanso');
-            localStorage.setItem('config_completada', 'true');
 
-            finalizarConfiguracionYEntrar();
+            cerrarConfiguracionYEntrar();
 
         } catch (err) {
-            console.error("Error al guardar descanso:", err);
-            alert('Error al procesar descanso: ' + err.message);
+            console.error('Error en Caso 2:', err);
+            alert('Error al guardar descanso: ' + err.message);
         }
     }
-}
+} // <--- AQUÍ SE CIERRA LA FUNCIÓN
 
 /**
- * Función auxiliar para limpiar UI y acceder
+ * Función auxiliar para evitar repetir código de salida
  */
-function finalizarConfiguracionYEntrar() {
+function cerrarConfiguracionYEntrar() {
     const configSec = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-    if (configSec) {
-        configSec.style.display = 'none';
-        configSec.innerHTML = ''; // Limpieza total de memoria DOM
-    }
+    if (configSec) configSec.style.display = 'none';
     
-    console.log("✅ Configuración terminada. Accediendo al Menú...");
     if (typeof accederMenuATTF === 'function') {
         accederMenuATTF();
     } else {
-        location.reload(); // Fallback de seguridad
+        console.log("✅ Configuración guardada. Refrescando para aplicar cambios...");
+        location.reload();
     }
 }
+
 
 
 function getFechaLocalISO(fechaObjeto) {
@@ -2305,28 +2196,24 @@ function mostrarForzarDescansoATTF() {
 async function confirmarDescansoObligatorioATTF() {
     const turnoRegreso = document.getElementById('turnoRegreso')?.value;
     
-    // 1. Validaciones iniciales
     if (!turnoRegreso) {
-        alert('⚠️ Por favor seleccione el turno en el que regresará después de su descanso.');
+        alert('⚠️ Por favor seleccione el turno de regreso');
         return;
     }
 
     const { inicio, fin } = window.fechasDescansoAutomaticas || {};
     if (!inicio || !fin) {
-        alert('❌ Error: No se detectaron las fechas del periodo de descanso.');
+        alert('❌ Error: No se encontraron las fechas de descanso.');
         return;
     }
 
-    // Calcular fecha de regreso real (Día después del fin del descanso)
+    // Calcular fecha de regreso real (Día después del fin)
     const fechaRegresoDate = new Date(fin + 'T00:00:00');
     fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
     const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
 
     try {
-        console.log("💾 Guardando periodo de descanso y reseteando ciclo...");
-
-        // 2. Guardar en Base de Datos (Supabase)
-        // Es vital resetear el contador_turnos a 0 para que al volver empiece de nuevo
+        // 1. Guardar en Base de Datos (Supabase)
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
@@ -2334,52 +2221,42 @@ async function confirmarDescansoObligatorioATTF() {
                 descanso_fecha_fin: fin,
                 turno_regreso: turnoRegreso,
                 fecha_turno_regreso: fechaRegreso,
-                contador_turnos: 0,        // <--- REINICIO DE CICLO
-                estado_ciclo: 'descanso',  // <--- CAMBIO DE ESTADO
-                turno_manana: 'descanso',  // Lo que hará mañana
+                contador_turnos: 0,
+                estado_ciclo: 'ciclo_normal',
+                turno_manana: 'descanso',
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
 
         if (error) throw error;
 
-        // ⚡ 3. ACTUALIZAR LOCALSTORAGE (Persistencia selectiva)
-        // No usamos .clear() para no borrar la sesión del usuario
+        // ⚡ 2. ACTUALIZAR LOCALSTORAGE (Para persistencia al reingresar)
         localStorage.setItem('turno_manana', 'descanso');
-        localStorage.setItem('descanso_activo', 'true');
         localStorage.setItem('descanso_inicio', inicio);
         localStorage.setItem('descanso_fin', fin);
-        localStorage.setItem('config_completada', 'true'); // Evita que pida pasos de nuevo hoy
+        localStorage.setItem('turnos_configurados', 'true');
 
-        // ⚡ 4. LIMPIEZA DE INTERFAZ (UI Clean)
-        // Quitamos el cuadro de configuración para evitar imágenes encimadas
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) {
-            configSec.innerHTML = ''; 
-            configSec.style.display = 'none';
+        // ⚡ 3. LIMPIAR LA INTERFAZ (Elimina el problema de las imágenes encimadas)
+        const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+        if (targetSection) {
+            targetSection.innerHTML = ''; // Borra físicamente el cuadro
+            targetSection.style.display = 'none'; // Oculta el contenedor
         }
 
-        const searchSec = document.getElementById('searchSection');
-        if (searchSec) searchSec.style.display = 'none';
+        // ⚡ 4. ASEGURAR QUE EL MENÚ SE VEA
+        const menuPrincipal = document.getElementById('menuModulosATTF');
+        if (menuPrincipal) menuPrincipal.style.display = 'block';
 
-        // ⚡ 5. MOSTRAR EL MENÚ O PANTALLA DE "EN DESCANSO"
-        alert(`✅ Descanso confirmado.\n\nPeriodo: Del ${inicio} al ${fin}.\nRegresas el: ${fechaRegreso} en turno ${turnoRegreso}.`);
+        alert('✅ Descanso obligatorio confirmado');
         
-        // Redirección final
-        if (typeof accederMenuATTF === 'function') {
-            accederMenuATTF();
-        } else {
-            // Fallback: mostrar el menú principal
-            const menuPrincipal = document.getElementById('menuModulosATTF') || document.getElementById('tableSelectionSection');
-            if (menuPrincipal) menuPrincipal.style.display = 'block';
-        }
+        // 5. Ir al menú
+        accederMenuATTF();
 
     } catch (err) {
         console.error('❌ Error al confirmar descanso:', err);
-        alert('No se pudo guardar la configuración del descanso. Por favor, reintente.');
+        alert('❌ Error al guardar en base de datos: ' + err.message);
     }
 }
-
 
 async function loginPoda(userData) {
     console.log('🌳 Iniciando flujo Poda');
@@ -3553,25 +3430,30 @@ async function verificarSesionReal() {
 
 
 async function logout() {
-    console.log("🚫 Cerrando sesión de forma selectiva...");
+    console.log("🚫 Cerrando sesión y limpiando caché...");
     
-    // 1. LIMPIEZA DE CREDENCIALES (Seguridad)
-    // Borramos solo el token y los datos de sesión activa
-    localStorage.removeItem('cleca_user_session'); 
-    // MANTENEMOS: 'turno_hoy', 'descanso_confirmado', etc. 
-    // para que al re-loguear el sistema sepa que ya terminó los pasos.
+    // 1. LIMPIEZA TOTAL DEL NAVEGADOR (LocalStorage + SessionStorage)
+    // Borramos credenciales
+    localStorage.removeItem('cleca_user_session');
+    localStorage.removeItem('usuario_logueado');
+    
+    // Borramos el progreso de turnos y descansos (ESTO EVITA EL INGRESO AUTOMÁTICO)
+    localStorage.removeItem('turno_hoy');
+    localStorage.removeItem('turno_manana');
+    localStorage.removeItem('descanso_confirmado');
+    localStorage.removeItem('turno_hoy_registrado'); 
 
+    // Limpiamos cualquier rastro en sessionStorage por si acaso
     sessionStorage.clear();
 
-    // 2. DESACTIVAR EN SERVIDOR (Tu tabla usuarios)
+    // 2. DESACTIVAR EN LA BASE DE DATOS (Seguridad en el Servidor)
     if (currentUser && currentUser.id) {
         try {
             await supabaseClient
                 .from('usuarios')
                 .update({ 
                     sessionactiva: false, 
-                    sessiontoken: null,
-                    ultima_actividad: new Date().toISOString()
+                    sessiontoken: null 
                 })
                 .eq('id', currentUser.id);
             console.log("✅ Sesión desactivada en servidor.");
@@ -3580,42 +3462,15 @@ async function logout() {
         }
     }
 
-    // 3. RECARGA
+    // 3. RESET DE VARIABLES Y RECARGA
     currentUser = null;
+    
+    // Usar clear() al final si quieres asegurar que NO quede nada de nada
+    // localStorage.clear(); 
+
     window.location.reload();
 }
 
-// Función que debes llamar justo después de un login exitoso
-async function verificarProgresoConfiguracion(user) {
-    const fechaHoy = new Date().toISOString().split('T')[0];
-
-    // 1. Revisamos si en la tabla 'usuarios' ya tiene turnos para HOY
-    // Usamos las columnas de tu tabla: fecha_turno_hoy y turno_hoy
-    if (user.fecha_turno_hoy === fechaHoy && user.turno_hoy) {
-        console.log("🕒 El usuario ya configuró sus turnos hoy. Saltando pasos...");
-        
-        // Guardamos en LocalStorage para que la UI sepa que ya terminó
-        localStorage.setItem('pasos_completados', 'true');
-        
-        // 2. Verificar si está en descanso (usando tus columnas de fecha_fin)
-        if (user.descanso_fecha_fin) {
-             const fechaFinDescanso = new Date(user.descanso_fecha_fin);
-             if (fechaFinDescanso >= new Date()) {
-                 localStorage.setItem('descanso_activo', 'true');
-             }
-        }
-
-        // 🚀 IR DIRECTO AL MENÚ
-        mostrarSeccion('menuSection'); // Ajusta al ID de tu menú
-        return true;
-    }
-
-    // Si no tiene turnos para hoy, debe hacer el flujo normal
-    console.log("📝 No hay configuración para hoy. Iniciando flujo de pasos...");
-    localStorage.removeItem('pasos_completados');
-    mostrarSeccion('paso1Section');
-    return false;
-}
 
 
    function generarCamposBusqueda(config) {
@@ -14298,52 +14153,34 @@ function verFoto(link) {
 
 
 
+// === FUNCIÓN PARA GUARDAR DATOS OFFLINE ===
 function guardarDatosOffline() {
     if (currentUser) {
-        console.log("💾 Guardando persistencia selectiva para:", currentUser.usuario);
+        // Nos aseguramos de que el token esté presente en el objeto antes de guardar
+        console.log("💾 Guardando sesión persistente para:", currentUser.usuario);
         
-        // 1. Datos de Sesión (Se borran al cerrar el navegador)
-        const sessionData = {
+        sessionStorage.setItem('cleca_user_session', JSON.stringify({
             user: currentUser,
-            timestamp: Date.now(),
-            token: currentUser.sessiontoken // Aseguramos que el token de Supabase viaje aquí
-        };
-        
-        sessionStorage.setItem('cleca_user_session', JSON.stringify(sessionData));
-
-        // 2. Datos de Persistencia (Sobreviven al cierre del navegador)
-        // Guardamos solo lo necesario para el "Relevo de Turnos" y la validación de seguridad
-        localStorage.setItem('usuario_logueado', JSON.stringify({
-            id: currentUser.id,
-            usuario: currentUser.usuario,
-            rol: currentUser.rol,
-            sessiontoken: currentUser.sessiontoken
+            timestamp: Date.now()
         }));
-
-        // 3. Bandera de estado para el flujo ATTF
-        // Si el usuario ya tiene turnos en el objeto currentUser, los respaldamos
-        if (currentUser.rol === 'ATTF') {
-            if (currentUser.turno_hoy) localStorage.setItem('turno_hoy', currentUser.turno_hoy);
-            if (currentUser.turno_manana) localStorage.setItem('turno_manana', currentUser.turno_manana);
-            if (currentUser.fecha_turno_hoy) localStorage.setItem('fecha_turno_hoy', currentUser.fecha_turno_hoy);
-        }
-        
-        console.log("✅ Datos sincronizados localmente.");
     }
 }
 
+
 function verificarDatosOffline() {
+    // Intentamos recuperar de localStorage (más persistente para F5)
     const sessionData = localStorage.getItem('cleca_user_session') || sessionStorage.getItem('cleca_user_session');
     
     if (sessionData) {
         const data = JSON.parse(sessionData);
+        // Usamos el timestamp guardado o el actual si no existe
         const tiempoTranscurrido = (Date.now() - (data.timestamp || Date.now())) / 1000 / 60;
 
         // 1. Validar tiempo de sesión (45 minutos)
         if (tiempoTranscurrido < 45) {
             currentUser = data.user;
             
-            // Limpiar interfaz de login
+            // ✅ QUITAR EL BLANCO INMEDIATAMENTE
             const loginSection = document.getElementById('loginSection');
             if (loginSection) loginSection.style.display = 'none';
 
@@ -14351,64 +14188,50 @@ function verificarDatosOffline() {
             if (userInfo) userInfo.classList.remove('hidden');
             document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario}`;
 
+            // 2. Re-activar vigilancia
             iniciarVerificacionSesion();
 
-            // 🛡️ BLOQUE PARA ROL ATTF (Lógica de Relevo)
+            // 🛡️ BLOQUE PARA ROL ATTF
             if (currentUser.rol === 'ATTF') {
-                console.log('🔄 Restaurando sesión ATTF - Analizando estado de turnos...');
+                console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
                 
                 const tHoy = localStorage.getItem('turno_hoy');
                 const tManana = localStorage.getItem('turno_manana');
 
-                // Asegurar visibilidad de secciones
+                // Asegurar que el contenedor principal de ATTF sea visible
                 const searchSection = document.getElementById('searchSection');
                 if (searchSection) {
                     searchSection.style.display = 'block';
                     searchSection.classList.remove('hidden');
                 }
 
-                // CASO A: No tiene ni el de HOY (Error crítico o primer ingreso del día)
-                if (!tHoy || tHoy === "null" || tHoy === "") {
-                    console.log("⚠️ Sin turno de HOY. Iniciando Paso 1...");
+                if (!tHoy || !tManana || tHoy === "null" || tManana === "null") {
+                    console.log("⚠️ Faltan turnos. Cargando Paso 1...");
+                    // Cambiamos a la función que SÍ dibuja los botones según tu archivo
                     if (typeof generarInterfazTurnosPaso1 === 'function') {
                         generarInterfazTurnosPaso1();
+                    } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
+                        mostrarConfiguracionInicialATTF();
                     }
                     return true;
                 }
 
-                // CASO B: Tiene HOY pero falta MAÑANA (El flujo diario normal)
-                if (!tManana || tManana === "null" || tManana === "") {
-                    console.log("⏩ Hoy cubierto. Solicitando turno de MAÑANA (Paso 2)...");
-                    
-                    const configSection = document.getElementById('configuracionInicialATTF');
-                    if (configSection) configSection.style.display = 'block';
+                // Si ya tiene todo, entrar al menú o mapa
+                console.log("✅ Turnos detectados. Accediendo...");
+                seleccionarTabla('mapa_rutas'); 
+                return true; 
+            }
 
-                    if (typeof generarInterfazTurnosPaso2 === 'function') {
-                        generarInterfazTurnosPaso2();
-                    }
-                    return true;
-                }
-
-                // CASO C: Todo completo (Hoy y Mañana configurados)
-console.log("✅ Turnos al día. Accediendo al mapa...");
-
-// 🚩 IMPORTANTE: Recuperar la unidad para que el mapa filtre correctamente
-const unidad = localStorage.getItem('unidad_asignada');
-if (unidad) currentUser.turno_actual = unidad; 
-
-seleccionarTabla('mapa_rutas'); 
-return true;
-
-            // --- OTROS ROLES ---
+            // --- FLUJO PARA OTROS ROLES ---
             const menuTablas = document.getElementById('tableSelectionSection');
             if (menuTablas) menuTablas.style.display = 'block';
+
             mostrarTablasSegunRol();
             return true;
         }
     }
     return false;
 }
-
 
 
 
@@ -14489,24 +14312,25 @@ function seleccionarTabla(tableName) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', async function() {
-    const ultimaConfig = localStorage.getItem('fecha_ultima_config');
-    const hoy = new Date().toISOString().split('T')[0];
+// ==========================================================
+// 🚀 INICIALIZACIÓN Y EVENTOS
+// ==========================================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Sistema de Consultas Campo Inicializado');
 
-    if (ultimaConfig && ultimaConfig !== hoy) {
-        // 🔄 ROTACIÓN: Lo de mañana pasa a ser hoy
-        const tManana = localStorage.getItem('turno_manana');
-        
-        if (tManana && tManana !== "null" && tManana !== "") {
-            localStorage.setItem('turno_hoy', tManana);
-            localStorage.setItem('fecha_turno_hoy', hoy);
-            localStorage.removeItem('turno_manana'); // Queda vacío para obligar a elegir
-            localStorage.setItem('paso_1_completado', 'true'); 
-        } else {
-            // Si por alguna razón no había turno de mañana, reset total
-            localStorage.clear(); 
-        }
-        localStorage.setItem('fecha_ultima_config', hoy);
+    // Validación de sesión
+    if (!verificarDatosOffline()) {
+        const loginSec = document.getElementById('loginSection');
+        if (loginSec) loginSec.style.display = 'block';
+    }
+
+    // Conector del botón de Login
+    const loginButton = document.getElementById('loginButton');
+    if (loginButton) {
+        loginButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            login();
+        });
     }
 });
 
