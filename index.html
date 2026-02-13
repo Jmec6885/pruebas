@@ -1287,6 +1287,8 @@ async function login() {
             // ✅ CORRECTO - Delegar toda la lógica a loginATTF
 loginATTF(data);
 return;
+        }
+
         if (data.rol === 'Poda') {
             loginPoda(data); 
             return;
