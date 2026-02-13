@@ -2148,7 +2148,7 @@ function accederMenuATTF() {
             document.getElementById('userInfo').classList.remove('hidden');
         }
 
-        // 3. EJECUTAR PROCESOS DE FONDO
+                // 3. EJECUTAR PROCESOS DE FONDO
         console.log('⚙️ Ejecutando procesos de fondo...');
         mostrarTablasSegunRol();
         iniciarVerificacionSesion();
@@ -2158,6 +2158,21 @@ function accederMenuATTF() {
     } catch (error) {
         console.error('❌ Error crítico al renderizar el menú:', error);
     }
+
+    // ✅ DEBUG: Verificar elementos visibles (FUERA del try-catch)
+    setTimeout(() => {
+        console.log('🔍 ELEMENTOS VISIBLES EN PANTALLA:');
+        const visibleElements = document.querySelectorAll('*');
+        visibleElements.forEach(el => {
+            if (el.offsetWidth > 0 && el.offsetHeight > 0 && el.style.display !== 'none') {
+                const id = el.id || 'sin-id';
+                const classes = el.className || 'sin-clase';
+                console.log(`   ✅ ${id} - ${classes}`);
+            }
+        });
+    }, 1000);
+}
+
 }
 
 
