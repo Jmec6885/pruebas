@@ -1576,8 +1576,7 @@ async function confirmarTurnoHoyATTF() {
         localStorage.setItem('turno_hoy', turnoHoyKey);
         localStorage.setItem('fecha_turno_hoy', fechaHoyISO);
 
-        // Limpiar mañana para evitar saltos de lógica
-        localStorage.removeItem('turno_manana'); 
+       
 
         console.log("✅ Turno de hoy guardado.");
 
@@ -2063,6 +2062,17 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
+
+    // ✅ RECUPERAR DATOS DE BD SI LOCALSTORAGE ESTÁ VACÍO
+    if (currentUser && currentUser.turno_hoy && !localStorage.getItem('turno_hoy')) {
+        localStorage.setItem('turno_hoy', currentUser.turno_hoy);
+        console.log('🔄 Recuperado turno_hoy desde BD');
+    }
+    
+    if (currentUser && currentUser.turno_manana && !localStorage.getItem('turno_manana')) {
+        localStorage.setItem('turno_manana', currentUser.turno_manana);
+        console.log('🔄 Recuperado turno_manana desde BD');
+    }
     console.log('📊 currentUser:', {
         usuario: currentUser?.usuario,
         turno_hoy: currentUser?.turno_hoy,
