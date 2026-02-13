@@ -1360,70 +1360,59 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 }
 
 async function loginATTF(userData) {
-    console.log('👷 Validando flujo ATTF para:', userData.usuario);
-    
-    const fechaHoy = getFechaHoyElSalvador(); 
-    const horaActual = new Date().getHours();
-    
-    // 1. Verificar descanso programado (Prioridad Máxima)
-    if (verificarDiaDescanso(userData)) {
-        alert('📅 Hoy es día de descanso programado.');
-        logout();
-        return;
+  console.log('👷 Iniciando flujo ATTF para:', userData.usuario);
+  const fechaHoy = getFechaHoyElSalvador();
+  const horaActual = new Date().getHours();
+
+  // ✅ ACTUALIZAR última_actividad al ingresar
+  await supabaseClient.from('usuarios').update({ 
+    ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
+  }).eq('id', userData.id);
+
+  // 1. Verificar descanso programado (Prioridad Máxima)
+  if (verificarDiaDescanso(userData)) {
+    alert('📅 Hoy es día de descanso programado.');
+    logout();
+    return;
+  }
+
+  // 2. VALIDACIÓN PRINCIPAL: ¿Tiene turno de HOY configurado para hoy?
+  const tieneHoyAlDia = userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy;
+  const tieneTurnoManana = userData.turno_manana && userData.turno_manana !== "null" && userData.turno_manana !== "";
+  const tieneDescansoActivo = userData.descanso_fecha_inicio && userData.descanso_fecha_inicio >= fechaHoy;
+
+  // ✅ CASO 1: TIENE HOY + (MAÑANA o DESCANSO) = ENTRAR AL MENÚ
+  if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
+    if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+      const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
+      alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
+      logout();
+      return;
     }
+    console.log("✅ Turno de hoy configurado. Accediendo al menú...");
+    accederMenuATTF();
+    return;
+  }
 
-    // 2. VALIDACIÓN DE PERSISTENCIA (El Escudo)
-    // Comprobamos si HOY ya se registró el turno en la tabla de la BD
-    const tieneHoyAlDia = userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy;
-    
-    // Revisamos si ya tiene mañana programado O si ya registró su descanso futuro
-    const tieneMananaOdescanso = (userData.turno_manana && userData.turno_manana !== "null" && userData.turno_manana !== "") || 
-                                 (userData.descanso_fecha_inicio && userData.descanso_fecha_inicio >= fechaHoy);
-
-    if (tieneHoyAlDia && tieneMananaOdescanso) {
-        // Si ya tiene todo, solo validamos que esté en hora de trabajar
-        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-            const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
-            alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
-            logout();
-            return;
-        }
-        console.log("🚀 Todo al día. Entrando al menú...");
-        accederMenuATTF(); 
-        return;
-    }
-
-    // 3. VERIFICAR INACTIVIDAD
-    // Aquí es donde el "-1" de antes fallaba. Con la nueva función calcularDiasSinActividad 
-    // que hicimos, ahora devolverá 0 si es hoy.
-    const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
-    console.log(`⏰ Días evaluados: ${diasSinActividad}`);
-    
-    // Si es nuevo, o han pasado días, o NO tiene turno para HOY...
-    if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1 || !tieneHoyAlDia) {
-        console.log('🔧 Iniciando configuración desde cero (Paso 1)...');
-        mostrarConfiguracionInicialATTF();
-        return;
-    }
-
-    // 4. CASO: TIENE HOY PERO NO MAÑANA (Se quedó a medias)
-    if (tieneHoyAlDia && !tieneMananaOdescanso) {
-        console.log('⚠️ Falta programar el día de mañana.');
-        const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-        if (contadorTurnos >= 5) {
-            mostrarForzarDescansoATTF();
-        } else {
-            // Pasamos a pedir el turno de mañana directamente
-            mostrarProgramarTurnoMañanaConDescanso(userData);
-        }
-        return;
-    }
-
-    // 5. SEGURIDAD FINAL (Si llega aquí por algún error de datos, mejor configurar)
-    console.warn("⚠️ Estado inconsistente, redirigiendo a configuración.");
+  // ✅ CASO 2: NO TIENE HOY = PASO 1 (Configurar turno de hoy)
+  if (!tieneHoyAlDia) {
+    console.log('🔧 No tiene turno de hoy configurado. Paso 1...');
     mostrarConfiguracionInicialATTF();
-}
+    return;
+  }
 
+  // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+  console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+  
+  // Verificar si ya completó 5 turnos
+  const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+  if (contadorTurnos >= 5) {
+    mostrarForzarDescansoATTF();
+  } else {
+    mostrarProgramarTurnoMañanaConDescanso(userData);
+  }
+  return;
+}
 
 
 function calcularDiasSinActividad(ultimaActividad) {
