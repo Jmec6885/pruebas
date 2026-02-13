@@ -1331,92 +1331,102 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 async function loginATTF(userData) {
     console.log('👷 Validando flujo ATTF para:', userData.usuario);
     
-    const ahora = new Date();
-    const fechaHoy = getFechaHoyElSalvador(); // Formato YYYY-MM-DD
-    const horaActual = ahora.getHours();
+    // --- SINCRONIZACIÓN PREVENTIVA (Crítico) ---
+    // Bajamos la "verdad" de la BD al navegador antes de evaluar nada
+    if (userData.turno_hoy && userData.turno_hoy !== "null") {
+        localStorage.setItem('turno_hoy', userData.turno_hoy);
+    }
+    if (userData.turno_manana && userData.turno_manana !== "null") {
+        localStorage.setItem('turno_manana', userData.turno_manana);
+    }
     
-    // 1. Verificar si está en día de descanso programado (Evita acceso en días libres)
+    const fechaHoy = getFechaHoyElSalvador(); 
+    const horaActual = new Date().getHours();
+    
+    // 1. Verificar descanso programado
     if (verificarDiaDescanso(userData)) {
-        alert('📅 Hoy es uno de tus días de descanso programados. No puedes acceder al sistema.');
+        alert('📅 Hoy es día de descanso programado.');
         logout();
         return;
     }
 
     // 2. VALIDACIÓN DE CONFIGURACIÓN COMPLETA
-    // Verificamos si ya tiene turno hoy Y si ya dejó programado mañana (o descanso)
     const tieneHoyAlDia = userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy;
     const tieneMananaOdescanso = userData.turno_manana && userData.turno_manana !== "null" && userData.turno_manana !== "";
 
     if (tieneHoyAlDia && tieneMananaOdescanso) {
-        console.log("✅ Configuración diaria completa detectada en BD.");
-        
-        // --- VALIDACIÓN DE VENTANA HORARIA ---
         if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
             const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
-            alert(`⚠️ No estás en el horario de tu turno programado (${turnoInfo.nombre}).`);
+            alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
             logout();
             return;
         }
-
-        // --- PUNTO CLAVE: Sincronización y Acceso ---
-        // En lugar de accederMenuATTF directo, usamos la función puente para asegurar LocalStorage
-        console.log("🚀 Sincronizando datos y preparando interfaz...");
+        console.log("🚀 Todo al día. Entrando al menú...");
         iniciarInterfazATTF(userData); 
         return;
     }
 
-    // 3. VERIFICAR INACTIVIDAD O NUEVOS CICLOS
-    // Calculamos si el usuario ha estado ausente para forzar el Paso 1
+    // 3. VERIFICAR INACTIVIDAD (Con corrección de -1)
     const diasSinActividad = calcularDiasSinActividad(userData.ultima_actividad);
+    console.log(`⏰ Días evaluados: ${diasSinActividad}`);
     
-    // Si no tiene estado de ciclo, es su primera vez, o pasó más de 1 día, va al Paso 1
+    // Cambiamos la lógica: Solo reseteamos si es estrictamente mayor o igual a 1
     if (!userData.estado_ciclo || userData.estado_ciclo === 'primera_vez' || diasSinActividad >= 1 || !userData.turno_hoy) {
-        console.log('🔧 Requiere configuración inicial (Paso 1)');
+        console.log('🔧 Iniciando configuración desde cero (Paso 1)...');
         mostrarConfiguracionInicialATTF();
         return;
     }
 
-    // 4. CASO INTERMEDIO: TIENE HOY PERO NO PROGRAMÓ MAÑANA
-    // Ocurre si el técnico entró en la mañana pero no terminó el Paso 2
+    // 4. CASO INTERMEDIO: TIENE HOY PERO NO MAÑANA
     if (tieneHoyAlDia && !tieneMananaOdescanso) {
-        console.log('⚠️ Turno de hoy detectado pero falta programar mañana');
-        
         const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-        
-        // Si ya lleva 5 turnos seguidos, el sistema lo obliga a ir a la pantalla de descanso
         if (contadorTurnos >= 5) {
-            console.log('🛑 Límite de turnos alcanzado (5/5). Forzando descanso.');
             mostrarForzarDescansoATTF();
         } else {
-            // Si no ha llegado al límite, lo mandamos al filtro para que cargue el Paso 2 correctamente
-            console.log('📋 Derivando al programador de mañana...');
             iniciarInterfazATTF(userData);
         }
         return;
     }
 
-    // 5. SEGURIDAD FINAL (Fallback)
-    // Si por alguna razón extraña nada de lo anterior coincide, reiniciamos el flujo por seguridad
-    console.warn("⚠️ Estado de turno inconsistente o fecha vieja, reiniciando configuración.");
-    mostrarConfiguracionInicialATTF();
-}
-
-/**
- * Función auxiliar para calcular días de ausencia
- */
-function calcularDiasSinActividad(ultimaActividad) {
-    if (!ultimaActividad) return 999;
-    try {
-        const ahora = new Date();
-        const ultima = new Date(ultimaActividad.replace(/-/g, '/')); // Compatible con todos los navegadores
-        const diffMs = ahora - ultima;
-        return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    } catch (e) {
-        return 999;
+    // 5. SEGURIDAD FINAL
+    console.warn("⚠️ Estado inconsistente. Verificando si es error de zona horaria...");
+    // Si llegamos aquí y es el mismo día, forzamos entrada al menú
+    if (tieneHoyAlDia) {
+        iniciarInterfazATTF(userData);
+    } else {
+        mostrarConfiguracionInicialATTF();
     }
 }
 
 
+
+
+/**
+ * Función auxiliar para calcular días de ausencia (Versión Blindada)
+ */
+function calcularDiasSinActividad(ultimaActividad) {
+    if (!ultimaActividad) return 0; // Si es nuevo, asumimos 0 para que el flujo normal decida
+    try {
+        // Obtenemos solo la fecha de hoy en El Salvador sin horas
+        const hoyStr = getFechaHoyElSalvador(); 
+        const hoy = new Date(hoyStr + "T00:00:00");
+        
+        // Obtenemos solo la parte de la fecha de la última actividad (YYYY-MM-DD)
+        const ultimaFechaStr = ultimaActividad.includes(' ') ? ultimaActividad.split(' ')[0] : ultimaActividad.split('T')[0];
+        const ultima = new Date(ultimaFechaStr + "T00:00:00");
+        
+        const diffTime = hoy - ultima;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        console.log(`📊 Cálculo de inactividad: Hoy(${hoyStr}) vs Última(${ultimaFechaStr}) = ${diffDays} días`);
+        
+        // Si es hoy o una fecha futura por error de server, retornar 0
+        return diffDays <= 0 ? 0 : diffDays;
+    } catch (e) {
+        console.error("❌ Error calculando días de actividad:", e);
+        return 0;
+    }
+}
 
 function mostrarConfiguracionInicialATTF() {
     console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy");
@@ -3499,44 +3509,29 @@ async function verificarSesionReal() {
 
 
 async function logout() {
-    console.log("🚫 Cerrando sesión y limpiando caché...");
+    console.log("🚫 Cerrando sesión...");
     
-    // 1. LIMPIEZA TOTAL DEL NAVEGADOR (LocalStorage + SessionStorage)
-    // Borramos credenciales
+    // 1. Solo borramos lo que identifica la sesión actual
     localStorage.removeItem('cleca_user_session');
     localStorage.removeItem('usuario_logueado');
     
-    // Borramos el progreso de turnos y descansos (ESTO EVITA EL INGRESO AUTOMÁTICO)
-    localStorage.removeItem('turno_hoy');
-    localStorage.removeItem('turno_manana');
-    localStorage.removeItem('descanso_confirmado');
-    localStorage.removeItem('turno_hoy_registrado'); 
+    // NO borres 'turno_hoy' ni 'turno_manana' aquí. 
+    // Deja que iniciarInterfazATTF los maneje al entrar.
 
-    // Limpiamos cualquier rastro en sessionStorage por si acaso
     sessionStorage.clear();
 
-    // 2. DESACTIVAR EN LA BASE DE DATOS (Seguridad en el Servidor)
     if (currentUser && currentUser.id) {
         try {
             await supabaseClient
                 .from('usuarios')
-                .update({ 
-                    sessionactiva: false, 
-                    sessiontoken: null 
-                })
+                .update({ sessionactiva: false, sessiontoken: null })
                 .eq('id', currentUser.id);
-            console.log("✅ Sesión desactivada en servidor.");
         } catch (e) {
-            console.error("❌ Error al notificar al servidor:", e);
+            console.error("❌ Error servidor:", e);
         }
     }
 
-    // 3. RESET DE VARIABLES Y RECARGA
     currentUser = null;
-    
-    // Usar clear() al final si quieres asegurar que NO quede nada de nada
-    // localStorage.clear(); 
-
     window.location.reload();
 }
 
