@@ -1575,6 +1575,9 @@ function mostrarConfiguracionInicialATTF() {
 
 
 async function confirmarTurnoHoyATTF() {
+    console.log("🔍 ID del usuario actual:", currentUser?.id);
+    console.log("🔍 currentUser completo:", currentUser);
+    
     // 🔍 Buscamos el ID correcto (el que se dibujó en el Paso 1)
     const selectElement = document.getElementById('turnoHoy') || document.getElementById('turnoHoySeleccionado');
     const turnoHoyKey = selectElement?.value;
@@ -1595,6 +1598,7 @@ async function confirmarTurnoHoyATTF() {
         const hoySV = getFechaElSalvador(); 
         const fechaHoyISO = hoySV.toISOString().split('T')[0];
 
+        // ✅ GUARDAR EN BD CON MANEJO DE ERRORES
         const { error } = await supabaseClient
             .from('usuarios')
             .update({ 
@@ -1604,39 +1608,58 @@ async function confirmarTurnoHoyATTF() {
             })
             .eq('id', currentUser.id);
 
-        if (error) throw error;
+        if (error) {
+            console.error("❌ Error al guardar en BD:", error);
+            throw error;
+        }
 
-        // GUARDADO LOCAL
+        console.log("✅ UPDATE ejecutado correctamente");  // ← AGREGAR ESTA LÍNEA
+
+        // ✅ GUARDADO LOCAL (temporal, se actualizará después con los datos de BD)
         window.turnoHoySeleccionado = turnoHoyKey;
         localStorage.setItem('turno_hoy', turnoHoyKey);
         localStorage.setItem('fecha_turno_hoy', fechaHoyISO);
 
-       
-
         console.log("✅ Turno de hoy guardado.");
-console.log("📊 Verificando guardado en BD...");
+        console.log("📊 Verificando guardado en BD...");
 
-// Verificar que se guardó correctamente
-const { data: verificacion } = await supabaseClient
-    .from('usuarios')
-    .select('turno_hoy, fecha_turno_hoy')
-    .eq('id', currentUser.id)
-    .single();
+        // Verificar que se guardó correctamente
+        const {  verificacion } = await supabaseClient
+            .from('usuarios')
+            .select('turno_hoy, fecha_turno_hoy')
+            .eq('id', currentUser.id)
+            .single();
 
-console.log("🔍 Datos guardados:", verificacion);
+        console.log("🔍 Datos guardados:", verificacion);
+
+        // ✅ ACTUALIZAR currentUser LOCAL
+        currentUser.turno_hoy = verificacion.turno_hoy;
+        currentUser.fecha_turno_hoy = verificacion.fecha_turno_hoy;
+        console.log("🔄 currentUser actualizado:", currentUser.turno_hoy, currentUser.fecha_turno_hoy);
+
+        // ✅ GUARDAR EN LOCALSTORAGE LA SESIÓN ACTUALIZADA
+        localStorage.setItem('cleca_user_session', JSON.stringify({
+            user: currentUser,
+            timestamp: Date.now()
+        }));
+        localStorage.setItem('usuario_logueado', JSON.stringify(currentUser));
+        console.log("💾 Sesión actualizada en localStorage");
+
+        // ✅ GUARDADO LOCAL DE TURNOS (actualizado con datos de BD)
+        window.turnoHoySeleccionado = verificacion.turno_hoy;
+        localStorage.setItem('turno_hoy', verificacion.turno_hoy);
+        localStorage.setItem('fecha_turno_hoy', verificacion.fecha_turno_hoy);
+        localStorage.setItem('turnos_configurados', 'true');
 
         // 🚀 PASAR AL PASO 2:
-        // Pasamos el objeto necesario para que la función de "Mañana" sepa qué filtrar
         const userDataParaSiguientePaso = {
             turno_hoy: turnoHoyKey,
             contador_turnos: currentUser.contador_turnos || 0
         };
 
-        // Llamamos a la función que ya ajustamos para que use el contenedor visible
         if (typeof mostrarProgramarTurnoMañanaConDescanso === 'function') {
             mostrarProgramarTurnoMañanaConDescanso(userDataParaSiguientePaso);
         } else {
-            // Si tu función se llama distinto, ajústalo aquí:
             mostrarProgramarTurnoManana(true); 
         }
 
@@ -1645,7 +1668,6 @@ console.log("🔍 Datos guardados:", verificacion);
         alert('Error de conexión: No se pudo guardar el turno.');
     }
 }
-
 
 
 // ========================================
