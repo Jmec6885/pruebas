@@ -14375,35 +14375,38 @@ function verificarDatosOffline() {
             iniciarVerificacionSesion();
 
             // 🛡️ BLOQUE PARA ROL ATTF
-            if (currentUser.rol === 'ATTF') {
-                console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
-                
-                const tHoy = localStorage.getItem('turno_hoy');
-                const tManana = localStorage.getItem('turno_manana');
+if (currentUser.rol === 'ATTF') {
+    console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
+    
+    const tHoy = localStorage.getItem('turno_hoy');
+    const tManana = localStorage.getItem('turno_manana');
 
-                // Asegurar que el contenedor principal de ATTF sea visible
-                const searchSection = document.getElementById('searchSection');
-                if (searchSection) {
-                    searchSection.style.display = 'block';
-                    searchSection.classList.remove('hidden');
-                }
+    // Asegurar que el contenedor principal de ATTF sea visible
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'block';
+        searchSection.classList.remove('hidden');
+    }
 
-                if (!tHoy || !tManana || tHoy === "null" || tManana === "null") {
-                    console.log("⚠️ Faltan turnos. Cargando Paso 1...");
-                    // Cambiamos a la función que SÍ dibuja los botones según tu archivo
-                    if (typeof generarInterfazTurnosPaso1 === 'function') {
-                        generarInterfazTurnosPaso1();
-                    } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
-                        mostrarConfiguracionInicialATTF();
-                    }
-                    return true;
-                }
+    if (!tHoy || !tManana || tHoy === "null" || tManana === "null") {
+        console.log("⚠️ Faltan turnos. Cargando Paso 1...");
+        // Cambiamos a la función que SÍ dibuja los botones según tu archivo
+        if (typeof generarInterfazTurnosPaso1 === 'function') {
+            generarInterfazTurnosPaso1();
+        } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
+            mostrarConfiguracionInicialATTF();
+        }
+        return true;
+    }
 
-                // Si ya tiene todo, entrar al menú o mapa
-                console.log("✅ Turnos detectados. Accediendo...");
-                seleccionarTabla('mapa_rutas'); 
-                return true; 
-            }
+    // ✅ CORREGIDO: Si ya tiene todo, mostrar menú de módulos (NO cargar mapa_rutas)
+    console.log("✅ Turnos detectados. Mostrando menú...");
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) {
+        tableSelection.style.display = 'block';
+    }
+    return true; 
+}
 
             // --- FLUJO PARA OTROS ROLES ---
             const menuTablas = document.getElementById('tableSelectionSection');
@@ -14442,6 +14445,9 @@ const PERMISOS_MODULOS = {
  * Versión Corregida para evitar pantalla en blanco en Carga de Asignaciones
  */
 function seleccionarTabla(tableName) {
+console.trace(`🔍 Intento de acceso a: ${tableName}`);
+    console.trace(`🔍 Intento de acceso a: ${tableName} desde:`);
+    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${currentUser.rol})`);
     renovarSesion();
     const rolActual = currentUser.rol;
 
@@ -14513,6 +14519,7 @@ function seleccionarTabla(tableName) {
 // 🚀 INICIALIZACIÓN Y EVENTOS
 // ==========================================================
 document.addEventListener('DOMContentLoaded', function() {
+
     console.log('🚀 Sistema de Consultas Campo Inicializado');
 
     // Validación de sesión
