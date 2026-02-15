@@ -1457,21 +1457,22 @@ async function loginATTF(userData) {
   }
 
   // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-  console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
-  console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
-  
-  const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-  console.log('🔢 Contador de turnos:', contadorTurnos);
-  
-  if (contadorTurnos >= 5) {
+console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
+console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+
+const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+console.log('🔢 Contador de turnos:', contadorTurnos);
+
+if (contadorTurnos >= 5) {
     console.log('⚠️ Contador >= 5 - Forzando descanso');
     mostrarForzarDescansoATTF();
-  } else {
+    return; // ✅ AGREGADO: Detener ejecución inmediatamente
+} else {
     console.log('➡️ Redirigiendo a Paso 2...');
     mostrarProgramarTurnoMañanaConDescanso(userData);
-  }
-  return;
+    return; // ✅ AGREGADO: Detener ejecución inmediatamente
 }
+
 
 function calcularDiasSinActividad(ultimaActividad) {
   if (!ultimaActividad) {
@@ -2148,6 +2149,13 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
+
+    // ✅ BLOQUEO CRÍTICO: Verificar si hay configuración activa
+    const configSection = document.getElementById('configuracionInicialATTF');
+    if (configSection && configSection.style.display === 'block') {
+        console.warn('⚠️ CONFIGURACIÓN ACTIVA - Bloqueando acceso al menú');
+        return; // ✅ SALIR INMEDIATAMENTE SIN MOSTRAR MENÚ
+    }
 
     // ✅ RECUPERAR DATOS DE BD SI LOCALSTORAGE ESTÁ VACÍO
     if (currentUser && currentUser.turno_hoy && !localStorage.getItem('turno_hoy')) {
