@@ -1499,6 +1499,11 @@ function calcularDiasSinActividad(ultimaActividad) {
 }
 
 function mostrarConfiguracionInicialATTF() {
+    // ✅ OCULTAR MENÚ DE MÓDULOS DURANTE CONFIGURACIÓN
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) tableSelection.style.display = 'none';
+    
+    );
     console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy");
     const ahora = new Date();
     const horaActual = ahora.getHours();
@@ -2014,6 +2019,11 @@ function getFechaLocalISO(fechaObjeto) {
 }
 
 	function mostrarProgramarTurnoMañanaConDescanso(userData) {
+    // ✅ OCULTAR MENÚ DE MÓDULOS DURANTE CONFIGURACIÓN
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) tableSelection.style.display = 'none';
+    
+    console.log("🛠️ Iniciando Paso 2: Configuración de Turno Mañana");
     const turnoHoyKey = userData.turno_hoy;
     const contadorActual = parseInt(userData.contador_turnos) || 0;
     
@@ -2271,6 +2281,11 @@ setTimeout(() => {
 
 
 function mostrarForzarDescansoATTF() {
+    // ✅ OCULTAR MENÚ DE MÓDULOS DURANTE CONFIGURACIÓN
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) tableSelection.style.display = 'none';
+    
+    console.log("🛠️ Forzando descanso obligatorio");
     // 1. Buscamos los contenedores
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
     const menuPrincipal = document.getElementById('menuModulosATTF') || document.querySelector('.main-menu-container');
@@ -14479,7 +14494,6 @@ function guardarDatosOffline() {
 
 
 function verificarDatosOffline() {
-    // Intentamos recuperar de localStorage (más persistente para F5)
     const sessionData = localStorage.getItem('cleca_user_session') || sessionStorage.getItem('cleca_user_session');
     
     if (sessionData) {
@@ -14498,11 +14512,11 @@ function verificarDatosOffline() {
 
             iniciarVerificacionSesion();
 
-            // 🛡️ BLOQUE PARA ROL ATTF - DELEGAR A loginATTF
+            // 🛡️ BLOQUE PARA ROL ATTF - DETENER FLUJO PRINCIPAL
             if (currentUser.rol === 'ATTF') {
                 console.log('🔄 Restaurando sesión ATTF - Delegando a loginATTF...');
-                loginATTF(currentUser); // ✅ loginATTF ya tiene toda la lógica de validación
-                return true;
+                loginATTF(currentUser);
+                return true; // ✅ DETENER AQUÍ - No continuar con el flujo principal
             }
 
             // --- FLUJO PARA OTROS ROLES ---
@@ -14514,7 +14528,6 @@ function verificarDatosOffline() {
     }
     return false;
 }
-
 
 
 /**
@@ -14533,32 +14546,42 @@ const PERMISOS_MODULOS = {
     'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura'],
     'TX y Cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']  // ✅ Corregido
 };
+
+
 /**
  * Selecciona y valida el acceso a las tablas/módulos
+ * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración
  */
-/**
- * Selecciona y valida el acceso a las tablas/módulos
- * Versión Corregida para evitar pantalla en blanco en Carga de Asignaciones
- */
-function seleccionarTabla(tableName) {
-console.trace(`🔍 Intento de acceso a: ${tableName}`);
-    console.trace(`🔍 Intento de acceso a: ${tableName} desde:`);
-    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${currentUser.rol})`);
+function seleccionarTabla(tableName, retryCount = 0) {
+    // ✅ BLOQUEO INMEDIATO: Si está en configuración de turnos (ATTF), NO permitir acceso
+    if (currentUser?.rol === 'ATTF') {
+        const configSection = document.getElementById('configuracionInicialATTF');
+        if (configSection && configSection.style.display !== 'none' && configSection.style.display !== '') {
+            alert('⚠️ Debe completar la configuración de turnos antes de acceder a los módulos.');
+            return;
+        }
+    }
+
+    // ✅ LÍMITE DE INTENTOS: Máximo 10 intentos (1 segundo total)
+    if (!document.getElementById('searchGrid')) {
+        if (retryCount < 10) {
+            console.warn(`⚠️ searchGrid no está listo (intento ${retryCount + 1}/10), esperando...`);
+            setTimeout(() => seleccionarTabla(tableName, retryCount + 1), 100);
+            return;
+        } else {
+            console.error('❌ searchGrid no disponible después de 10 intentos');
+            alert('Error: La interfaz no está lista. Complete la configuración de turnos o recargue la página.');
+            return;
+        }
+    }
+
     renovarSesion();
     const rolActual = currentUser.rol;
 
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
 
-     // ✅ NUEVO: Esperar a que el DOM esté listo
-    if (!document.getElementById('searchGrid')) {
-        console.warn('⚠️ searchGrid no está listo, esperando...');
-        setTimeout(() => seleccionarTabla(tableName), 100);
-        return;
-    }
-
     // 1. VALIDACIÓN DE PERMISOS DINÁMICA
     const rolesPermitidos = PERMISOS_MODULOS[tableName];
-
     if (!rolesPermitidos) {
         console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
     } else if (!rolesPermitidos.includes(rolActual)) {
@@ -14569,32 +14592,24 @@ console.trace(`🔍 Intento de acceso a: ${tableName}`);
     // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
         case 'cargar_asignaciones':
-            // ✅ Ocultar menú y mostrar sección de búsqueda
             const tableSel = document.getElementById('tableSelectionSection');
             const searchSec = document.getElementById('searchSection');
-            
             if (tableSel) tableSel.style.display = 'none';
             if (searchSec) searchSec.style.display = 'block';
-            
-            // ✅ Limpiar grid antes de inyectar interfaz
             const searchGrid = document.getElementById('searchGrid');
             if (searchGrid) searchGrid.innerHTML = '';
-            
-            // ✅ Cargar interfaz de archivos
             cargarInterfazAsignaciones();
             return;
-
         case 'mapa_rutas':
             console.log("📍 Inicializando Mapa de Rutas...");
             break;
     }
 
-    // 3. ACTUALIZAR INTERFAZ VISUAL (Solo para módulos de consulta estándar)
+    // 3. ACTUALIZAR INTERFAZ VISUAL
     const config = tableConfigs[tableName];
     if (config) {
         selectedTable = tableName;
         
-        // ✅ VERIFICAR QUE EL ELEMENTO EXISTA ANTES DE ACCEDER
         const searchTitle = document.getElementById('searchTitle');
         if (searchTitle) {
             searchTitle.innerHTML = `${config.icon} ${config.title}`;
@@ -14611,11 +14626,10 @@ console.trace(`🔍 Intento de acceso a: ${tableName}`);
         if (searchSection) {
             searchSection.style.display = 'block';
             searchSection.classList.remove('hidden');
-            console.log('✅ searchSection visible:', searchSection.style.display);
+            console.log('✅ searchSection visible');
         } else {
             console.error('❌ searchSection no encontrado en el DOM');
         }
-        
     } else {
         console.error("❌ Error: Configuración visual no encontrada para", tableName);
         alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
