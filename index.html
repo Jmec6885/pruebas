@@ -14484,14 +14484,11 @@ function verificarDatosOffline() {
     
     if (sessionData) {
         const data = JSON.parse(sessionData);
-        // Usamos el timestamp guardado o el actual si no existe
         const tiempoTranscurrido = (Date.now() - (data.timestamp || Date.now())) / 1000 / 60;
 
-        // 1. Validar tiempo de sesión (45 minutos)
         if (tiempoTranscurrido < 45) {
             currentUser = data.user;
             
-            // ✅ QUITAR EL BLANCO INMEDIATAMENTE
             const loginSection = document.getElementById('loginSection');
             if (loginSection) loginSection.style.display = 'none';
 
@@ -14499,88 +14496,82 @@ function verificarDatosOffline() {
             if (userInfo) userInfo.classList.remove('hidden');
             document.getElementById('currentUser').textContent = `Bienvenido, ${currentUser.usuario}`;
 
-            // 2. Re-activar vigilancia
             iniciarVerificacionSesion();
 
-            // 🛡️ BLOQUE PARA ROL ATTF
-if (currentUser.rol === 'ATTF') {
-    console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
-    
-    // ✅ NUEVO: Obtener datos ACTUALES de la BD
-    const {  datosBD } = await supabaseClient
-        .from('usuarios')
-        .select('turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana, descanso_fecha_inicio, descanso_fecha_fin, contador_turnos, estado_ciclo')
-        .eq('id', currentUser.id)
-        .single();
+            // 🛡️ BLOQUE PARA ROL ATTF (CORREGIDO)
+            if (currentUser.rol === 'ATTF') {
+                console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
+                
+                const {  datosBD } = await supabaseClient
+                    .from('usuarios')
+                    .select('turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana, descanso_fecha_inicio, descanso_fecha_fin, contador_turnos, estado_ciclo')
+                    .eq('id', currentUser.id)
+                    .single();
 
-    if (errorBD) {
-        console.error('❌ Error al obtener datos de BD:', errorBD);
-        return false;
-    }
+                if (errorBD) {
+                    console.error('❌ Error al obtener datos de BD:', errorBD);
+                    return false;
+                }
 
-    console.log('📊 Datos de BD:', datosBD);
+                console.log('📊 Datos de BD:', datosBD);
 
-    // ✅ VALIDACIÓN COMPLETA
-    const fechaHoy = getFechaHoyElSalvador();
-    
-    const tieneTurnoHoy = datosBD.turno_hoy && datosBD.fecha_turno_hoy === fechaHoy;
-    const tieneTurnoManana = datosBD.turno_manana && 
-                             datosBD.turno_manana !== "null" && 
-                             datosBD.turno_manana !== "";
-    const tieneDescanso = datosBD.descanso_fecha_inicio && 
-                          datosBD.descanso_fecha_inicio >= fechaHoy;
+                const fechaHoy = getFechaHoyElSalvador();
+                
+                const tieneTurnoHoy = datosBD.turno_hoy && datosBD.fecha_turno_hoy === fechaHoy;
+                const tieneTurnoManana = datosBD.turno_manana && 
+                                         datosBD.turno_manana !== "null" && 
+                                         datosBD.turno_manana !== "";
+                const tieneDescanso = datosBD.descanso_fecha_inicio && 
+                                      datosBD.descanso_fecha_inicio >= fechaHoy;
 
-    console.log('✅ Validación completa:');
-    console.log('   tieneTurnoHoy:', tieneTurnoHoy);
-    console.log('   tieneTurnoManana:', tieneTurnoManana);
-    console.log('   tieneDescanso:', tieneDescanso);
+                console.log('✅ Validación completa:');
+                console.log('   tieneTurnoHoy:', tieneTurnoHoy);
+                console.log('   tieneTurnoManana:', tieneTurnoManana);
+                console.log('   tieneDescanso:', tieneDescanso);
 
-    // Asegurar que el contenedor principal de ATTF sea visible
-    const searchSection = document.getElementById('searchSection');
-    if (searchSection) {
-        searchSection.style.display = 'block';
-        searchSection.classList.remove('hidden');
-    }
+                const searchSection = document.getElementById('searchSection');
+                if (searchSection) {
+                    searchSection.style.display = 'block';
+                    searchSection.classList.remove('hidden');
+                }
 
-    // ✅ CASO 1: NO TIENE TURNO DE HOY = PASO 1
-    if (!tieneTurnoHoy) {
-        console.log("⚠️ Faltan turnos. Cargando Paso 1...");
-        if (typeof generarInterfazTurnosPaso1 === 'function') {
-            generarInterfazTurnosPaso1();
-        } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
-            mostrarConfiguracionInicialATTF();
-        }
-        return true;
-    }
+                if (!tieneTurnoHoy) {
+                    console.log("⚠️ Faltan turnos. Cargando Paso 1...");
+                    if (typeof generarInterfazTurnosPaso1 === 'function') {
+                        generarInterfazTurnosPaso1();
+                    } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
+                        mostrarConfiguracionInicialATTF();
+                    }
+                    return true;
+                }
 
-    // ✅ CASO 2: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-    if (!tieneTurnoManana && !tieneDescanso) {
-        console.log("⚠️ Tiene turno de hoy pero falta configurar mañana.");
-        
-        const contadorTurnos = parseInt(datosBD.contador_turnos) || 0;
-        if (contadorTurnos >= 5) {
-            console.log('⚠️ Contador >= 5 - Forzando descanso');
-            mostrarForzarDescansoATTF();
-        } else {
-            console.log('➡️ Redirigiendo a Paso 2...');
-            const userDataParaSiguientePaso = {
-                turno_hoy: datosBD.turno_hoy,
-                contador_turnos: contadorTurnos
-            };
-            mostrarProgramarTurnoMañanaConDescanso(userDataParaSiguientePaso);
-        }
-        return true;
-    }
+                if (!tieneTurnoManana && !tieneDescanso) {
+                    console.log("⚠️ Tiene turno de hoy pero falta configurar mañana.");
+                    
+                    const contadorTurnos = parseInt(datosBD.contador_turnos) || 0;
+                    if (contadorTurnos >= 5) {
+                        console.log('⚠️ Contador >= 5 - Forzando descanso');
+                        mostrarForzarDescansoATTF();
+                    } else {
+                        console.log('➡️ Redirigiendo a Paso 2...');
+                        const userDataParaSiguientePaso = {
+                            turno_hoy: datosBD.turno_hoy,
+                            contador_turnos: contadorTurnos
+                        };
+                        mostrarProgramarTurnoMañanaConDescanso(userDataParaSiguientePaso);
+                    }
+                    return true;
+                }
 
-    // ✅ CASO 3: TIENE TODO COMPLETO = MOSTRAR MENÚ
-    console.log("✅ Todos los pasos completados. Mostrando menú...");
-    const tableSelection = document.getElementById('tableSelectionSection');
-    if (tableSelection) {
-        tableSelection.style.display = 'block';
-    }
-    mostrarTablasSegunRol();
-    return true; 
-}
+                console.log("✅ Todos los pasos completados. Mostrando menú...");
+                const tableSelection = document.getElementById('tableSelectionSection');
+                if (tableSelection) {
+                    tableSelection.style.display = 'block';
+                }
+                mostrarTablasSegunRol();
+                return true; 
+            }
+
             // --- FLUJO PARA OTROS ROLES ---
             const menuTablas = document.getElementById('tableSelectionSection');
             if (menuTablas) menuTablas.style.display = 'block';
@@ -14591,7 +14582,6 @@ if (currentUser.rol === 'ATTF') {
     }
     return false;
 }
-
 
 
 /**
