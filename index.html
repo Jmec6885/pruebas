@@ -1347,6 +1347,41 @@ async function loginATTF(userData) {
   console.log('📅 Fecha hoy (SV):', fechaHoy);
   console.log('🕐 Hora actual:', horaActual);
   
+  // ✅ ROLL FORWARD: Si ayer configuró "mañana", hoy es "hoy"
+  if (userData.turno_manana && 
+      userData.turno_manana !== "null" && 
+      userData.turno_manana !== "descanso" &&
+      !userData.fecha_turno_hoy) {
+      
+      console.log('🔄 Roll forward: Verificando si turno_manana de ayer es hoy...');
+      
+      // Calcular fecha de "mañana" de ayer = hoy
+      const ayer = new Date(getFechaElSalvador());
+      ayer.setDate(ayer.getDate() - 1);
+      const fechaAyerManana = ayer.toISOString().split('T')[0];
+      
+      // Si coincide con hoy, autoasignar
+      if (fechaAyerManana === fechaHoy) {
+          console.log('🔄 Roll forward: Convirtiendo turno_manana en turno_hoy');
+          userData.turno_hoy = userData.turno_manana;
+          userData.fecha_turno_hoy = fechaHoy;
+          
+          // Guardar en BD
+          try {
+              await supabaseClient
+                  .from('usuarios')
+                  .update({ 
+                      turno_hoy: userData.turno_hoy,
+                      fecha_turno_hoy: fechaHoy
+                  })
+                  .eq('id', userData.id);
+              console.log('✅ Turno actualizado en BD por roll forward');
+          } catch (err) {
+              console.error('⚠️ Error en roll forward:', err);
+          }
+      }
+  }
+  
   // ✅ ACTUALIZAR última_actividad al hacer login
   try {
     await supabaseClient.from('usuarios').update({ 
@@ -1579,6 +1614,16 @@ async function confirmarTurnoHoyATTF() {
        
 
         console.log("✅ Turno de hoy guardado.");
+console.log("📊 Verificando guardado en BD...");
+
+// Verificar que se guardó correctamente
+const { data: verificacion } = await supabaseClient
+    .from('usuarios')
+    .select('turno_hoy, fecha_turno_hoy')
+    .eq('id', currentUser.id)
+    .single();
+
+console.log("🔍 Datos guardados:", verificacion);
 
         // 🚀 PASAR AL PASO 2:
         // Pasamos el objeto necesario para que la función de "Mañana" sepa qué filtrar
@@ -2123,20 +2168,16 @@ function accederMenuATTF() {
 
         // C. CONFIGURAR SECCIÓN DE BÚSQUEDA
         const searchSection = document.getElementById('searchSection');
-        if (searchSection) {
-            searchSection.style.display = 'block';
-            searchSection.classList.remove('hidden');
-            console.log('✅ searchSection visible');
-        }
-
+if (searchSection) {
+    searchSection.style.display = 'none';  // ✅ CORREGIDO
+    searchSection.classList.add('hidden');
+}
         // D. MOSTRAR BOTONES DE MÓDULOS
         const tableSelection = document.getElementById('tableSelectionSection');
-        if (tableSelection) {
-            tableSelection.style.display = 'block';
-            tableSelection.classList.remove('hidden');
-            console.log('✅ tableSelectionSection visible');
-        }
-
+if (tableSelection) {
+    tableSelection.style.display = 'block';
+    tableSelection.classList.remove('hidden');
+}
         // E. IDENTIDAD DE USUARIO
         const userLabel = document.getElementById('currentUser');
         if (userLabel) {
@@ -3502,8 +3543,7 @@ async function logout() {
     localStorage.removeItem('usuario_logueado');
     
     // Borramos el progreso de turnos y descansos (ESTO EVITA EL INGRESO AUTOMÁTICO)
-    localStorage.removeItem('turno_hoy');
-    localStorage.removeItem('turno_manana');
+    
     localStorage.removeItem('descanso_confirmado');
     localStorage.removeItem('turno_hoy_registrado'); 
 
