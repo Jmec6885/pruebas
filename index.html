@@ -14506,8 +14506,34 @@ function verificarDatosOffline() {
 if (currentUser.rol === 'ATTF') {
     console.log('🔄 Restaurando sesión ATTF - Verificando turnos...');
     
-    const tHoy = localStorage.getItem('turno_hoy');
-    const tManana = localStorage.getItem('turno_manana');
+    // ✅ NUEVO: Obtener datos ACTUALES de la BD
+    const {  datosBD } = await supabaseClient
+        .from('usuarios')
+        .select('turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana, descanso_fecha_inicio, descanso_fecha_fin, contador_turnos, estado_ciclo')
+        .eq('id', currentUser.id)
+        .single();
+
+    if (errorBD) {
+        console.error('❌ Error al obtener datos de BD:', errorBD);
+        return false;
+    }
+
+    console.log('📊 Datos de BD:', datosBD);
+
+    // ✅ VALIDACIÓN COMPLETA
+    const fechaHoy = getFechaHoyElSalvador();
+    
+    const tieneTurnoHoy = datosBD.turno_hoy && datosBD.fecha_turno_hoy === fechaHoy;
+    const tieneTurnoManana = datosBD.turno_manana && 
+                             datosBD.turno_manana !== "null" && 
+                             datosBD.turno_manana !== "";
+    const tieneDescanso = datosBD.descanso_fecha_inicio && 
+                          datosBD.descanso_fecha_inicio >= fechaHoy;
+
+    console.log('✅ Validación completa:');
+    console.log('   tieneTurnoHoy:', tieneTurnoHoy);
+    console.log('   tieneTurnoManana:', tieneTurnoManana);
+    console.log('   tieneDescanso:', tieneDescanso);
 
     // Asegurar que el contenedor principal de ATTF sea visible
     const searchSection = document.getElementById('searchSection');
@@ -14516,9 +14542,9 @@ if (currentUser.rol === 'ATTF') {
         searchSection.classList.remove('hidden');
     }
 
-    if (!tHoy || !tManana || tHoy === "null" || tManana === "null") {
+    // ✅ CASO 1: NO TIENE TURNO DE HOY = PASO 1
+    if (!tieneTurnoHoy) {
         console.log("⚠️ Faltan turnos. Cargando Paso 1...");
-        // Cambiamos a la función que SÍ dibuja los botones según tu archivo
         if (typeof generarInterfazTurnosPaso1 === 'function') {
             generarInterfazTurnosPaso1();
         } else if (typeof mostrarConfiguracionInicialATTF === 'function') {
@@ -14527,15 +14553,34 @@ if (currentUser.rol === 'ATTF') {
         return true;
     }
 
-    // ✅ CORREGIDO: Si ya tiene todo, mostrar menú de módulos (NO cargar mapa_rutas)
-    console.log("✅ Turnos detectados. Mostrando menú...");
-const tableSelection = document.getElementById('tableSelectionSection');
-if (tableSelection) {
-    tableSelection.style.display = 'block';
-}
-mostrarTablasSegunRol(); // ✅ AGREGAR ESTA LÍNEA
-return true; }
+    // ✅ CASO 2: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+    if (!tieneTurnoManana && !tieneDescanso) {
+        console.log("⚠️ Tiene turno de hoy pero falta configurar mañana.");
+        
+        const contadorTurnos = parseInt(datosBD.contador_turnos) || 0;
+        if (contadorTurnos >= 5) {
+            console.log('⚠️ Contador >= 5 - Forzando descanso');
+            mostrarForzarDescansoATTF();
+        } else {
+            console.log('➡️ Redirigiendo a Paso 2...');
+            const userDataParaSiguientePaso = {
+                turno_hoy: datosBD.turno_hoy,
+                contador_turnos: contadorTurnos
+            };
+            mostrarProgramarTurnoMañanaConDescanso(userDataParaSiguientePaso);
+        }
+        return true;
+    }
 
+    // ✅ CASO 3: TIENE TODO COMPLETO = MOSTRAR MENÚ
+    console.log("✅ Todos los pasos completados. Mostrando menú...");
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) {
+        tableSelection.style.display = 'block';
+    }
+    mostrarTablasSegunRol();
+    return true; 
+}
             // --- FLUJO PARA OTROS ROLES ---
             const menuTablas = document.getElementById('tableSelectionSection');
             if (menuTablas) menuTablas.style.display = 'block';
