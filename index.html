@@ -1621,21 +1621,26 @@ async function confirmarTurnoHoyATTF() {
         localStorage.setItem('fecha_turno_hoy', fechaHoyISO);
 
         console.log("✅ Turno de hoy guardado.");
-        console.log("📊 Verificando guardado en BD...");
+console.log("📊 Verificando guardado en BD...");
 
-        // Verificar que se guardó correctamente
-        const {  verificacion } = await supabaseClient
-            .from('usuarios')
-            .select('turno_hoy, fecha_turno_hoy')
-            .eq('id', currentUser.id)
-            .single();
+// ✅ VERIFICAR QUE SE GUARDÓ CORRECTAMENTE
+const {  verificacion } = await supabaseClient
+    .from('usuarios')
+    .select('turno_hoy, fecha_turno_hoy')
+    .eq('id', currentUser.id)
+    .single();
 
-        console.log("🔍 Datos guardados:", verificacion);
+if (errorVerif) {
+    console.error("❌ Error al verificar datos:", errorVerif);
+    throw errorVerif;
+}
 
-        // ✅ ACTUALIZAR currentUser LOCAL
-        currentUser.turno_hoy = verificacion.turno_hoy;
-        currentUser.fecha_turno_hoy = verificacion.fecha_turno_hoy;
-        console.log("🔄 currentUser actualizado:", currentUser.turno_hoy, currentUser.fecha_turno_hoy);
+console.log("🔍 Datos guardados:", verificacion);
+
+// ✅ ACTUALIZAR currentUser LOCAL
+currentUser.turno_hoy = verificacion.turno_hoy;
+currentUser.fecha_turno_hoy = verificacion.fecha_turno_hoy;
+console.log("🔄 currentUser actualizado:", currentUser.turno_hoy, currentUser.fecha_turno_hoy);
 
         // ✅ GUARDAR EN LOCALSTORAGE LA SESIÓN ACTUALIZADA
         localStorage.setItem('cleca_user_session', JSON.stringify({
