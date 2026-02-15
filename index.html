@@ -1595,8 +1595,14 @@ async function confirmarTurnoHoyATTF() {
         // Mostrar un pequeño indicador de carga si tienes uno, o cambiar el texto del botón
         console.log("⏳ Guardando turno de hoy en base de datos...");
 
-        const hoySV = getFechaElSalvador(); 
-        const fechaHoyISO = hoySV.toISOString().split('T')[0];
+        // ✅ CORRECTO - Usa fecha local directamente
+const ahora = new Date();
+const offset = ahora.getTimezoneOffset() * 60000; // UTC-6 = -360 minutos
+const fechaElSalvador = new Date(ahora.getTime() - offset);
+const fechaHoyISO = fechaElSalvador.toISOString().split('T')[0];
+
+console.log("📅 Fecha calculada:", fechaHoyISO);
+console.log("🕐 Hora actual SV:", fechaElSalvador.getHours());
 
         // ✅ GUARDAR EN BD CON MANEJO DE ERRORES
         const { error } = await supabaseClient
