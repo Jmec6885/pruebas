@@ -1456,23 +1456,23 @@ async function loginATTF(userData) {
     return;
   }
 
-  // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
-console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+   // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+  console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
+  console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
 
-const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-console.log('🔢 Contador de turnos:', contadorTurnos);
+  const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+  console.log('🔢 Contador de turnos:', contadorTurnos);
 
-if (contadorTurnos >= 5) {
-    console.log('⚠️ Contador >= 5 - Forzando descanso');
-    mostrarForzarDescansoATTF();
-    return; // ✅ AGREGADO: Detener ejecución inmediatamente
-} else {
-    console.log('➡️ Redirigiendo a Paso 2...');
-    mostrarProgramarTurnoMañanaConDescanso(userData);
-    return; // ✅ AGREGADO: Detener ejecución inmediatamente
-}
-
+  if (contadorTurnos >= 5) {
+      console.log('⚠️ Contador >= 5 - Forzando descanso');
+      mostrarForzarDescansoATTF();
+      return; // ✅ AGREGADO: Detener ejecución inmediatamente
+  } else {
+      console.log('➡️ Redirigiendo a Paso 2...');
+      mostrarProgramarTurnoMañanaConDescanso(userData);
+      return; // ✅ AGREGADO: Detener ejecución inmediatamente
+  }
+} // ✅ ¡CORREGIDO! Cierre definitivo de loginATTF
 
 function calcularDiasSinActividad(ultimaActividad) {
   if (!ultimaActividad) {
