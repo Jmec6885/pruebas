@@ -14401,12 +14401,12 @@ if (currentUser.rol === 'ATTF') {
 
     // ✅ CORREGIDO: Si ya tiene todo, mostrar menú de módulos (NO cargar mapa_rutas)
     console.log("✅ Turnos detectados. Mostrando menú...");
-    const tableSelection = document.getElementById('tableSelectionSection');
-    if (tableSelection) {
-        tableSelection.style.display = 'block';
-    }
-    return true; 
+const tableSelection = document.getElementById('tableSelectionSection');
+if (tableSelection) {
+    tableSelection.style.display = 'block';
 }
+mostrarTablasSegunRol(); // ✅ AGREGAR ESTA LÍNEA
+return true; }
 
             // --- FLUJO PARA OTROS ROLES ---
             const menuTablas = document.getElementById('tableSelectionSection');
