@@ -3436,19 +3436,21 @@ async function renovarSesion() {
             document.getElementById('currentUser').textContent = `${currentUser.usuario} (${currentUser.rol})`;
 
             if (currentUser.rol === 'ATTF') {
-                const searchSection = document.getElementById('searchSection');
-                searchSection.style.display = 'block';
+    const searchSection = document.getElementById('searchSection');
+    searchSection.style.display = 'block';
 
-                if (!localStorage.getItem('turnos_configurados')) {
-                    console.log("📋 Cargando selector de turnos...");
-                    generarInterfazTurnosPaso1();
-                } else {
-                    console.log("🗺️ Cargando mapa directamente...");
-                    seleccionarTabla('mapa_rutas');
-                }
-            } else {
-                document.getElementById('tableSelectionSection').style.display = 'block';
-            }
+    if (!localStorage.getItem('turnos_configurados')) {
+        console.log("📋 Cargando selector de turnos...");
+        generarInterfazTurnosPaso1();
+    } else {
+        console.log("✅ Turnos configurados. Mostrando menú...");
+        // ✅ NO cargar mapa_rutas para ATTF
+        document.getElementById('tableSelectionSection').style.display = 'block';
+    }
+} else {
+    // ✅ Mantener esto para otros roles
+    document.getElementById('tableSelectionSection').style.display = 'block';
+}
         }
 
     } catch (err) {
@@ -14422,17 +14424,16 @@ function verificarDatosOffline() {
  */
 const PERMISOS_MODULOS = {
     'cargar_asignaciones': ['Administrador', 'Despacho'],
-    'mapa_rutas':          ['Administrador', 'Despacho'], // Solo estos dos según tu instrucción
+    'mapa_rutas':          ['Administrador', 'Despacho'],
     'usuarios':            ['Administrador'],
     'detalle_os':          ['Administrador', 'Supervisor'],
     'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'],
-    'kml_rutas':           ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
-    'os_pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
-    'os_cerradas':         ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'kml_ruta':            ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
+    'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura'],
-    'tx_cortes':           ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'] // Agregado Tx y Cortes
+    'TX y Cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']  // ✅ Corregido
 };
-
 /**
  * Selecciona y valida el acceso a las tablas/módulos
  */
@@ -14443,12 +14444,14 @@ const PERMISOS_MODULOS = {
 function seleccionarTabla(tableName) {
     renovarSesion();
     const rolActual = currentUser.rol;
-    
+
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
 
-    // 1. VALIDACIÓN DE PERMISOS DINÁMICA (Tu código original)
-    const rolesPermitidos = PERMISOS_MODULOS[tableName];
     
+
+    // 1. VALIDACIÓN DE PERMISOS DINÁMICA
+    const rolesPermitidos = PERMISOS_MODULOS[tableName];
+
     if (!rolesPermitidos) {
         console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
     } else if (!rolesPermitidos.includes(rolActual)) {
@@ -14459,20 +14462,21 @@ function seleccionarTabla(tableName) {
     // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
         case 'cargar_asignaciones':
-            // ✅ PRIMERO: Ocultamos el menú y mostramos la sección de búsqueda
-            document.getElementById('tableSelectionSection').style.display = 'none';
-            document.getElementById('searchSection').style.display = 'block';
+            // ✅ Ocultar menú y mostrar sección de búsqueda
+            const tableSel = document.getElementById('tableSelectionSection');
+            const searchSec = document.getElementById('searchSection');
             
-            // ✅ SEGUNDO: Limpiamos el grid antes de inyectar la interfaz de carga
-            document.getElementById('searchGrid').innerHTML = '';
+            if (tableSel) tableSel.style.display = 'none';
+            if (searchSec) searchSec.style.display = 'block';
             
-            // ✅ TERCERO: Cargamos la interfaz de archivos
+            // ✅ Limpiar grid antes de inyectar interfaz
+            const searchGrid = document.getElementById('searchGrid');
+            if (searchGrid) searchGrid.innerHTML = '';
+            
+            // ✅ Cargar interfaz de archivos
             cargarInterfazAsignaciones();
-            
-            // 🚩 CRÍTICO: Usamos 'return' para evitar que el Punto 3 (abajo) 
-            // genere campos de búsqueda y borre lo que acabamos de hacer.
-            return; 
-            
+            return;
+
         case 'mapa_rutas':
             console.log("📍 Inicializando Mapa de Rutas...");
             break;
@@ -14482,11 +14486,23 @@ function seleccionarTabla(tableName) {
     const config = tableConfigs[tableName];
     if (config) {
         selectedTable = tableName;
-        document.getElementById('searchTitle').innerHTML = `${config.icon} ${config.title}`;
-        generarCamposBusqueda(config);
         
-        document.getElementById('tableSelectionSection').style.display = 'none';
-        document.getElementById('searchSection').style.display = 'block';
+        // ✅ VERIFICAR QUE EL ELEMENTO EXISTA ANTES DE ACCEDER
+        const searchTitle = document.getElementById('searchTitle');
+        if (searchTitle) {
+            searchTitle.innerHTML = `${config.icon} ${config.title}`;
+        } else {
+            console.warn('⚠️ Elemento searchTitle no encontrado en el DOM');
+        }
+        
+        generarCamposBusqueda(config);
+
+        const tableSelection = document.getElementById('tableSelectionSection');
+        const searchSection = document.getElementById('searchSection');
+        
+        if (tableSelection) tableSelection.style.display = 'none';
+        if (searchSection) searchSection.style.display = 'block';
+        
     } else {
         console.error("❌ Error: Configuración visual no encontrada para", tableName);
         alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
