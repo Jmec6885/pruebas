@@ -1623,8 +1623,8 @@ async function confirmarTurnoHoyATTF() {
         console.log("✅ Turno de hoy guardado.");
 console.log("📊 Verificando guardado en BD...");
 
-// ✅ VERIFICAR QUE SE GUARDÓ CORRECTAMENTE
-const {  verificacion } = await supabaseClient
+// ✅ CORREGIDO: Desestructuración correcta de respuesta Supabase
+const { data: verificacion, error: errorVerif } = await supabaseClient
     .from('usuarios')
     .select('turno_hoy, fecha_turno_hoy')
     .eq('id', currentUser.id)
@@ -1641,7 +1641,6 @@ console.log("🔍 Datos guardados:", verificacion);
 currentUser.turno_hoy = verificacion.turno_hoy;
 currentUser.fecha_turno_hoy = verificacion.fecha_turno_hoy;
 console.log("🔄 currentUser actualizado:", currentUser.turno_hoy, currentUser.fecha_turno_hoy);
-
         // ✅ GUARDAR EN LOCALSTORAGE LA SESIÓN ACTUALIZADA
         localStorage.setItem('cleca_user_session', JSON.stringify({
             user: currentUser,
