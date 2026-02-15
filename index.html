@@ -2252,6 +2252,19 @@ setTimeout(() => {
             }
         });
     }, 1000);
+
+
+setTimeout(() => {
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        console.log('🔍 searchSection estado:', {
+            display: searchSection.style.display,
+            classList: Array.from(searchSection.classList),
+            offsetHeight: searchSection.offsetHeight,
+            offsetWidth: searchSection.offsetWidth
+        });
+    }
+}, 1000);
 }
 
 
@@ -14627,13 +14640,20 @@ console.trace(`🔍 Intento de acceso a: ${tableName}`);
         const searchSection = document.getElementById('searchSection');
         
         if (tableSelection) tableSelection.style.display = 'none';
-        if (searchSection) searchSection.style.display = 'block';
+        if (searchSection) {
+            searchSection.style.display = 'block';
+            searchSection.classList.remove('hidden');
+            console.log('✅ searchSection visible:', searchSection.style.display);
+        } else {
+            console.error('❌ searchSection no encontrado en el DOM');
+        }
         
     } else {
         console.error("❌ Error: Configuración visual no encontrada para", tableName);
         alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
     }
 }
+
 
 // ==========================================================
 // 🚀 INICIALIZACIÓN Y EVENTOS
