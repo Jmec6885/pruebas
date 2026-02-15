@@ -1503,8 +1503,7 @@ function mostrarConfiguracionInicialATTF() {
     const tableSelection = document.getElementById('tableSelectionSection');
     if (tableSelection) tableSelection.style.display = 'none';
     
-    );
-    console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy");
+    console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy"); // ✅ Línea corregida
     const ahora = new Date();
     const horaActual = ahora.getHours();
     
