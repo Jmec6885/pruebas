@@ -2230,7 +2230,15 @@ if (tableSelection) {
 
     } catch (error) {
         console.error('❌ Error crítico al renderizar el menú:', error);
+
     }
+
+
+// ✅ FORZAR CARGA COMPLETA DEL DOM
+setTimeout(() => {
+    console.log('✅ DOM completamente cargado y listo');
+}, 500);
+
 
     // ✅ DEBUG: Verificar elementos visibles (FUERA del try-catch)
     setTimeout(() => {
@@ -3610,68 +3618,103 @@ async function logout() {
 
 
    function generarCamposBusqueda(config) {
-  renovarSesion(); 
-  const searchGrid = document.getElementById('searchGrid');
-
-  // --- Mantenemos tus casos especiales intactos ---
-  if (selectedTable === 'usuarios') {
-    searchGrid.innerHTML = `
-      <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
-        <div class="form-group" style="margin: 0;">
-          <label>Buscar Usuario:</label>
-          <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
-        </div>
-        <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
-      </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-        <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
-          ➕ Crear Nuevo Usuario
-        </button>
-        <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-          📤 Actualización Masiva
-        </button>
-      </div>
-    `;
-    return;
-  }
-
-  if (selectedTable === 'kml_ruta') { cargarInterfazKMLRuta(); return; }
-  if (selectedTable === 'detalle_os') { cargarInterfazDetalleOS(); return; }
-  if (selectedTable === 'retiro_medidores') { cargarInterfazIPR(); return; }
-  if (selectedTable === 'mapa_rutas') { cargarInterfazMapaRutas(); return; }
-
-  // ✅ CORRECCIÓN PARA CASO NORMAL (OS Pendientes, Cerradas, etc.)
-  // 1. Envolvemos todo en el contenedor "search-grid" que definimos en el CSS
-  let html = '<div class="search-grid">'; 
-
-  config.fields.forEach(field => {
-    // 🚫 Filtro de seguridad que ya tenías
-    if (
-      field.key === 'NombreCliente' &&
-      selectedTable === 'consultas_servicios' &&
-      !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
-    ) {
-      return; 
+    console.log('📝 Generando campos de búsqueda para:', selectedTable);
+    
+    // ✅ ELIMINADO: renovarSesion() - Interfiere con la carga
+    
+    const searchGrid = document.getElementById('searchGrid');
+    
+    // ✅ VALIDACIÓN: Verificar que el elemento exista
+    if (!searchGrid) {
+        console.error('❌ Error: searchGrid no encontrado en el DOM');
+        alert('Error: La interfaz de búsqueda no está disponible. Por favor recargue la página.');
+        return;
     }
+    
+    try {
+        // --- Mantenemos tus casos especiales intactos ---
+        if (selectedTable === 'usuarios') {
+            searchGrid.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
+                    <div class="form-group" style="margin: 0;">
+                        <label>Buscar Usuario:</label>
+                        <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
+                    </div>
+                    <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                    <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                        ➕ Crear Nuevo Usuario
+                    </button>
+                    <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        📤 Actualización Masiva
+                    </button>
+                </div>
+            `;
+            console.log('✅ Campos de búsqueda generados para: usuarios');
+            return;
+        }
 
-    // Determinar si es "Nombre Cliente" para que ocupe toda la fila
-    const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
+        if (selectedTable === 'kml_ruta') { 
+            console.log('✅ Cargando interfaz KML Ruta');
+            cargarInterfazKMLRuta(); 
+            return; 
+        }
+        
+        if (selectedTable === 'detalle_os') { 
+            console.log('✅ Cargando interfaz Detalle OS');
+            cargarInterfazDetalleOS(); 
+            return; 
+        }
+        
+        if (selectedTable === 'retiro_medidores') { 
+            console.log('✅ Cargando interfaz IPR');
+            cargarInterfazIPR(); 
+            return; 
+        }
+        
+        if (selectedTable === 'mapa_rutas') { 
+            console.log('✅ Cargando interfaz Mapa de Rutas');
+            cargarInterfazMapaRutas(); 
+            return; 
+        }
 
-    // ✅ Estructura nueva: cada campo es un "search-group"
-    html += `
-      <div class="search-group ${esNombre}">
-        <label>${field.label}:</label>
-        <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label}">
-        <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
-      </div>
-    `;
-  });
+        // ✅ CORRECCIÓN PARA CASO NORMAL (OS Pendientes, Cerradas, etc.)
+        console.log('📝 Generando campos estándar para:', selectedTable);
+        
+        let html = '<div class="search-grid">'; 
 
-  html += '</div>'; // Cerramos el search-grid
-  searchGrid.innerHTML = html;
+        config.fields.forEach(field => {
+            // 🚫 Filtro de seguridad que ya tenías
+            if (
+                field.key === 'NombreCliente' &&
+                selectedTable === 'consultas_servicios' &&
+                !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+            ) {
+                return; 
+            }
+
+            const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
+
+            html += `
+                <div class="search-group ${esNombre}">
+                    <label>${field.label}:</label>
+                    <input type="text" id="search${field.key}" placeholder="Ingrese ${field.label}">
+                    <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        searchGrid.innerHTML = html;
+        console.log('✅ Campos de búsqueda generados correctamente');
+        
+    } catch (error) {
+        console.error('❌ Error al generar campos de búsqueda:', error);
+        alert('Error al generar la interfaz de búsqueda: ' + error.message);
+        searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
+    }
 }
-
-
 
 
     function volverATablas() {
@@ -14525,7 +14568,12 @@ console.trace(`🔍 Intento de acceso a: ${tableName}`);
 
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
 
-    
+     // ✅ NUEVO: Esperar a que el DOM esté listo
+    if (!document.getElementById('searchGrid')) {
+        console.warn('⚠️ searchGrid no está listo, esperando...');
+        setTimeout(() => seleccionarTabla(tableName), 100);
+        return;
+    }
 
     // 1. VALIDACIÓN DE PERMISOS DINÁMICA
     const rolesPermitidos = PERMISOS_MODULOS[tableName];
