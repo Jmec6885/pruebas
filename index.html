@@ -5542,7 +5542,7 @@ console.log("⏳ Iniciando descarga por lotes de 'OS Pendientes'...");
 while (hayMas) {
 const { data: lote, error: errorLote } = await supabaseClient
 .from('OS Pendientes')
-.select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, ComentarioGeneral, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
+.select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
 .range(r_inicio, r_fin);
 
             if (errorLote) throw errorLote;
