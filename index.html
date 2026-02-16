@@ -471,7 +471,7 @@
             </div>
         </div>
 
-        <div class="admin-section" id="adminSection">
+                <div class="admin-section" id="adminSection">
             <div class="card">
                 <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
                 <div class="header">
@@ -488,8 +488,12 @@
                 </div>
             </div>
         </div>
-    </div>
 
+        <!-- ✅ CONTENEDOR DEDICADO PARA CONFIGURACIÓN DE TURNOS (ATTF) - DENTRO DEL .container -->
+        <div id="configuracionInicialATTF" class="search-section" style="display: none;"></div>
+    </div> <!-- ✅ CIERRE ÚNICO Y CORRECTO DEL .container -->
+
+    <!-- ✅ Modal de gráficas SIN modificaciones -->
     <div id="chartsModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="cerrarGraficas()">×</span>
@@ -511,8 +515,6 @@
         </div>
     </div>
 </body>
-
-
 
 <script>
     // --- 1. DEFINICIÓN DE VARIABLES GLOBALES (Usar solo 'let', una vez) ---
@@ -1529,9 +1531,14 @@ function mostrarConfiguracionInicialATTF() {
         return;
     }
     
-    // ✅ CORRECCIÓN CRÍTICA: Cambiar loginSection por el contenedor de configuración
-    const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-    const loginSection = document.getElementById('loginSection');
+   const targetSection = document.getElementById('configuracionInicialATTF');
+if (!targetSection) {
+    console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
+    alert("Error de interfaz: Falta el elemento de configuración. Contacte al administrador.");
+    logout();
+    return;
+}
+const loginSection = document.getElementById('loginSection'); 
 
     if (targetSection) {
         // 1. Ocultamos el login definitivamente
@@ -2049,7 +2056,13 @@ function getFechaLocalISO(fechaObjeto) {
     });
     
     // ✅ CORRECCIÓN: Usar el contenedor de configuración, NO el loginSection
-    const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+    const targetSection = document.getElementById('configuracionInicialATTF');
+if (!targetSection) {
+    console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
+    alert("Error de interfaz: Falta el elemento de configuración. Contacte al administrador.");
+    logout();
+    return;
+}
     
     if (targetSection) {
         // Aseguramos visibilidad
@@ -2101,7 +2114,13 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
     window.turnoMañanaSeleccionado = turnoManana;
     
     // ✅ CORRECCIÓN: Usar el contenedor de configuración, NO el loginSection
-    const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+    const targetSection = document.getElementById('configuracionInicialATTF');
+if (!targetSection) {
+    console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
+    alert("Error de interfaz: Falta el elemento de configuración. Contacte al administrador.");
+    logout();
+    return;
+}
     
     if (targetSection) {
         // Aseguramos que sea visible
@@ -2155,6 +2174,31 @@ function accederMenuATTF() {
     if (configSection && configSection.style.display === 'block') {
         console.warn('⚠️ CONFIGURACIÓN ACTIVA - Bloqueando acceso al menú');
         return; // ✅ SALIR INMEDIATAMENTE SIN MOSTRAR MENÚ
+    }
+
+ // ✅ NUEVO: Verificar y restaurar searchGrid si fue destruido
+    const searchGrid = document.getElementById('searchGrid');
+    if (!searchGrid) {
+        console.warn('⚠️ searchGrid destruido durante configuración. Restaurando...');
+        const searchSection = document.getElementById('searchSection');
+        if (searchSection) {
+            // Restaurar estructura mínima requerida
+            searchSection.innerHTML = `
+                <div class="card">
+                    <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
+                    <div class="header">
+                        <h2 id="searchTitle">Consultar Información</h2>
+                    </div>
+                    <div class="search-grid" id="searchGrid"></div>
+                    <div id="searchResults"></div>
+                </div>
+            `;
+            console.log('✅ searchGrid restaurado exitosamente');
+        } else {
+            console.error('❌ searchSection no existe. Imposible restaurar interfaz');
+            alert('Error crítico: Interfaz de búsqueda dañada. Recargue la página.');
+            return;
+        }
     }
 
     // ✅ RECUPERAR DATOS DE BD SI LOCALSTORAGE ESTÁ VACÍO
@@ -2294,7 +2338,13 @@ function mostrarForzarDescansoATTF() {
     
     console.log("🛠️ Forzando descanso obligatorio");
     // 1. Buscamos los contenedores
-    const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+    const targetSection = document.getElementById('configuracionInicialATTF');
+if (!targetSection) {
+    console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
+    alert("Error de interfaz: Falta el elemento de configuración. Contacte al administrador.");
+    logout();
+    return;
+}
     const menuPrincipal = document.getElementById('menuModulosATTF') || document.querySelector('.main-menu-container');
 
     if (!targetSection) {
@@ -14557,42 +14607,62 @@ const PERMISOS_MODULOS = {
 
 /**
  * Selecciona y valida el acceso a las tablas/módulos
- * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración
+ * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración + Verificación robusta de contenedores
  */
 function seleccionarTabla(tableName, retryCount = 0) {
-    // ✅ BLOQUEO INMEDIATO: Si está en configuración de turnos (ATTF), NO permitir acceso
-    if (currentUser?.rol === 'ATTF') {
-        const configSection = document.getElementById('configuracionInicialATTF');
-        if (configSection && configSection.style.display !== 'none' && configSection.style.display !== '') {
+    // ✅ BLOQUEO CRÍTICO 1: Verificar existencia del contenedor de configuración (evita fallback destructivo)
+    const configContainer = document.getElementById('configuracionInicialATTF');
+    if (currentUser?.rol === 'ATTF' && !configContainer) {
+        console.error('❌ CONTENEDOR CRÍTICO NO ENCONTRADO: #configuracionInicialATTF');
+        alert('⚠️ Error de interfaz: Falta el contenedor de configuración. Contacte al administrador.');
+        return;
+    }
+
+    // ✅ BLOQUEO CRÍTICO 2: Si está en configuración de turnos (ATTF), BLOQUEAR acceso a módulos
+    if (currentUser?.rol === 'ATTF' && configContainer) {
+        const esVisible = configContainer.style.display !== 'none' && 
+                         configContainer.style.display !== '' &&
+                         configContainer.offsetHeight > 0; // ✅ Verificación física adicional
+        
+        if (esVisible) {
+            console.warn('⚠️ ACCESO BLOQUEADO: Configuración de turnos activa');
             alert('⚠️ Debe completar la configuración de turnos antes de acceder a los módulos.');
             return;
         }
     }
 
-    // ✅ LÍMITE DE INTENTOS: Máximo 10 intentos (1 segundo total)
-    if (!document.getElementById('searchGrid')) {
+    // ✅ BLOQUEO CRÍTICO 3: Verificar existencia de searchGrid ANTES de intentar usarlo
+    const searchGrid = document.getElementById('searchGrid');
+    if (!searchGrid) {
         if (retryCount < 10) {
-            console.warn(`⚠️ searchGrid no está listo (intento ${retryCount + 1}/10), esperando...`);
+            console.warn(`⚠️ searchGrid no está listo (intento ${retryCount + 1}/10), reintentando...`);
             setTimeout(() => seleccionarTabla(tableName, retryCount + 1), 100);
             return;
         } else {
-            console.error('❌ searchGrid no disponible después de 10 intentos');
-            alert('Error: La interfaz no está lista. Complete la configuración de turnos o recargue la página.');
+            // ✅ ÚLTIMA LÍNEA DE DEFENSA: Verificar si searchSection existe pero está vacío
+            const searchSection = document.getElementById('searchSection');
+            if (searchSection && searchSection.innerHTML.trim() === '') {
+                console.error('❌ searchSection está vacío. Posible destrucción por fallback de configuración.');
+                alert('❌ Error crítico: Interfaz dañada. Recargue la página o contacte al administrador.');
+            } else {
+                console.error('❌ searchGrid no disponible después de 10 intentos');
+                alert('Error: La interfaz no está lista. Complete la configuración de turnos o recargue la página.');
+            }
             return;
         }
     }
 
+    // ✅ FLUJO NORMAL: Continuar con validaciones y carga
     renovarSesion();
-    const rolActual = currentUser.rol;
-
-    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser.usuario} (Rol: ${rolActual})`);
+    const rolActual = currentUser?.rol || 'Invitado';
+    console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser?.usuario} (Rol: ${rolActual})`);
 
     // 1. VALIDACIÓN DE PERMISOS DINÁMICA
     const rolesPermitidos = PERMISOS_MODULOS[tableName];
     if (!rolesPermitidos) {
         console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
     } else if (!rolesPermitidos.includes(rolActual)) {
-        alert(`⚠️ Acceso Denegado: Su rol de '${rolActual}' no tiene permisos para el módulo ${tableName.replace('_', ' ').toUpperCase()}.`);
+        alert(`⚠️ Acceso Denegado: Su rol '${rolActual}' no tiene permisos para ${tableName.replace('_', ' ').toUpperCase()}.`);
         return;
     }
 
@@ -14602,8 +14672,10 @@ function seleccionarTabla(tableName, retryCount = 0) {
             const tableSel = document.getElementById('tableSelectionSection');
             const searchSec = document.getElementById('searchSection');
             if (tableSel) tableSel.style.display = 'none';
-            if (searchSec) searchSec.style.display = 'block';
-            const searchGrid = document.getElementById('searchGrid');
+            if (searchSec) {
+                searchSec.style.display = 'block';
+                searchSec.classList.remove('hidden');
+            }
             if (searchGrid) searchGrid.innerHTML = '';
             cargarInterfazAsignaciones();
             return;
@@ -14614,35 +14686,34 @@ function seleccionarTabla(tableName, retryCount = 0) {
 
     // 3. ACTUALIZAR INTERFAZ VISUAL
     const config = tableConfigs[tableName];
-    if (config) {
-        selectedTable = tableName;
-        
-        const searchTitle = document.getElementById('searchTitle');
-        if (searchTitle) {
-            searchTitle.innerHTML = `${config.icon} ${config.title}`;
-        } else {
-            console.warn('⚠️ Elemento searchTitle no encontrado en el DOM');
-        }
-        
-        generarCamposBusqueda(config);
+    if (!config) {
+        console.error("❌ Configuración no encontrada para:", tableName);
+        alert("Error: Módulo sin configuración visual. Contacte al administrador.");
+        return;
+    }
 
-        const tableSelection = document.getElementById('tableSelectionSection');
-        const searchSection = document.getElementById('searchSection');
-        
-        if (tableSelection) tableSelection.style.display = 'none';
-        if (searchSection) {
-            searchSection.style.display = 'block';
-            searchSection.classList.remove('hidden');
-            console.log('✅ searchSection visible');
-        } else {
-            console.error('❌ searchSection no encontrado en el DOM');
-        }
-    } else {
-        console.error("❌ Error: Configuración visual no encontrada para", tableName);
-        alert("Error de configuración: El módulo existe pero no tiene diseño asignado.");
+    selectedTable = tableName;
+    
+    // Actualizar título
+    const searchTitle = document.getElementById('searchTitle');
+    if (searchTitle) {
+        searchTitle.innerHTML = `${config.icon} ${config.title}`;
+    }
+
+    // ✅ GENERAR CAMPOS (con validación interna mejorada)
+    generarCamposBusqueda(config);
+
+    // Mostrar sección de búsqueda y ocultar menú
+    const tableSelection = document.getElementById('tableSelectionSection');
+    const searchSection = document.getElementById('searchSection');
+    
+    if (tableSelection) tableSelection.style.display = 'none';
+    if (searchSection) {
+        searchSection.style.display = 'block';
+        searchSection.classList.remove('hidden');
+        console.log('✅ searchSection visible y activo');
     }
 }
-
 
 // ==========================================================
 // 🚀 INICIALIZACIÓN Y EVENTOS
