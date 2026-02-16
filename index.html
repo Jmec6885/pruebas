@@ -10181,6 +10181,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         const osAsignadasSet = new Set(osAsignadasBD?.map(a => String(a.osatomo).trim()) || []);
         console.log(`✅ ${osAsignadasSet.size} OS bloqueadas por estar asignadas.`);
 
+
         // 4. CARGAR OS PENDIENTES (Paginado)
         let todasOSRegistradas = [];
         let offset = 0;
@@ -10197,6 +10198,75 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             if (data.length < BATCH_SIZE) break;
             offset += BATCH_SIZE;
         }
+
+// ========================================
+// ✅ 🆕 PASO NUEVO: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
+// ========================================
+console.log('📝 ==========================================');
+console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
+console.log('📝 ==========================================');
+
+// Extraer medidores únicos de todas las OS
+const medidoresUnicos = [...new Set(todasOSRegistradas
+    .map(os => os.Medidor)
+    .filter(m => m && String(m).trim() !== ''))];
+
+const cuentasUnicas = [...new Set(todasOSRegistradas
+    .map(os => os.CuentaContrato)
+    .filter(c => c && String(c).trim() !== ''))];
+
+console.log(`🔍 Buscando comentarios para ${medidoresUnicos.length} medidores únicos`);
+
+// Mapa para almacenar comentarios por Medidor
+const comentariosPorMedidor = new Map();
+
+// Consultar comentarios en lotes de 100 medidores
+const BATCH_MEDIDORES = 100;
+for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
+    const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
+    
+    const { data: comentariosData, error: errorComentarios } = await supabaseClient
+        .from('consultas_servicios')
+        .select('Medidor, CuentaContrato, ComentarioGeneral')
+        .in('Medidor', batchMedidores);
+    
+    if (!errorComentarios && comentariosData) {
+        comentariosData.forEach(item => {
+            if (item.Medidor) {
+                comentariosPorMedidor.set(String(item.Medidor).trim(), {
+                    ComentarioGeneral: item.ComentarioGeneral || '',
+                    CuentaContrato: item.CuentaContrato
+                });
+            }
+        });
+        console.log(`✅ Lote ${i/BATCH_MEDIDORES + 1}: ${comentariosData.length} comentarios encontrados`);
+    }
+    
+    // Pequeña pausa para no saturar
+    await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
+console.log('📝 ==========================================');
+
+// ========================================
+// ✅ INYECTAR COMENTARIOS EN LAS OS
+// ========================================
+todasOSRegistradas.forEach(os => {
+    const medidorKey = String(os.Medidor).trim();
+    const comentarioData = comentariosPorMedidor.get(medidorKey);
+    
+    if (comentarioData) {
+        // ✅ INYECTAR ComentarioGeneral desde consulta_servicios
+        os.Comentario = comentarioData.ComentarioGeneral;
+        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+        console.log(`💬 OS ${os.OSATMO}: Comentario inyectado (${comentarioData.ComentarioGeneral?.length || 0} caracteres)`);
+    } else {
+        os.Comentario = 'Sin comentario disponible';
+        os.ComentarioGeneral = 'Sin comentario disponible';
+    }
+});
+
 
         // 5. 🔍 PROCESAMIENTO Y FILTRADO INICIAL (Radio y Estado)
         const osFinalesParaFiltrar = []; 
