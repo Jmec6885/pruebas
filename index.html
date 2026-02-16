@@ -1344,39 +1344,80 @@ async function loginATTF(userData) {
   console.log('🕐 Hora actual:', horaActual);
   
   // ✅ ROLL FORWARD: Si ayer configuró "mañana", hoy es "hoy"
-  if (userData.turno_manana && 
-      userData.turno_manana !== "null" && 
-      userData.turno_manana !== "descanso" &&
-      !userData.fecha_turno_hoy) {
-      
-      console.log('🔄 Roll forward: Verificando si turno_manana de ayer es hoy...');
-      
-      // Calcular fecha de "mañana" de ayer = hoy
-      const ayer = new Date(getFechaElSalvador());
-      ayer.setDate(ayer.getDate() - 1);
-      const fechaAyerManana = ayer.toISOString().split('T')[0];
-      
-      // Si coincide con hoy, autoasignar
-      if (fechaAyerManana === fechaHoy) {
-          console.log('🔄 Roll forward: Convirtiendo turno_manana en turno_hoy');
-          userData.turno_hoy = userData.turno_manana;
-          userData.fecha_turno_hoy = fechaHoy;
-          
-          // Guardar en BD
-          try {
-              await supabaseClient
-                  .from('usuarios')
-                  .update({ 
-                      turno_hoy: userData.turno_hoy,
-                      fecha_turno_hoy: fechaHoy
-                  })
-                  .eq('id', userData.id);
-              console.log('✅ Turno actualizado en BD por roll forward');
-          } catch (err) {
-              console.error('⚠️ Error en roll forward:', err);
-          }
-      }
-  }
+  // ✅ ROLL FORWARD CORREGIDO: Si "mañana" configurado ayer ES HOY, promoverlo + limpiar
+console.log('🔍 ==========================================');
+console.log('🔍 VALIDACIÓN DE ROLL FORWARD (PROMOCIÓN DE TURNO)');
+console.log('🔍 Fecha hoy (SV):', fechaHoy);
+console.log('🔍 fecha_turno_manana en BD:', userData.fecha_turno_manana);
+console.log('🔍 turno_manana en BD:', userData.turno_manana);
+console.log('🔍 turno_hoy actual en BD:', userData.turno_hoy);
+console.log('🔍 fecha_turno_hoy actual en BD:', userData.fecha_turno_hoy);
+console.log('🔍 ==========================================');
+
+// 🎯 CONDICIÓN CLAVE: ¿El "mañana" programado AYER es HOY?
+if (userData.fecha_turno_manana === fechaHoy) {
+    console.log('✅ 🟢 ROLL FORWARD ACTIVADO: fecha_turno_manana COINCIDE con HOY');
+    console.log(`   📅 fecha_turno_manana: ${userData.fecha_turno_manana} === HOY: ${fechaHoy}`);
+    console.log(`   🔄 turno_manana a promover: ${userData.turno_manana}`);
+    
+    // 🛡️ Validaciones de seguridad antes de promover
+    const esDescanso = userData.turno_manana === 'descanso';
+    const esInvalido = !userData.turno_manana || 
+                      userData.turno_manana === 'null' || 
+                      userData.turno_manana === '';
+    
+    if (esDescanso) {
+        console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es "descanso" (manejado por verificarDiaDescanso)');
+    } else if (esInvalido) {
+        console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es nulo/vacío');
+    } else {
+        // ✅ PROMOVER "MAÑANA" A "HOY"
+        console.log('🔄 PROMOVIENDO turno_manana a turno_hoy...');
+        userData.turno_hoy = userData.turno_manana;
+        userData.fecha_turno_hoy = fechaHoy;
+        
+        // 🧹 LIMPIAR CAMPOS DE "MAÑANA" (¡CRÍTICO!)
+        // Esto hará que el sistema pida SOLO el turno de mañana (no de hoy)
+        try {
+            console.log('💾 Guardando promoción en BD...');
+            const { error } = await supabaseClient
+                .from('usuarios')
+                .update({ 
+                    turno_hoy: userData.turno_hoy,
+                    fecha_turno_hoy: fechaHoy,
+                    turno_manana: null,          // ← LIMPIAR para que pida SOLO mañana
+                    fecha_turno_manana: null,    // ← LIMPIAR para que pida SOLO mañana
+                    contador_turnos: userData.contador_turnos // Mantener contador
+                })
+                .eq('id', userData.id);
+            
+            if (error) throw error;
+            console.log('✅ 🎯 ROLL FORWARD EXITOSO: turno_manana promovido a HOY y campos de mañana LIMPIADOS');
+            console.log(`   ✅ Nuevo turno_hoy: ${userData.turno_hoy} (${fechaHoy})`);
+            console.log(`   ✅ Campos turno_manana y fecha_turno_manana BORRADOS (listos para nuevo Paso 2)`);
+        } catch (err) {
+            console.error('❌ ⚠️ Error guardando roll forward:', err);
+            alert('⚠️ Error al actualizar turno. Por favor contacte al administrador.');
+        }
+    }
+} else {
+    console.log('❌ 🔴 ROLL FORWARD NO APLICABLE: fecha_turno_manana no coincide con HOY');
+    if (userData.fecha_turno_manana) {
+        console.log(`   📅 fecha_turno_manana: ${userData.fecha_turno_manana} ≠ HOY: ${fechaHoy}`);
+    } else {
+        console.log('   📅 fecha_turno_manana NO ESTÁ DEFINIDA en la base de datos');
+    }
+}
+
+// 📊 LOG POST-ROLL FORWARD (ESTADO ACTUALIZADO)
+console.log('📊 ==========================================');
+console.log('📊 ESTADO TRAS ROLL FORWARD:');
+console.log('📊 turno_hoy:', userData.turno_hoy);
+console.log('📊 fecha_turno_hoy:', userData.fecha_turno_hoy);
+console.log('📊 turno_manana:', userData.turno_manana);
+console.log('📊 fecha_turno_manana:', userData.fecha_turno_manana);
+console.log('📊 contador_turnos:', userData.contador_turnos);
+console.log('📊 ==========================================');
   
   // ✅ ACTUALIZAR última_actividad al hacer login
   try {
