@@ -11919,7 +11919,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 
 
  	// ========================================
-// 📋 MOSTRAR DETALLE DE OS EN PANEL INFERIOR (VERSIÓN CORREGIDA)
+// 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
     const panelDetalle = document.getElementById('panelDetalleOS');
@@ -11930,11 +11930,25 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
     }
 
     // ========================================
+    // 🕵️ LOGS DE DEBUG - VER QUÉ DATOS RECIBIMOS
+    // ========================================
+    console.log('🔍 ==========================================');
+    console.log('🔍 MOSTRAR DETALLE OS - DATOS RECIBIDOS');
+    console.log('🔍 ==========================================');
+    console.log('📋 OS:', os.OSATMO || os.osatomo || 'SIN ID');
+    console.log('📊 labelEstado:', labelEstado);
+    console.log('💬 os.Comentario:', os.Comentario);
+    console.log('💬 os.ComentarioGeneral:', os.ComentarioGeneral);
+    console.log('💬 os.comentario:', os.comentario);
+    console.log('💬 os.Observaciones:', os.Observaciones);
+    console.log('📊 Todos los campos disponibles:', Object.keys(os));
+    console.log('🔍 ==========================================');
+    // ========================================
     // ✅ 🆕 BUSCAR COMENTARIO EN MÚLTIPLES CAMPOS
     // ========================================
     const comentarioTexto = 
         os.Comentario || 
-        os.ComentarioGeneral || 
+        os.ComentarioGeneral ||      // ← Campo de Consulta Suministro
         os.comentario || 
         os.comentarioGeneral || 
         os.Observaciones || 
@@ -11955,6 +11969,7 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
         TieneComentarioGeneral: !!os.ComentarioGeneral,
         TieneObservaciones: !!os.Observaciones,
         ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO',
+        LongitudComentario: comentarioTexto.length,
         TodosLosCamposDisponibles: Object.keys(os).filter(k => 
             k.toLowerCase().includes('coment') || 
             k.toLowerCase().includes('observ') ||
@@ -12025,6 +12040,7 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
                     ${os.Tipo_de_OS ? `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${os.Tipo_de_OS}</div>` : ''}
                     ${os.Estado_ATOMO ? `<div><strong style="color: #2d3748;">🔄 Estado ATOMO:</strong> ${os.Estado_ATOMO}</div>` : ''}
                     ${os.Estado_SAP ? `<div><strong style="color: #2d3748;">🔄 Estado SAP:</strong> ${os.Estado_SAP}</div>` : ''}
+                    ${os.CuentaContrato ? `<div><strong style="color: #2d3748;">📄 Cuenta Contrato:</strong> ${os.CuentaContrato}</div>` : ''}
                 </div>
             </div>
 
@@ -12055,6 +12071,7 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
 
     console.log('✅ Detalle de OS mostrado:', os.OSATMO || os.osatomo);
 }
+
 
 
 // ========================================
