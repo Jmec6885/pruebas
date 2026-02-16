@@ -1356,29 +1356,21 @@ console.log('🔍 turno_hoy actual en BD:', userData.turno_hoy);
 console.log('🔍 fecha_turno_hoy actual en BD:', userData.fecha_turno_hoy);
 console.log('🔍 ==========================================');
 
-// ✅ CORRECCIÓN DE INTEGRIDAD DE DATOS: Si turno_hoy existe pero fecha es NULL, INFERIR fecha
+
 // ✅ CORRECCIÓN DE INTEGRIDAD DE DATOS: Si turno_hoy existe pero fecha es NULL, INFERIR fecha
 if (userData.turno_hoy && !userData.fecha_turno_hoy) {
     console.warn('⚠️ ALERTA DE INTEGRIDAD: fecha_turno_hoy es NULL pero turno_hoy existe. Corrigiendo...');
     
-    // 🌙 CASO ESPECIAL: Turno nocturno (turno3) con hora < 9 AM → Es de AYER
     if (userData.turno_hoy === 'turno3' && horaActual < 9) {
         const ayer = new Date(getFechaElSalvador());
         ayer.setDate(ayer.getDate() - 1);
         userData.fecha_turno_hoy = ayer.toISOString().split('T')[0];
         console.log(`✅ Corregido: turno3 activo desde AYER (${userData.fecha_turno_hoy})`);
-    } 
-    // 🌞 OTROS TURNOS: Usar HOY
-    else {
+    } else {
         userData.fecha_turno_hoy = fechaHoy;
         console.log(`✅ Corregido: fecha_turno_hoy establecida a HOY (${fechaHoy})`);
     }
     
-    // ✅ REEMPLAZAR POR ESTA FUNCIÓN SÍNCRONA EN FLUJO:
-if (userData.turno_hoy && !userData.fecha_turno_hoy) {
-    // ... [lógica de corrección de fecha] ...
-    
-    // ✅ ACTUALIZAR EN BD DE FORMA SÍNCRONA (dentro del flujo principal)
     try {
         await supabaseClient
             .from('usuarios')
@@ -1387,14 +1379,8 @@ if (userData.turno_hoy && !userData.fecha_turno_hoy) {
         console.log('✅ fecha_turno_hoy corregida en base de datos');
     } catch (err) {
         console.error('❌ Error corrigiendo fecha_turno_hoy:', err);
-        // ⚠️ NO DETENER EL FLUJO - continuar con fecha corregida en memoria
     }
-    
-    // ✅ LOG DE VERIFICACIÓN (mantener)
-    console.log('🔍 Verificación post-corrección...');
-}
-    
-    // ✅ LOG DE VERIFICACIÓN POST-CORRECCIÓN
+
     console.log('🔍 Verificación post-corrección de integridad:');
     console.log(`   • turno_hoy: ${userData.turno_hoy}`);
     console.log(`   • fecha_turno_hoy: ${userData.fecha_turno_hoy}`);
