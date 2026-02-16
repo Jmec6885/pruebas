@@ -5534,18 +5534,16 @@ async function cargarInterfazKMLRuta() {
         if (errorAsignadas) throw errorAsignadas;
 
         // 2️⃣ OBTENER EL UNIVERSO COMPLETO DE PENDIENTES (De mil en mil)
-        let todasLasPendientes = [];
-        let r_inicio = 0;
-        let r_fin = 999;
-        let hayMas = true;
-
-        console.log("⏳ Iniciando descarga por lotes de 'OS Pendientes'...");
-
-        while (hayMas) {
-            const { data: lote, error: errorLote } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen."')
-                .range(r_inicio, r_fin);
+let todasLasPendientes = [];
+let r_inicio = 0;
+let r_fin = 999;
+let hayMas = true;
+console.log("⏳ Iniciando descarga por lotes de 'OS Pendientes'...");
+while (hayMas) {
+const { data: lote, error: errorLote } = await supabaseClient
+.from('OS Pendientes')
+.select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')Estado_SAP, Direccion')
+.range(r_inicio, r_fin);
 
             if (errorLote) throw errorLote;
 
@@ -7265,19 +7263,17 @@ function generarMapaKMLConPuntoPartida(unidad) {
 // 🔄 MOSTRAR MAPA KML CON NUMERACIÓN (MEJORADO)
 // ========================================
 function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
-    console.log(`🎨 Renderizando mapa para ${unidad} con ${todosLosPuntos.length} puntos.`);
-
-    // 1️⃣ Preparar datos para Leaflet
-    const osCentro = todosLosPuntos[0]; // El punto de partida (Origen)
-    const osEnRadio = todosLosPuntos.slice(1); // El resto de la secuencia optimizada
-    
-    // Guardar para la función de descarga
-    window.datosRutaKML = todosLosPuntos;
-
-    // 2️⃣ Renderizar el mapa
-    // Nota: El radioKm se pone alto o se ignora en la lógica interna para mostrar todos los puntos
-    const radioVisual = 10; 
-    generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
+console.log(`🎨 Renderizando mapa para ${unidad} con ${todosLosPuntos.length} puntos.`);
+// 1️⃣ Preparar datos para Leaflet
+const osCentro = todosLosPuntos[0]; // El punto de partida (Origen)
+const osEnRadio = todosLosPuntos.slice(1); // El resto de la secuencia optimizada
+// Guardar para la función de descarga
+window.datosRutaKML = todosLosPuntos;
+// 2️⃣ Renderizar el mapa
+// Nota: El radioKm se pone alto o se ignora en la lógica interna para mostrar todos los puntos
+const radioVisual = 10;
+// ✅ PASAR DATOS COMPLETOS CON COMENTARIOS
+generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
 
     // 3️⃣ Gestionar el contenedor de resultados y botón de descarga
     const resultsContainer = document.getElementById('searchResults');
@@ -9778,7 +9774,7 @@ const comentariosPorMedidor = new Map();
 
 // Consultar comentarios en lotes de 100 medidores
 if (medidoresUnicos.length > 0) {
-    const BATCH_MEDIDORES = 100;
+    const BATCH_MEDIDORES = 1000;
     for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
         const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
         
@@ -10889,6 +10885,8 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
 
     window.datosMapaExportar = osValidadasParaMapa;
 }
+
+
 
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
     // ✅ Convertir a número y validar
