@@ -10570,50 +10570,96 @@ async function guardarFiltrosMapaGlobales() {
 // ========================================
 // 🗺️ GENERAR MAPA LEAFLET (VERSIÓN DINÁMICA CON CONTADORES CORREGIDOS)
 // ========================================
+// ========================================
+// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN COMPLETA CON AGRUPAMIENTO DE COORDENADAS)
+// ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     console.log('🗺️ ==========================================');
-    console.log('🗺️ GENERANDO MAPA LEAFLET');
+    console.log('🗺️ GENERANDO MAPA LEAFLET CON AGRUPAMIENTO');
     console.log('🗺️ OS recibidas:', osEnRadio?.length || 0);
     console.log('🗺️ ==========================================');
 
     const resultsContainer = document.getElementById('searchResults');
     const osValidadasParaMapa = osEnRadio || [];
 
-    // 📊 2. CÁLCULO DE TOTALES PARA BOTONES DE ESTADO (LÓGICA CORREGIDA)
+    // ========================================
+    // ✅ 🆕 AGRUPAR OS POR COORDENADAS EXACTAS (ANTES DE CONTAR)
+    // ========================================
+    console.log('📍 ==========================================');
+    console.log('📍 AGRUPANDO OS POR COORDENADAS ANTES DE MOSTRAR');
+    console.log('📍 ==========================================');
+
+    const coordenadasAgrupadas = {};
+    let totalOSProcesadas = 0;
+
+    osValidadasParaMapa.forEach((os, index) => {
+        // Saltar la OS centro si está en la lista
+        if (os.OSATMO === osCentro.OSATMO) {
+            return;
+        }
+
+        // Obtener coordenadas
+        const lat = parseFloat(os.Latitud || os.lat);
+        const lng = parseFloat(os.Longitud || os.lng);
+
+        if (isNaN(lat) || isNaN(lng)) {
+            console.warn(`⚠️ OS ${os.OSATMO} sin coordenadas válidas`);
+            return;
+        }
+
+        // Crear clave única para coordenadas (6 decimales para precisión)
+        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+
+        // Agrupar OS por coordenadas
+        if (!coordenadasAgrupadas[claveCoordenadas]) {
+            coordenadasAgrupadas[claveCoordenadas] = {
+                lat: lat,
+                lng: lng,
+                osList: []
+            };
+        }
+
+        coordenadasAgrupadas[claveCoordenadas].osList.push({
+            ...os,
+            numeroOrden: index + 1
+        });
+
+        totalOSProcesadas++;
+    });
+
+    console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
+    console.log(`📍 Total OS agrupadas: ${totalOSProcesadas}`);
+    console.log('📍 ==========================================');
+
+    // ========================================
+    // 📊 CÁLCULO DE TOTALES PARA BOTONES DE ESTADO (CON DATOS AGRUPADOS)
+    // ========================================
     const conteoEstados = {
-        centro: 0,
+        centro: 1,
         asignada: 0,
         regulada: 0,
         no_regulada: 0,
         deuda_alta: 0
     };
 
-    osValidadasParaMapa.forEach(os => {
-        const idActual = String(os.OSATMO || "").trim();
-        const idCentro = String(osCentro.OSATMO || "").trim();
+    Object.values(coordenadasAgrupadas).forEach(grupo => {
+        const primeraOS = grupo.osList[0];
+        const tipoBusqueda = (primeraOS.Tipo_de_OS || '').toUpperCase();
+        const deuda = parseFloat(primeraOS.Deuda) || 0;
+        const unidad = (primeraOS.Unidad || "").trim();
 
-        if (idActual === idCentro && idCentro !== "") {
-            conteoEstados.centro++;
+        const esRegulada = tipoBusqueda.includes('REGULADA') && !tipoBusqueda.includes('NO');
+        const esDeudaAlta = deuda >= 500;
+        const estaAsignada = (unidad !== "" && unidad !== "--------------------" && !unidad.includes("---"));
+
+        if (esRegulada) {
+            conteoEstados.regulada++;
+        } else if (esDeudaAlta) {
+            conteoEstados.deuda_alta++;
+        } else if (estaAsignada) {
+            conteoEstados.asignada++;
         } else {
-            // Normalizamos a Mayúsculas para la búsqueda interna (No afecta la base de datos)
-            const tipoBusqueda = (os.Tipo_de_OS || '').toUpperCase();
-            const deuda = parseFloat(os.Deuda) || 0;
-            const unidad = (os.Unidad || "").trim();
-            
-            // Verificamos estados
-            const esRegulada = tipoBusqueda.includes('REGULADA') && !tipoBusqueda.includes('NO');
-            const esDeudaAlta = deuda >= 500;
-            const estaAsignada = (unidad !== "" && unidad !== "--------------------" && !unidad.includes("---"));
-
-            if (esRegulada) {
-                conteoEstados.regulada++;
-            } else if (esDeudaAlta) {
-                conteoEstados.deuda_alta++;
-            } else if (estaAsignada) {
-                conteoEstados.asignada++;
-            } else {
-                conteoEstados.no_regulada++;
-            }
+            conteoEstados.no_regulada++;
         }
     });
 
@@ -10627,11 +10673,15 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         window.mapaLeafletInstance = null;
     }
 
-    // 3. Contar y Ordenar Tipologías
+    // ========================================
+    // 3. CONTAR Y ORDENAR TIPOLOGÍAS (CON DATOS AGRUPADOS)
+    // ========================================
     const conteoPorTipologia = {};
-    osValidadasParaMapa.forEach(os => {
-        const tip = os.Tipologia || 'Sin tipología';
-        conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
+    Object.values(coordenadasAgrupadas).forEach(grupo => {
+        grupo.osList.forEach(os => {
+            const tip = os.Tipologia || 'Sin tipología';
+            conteoPorTipologia[tip] = (conteoPorTipologia[tip] || 0) + 1;
+        });
     });
 
     console.log('📊 Conteo por estado:');
@@ -10642,15 +10692,31 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
 
     const radioActual = window.filtrosAplicados?.radio_km || radioKm || 3;
 
+    // ========================================
+    // 🆕 CALCULAR TOTAL DE MARCADORES (No OS, sino marcadores únicos)
+    // ========================================
+    const totalMarcadores = Object.keys(coordenadasAgrupadas).length;
+    const hayMultiplesPuntos = Object.values(coordenadasAgrupadas).some(g => g.osList.length > 1);
+
     // 4. Generar HTML con los contadores inyectados
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
             <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <span>🗺️ Mapa de Rutas - OS ${osCentro.OSATMO || osCentro.OS}</span>
                 <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">
-                    ${osValidadasParaMapa.length} órdenes visibles en ${radioActual} km
+                    ${totalMarcadores} puntos en mapa (${totalOSProcesadas} OS) en ${radioActual} km
                 </span>
             </div>
+
+            ${hayMultiplesPuntos ? `
+            <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                <strong style="color: #856404;">⚠️ Puntos Múltiples Detectados</strong>
+                <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
+                    Hay ${Object.values(coordenadasAgrupadas).filter(g => g.osList.length > 1).length} ubicación(es) con más de una OS. 
+                    Haz clic en los marcadores con indicador "+" para ver todas las órdenes.
+                </p>
+            </div>
+            ` : ''}
 
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
                 <strong style="display: block; margin-bottom: 10px; color: #1e40af;">Leyenda de Estados (Click para filtrar mapa):</strong>
@@ -10677,7 +10743,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                     </button>
                     
                     <button onclick="filtrarPorEstado('todas')" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px;">
-                        🔄 Ver Todas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${osValidadasParaMapa.length}</span>
+                        🔄 Ver Todas <span style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 4px; font-size: 11px;">${totalMarcadores}</span>
                     </button>
                 </div>
             </div>
@@ -10705,22 +10771,28 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
         </div>
     `;
 
-    // 5. Inicialización diferida
-   setTimeout(() => {
-    if (document.getElementById('mapaLeaflet')) {
-        try {
-            // CAMBIO AQUÍ: Asegúrate de pasar 'osValidadasParaMapa' 
-            // que ya viene con el .numeroOrden inyectado por la optimización
-            inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
-            
-            if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
-        } catch (error) {
-            console.error('❌ Error inicializando mapa:', error);
+    // ========================================
+    // 5. Inicialización diferida - PASANDO DATOS AGRUPADOS
+    // ========================================
+    setTimeout(() => {
+        if (document.getElementById('mapaLeaflet')) {
+            try {
+                // ✅ PASAMOS LOS DATOS AGRUPADOS A inicializarMapaLeaflet
+                inicializarMapaLeaflet(osCentro, coordenadasAgrupadas, latCentro, lngCentro, radioActual);
+                
+                if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
+            } catch (error) {
+                console.error('❌ Error inicializando mapa:', error);
+            }
         }
-    }
-}, 300);
+    }, 300);
+
+    // Guardar para exportación
     window.datosMapaExportar = osValidadasParaMapa;
+    window.coordenadasAgrupadasMapa = coordenadasAgrupadas;
 }
+
+
 
 function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
     // ✅ Convertir a número y validar
@@ -11264,40 +11336,38 @@ function ejecutarGuardiaNavegacion() {
 // ========================================
 // 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN COMPLETA SIN RECORTES + CORRECCIONES)
 // ========================================
+function // ========================================
+// 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN CORREGIDA CON AGRUPAMIENTO DE COORDENADAS)
+// ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     console.log('🗺️ ==========================================');
-    console.log('🗺️ INICIALIZANDO MAPA LEAFLET');
+    console.log('🗺️ INICIALIZANDO MAPA LEAFLET CON AGRUPAMIENTO');
     console.log('🗺️ ==========================================');
-    console.log('📊 OS Centro:', osCentro?.OSATMO);
-    console.log('📊 Total OS recibidas para mapa:', osEnRadio?.length || 0);
-    console.log('📊 Radio configurado:', radioKm, 'km');
-    console.log('🗺️ ==========================================');
-
+    
     const mapaDiv = document.getElementById('mapaLeaflet');
- 
     if (!mapaDiv) {
         console.error('❌ Div del mapa no encontrado');
         return;
     }
-
+    
     // Limpiar mapa anterior
     if (window.mapaLeafletInstance) {
         window.mapaLeafletInstance.remove();
     }
-
+    
     // Crear mapa
     const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
     window.mapaLeafletInstance = mapa;
-
+    
     // Capa de mapa
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(mapa);
-
+    
     // ========================================
     // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
     // ========================================
-     const circuloRadio = L.circle([latCentro, lngCentro], {
+    const circuloRadio = L.circle([latCentro, lngCentro], {
         radius: radioKm * 1000,
         color: '#3b82f6',
         weight: 3,
@@ -11313,9 +11383,8 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         </div>
     `)
     .openPopup();
-
     window.circuloRadio = circuloRadio;
-
+    
     // ========================================
     // ✅ MARCADOR "0" PARA PUNTO DE PARTIDA (VERDE)
     // ========================================
@@ -11338,50 +11407,68 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         iconSize: [50, 50],
         iconAnchor: [25, 50]
     });
-
+    
     const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoVerde })
-    .addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px;">
-            <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA (0)</strong><br>
-            <strong>OS:</strong> ${osCentro.OSATMO}<br>
-            <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
-        </div>
-    `)
-    .on('click', function() {
-        const osCentroCompleto = {
-            ...osCentro,
-            lat: latCentro,
-            lng: lngCentro,
-            distancia: 0,
-            esRegulada: false,
-            tieneDeudaAlta: false
-        };
- 
-        const tipoOS = (osCentroCompleto.Tipo_de_OS || '').toLowerCase();
-        const esRegulada = tipoOS.includes('regulad') && !tipoOS.includes('no');
-        const deuda = parseFloat(osCentroCompleto.Deuda) || 0;
-        let labelEstado;
- 
-        if (deuda > 500) {
-            labelEstado = 'DEUDA ALTA (>$500)';
-        } else if (deuda >= 100 && deuda <= 500) {
-            labelEstado = 'DEUDA MEDIA ($100-$500)';
-        } else if (deuda >= 50 && deuda < 100) {
-            labelEstado = 'DEUDA BAJA ($50-$100)';
-        } else if (osCentroCompleto.Estado_ATOMO === 'Asignada') {
-            labelEstado = 'OS ASIGNADA';
-        } else if (esRegulada) {
-            labelEstado = 'OS REGULADA';
-        } else {
-            labelEstado = 'OS NO REGULADA';
-        }
- 
-        mostrarDetalleOSEnPanel(osCentroCompleto, labelEstado);
-    });
-
+        .addTo(mapa)
+        .bindPopup(`
+            <div style="min-width: 200px;">
+                <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA (0)</strong><br>
+                <strong>OS:</strong> ${osCentro.OSATMO}<br>
+                <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
+            </div>
+        `)
+        .on('click', function() {
+            mostrarDetalleOSEnPanel(osCentro, 'OS DE REFERENCIA');
+        });
+    
     // ========================================
-    // ✅ INICIALIZAR AGRUPACIONES
+    // ✅ 🆕 AGRUPAR OS POR COORDENADAS EXACTAS
+    // ========================================
+    console.log('📍 ==========================================');
+    console.log('📍 AGRUPANDO OS POR COORDENADAS');
+    console.log('📍 Total OS a procesar:', osEnRadio.length);
+    console.log('📍 ==========================================');
+    
+    const coordenadasAgrupadas = {};
+    
+    osEnRadio.forEach((os, index) => {
+        // Saltar la OS centro si está en la lista
+        if (os.OSATMO === osCentro.OSATMO) {
+            return;
+        }
+        
+        // Obtener coordenadas
+        const lat = parseFloat(os.Latitud || os.lat);
+        const lng = parseFloat(os.Longitud || os.lng);
+        
+        if (isNaN(lat) || isNaN(lng)) {
+            console.warn(`⚠️ OS ${os.OSATMO} sin coordenadas válidas`);
+            return;
+        }
+        
+        // Crear clave única para coordenadas (6 decimales para precisión)
+        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        
+        // Agrupar OS por coordenadas
+        if (!coordenadasAgrupadas[claveCoordenadas]) {
+            coordenadasAgrupadas[claveCoordenadas] = {
+                lat: lat,
+                lng: lng,
+                osList: []
+            };
+        }
+        
+        coordenadasAgrupadas[claveCoordenadas].osList.push({
+            ...os,
+            numeroOrden: index + 1
+        });
+    });
+    
+    console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
+    console.log(`📍 OS agrupadas: ${osEnRadio.length - 1}`);
+    
+    // ========================================
+    // ✅ INICIALIZAR AGRUPACIONES PARA FILTROS
     // ========================================
     window.markersPorTipologia = {};
     window.markersPorEstado = {
@@ -11393,19 +11480,14 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         'deuda_media': [],
         'deuda_baja': []
     };
-
+    
     const bounds = L.latLngBounds();
     bounds.extend([latCentro, lngCentro]);
-
+    
     // ========================================
-    // ✅ CREAR MARCADORES NUMERADOS PARA EL RESTO
+    // ✅ CREAR MARCADORES CON AGRUPAMIENTO
     // ========================================
-    console.log('📍 ==========================================');
-    console.log('📍 PROCESANDO MARCADORES');
-    console.log('📍 Total OS a procesar:', osEnRadio.length);
-    console.log('📍 ==========================================');
-
-    let contadorProcesadas = 0, contadorSinCoords = 0, contadorDuplicadas = 0;
+    let contadorProcesadas = 0;
     let estadisticas = {
         reguladas: 0,
         no_reguladas: 0,
@@ -11414,65 +11496,55 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         deuda_baja: 0,
         asignadas: 0
     };
-
-    osEnRadio.forEach((os, index) => {
-        if (os.OSATMO === osCentro.OSATMO) {
-            contadorDuplicadas++;
-            return;
-        }
-
-        // --- CORRECCIÓN DE COORDENADAS (BUSCA AMBOS NOMBRES) ---
-        const lat = parseFloat(os.Latitud || os.lat);
-        const lng = parseFloat(os.Longitud || os.lng);
-
-        if (isNaN(lat) || isNaN(lng)) {
-            contadorSinCoords++;
-            return;
-        }
-
-        const tipoOS = (os.Tipo_de_OS || '').toLowerCase();
-        const esRegulada = (os.Condicion?.toUpperCase() === 'REGULADA') || (tipoOS.includes('regulad') && !tipoOS.includes('no'));
-        const deuda = parseFloat(os.Deuda) || 0;
- 
+    
+    Object.values(coordenadasAgrupadas).forEach(grupo => {
+        const { lat, lng, osList } = grupo;
+        const esMultiple = osList.length > 1;
+        
+        // Determinar estado y color del marcador principal
+        const primeraOS = osList[0];
+        const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
+        const deuda = parseFloat(primeraOS.Deuda) || 0;
         let colorFondo, labelEstado, estadoKey;
- 
+        
         if (deuda > 500) {
-            colorFondo = '#fdd835'; // Amarillo
-            labelEstado = 'DEUDA ALTA (>$500)';
+            colorFondo = '#fdd835';
+            labelEstado = 'DEUDA ALTA';
             estadoKey = 'deuda_alta';
         } else if (deuda >= 100 && deuda <= 500) {
-            colorFondo = '#ff9800'; // Naranja
-            labelEstado = 'DEUDA MEDIA ($100-$500)';
+            colorFondo = '#ff9800';
+            labelEstado = 'DEUDA MEDIA';
             estadoKey = 'deuda_media';
         } else if (deuda >= 50 && deuda < 100) {
-            colorFondo = '#f48fb1'; // Rosado
-            labelEstado = 'DEUDA BAJA ($50-$100)';
+            colorFondo = '#f48fb1';
+            labelEstado = 'DEUDA BAJA';
             estadoKey = 'deuda_baja';
-        } else if (os.Estado_ATOMO === 'Asignada' || os.Estado_SAP === 'ASIGNADA') {
-            colorFondo = '#ff9800'; // Naranja
+        } else if (primeraOS.Estado_ATOMO === 'Asignada' || primeraOS.Estado_SAP === 'ASIGNADA') {
+            colorFondo = '#ff9800';
             labelEstado = 'OS ASIGNADA';
             estadoKey = 'asignada';
-        } else if (esRegulada) {
-            colorFondo = '#f44336'; // Rojo
+        } else if (tipoOS.includes('regulad') && !tipoOS.includes('no')) {
+            colorFondo = '#f44336';
             labelEstado = 'OS REGULADA';
             estadoKey = 'regulada';
         } else {
-            colorFondo = '#2196f3'; // Azul
+            colorFondo = '#2196f3';
             labelEstado = 'OS NO REGULADA';
             estadoKey = 'no_regulada';
         }
-
-        // 📊 Contabilizar
+        
+        // Contabilizar estadísticas
         contadorProcesadas++;
-        estadisticas[estadoKey]++;
-
+        estadisticas[estadoKey] += osList.length;
+        
+        // Crear icono con indicador de múltiple si aplica
         const iconoConNumero = L.divIcon({
             className: 'custom-marker',
             html: `
                 <div style="
                     background-color: ${colorFondo};
-                    width: 32px;
-                    height: 32px;
+                    width: ${esMultiple ? '40px' : '32px'};
+                    height: ${esMultiple ? '40px' : '32px'};
                     border-radius: 50% 50% 50% 0;
                     transform: rotate(-45deg);
                     display: flex;
@@ -11480,80 +11552,163 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                     justify-content: center;
                     border: 2px solid white;
                     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    position: relative;
                 ">
                     <span style="
-                        transform: rotate(45deg); 
-                        color: white; 
-                        font-weight: bold; 
-                        font-size: 13px;
-                    ">${os.numeroOrden || index + 1}</span>
+                        transform: rotate(45deg);
+                        color: white;
+                        font-weight: bold;
+                        font-size: ${esMultiple ? '16px' : '13px'};
+                    ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
+                    ${esMultiple ? '<div style="position:absolute;top:-5px;right:-5px;background:#ff5722;color:white;border-radius:50%;width:20px;height:20px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid white;">' + osList.length + '</div>' : ''}
                 </div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 32] // Punto inferior de la gota
+            iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
+            iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32]
         });
-
-        // ✅ CREAR MARCADOR USANDO EL NUEVO ICONO
-        const marker = L.marker([lat, lng], { icon: iconoConNumero })
-            .addTo(mapa)
-            .bindPopup(`
-                <div style="min-width: 250px;">
-                    <strong style="color: ${colorFondo};">#${os.numeroOrden || index + 1} - ${labelEstado}</strong><br>
+        
+        // ========================================
+        // ✅ 🆕 CREAR POPUP CON LISTA DE TODAS LAS OS
+        // ========================================
+        let popupContent = `
+            <div style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px;">
+                    📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
+                </strong>
+        `;
+        
+        if (esMultiple) {
+            // Mostrar lista de todas las OS en este punto
+            osList.forEach((os, idx) => {
+                const osDeuda = parseFloat(os.Deuda) || 0;
+                const osTipo = (os.Tipo_de_OS || '').toLowerCase();
+                let osColor = '#2196f3';
+                
+                if (osDeuda > 500) osColor = '#fdd835';
+                else if (osDeuda >= 100) osColor = '#ff9800';
+                else if (osDeuda >= 50) osColor = '#f48fb1';
+                else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
+                else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
+                
+                popupContent += `
+                    <div style="
+                        background: #f8f9fa;
+                        padding: 10px;
+                        margin-bottom: 8px;
+                        border-radius: 6px;
+                        border-left: 4px solid ${osColor};
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    " onclick="seleccionarOSDeLista('${os.OSATMO}', ${os.lat}, ${os.lng})"
+                       onmouseover="this.style.background='#e3f2fd'"
+                       onmouseout="this.style.background='#f8f9fa'">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO}</strong>
+                            <span style="background: ${osColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${os.Tipo_de_OS || 'Normal'}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; line-height: 1.4;">
+                            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                            ${osDeuda > 0 ? `<strong>Deuda:</strong> $${osDeuda.toFixed(2)}<br>` : ''}
+                            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                            <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
+                        </div>
+                        <button onclick="event.stopPropagation(); mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
+                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px;">
+                            📋 Ver Detalle Completo
+                        </button>
+                    </div>
+                `;
+            });
+        } else {
+            // Popup normal para OS única
+            const os = osList[0];
+            popupContent += `
+                <div style="margin-bottom: 10px;">
                     <strong>OS:</strong> ${os.OSATMO}<br>
                     <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
                     ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
                     ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                    <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                            style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-                        📋 Ver Detalle Completo
-                    </button>
                 </div>
-            `);
-
+                <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
+                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                    📋 Ver Detalle Completo
+                </button>
+            `;
+        }
+        
+        popupContent += `</div>`;
+        
+        // Crear marcador con popup
+        const marker = L.marker([lat, lng], { icon: iconoConNumero })
+            .addTo(mapa)
+            .bindPopup(popupContent);
+        
         window.markersPorEstado[estadoKey].push(marker);
         bounds.extend([lat, lng]);
-
-        const tip = os.Tipologia || 'Sin tipología';
+        
+        // Agrupar por tipología
+        const tip = primeraOS.Tipologia || 'Sin tipología';
         if (!window.markersPorTipologia[tip]) {
             window.markersPorTipologia[tip] = [];
         }
         window.markersPorTipologia[tip].push(marker);
     });
-
+    
+    // ========================================
     // 📊 LOG FINAL DE MARCADORES
+    // ========================================
     console.log('📍 ==========================================');
     console.log('📍 RESUMEN DE MARCADORES CREADOS');
     console.log('📍 ==========================================');
     console.table({
         'Total procesadas': contadorProcesadas,
-        'Sin coordenadas': contadorSinCoords,
-        'Duplicadas (centro)': contadorDuplicadas,
-        'Marcadores creados': contadorProcesadas - contadorSinCoords
+        'Marcadores creados': Object.keys(coordenadasAgrupadas).length
     });
-    
-    console.log('\n📊 DISTRIBUCIÓN POR ESTADO:');
+    console.log('📊 DISTRIBUCIÓN POR ESTADO:');
     console.table(estadisticas);
-    
-    console.log('\n📊 VERIFICACIÓN DE AGRUPACIONES:');
-    console.table({
-        'Centro': window.markersPorEstado.centro.length,
-        'Asignadas': window.markersPorEstado.asignada.length,
-        'Reguladas': window.markersPorEstado.regulada.length,
-        'No Reguladas': window.markersPorEstado.no_regulada.length,
-        'Deuda Alta': window.markersPorEstado.deuda_alta.length,
-        'Deuda Media': window.markersPorEstado.deuda_media.length,
-        'Deuda Baja': window.markersPorEstado.deuda_baja.length
-    });
     console.log('📍 ==========================================');
-
+    
     if (bounds.isValid()) {
         mapa.fitBounds(bounds, { padding: [50, 50] });
     }
-
+    
     L.control.scale().addTo(mapa);
-
-    console.log(`✅ Mapa inicializado con ${osEnRadio.length} marcadores.`);
+    console.log(`✅ Mapa inicializado con ${Object.keys(coordenadasAgrupadas).length} marcadores.`);
 }
 
+
+
+// ========================================
+// 🆕 FUNCIÓN: SELECCIONAR OS DE LISTA EN POPUP MÚLTIPLE
+// ========================================
+function seleccionarOSDeLista(osatomo, lat, lng) {
+    console.log(`📍 Seleccionando OS: ${osatomo}`);
+    
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa) {
+        console.error('❌ Mapa no inicializado');
+        return;
+    }
+    
+    // Centrar mapa en la OS seleccionada
+    mapa.setView([lat, lng], 17, {
+        animate: true,
+        duration: 0.5
+    });
+    
+    // Buscar y abrir popup del marcador específico
+    if (window.markersPorEstado) {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                const popup = marker.getPopup();
+                if (popup && popup.getContent().includes(osatomo)) {
+                    marker.openPopup();
+                }
+            });
+        });
+    }
+    
+    console.log(`✅ OS ${osatomo} seleccionada y mapa centrado`);
+}
 
 
  	// ========================================
