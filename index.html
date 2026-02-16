@@ -4784,67 +4784,7 @@ async function guardarNuevoUsuario() {
     `;
 }
 
- 	// ========================================
-// 📤 MOSTRAR INTERFAZ ACTUALIZACIÓN MASIVA
-// ========================================
-function mostrarActualizacionMasiva() {
-    const resultsContainer = document.getElementById('searchResults');
- 
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #e8eaf6; border: 2px solid #5c6bc0;">
-            <div class="result-header">📤 Actualización Masiva de Consulta Suministros</div>
- 
-            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
-                <strong>⚠️ Importante:</strong><br>
-                • Solo para rol <strong>Administrador</strong><br>
-                • Actualiza registros existentes (no crea nuevos)<br>
-                • Proceso irreversible
-            </div>
- 
-            <div style="max-width: 700px; margin: 0 auto;">
- 
-                <div class="form-group">
-                    <label style="font-size: 16px; font-weight: 600; color: #2d3748;">
-                        🎯 Seleccionar Tipo de Actualización:
-                    </label>
-                    <select id="tipoActualizacion" onchange="mostrarInstruccionesArchivo()"
-                            style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                        <option value="">-- Seleccione una opción --</option>
-                        <option value="medidor\_comentario">Actualizar Medidor + Comentario General</option>
-                        <option value="nombre\_cuenta">Actualizar Nombre Cliente + Cuenta Contrato</option>
-                        <option value="grafica">Actualizar Gráfica</option>
-                    </select>
-                </div>
- 
-                <div id="instruccionesArchivo" style="display: none; background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #2196f3;">
-                    <!-- Se llena dinámicamente -->
-                </div>
- 
-                <div class="form-group">
-                    <label style="font-size: 16px; font-weight: 600; color: #2d3748;">
-                        📁 Subir Archivo:
-                    </label>
-                    <input type="file" id="archivoActualizacion" accept=".xlsx,.xls,.csv"
-                           style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 14px;">
-                    <small style="color: #666; display: block; margin-top: 5px;">
-                        Formatos aceptados: Excel (.xlsx, .xls) o CSV
-                    </small>
-                </div>
- 
-                <div class="action-buttons" style="margin-top: 25px;">
-                    <button class="btn btn-secondary" onclick="procesarActualizacionMasiva()"
-                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        ⚡ Procesar Actualización
-                    </button>
-                    <button class="btn btn-danger" onclick="document.getElementById('searchResults').innerHTML = ''">
-                        ✕ Cancelar
-                    </button>
-                </div>
- 
-            </div>
-        </div>
-    `;
-}
+ 	
 
 
  	// ========================================
@@ -11254,6 +11194,7 @@ function ejecutarGuardiaNavegacion() {
 }
 
 
+
 // 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN CORREGIDA CON AGRUPAMIENTO INTERNO)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
@@ -11978,100 +11919,143 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 
 
  	// ========================================
-// 📋 MOSTRAR DETALLE DE OS EN PANEL INFERIOR
+// 📋 MOSTRAR DETALLE DE OS EN PANEL INFERIOR (VERSIÓN CORREGIDA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
-    const panelDetalle = document.getElementById('panelDetalleOS');
- 
-    if (!panelDetalle) {
-        console.error('❌ Panel de detalle no encontrado');
-        return;
-    }
- 
-    // Formatear comentario
-    const comentarioFormateado = os.Comentario
-        ? formatearComentario(os.Comentario)
-        : '<em style="color: #999;">Sin comentario</em>';
- 
-    // Determinar color según estado
-    let colorFondo, colorBorde;
-    const deuda = parseFloat(os.Deuda) || 0;
- 
-    if (deuda > 500) {
-        colorFondo = '#fffde7';
-        colorBorde = '#fdd835';
-    } else if (deuda >= 100 && deuda <= 500) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
-    } else if (deuda >= 50 && deuda < 100) {
-        colorFondo = '#fce4ec';
-        colorBorde = '#f48fb1';
-    } else if (labelEstado.includes('ASIGNADA')) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
-    } else if (labelEstado.includes('REGULADA')) {
-        colorFondo = '#ffebee';
-        colorBorde = '#f44336';
-    } else if (labelEstado.includes('TU OS')) {
-        colorFondo = '#e8f5e9';
-        colorBorde = '#4caf50';
-    } else {
-        colorFondo = '#e3f2fd';
-        colorBorde = '#2196f3';
-    }
- 
-    panelDetalle.innerHTML = `
-        <div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
- 
-            <!-- Encabezado con botón cerrar -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
-                <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
-                    ${labelEstado}
-                </strong>
-                <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
-                    ✕ Cerrar
-                </button>
-            </div>
- 
-            <!-- Información principal -->
-            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                <div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">
-                    <div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${os.OSATMO || 'N/A'}</span></div>
-                    <div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${os.Tipologia || 'N/A'}</div>
-                    ${os.Deuda && parseFloat(os.Deuda) > 0 ? `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">$${parseFloat(os.Deuda).toFixed(2)}</span></div>` : ''}
-                    ${os.distancia ? `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${os.distancia} km</span></div>` : ''}
-                    <div><strong style="color: #2d3748;">📍 Unidad:</strong> ${os.Unidad || 'N/A'}</div>
-                    ${os.Medidor ? `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
-                </div>
-            </div>
- 
-            <!-- Comentario (colapsable en móviles) -->
-            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">
-                <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
-                <div style="max-height: 150px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6;">
-                    ${comentarioFormateado}
-                </div>
-            </div>
- 
-            <!-- Botón Google Maps -->
-            <div style="text-align: center;">
-                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat},${os.lng}"
-                   target="_blank"
-                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-                          color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none;
-                          font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">
-                    🗺️ Navegar en Google Maps
-                </a>
-            </div>
- 
-        </div>
-    `;
- 
-    // Hacer scroll suave hacia el panel
-    panelDetalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
- 
-    console.log('✅ Detalle de OS mostrado:', os.OSATMO);
+    const panelDetalle = document.getElementById('panelDetalleOS');
+
+    if (!panelDetalle) {
+        console.error('❌ Panel de detalle no encontrado');
+        return;
+    }
+
+    // ========================================
+    // ✅ 🆕 BUSCAR COMENTARIO EN MÚLTIPLES CAMPOS
+    // ========================================
+    const comentarioTexto = 
+        os.Comentario || 
+        os.ComentarioGeneral || 
+        os.comentario || 
+        os.comentarioGeneral || 
+        os.Observaciones || 
+        os.observaciones || 
+        os.Comentarios || 
+        os.comentarios ||
+        os.Detalle || 
+        os.detalle ||
+        os.descripcion ||
+        os.Descripcion ||
+        os.Nota ||
+        os.nota ||
+        '';
+
+    console.log('🔍 DEBUG COMENTARIO:', {
+        OS: os.OSATMO || os.osatomo,
+        TieneComentario: !!os.Comentario,
+        TieneComentarioGeneral: !!os.ComentarioGeneral,
+        TieneObservaciones: !!os.Observaciones,
+        ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO',
+        TodosLosCamposDisponibles: Object.keys(os).filter(k => 
+            k.toLowerCase().includes('coment') || 
+            k.toLowerCase().includes('observ') ||
+            k.toLowerCase().includes('nota') ||
+            k.toLowerCase().includes('detalle')
+        )
+    });
+
+    // Formatear comentario usando tu función existente
+    const comentarioFormateado = comentarioTexto && comentarioTexto.trim() !== '' && comentarioTexto !== 'Sin comentario' && comentarioTexto !== 'Sin Datos'
+        ? formatearComentario(comentarioTexto)
+        : '<em style="color: #999;">Sin comentario disponible</em>';
+
+    // ========================================
+    // DETERMINAR COLOR SEGÚN ESTADO
+    // ========================================
+    let colorFondo, colorBorde;
+    const deuda = parseFloat(os.Deuda) || 0;
+
+    if (deuda > 500) {
+        colorFondo = '#fffde7';
+        colorBorde = '#fdd835';
+    } else if (deuda >= 100 && deuda <= 500) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (deuda >= 50 && deuda < 100) {
+        colorFondo = '#fce4ec';
+        colorBorde = '#f48fb1';
+    } else if (labelEstado && labelEstado.includes('ASIGNADA')) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (labelEstado && labelEstado.includes('REGULADA')) {
+        colorFondo = '#ffebee';
+        colorBorde = '#f44336';
+    } else if (labelEstado && labelEstado.includes('TU OS')) {
+        colorFondo = '#e8f5e9';
+        colorBorde = '#4caf50';
+    } else {
+        colorFondo = '#e3f2fd';
+        colorBorde = '#2196f3';
+    }
+
+    // ========================================
+    // GENERAR HTML DEL PANEL
+    // ========================================
+    panelDetalle.innerHTML = `
+        <div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
+
+            <!-- Encabezado con botón cerrar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
+                <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
+                    ${labelEstado || 'DETALLE DE OS'}
+                </strong>
+                <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
+                    ✕ Cerrar
+                </button>
+            </div>
+
+            <!-- Información principal -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">
+                    <div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${os.OSATMO || os.osatomo || os.OSATOMO || 'N/A'}</span></div>
+                    <div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${os.Tipologia || os.tipologia || 'N/A'}</div>
+                    ${os.Deuda && parseFloat(os.Deuda) > 0 ? `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">$${parseFloat(os.Deuda).toFixed(2)}</span></div>` : ''}
+                    ${os.distancia ? `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${os.distancia} km</span></div>` : ''}
+                    <div><strong style="color: #2d3748;">📍 Unidad:</strong> ${os.Unidad || os.unidad || 'N/A'}</div>
+                    ${os.Medidor ? `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
+                    ${os.Tipo_de_OS ? `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${os.Tipo_de_OS}</div>` : ''}
+                    ${os.Estado_ATOMO ? `<div><strong style="color: #2d3748;">🔄 Estado ATOMO:</strong> ${os.Estado_ATOMO}</div>` : ''}
+                    ${os.Estado_SAP ? `<div><strong style="color: #2d3748;">🔄 Estado SAP:</strong> ${os.Estado_SAP}</div>` : ''}
+                </div>
+            </div>
+
+            <!-- Comentario (colapsable en móviles) -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">
+                <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
+                <div style="max-height: 200px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 6px;">
+                    ${comentarioFormateado}
+                </div>
+            </div>
+
+            <!-- Botón Google Maps -->
+            <div style="text-align: center;">
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat || os.Latitud},${os.lng || os.Longitud}"
+                   target="_blank"
+                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+                          color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none;
+                          font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">
+                    🗺️ Navegar en Google Maps
+                </a>
+            </div>
+
+        </div>
+    `;
+
+    // Hacer scroll suave hacia el panel
+    panelDetalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    console.log('✅ Detalle de OS mostrado:', os.OSATMO || os.osatomo);
 }
+
 
 // ========================================
 // ✕ CERRAR PANEL DE DETALLE
