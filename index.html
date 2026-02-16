@@ -1925,15 +1925,23 @@ function calcularFechaFin() {
 
 
 async function confirmarTurnoMananaATTF() {
+    console.log('🔍 ==========================================');
+    console.log('🔍 INICIANDO: confirmarTurnoMananaATTF');
+    console.log('🔍 Usuario:', currentUser?.usuario || 'NO DISPONIBLE');
+    console.log('🔍 ID Usuario:', currentUser?.id || 'NO DISPONIBLE');
+    console.log('🔍 ==========================================');
+
     // 1. Validaciones Iniciales
     const selectManana = document.getElementById('turnoManana');
     if (!selectManana) {
-        console.error("❌ No se encontró el elemento 'turnoManana'");
+        console.error('❌ [ERROR CRÍTICO] Elemento "turnoManana" NO ENCONTRADO en el DOM');
+        alert('⚠️ Error de interfaz: Recargue la página e intente nuevamente');
         return;
     }
 
     const turnoManana = selectManana.value;
     if (!turnoManana) {
+        console.warn('⚠️ [VALIDACIÓN] Turno de mañana no seleccionado');
         alert('Por favor seleccione el turno de mañana');
         return;
     }
@@ -1943,31 +1951,51 @@ async function confirmarTurnoMananaATTF() {
     const turnoHoy = window.turnoHoySeleccionado || (currentUser ? currentUser.turno_hoy : null);
 
     if (!turnoHoy) {
+        console.error('❌ [DATOS FALTANTES] Turno de hoy no detectado');
         alert("Error: No se detectó el turno de hoy. Reintente el paso 1.");
         return;
     }
 
+    console.log(`📊 Datos iniciales:`, {
+        turnoHoy,
+        fechaHoy,
+        turnoManana,
+        contadorActual: currentUser?.contador_turnos
+    });
+
     // --- CASO 1: TURNO NORMAL ---
     if (turnoManana !== 'descanso') {
+        console.log('✅ CASO 1: Guardando TURNO NORMAL (no descanso)');
+        
         const turno = TURNOS_ATTF[turnoManana];
-        if (!confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turno.nombre}?`)) return;
+        if (!confirm(`¿Confirmas que tu turno de MAÑANA será:\n\n${turno.nombre}?`)) {
+            console.log('ℹ️ Usuario canceló la confirmación');
+            return;
+        }
 
         const manana = new Date(ahora);
         manana.setDate(manana.getDate() + 1);
-        const fechaMananaStr = getFechaLocalISO(manana);
-
+        const fechaMananaStr = getFechaLocalISO(manana); // ✅ Formato limpio YYYY-MM-DD
         const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
         const nuevoContador = contadorActual + 1;
 
+        console.log('💾 Datos a guardar (TURNO NORMAL):', {
+            turno_hoy: turnoHoy,
+            fecha_turno_hoy: fechaHoy,
+            turno_manana: turnoManana,
+            fecha_turno_manana: fechaMananaStr, // ✅ CLAVE: Formato consistente
+            contador_turnos: nuevoContador
+        });
+
         try {
-            console.log("⏳ Guardando turno normal en Supabase...");
-            const { error } = await supabaseClient
+            console.log('⏳ Enviando UPDATE a Supabase...');
+            const { data, error } = await supabaseClient
                 .from('usuarios')
                 .update({
                     turno_hoy: turnoHoy,
                     fecha_turno_hoy: fechaHoy,
                     turno_manana: turnoManana,
-                    fecha_turno_manana: fechaMananaStr,
+                    fecha_turno_manana: fechaMananaStr, // ✅ CORREGIDO: Formato consistente
                     contador_turnos: nuevoContador,
                     estado_ciclo: 'ciclo_normal',
                     descanso_fecha_inicio: null,
@@ -1975,43 +2003,92 @@ async function confirmarTurnoMananaATTF() {
                     ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
                     ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
                 })
-                .eq('id', currentUser.id);
+                .eq('id', currentUser.id)
+                .select('turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana, contador_turnos');
 
-            if (error) throw error;
+            if (error) {
+                throw new Error(`Supabase: ${error.message} | Detalle: ${JSON.stringify(error)}`);
+            }
 
-            // Guardado Local exitoso
+            // ✅ SINCRONIZAR currentUser LOCAL (CRÍTICO PARA ROLL FORWARD)
+            if (data && data[0]) {
+                currentUser.turno_hoy = data[0].turno_hoy;
+                currentUser.fecha_turno_hoy = data[0].fecha_turno_hoy;
+                currentUser.turno_manana = data[0].turno_manana;
+                currentUser.fecha_turno_manana = data[0].fecha_turno_manana;
+                currentUser.contador_turnos = data[0].contador_turnos;
+                
+                console.log('✅ [ÉXITO] Datos sincronizados en currentUser:', {
+                    turno_manana: currentUser.turno_manana,
+                    fecha_turno_manana: currentUser.fecha_turno_manana,
+                    contador_turnos: currentUser.contador_turnos
+                });
+            }
+
+            // Guardado Local
             localStorage.setItem('turno_hoy', turnoHoy);
             localStorage.setItem('turno_manana', turnoManana);
+            localStorage.setItem('fecha_turno_manana', fechaMananaStr); // ✅ NUEVO: Guardar fecha en localStorage
 
-            // Limpieza visual y acceso
+            console.log('✅ [LOCALSTORAGE] Guardado exitoso');
             cerrarConfiguracionYEntrar();
 
         } catch (err) {
-            console.error('Error en Caso 1:', err);
-            alert('Error al guardar: ' + err.message);
+            console.error('❌ [ERROR CASO 1 - TURNO NORMAL]:', {
+                mensaje: err.message,
+                stack: err.stack,
+                timestamp: new Date().toISOString()
+            });
+            alert(`❌ Error al guardar turno:\n${err.message}\n\nVerifique la consola para detalles.`);
         }
 
     } 
     // --- CASO 2: DESCANSO ---
     else {
-        const fechaInicio = document.getElementById('fechaDescansoInicio')?.value;
-        const fechaFin = document.getElementById('fechaDescansoFin')?.value;
-        const turnoRegreso = document.getElementById('turnoRegreso')?.value;
+        console.log('✅ CASO 2: Guardando CONFIGURACIÓN DE DESCANSO');
+        
+        const fechaInicioInput = document.getElementById('fechaDescansoInicio');
+        const fechaFinInput = document.getElementById('fechaDescansoFin');
+        const turnoRegresoInput = document.getElementById('turnoRegreso');
+        
+        const fechaInicio = fechaInicioInput?.value;
+        const fechaFin = fechaFinInput?.value;
+        const turnoRegreso = turnoRegresoInput?.value;
+
+        console.log('📊 Datos de descanso capturados:', { fechaInicio, fechaFin, turnoRegreso });
 
         if (!fechaInicio || !fechaFin || !turnoRegreso) {
+            console.error('❌ [VALIDACIÓN] Campos incompletos:', { fechaInicio, fechaFin, turnoRegreso });
             alert('Por favor complete todos los campos del descanso');
             return;
         }
 
-        if (!confirm(`¿Confirmas tu configuración de descanso?\nInicio: ${fechaInicio}\nFin: ${fechaFin}`)) return;
+        if (!confirm(`¿Confirmas tu configuración de descanso?\nInicio: ${fechaInicio}\nFin: ${fechaFin}`)) {
+            console.log('ℹ️ Usuario canceló la confirmación de descanso');
+            return;
+        }
 
+        // ✅ CORREGIDO: Usar getFechaLocalISO para formato consistente YYYY-MM-DD
         const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
         const fechaRegresoStr = getFechaLocalISO(fechaRegresoDate);
+        const fechaTurnoMananaStr = getFechaLocalISO(new Date(fechaInicio + 'T00:00:00')); // ✅ CLAVE: Formato limpio
+
+        console.log('💾 Datos a guardar (DESCANSO):', {
+            turno_hoy: turnoHoy,
+            fecha_turno_hoy: fechaHoy,
+            descanso_fecha_inicio: fechaInicio,
+            descanso_fecha_fin: fechaFin,
+            turno_regreso: turnoRegreso,
+            fecha_turno_regreso: fechaRegresoStr,
+            turno_manana: 'descanso',
+            fecha_turno_manana: fechaTurnoMananaStr, // ✅ CORREGIDO: Formato consistente YYYY-MM-DD
+            contador_turnos: 0
+        });
 
         try {
-            console.log("⏳ Guardando configuración de descanso en Supabase...");
-            const { error } = await supabaseClient
+            console.log('⏳ Enviando UPDATE de DESCANSO a Supabase...');
+            const { data, error } = await supabaseClient
                 .from('usuarios')
                 .update({
                     turno_hoy: turnoHoy,
@@ -2020,44 +2097,84 @@ async function confirmarTurnoMananaATTF() {
                     descanso_fecha_fin: fechaFin,
                     turno_regreso: turnoRegreso,
                     fecha_turno_regreso: fechaRegresoStr,
-                    contador_turnos: 0, // El descanso reinicia el contador
+                    contador_turnos: 0,
                     estado_ciclo: 'ciclo_normal',
                     turno_manana: 'descanso',
-                    fecha_turno_manana: fechaInicio,
+                    fecha_turno_manana: fechaTurnoMananaStr, // ✅ CORREGIDO: Formato consistente
                     ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
                     ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
                 })
-                .eq('id', currentUser.id);
+                .eq('id', currentUser.id)
+                .select('turno_manana, fecha_turno_manana, descanso_fecha_inicio, contador_turnos');
 
-            if (error) throw error;
+            if (error) {
+                throw new Error(`Supabase: ${error.message} | Detalle: ${JSON.stringify(error)}`);
+            }
 
+            // ✅ SINCRONIZAR currentUser LOCAL (CRÍTICO PARA ROLL FORWARD)
+            if (data && data[0]) {
+                currentUser.turno_manana = data[0].turno_manana;
+                currentUser.fecha_turno_manana = data[0].fecha_turno_manana;
+                currentUser.descanso_fecha_inicio = data[0].descanso_fecha_inicio;
+                currentUser.contador_turnos = data[0].contador_turnos;
+                
+                console.log('✅ [ÉXITO] Datos de descanso sincronizados en currentUser:', {
+                    turno_manana: currentUser.turno_manana,
+                    fecha_turno_manana: currentUser.fecha_turno_manana,
+                    descanso_fecha_inicio: currentUser.descanso_fecha_inicio
+                });
+            }
+
+            // Guardado Local
             localStorage.setItem('turno_hoy', turnoHoy);
             localStorage.setItem('turno_manana', 'descanso');
+            localStorage.setItem('fecha_turno_manana', fechaTurnoMananaStr); // ✅ NUEVO: Guardar fecha en localStorage
+            localStorage.setItem('descanso_inicio', fechaInicio);
+            localStorage.setItem('descanso_fin', fechaFin);
 
+            console.log('✅ [LOCALSTORAGE] Datos de descanso guardados exitosamente');
             cerrarConfiguracionYEntrar();
 
         } catch (err) {
-            console.error('Error en Caso 2:', err);
-            alert('Error al guardar descanso: ' + err.message);
+            console.error('❌ [ERROR CASO 2 - DESCANSO]:', {
+                mensaje: err.message,
+                stack: err.stack,
+                timestamp: new Date().toISOString(),
+                datosIntentados: {
+                    fecha_turno_manana: fechaTurnoMananaStr,
+                    descanso_fecha_inicio: fechaInicio
+                }
+            });
+            alert(`❌ Error al guardar descanso:\n${err.message}\n\nVerifique la consola para detalles.`);
         }
     }
-} // <--- AQUÍ SE CIERRA LA FUNCIÓN
+    
+    console.log('🔍 ==========================================');
+    console.log('🔍 FINALIZADO: confirmarTurnoMananaATTF');
+    console.log('🔍 ==========================================');
+}
 
 /**
  * Función auxiliar para evitar repetir código de salida
  */
 function cerrarConfiguracionYEntrar() {
+    console.log('🚪 Cerrando configuración y accediendo al menú...');
     const configSec = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-    if (configSec) configSec.style.display = 'none';
+    if (configSec) {
+        configSec.style.display = 'none';
+        configSec.innerHTML = ''; // Limpiar contenido para evitar conflictos
+        console.log('✅ Contenedor de configuración limpiado y oculto');
+    }
     
     if (typeof accederMenuATTF === 'function') {
+        console.log('✅ Llamando a accederMenuATTF()');
         accederMenuATTF();
     } else {
+        console.warn('⚠️ accederMenuATTF no está definida. Recargando página...');
         console.log("✅ Configuración guardada. Refrescando para aplicar cambios...");
         location.reload();
     }
 }
-
 
 
 function getFechaLocalISO(fechaObjeto) {
