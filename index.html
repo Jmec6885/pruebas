@@ -9741,9 +9741,9 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         let offset = 0;
         const BATCH_SIZE = 1000;
         while (true) {
-            const { data, error } = await supabaseClient
+           const { data, error } = await supabaseClient
 .from('OS Pendientes')
-.select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato')
+.select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato, Estado_SAP, Direccion, Unicom')
                 .in('Estado_ATOMO', ['Registrada', 'Asignada'])
                 .range(offset, offset + BATCH_SIZE - 1);
             if (error || !data || data.length === 0) break;
@@ -10194,13 +10194,13 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
 
 
         // 4. CARGAR OS PENDIENTES (Paginado)
-        let todasOSRegistradas = [];
+         let todasOSRegistradas = [];
         let offset = 0;
         const BATCH_SIZE = 1000;
         while (true) {
             const { data, error } = await supabaseClient
                 .from('OS Pendientes')
-                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato, Estado_SAP, Direccion, Unicom, Rango, Dias, Condicion')
                 .in('Estado_ATOMO', ['Registrada', 'Asignada'])
                 .range(offset, offset + BATCH_SIZE - 1);
             
