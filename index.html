@@ -1402,6 +1402,7 @@ if (userData.fecha_turno_manana === fechaHoy) {
         userData.turno_manana === 'null' || 
         userData.turno_manana === '' || 
         userData.turno_manana === 'descanso') {
+        
         console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana inválido o ausente');
         // Forzar limpieza de campos inconsistentes
         try {
@@ -1419,62 +1420,63 @@ if (userData.fecha_turno_manana === fechaHoy) {
         userData.turno_manana = null;
         userData.fecha_turno_manana = null;
     } else {
-    console.log('✅ 🟢 ROLL FORWARD ACTIVADO: fecha_turno_manana COINCIDE con HOY');
-    console.log(`   📅 fecha_turno_manana: ${userData.fecha_turno_manana} === HOY: ${fechaHoy}`);
-    console.log(`   🔄 turno_manana a promover: ${userData.turno_manana}`);
-    
-    // 🛡️ Validaciones de seguridad antes de promover
-    const esDescanso = userData.turno_manana === 'descanso';
-    const esInvalido = !userData.turno_manana || 
-                      userData.turno_manana === 'null' || 
-                      userData.turno_manana === '';
-    
-    if (esDescanso) {
-        console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es "descanso" (manejado por verificarDiaDescanso)');
-    } else if (esInvalido) {
-        console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es nulo/vacío');
-    } else {
-        // ✅ PROMOVER "MAÑANA" A "HOY"
-        console.log('🔄 PROMOVIENDO turno_manana a turno_hoy...');
-        userData.turno_hoy = userData.turno_manana;
-        userData.fecha_turno_hoy = fechaHoy;
+        // --- AQUÍ EMPIEZA LA PROMOCIÓN SI EL TURNO ES VÁLIDO ---
+        console.log('✅ 🟢 ROLL FORWARD ACTIVADO: fecha_turno_manana COINCIDE con HOY');
+        console.log(`    📅 fecha_turno_manana: ${userData.fecha_turno_manana} === HOY: ${fechaHoy}`);
+        console.log(`    🔄 turno_manana a promover: ${userData.turno_manana}`);
         
-        // 🧹 LIMPIAR CAMPOS DE "MAÑANA" (¡CRÍTICO!)
-        try {
-            console.log('💾 Guardando promoción en BD...');
-            const { error } = await supabaseClient
-                .from('usuarios')
-                .update({ 
-                    turno_hoy: userData.turno_hoy,
-                    fecha_turno_hoy: fechaHoy,
-                    turno_manana: null,
-                    fecha_turno_manana: null,
-                    contador_turnos: userData.contador_turnos
-                })
-                .eq('id', userData.id);
+        // 🛡️ Validaciones de seguridad antes de promover (manteniendo tus logs)
+        const esDescanso = userData.turno_manana === 'descanso';
+        const esInvalido = !userData.turno_manana || userData.turno_manana === 'null' || userData.turno_manana === '';
+        
+        if (esDescanso) {
+            console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es "descanso" (manejado por verificarDiaDescanso)');
+        } else if (esInvalido) {
+            console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es nulo/vacío');
+        } else {
+            // ✅ PROMOVER "MAÑANA" A "HOY"
+            console.log('🔄 PROMOVIENDO turno_manana a turno_hoy...');
+            userData.turno_hoy = userData.turno_manana;
+            userData.fecha_turno_hoy = fechaHoy;
             
-            if (error) throw error;
-            console.log('✅ 🎯 ROLL FORWARD EXITOSO: turno_manana promovido a HOY y campos de mañana LIMPIADOS');
-            console.log(`   ✅ Nuevo turno_hoy: ${userData.turno_hoy} (${fechaHoy})`);
-            console.log(`   ✅ Campos turno_manana y fecha_turno_manana BORRADOS (listos para nuevo Paso 2)`);
-            
-            // ✅ 🔑 CORRECCIÓN CRÍTICA: Sincronizar MEMORIA con BD
-            userData.turno_manana = null;
-            userData.fecha_turno_manana = null;
-            console.log('✅ MEMORIA SINCRONIZADA: userData.turno_manana y fecha_turno_manana = null');
-        } catch (err) {
-            console.error('❌ ⚠️ Error guardando roll forward:', err);
-            alert('⚠️ Error al actualizar turno. Por favor contacte al administrador.');
+            try {
+                console.log('💾 Guardando promoción en BD...');
+                const { error } = await supabaseClient
+                    .from('usuarios')
+                    .update({ 
+                        turno_hoy: userData.turno_hoy,
+                        fecha_turno_hoy: fechaHoy,
+                        turno_manana: null,
+                        fecha_turno_manana: null,
+                        contador_turnos: userData.contador_turnos
+                    })
+                    .eq('id', userData.id);
+                
+                if (error) throw error;
+                console.log('✅ 🎯 ROLL FORWARD EXITOSO: turno_manana promovido a HOY y campos de mañana LIMPIADOS');
+                console.log(`    ✅ Nuevo turno_hoy: ${userData.turno_hoy} (${fechaHoy})`);
+                console.log(`    ✅ Campos turno_manana y fecha_turno_manana BORRADOS (listos para nuevo Paso 2)`);
+                
+                // ✅ 🔑 Sincronizar MEMORIA con BD
+                userData.turno_manana = null;
+                userData.fecha_turno_manana = null;
+                console.log('✅ MEMORIA SINCRONIZADA: userData.turno_manana y fecha_turno_manana = null');
+            } catch (err) {
+                console.error('❌ ⚠️ Error guardando roll forward:', err);
+                alert('⚠️ Error al actualizar turno. Por favor contacte al administrador.');
+            }
         }
-    }
+    } // <-- Cierre del "else" del turno_manana válido
 } else {
+    // ✅ AHORA ESTE ELSE ESTÁ CORRECTAMENTE VINCULADO AL IF DE LA FECHA
     console.log('❌ 🔴 ROLL FORWARD NO APLICABLE: fecha_turno_manana no coincide con HOY');
     if (userData.fecha_turno_manana) {
-        console.log(`   📅 fecha_turno_manana: ${userData.fecha_turno_manana} ≠ HOY: ${fechaHoy}`);
+        console.log(`    📅 fecha_turno_manana: ${userData.fecha_turno_manana} ≠ HOY: ${fechaHoy}`);
     } else {
-        console.log('   📅 fecha_turno_manana NO ESTÁ DEFINIDA en la base de datos');
+        console.log('    📅 fecha_turno_manana NO ESTÁ DEFINIDA en la base de datos');
     }
 }
+
 
 // 📊 LOG POST-ROLL FORWARD (ESTADO ACTUALIZADO)
 console.log('📊 ==========================================');
