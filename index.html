@@ -6239,8 +6239,8 @@ console.log(`📍 Punto de origen definido en: ${latCentro}, ${lngCentro} (OS: $
  
         // ✅ CORRECTO (sin "Días Vencimiento")
 const { data: osPendientes, error: errorPendientes } = await supabaseClient
-    .from('OS Pendientes')
-    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Comentario, Unidad, Estado_ATOMO, Deuda');
+    .from('OS Pendientes')
+    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario')
  
         if (errorPendientes) {
             console.error('❌ Error cargando OS pendientes:', errorPendientes);
