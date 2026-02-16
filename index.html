@@ -1278,13 +1278,7 @@ async function login() {
             document.getElementById('userInfo').classList.remove('hidden');
             document.getElementById('currentUser').textContent = `${data.usuario} (ATTF)`;
 
-            // 2. Asegurar que el contenedor principal esté visible
-            // IMPORTANTE: Verifica si tu ID es 'searchSection' o 'configuracionInicialATTF'
-            const searchSection = document.getElementById('searchSection');
-            if (searchSection) {
-                searchSection.style.display = 'block';
-                searchSection.classList.remove('hidden');
-            }
+            
 
             // ✅ CORRECTO - Delegar toda la lógica a loginATTF
 loginATTF(data);
@@ -1506,7 +1500,14 @@ function mostrarConfiguracionInicialATTF() {
     const tableSelection = document.getElementById('tableSelectionSection');
     if (tableSelection) tableSelection.style.display = 'none';
     
-    console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy"); // ✅ Línea corregida
+    // ✅ NUEVO: OCULTAR searchSection PARA ELIMINAR BOTÓN "VOLVER"
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'none';
+        searchSection.classList.add('hidden');
+    }
+    
+    console.log("🛠️ Iniciando Paso 1: Configuración de Turno Hoy");
     const ahora = new Date();
     const horaActual = ahora.getHours();
     
@@ -2030,6 +2031,13 @@ function getFechaLocalISO(fechaObjeto) {
     const tableSelection = document.getElementById('tableSelectionSection');
     if (tableSelection) tableSelection.style.display = 'none';
     
+    // ✅ NUEVO: OCULTAR searchSection PARA ELIMINAR BOTÓN "VOLVER"
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'none';
+        searchSection.classList.add('hidden');
+    }
+    
     console.log("🛠️ Iniciando Paso 2: Configuración de Turno Mañana");
     const turnoHoyKey = userData.turno_hoy;
     const contadorActual = parseInt(userData.contador_turnos) || 0;
@@ -2336,8 +2344,15 @@ function mostrarForzarDescansoATTF() {
     const tableSelection = document.getElementById('tableSelectionSection');
     if (tableSelection) tableSelection.style.display = 'none';
     
-    console.log("🛠️ Forzando descanso obligatorio");
-    // 1. Buscamos los contenedores
+    // ✅ NUEVO: OCULTAR searchSection PARA ELIMINAR BOTÓN "VOLVER"
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'none';
+        searchSection.classList.add('hidden');
+    }
+    
+    console.log("🛠️ Forzando descanso obligatorio"); 
+   // 1. Buscamos los contenedores
     const targetSection = document.getElementById('configuracionInicialATTF');
 if (!targetSection) {
     console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
