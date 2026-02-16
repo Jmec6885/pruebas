@@ -9690,76 +9690,230 @@ async function guardarFiltrosMapa() {
     }
 }
 
+// ========================================
+// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CON COMENTARIOS DE CONSULTA SUMINISTRO)
+// ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     const resultsContainer = document.getElementById('searchResults');
-    const [latCentro, lonCentro] = osCentro.Coordenadas.split(',').map(c => parseFloat(c.trim()));
-
     resultsContainer.innerHTML = `
-        <div class="result-card">
-            <div class="result-header">🗺️ Mapa de OS Cercanas</div>
-            <div id="mapAdmin" style="height: 500px; border-radius: 12px; margin-top: 15px;"></div>
+    <div class="result-card">
+        <div class="loading" style="display: block; margin: 20px auto;"></div>
+        <p style="text-align: center; color: #666;">Cargando mapa y aplicando filtros de despacho...</p>
+    </div>`;
+    
+    console.log('🗺️ --- INICIANDO PROCESAMIENTO DE MAPA ---');
+    
+    try {
+        // 1. CARGAR FILTROS UNIVERSALES
+        let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
+        if (!filtrosAplicar) {
+            console.warn('⚠️ Filtros no encontrados, usando valores por defecto');
+            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
+        }
+        window.filtrosAplicados = filtrosAplicar;
+        const radioKm = filtrosAplicar.radio_km || 3;
+        
+        // ✅ LOGS DE FILTROS
+        console.log('📋 ==========================================');
+        console.log('📋 FILTROS CARGADOS DESDE TABLA');
+        console.log('📋 ==========================================');
+        console.table({
+            'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
+            'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
+            'Radio (km)': radioKm,
+            'Unidad': unidadFiltro
+        });
+        console.log('📋 ==========================================');
+        
+        // 2. Coordenadas del Punto Central
+        const coordsCentroStr = osCentro.Coordenadas || osCentro.Coordendasgis;
+        if (!coordsCentroStr) throw new Error("La OS de referencia no tiene coordenadas.");
+        const [latCentro, lngCentro] = coordsCentroStr.split(',').map(c => parseFloat(c.trim()));
+        
+        // 3. 🛡️ CARGAR OS ASIGNADAS
+        console.log('📥 Sincronizando OS asignadas para bloqueo...');
+        const { data: osAsignadasBD } = await supabaseClient.from('os_asignadas').select('osatomo');
+        const osAsignadasSet = new Set(osAsignadasBD?.map(a => String(a.osatomo).trim()) || []);
+        console.log(`✅ ${osAsignadasSet.size} OS bloqueadas por estar asignadas.`);
+        
+        // 4. CARGAR OS PENDIENTES (Paginado)
+        let todasOSRegistradas = [];
+        let offset = 0;
+        const BATCH_SIZE = 1000;
+        while (true) {
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Medidor, CuentaContrato')
+                .in('Estado_ATOMO', ['Registrada', 'Asignada'])
+                .range(offset, offset + BATCH_SIZE - 1);
+            if (error || !data || data.length === 0) break;
+            todasOSRegistradas.push(...data);
+            if (data.length < BATCH_SIZE) break;
+            offset += BATCH_SIZE;
+        }
+        
+        console.log(`✅ ${todasOSRegistradas.length} OS Pendientes cargadas`);
+        
+        // ========================================
+        // ✅ 🆕 PASO NUEVO: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
+        // ========================================
+        console.log('📝 ==========================================');
+        console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
+        console.log('📝 ==========================================');
+        
+        // Extraer medidores únicos de todas las OS
+        const medidoresUnicos = [...new Set(todasOSRegistradas
+            .map(os => os.Medidor)
+            .filter(m => m && String(m).trim() !== ''))];
+        
+        const cuentasUnicas = [...new Set(todasOSRegistradas
+            .map(os => os.CuentaContrato)
+            .filter(c => c && String(c).trim() !== ''))];
+        
+        console.log(`🔍 Buscando comentarios para ${medidoresUnicos.length} medidores únicos`);
+        
+        // Mapa para almacenar comentarios por Medidor
+        const comentariosPorMedidor = new Map();
+        
+        // Consultar comentarios en lotes de 100 medidores
+        const BATCH_MEDIDORES = 100;
+        for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
+            const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
+            
+            const { data: comentariosData, error: errorComentarios } = await supabaseClient
+                .from('consultas_servicios')
+                .select('Medidor, CuentaContrato, ComentarioGeneral')
+                .in('Medidor', batchMedidores);
+            
+            if (!errorComentarios && comentariosData) {
+                comentariosData.forEach(item => {
+                    if (item.Medidor) {
+                        comentariosPorMedidor.set(String(item.Medidor).trim(), {
+                            ComentarioGeneral: item.ComentarioGeneral || '',
+                            CuentaContrato: item.CuentaContrato
+                        });
+                    }
+                });
+                console.log(`✅ Lote ${i/BATCH_MEDIDORES + 1}: ${comentariosData.length} comentarios encontrados`);
+            }
+            
+            // Pequeña pausa para no saturar
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
+        console.log('📝 ==========================================');
+        
+        // ========================================
+        // ✅ INYECTAR COMENTARIOS EN LAS OS
+        // ========================================
+        todasOSRegistradas.forEach(os => {
+            const medidorKey = String(os.Medidor).trim();
+            const comentarioData = comentariosPorMedidor.get(medidorKey);
+            
+            if (comentarioData) {
+                // ✅ INYECTAR ComentarioGeneral desde consulta_servicios
+                os.Comentario = comentarioData.ComentarioGeneral;
+                os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+                console.log(`💬 OS ${os.OSATMO}: Comentario inyectado (${comentarioData.ComentarioGeneral?.length || 0} caracteres)`);
+            } else {
+                os.Comentario = 'Sin comentario disponible';
+                os.ComentarioGeneral = 'Sin comentario disponible';
+            }
+        });
+        
+        // 5. 🔍 PROCESAMIENTO Y FILTRADO INICIAL (Radio y Estado)
+        const osFinalesParaFiltrar = [];
+        let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, prohibidas: 0 };
+        
+        for (const os of todasOSRegistradas) {
+            const osatmoActual = String(os.OSATMO).trim();
+            if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
+            
+            if (osAsignadasSet.has(osatmoActual)) {
+                stats.asignadasOcultas++;
+                continue;
+            }
+            
+            const cStr = os.Coordenadas || os.Coordendasgis;
+            if (!cStr || !cStr.includes(',')) { stats.sinCoords++; continue; }
+            
+            const [lat, lng] = cStr.split(',').map(c => parseFloat(c.trim()));
+            const dist = calcularDistancia(latCentro, lngCentro, lat, lng);
+            if (dist > radioKm) { stats.fueraRadio++; continue; }
+            
+            const tipoOS = (os.Tipo_de_OS || '').toUpperCase();
+            const deuda = parseFloat(os.Deuda) || 0;
+            const esPrioritaria = (tipoOS.includes('REGULADA') && !tipoOS.includes('NO REGULADA')) || deuda >= 500;
+            
+            if (esPrioritaria) {
+                osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: true });
+                continue;
+            }
+            
+            const unidad = (os.Unidad || "").trim();
+            const estadoAtomo = (os.Estado_ATOMO || "").trim().toUpperCase();
+            const esLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
+            const esRegistradaBD = estadoAtomo === "REGISTRADA";
+            
+            if (esLibre && esRegistradaBD) {
+                osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: false });
+            } else {
+                stats.prohibidas++;
+            }
+        }
+        
+        // 6. FILTRADO FINAL CON AUDITORÍA
+        let aprobadas = [];
+        let resumenFiltrado = { porPrioridad: 0, porFiltroTabla: 0, descartadas: 0 };
+        
+        osFinalesParaFiltrar.forEach(os => {
+            if (os.esPrioritaria) {
+                aprobadas.push(os);
+                resumenFiltrado.porPrioridad++;
+            } else if (validarFiltrosOS(os, filtrosAplicar)) {
+                aprobadas.push(os);
+                resumenFiltrado.porFiltroTabla++;
+            } else {
+                resumenFiltrado.descartadas++;
+            }
+        });
+        
+        // ✅ LOG DE RESULTADOS FINAL
+        console.log("%c📊 RESUMEN TÉCNICO DE FILTRADO", "background: #222; color: #bada55; font-size: 12px; padding: 5px;");
+        console.table({
+            "Total en Radio": osFinalesParaFiltrar.length,
+            "Pasan por Prioridad (Regulada/Deuda)": resumenFiltrado.porPrioridad,
+            "Pasan por Filtro de Tabla": resumenFiltrado.porFiltroTabla,
+            "Descartadas (No cumplen filtros)": resumenFiltrado.descartadas
+        });
+        
+        let osConFiltros = aprobadas;
+        
+        // 7. DIBUJAR MAPA
+        console.log('📊 TOTAL FINAL EN MAPA:', osConFiltros.length);
+        if (osConFiltros.length === 0) {
+            alert('ℹ️ No hay órdenes que cumplan los filtros en este radio.');
+        }
+        
+        const osFinalesMapa = [osCentro, ...osConFiltros];
+        const osOptimizadas = optimizarRutaVecinoCercano(
+            osFinalesMapa, 
+            osCentro.OSATMO, 
+            { lat: latCentro, lng: lngCentro }
+        );
+        
+        generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
+        
+    } catch (err) {
+        console.error('❌ Error Crítico:', err);
+        resultsContainer.innerHTML = `
+        <div class="result-card" style="border-left: 5px solid red;">
+            <strong>❌ Error:</strong> ${err.message}
         </div>`;
-
-    const map = L.map('mapAdmin').setView([latCentro, lonCentro], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-    // 1. OBTENER TODAS LAS OS CERCANAS (Aquí va tu lógica de Supabase de siempre)
-    // Supongamos que el resultado es 'data'
-    const { data: ordenesCercanas } = await supabaseClient.from('OS Pendientes').select('*'); // (Simplificado)
-
-    // 2. ✅ AGRUPAR POR COORDENADAS PARA EVITAR PUNTOS ENCIMADOS
-    const coordenadasAgrupadas = ordenesCercanas.reduce((acc, os) => {
-        let lat, lon;
-        const coords = os.Coordenadas || os.Coordendasgis || "";
-        if (coords.includes(',')) {
-            [lat, lon] = coords.split(',').map(c => parseFloat(c.trim()));
-        }
-
-        if (!isNaN(lat) && !isNaN(lon)) {
-            const key = `${lat.toFixed(6)}_${lon.toFixed(6)}`;
-            if (!acc[key]) acc[key] = [];
-            acc[key].push({...os, lat, lon});
-        }
-        return acc;
-    }, {});
-
-    // 3. ✅ DIBUJAR MARCADORES
-    Object.values(coordenadasAgrupadas).forEach(grupo => {
-        const primera = grupo[0];
-        const marcador = L.marker([primera.lat, primera.lon], { 
-            icon: iconoSegunEstado(primera.Estado || primera.estado) 
-        }).addTo(map);
-
-        if (grupo.length > 1) {
-            // CASO VARIAS ÓRDENES
-            let html = `<div style="max-height:150px; overflow-y:auto; min-width:180px;">
-                        <strong>📍 ${grupo.length} Órdenes aquí:</strong><hr>`;
-            grupo.forEach(os => {
-                const numOS = os.OSATMO || os.osatomo || "N/A";
-                // CORRECCIÓN COMENTARIO: Validar todos los nombres posibles
-                const coment = os.Comentario || os.comentario || os.Observaciones || "Sin comentario";
-                
-                html += `
-                    <div style="border-bottom:1px solid #eee; padding:5px 0;">
-                        <b>OS:</b> ${numOS}<br>
-                        <small>${coment}</small><br>
-                        <button onclick="verDetalleOrden('${numOS}')" style="width:100%; margin-top:5px; font-size:10px;">Ver Ficha</button>
-                    </div>`;
-            });
-            html += `</div>`;
-            marcador.bindPopup(html);
-        } else {
-            // CASO ÚNICO
-            const numOS = primera.OSATMO || primera.osatomo || "N/A";
-            const coment = primera.Comentario || primera.comentario || "Sin comentario";
-            marcador.bindPopup(`
-                <b>OS:</b> ${numOS}<br>
-                <b>Comentario:</b> ${coment}<br>
-                <button onclick="verDetalleOrden('${numOS}')">Ver Ficha</button>
-            `);
-        }
-    });
+    }
 }
+
 
 // ========================================
 // 🗺️ BUSCAR Y MOSTRAR MAPA (UNIDAD) - CORREGIDO
