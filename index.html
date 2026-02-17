@@ -2092,99 +2092,118 @@ function mostrarProgramarTurnoManana(userData, mostrarOpcionDescanso = null) {
 
 
 
+/**
+ * Verifica selección de turno y actualiza interfaz dinámicamente
+ * - Descanso: Muestra formulario con validación de fechas (día 2-6)
+ * - Turno normal: Oculta sección de descanso
+ * - Sin selección: Oculta elementos
+ */
 function verificarSeleccionDescanso() {
-    const turnoManana = document.getElementById('turnoManana').value;
+    const turnoManana = document.getElementById('turnoManana')?.value;
     const seccionDescanso = document.getElementById('seccionDescanso');
     const btnConfirmar = document.getElementById('btnConfirmarManana');
     
+    // 🔒 Validación de seguridad
+    if (!seccionDescanso || !btnConfirmar) {
+        console.warn('⚠️ Elementos DOM no encontrados');
+        return;
+    }
+    
     if (turnoManana === 'descanso') {
-        // 🎯 CAMBIO: Calcular límites de fechas (día 2 hasta día 6)
-        const ahora = new Date();
-        const fechaHoy = getFechaHoyElSalvador();
-        
-        // Fecha mínima: Mañana (día 2)
-        const fechaMinima = new Date(ahora);
-        fechaMinima.setDate(fechaMinima.getDate() + 1);
-        const fechaMinimaStr = fechaMinima.toISOString().split('T')[0];
-        
-        // Fecha máxima: Día 6 (5 días después de hoy)
-        const fechaMaxima = new Date(ahora);
-        fechaMaxima.setDate(fechaMaxima.getDate() + 5);
-        const fechaMaximaStr = fechaMaxima.toISOString().split('T')[0];
-        
-        // Mostrar calendario y turno de regreso
+        const { min, max } = obtenerLimitesFechasDescanso();
         seccionDescanso.style.display = 'block';
-        seccionDescanso.innerHTML = `
-            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
-                <strong>Configura tu descanso:</strong>
-                <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">
-                    ⚠️ El inicio de descanso debe ser entre <strong>mañana</strong> (día 2) y máximo <strong>5 días después</strong> (día 6).
-                </p>
-            </div>
-            
-            <div class="form-group">
-                <label>Primer día de descanso:</label>
-                <input type="date" 
-                       id="fechaDescansoInicio" 
-                       class="form-control" 
-                       min="${fechaMinimaStr}" 
-                       max="${fechaMaximaStr}"
-                       onchange="calcularFechaFin()" 
-                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                <small style="color: #666;">Mínimo: ${fechaMinimaStr} | Máximo: ${fechaMaximaStr}</small>
-            </div>
-            
-            <div class="form-group">
-                <label>Segundo día de descanso:</label>
-                <input type="date" 
-                       id="fechaDescansoFin" 
-                       class="form-control" 
-                       readonly 
-                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px; background: #f5f5f5;">
-                <small style="color: #666;">Se calcula automáticamente (día consecutivo)</small>
-            </div>
-            
-            <div class="form-group">
-                <label>Turno de REGRESO (post-descanso):</label>
-                <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
-                    <option value="">-- Seleccione --</option>
-                    ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
-                        `<option value="${key}">${turno.nombre}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        `;
+        seccionDescanso.innerHTML = generarFormularioDescanso(min, max);
         btnConfirmar.style.display = 'block';
+        btnConfirmar.textContent = '✅ Confirmar Descanso';
+        
     } else if (turnoManana) {
         seccionDescanso.style.display = 'none';
         btnConfirmar.style.display = 'block';
+        btnConfirmar.textContent = '✅ Confirmar Turno';
     } else {
         seccionDescanso.style.display = 'none';
         btnConfirmar.style.display = 'none';
     }
 }
 
+/**
+ * Calcula límites de fechas para descanso (día 2 a día 6)
+ * @returns {{min: string, max: string}} Fechas en formato YYYY-MM-DD
+ */
+function obtenerLimitesFechasDescanso() {
+    const ahora = new Date();
+    
+    const min = new Date(ahora);
+    min.setDate(min.getDate() + 1); // Día 2
+    
+    const max = new Date(ahora);
+    max.setDate(max.getDate() + 5); // Día 6
+    
+    return {
+        min: min.toISOString().split('T')[0],
+        max: max.toISOString().split('T')[0]
+    };
+}
+
+/**
+ * Genera HTML del formulario de descanso
+ */
+function generarFormularioDescanso(fechaMin, fechaMax) {
+    return `
+        <div style="background:#fff3cd;padding:15px;border-radius:10px;margin-bottom:15px;border-left:4px solid #ffc107">
+            <strong>Configura tu descanso:</strong>
+            <p style="margin:10px 0 0;font-size:14px;color:#666">
+                ⚠️ Inicio entre <strong>mañana</strong> (día 2) y máximo <strong>5 días después</strong> (día 6)
+            </p>
+        </div>
+        <div class="form-group">
+            <label>Primer día de descanso:</label>
+            <input type="date" id="fechaDescansoInicio" class="form-control"
+                   min="${fechaMin}" max="${fechaMax}" onchange="calcularFechaFin()"
+                   style="width:100%;padding:12px;border-radius:8px;border:2px solid #e1e5e9;font-size:16px">
+            <small style="color:#666">Mín: ${fechaMin} | Máx: ${fechaMax}</small>
+        </div>
+        <div class="form-group">
+            <label>Segundo día de descanso:</label>
+            <input type="date" id="fechaDescansoFin" class="form-control" readonly
+                   style="width:100%;padding:12px;border-radius:8px;border:2px solid #e1e5e9;font-size:16px;background:#f5f5f5">
+            <small style="color:#666">Se calcula automáticamente</small>
+        </div>
+        <div class="form-group">
+            <label>Turno de REGRESO:</label>
+            <select id="turnoRegreso" class="form-control" style="width:100%;padding:12px;border-radius:8px;border:2px solid #e1e5e9;font-size:16px">
+                <option value="">-- Seleccione --</option>
+                ${Object.entries(TURNOS_ATTF).map(([k,t])=>`<option value="${k}">${t.nombre}</option>`).join('')}
+            </select>
+        </div>
+    `;
+}
 
 
+/**
+ * Calcula fecha de fin de descanso (día consecutivo)
+ */
 function calcularFechaFin() {
     const fechaInicio = document.getElementById('fechaDescansoInicio')?.value;
     const inputFin = document.getElementById('fechaDescansoFin');
     
-    // ✅ Validaciones de seguridad
     if (!fechaInicio || !inputFin) {
-        console.warn('⚠️ Elementos del DOM no encontrados para calcularFechaFin');
+        console.warn('⚠️ Elementos DOM no encontrados');
         return;
     }
     
-    const fecha = new Date(fechaInicio + 'T00:00:00');
-    fecha.setDate(fecha.getDate() + 1); // Día consecutivo
-    
-    const fechaFin = fecha.toISOString().split('T')[0];
-    inputFin.value = fechaFin;
-    
-    console.log(`📅 Fecha fin calculada: ${fechaFin}`);
+    try {
+        const fecha = new Date(fechaInicio + 'T00:00:00');
+        if (isNaN(fecha.getTime())) throw new Error('Fecha inválida');
+        
+        fecha.setDate(fecha.getDate() + 1);
+        inputFin.value = fecha.toISOString().split('T')[0];
+        
+    } catch (error) {
+        console.error('❌ Error calculando fecha:', error);
+        alert('⚠️ Error al calcular fecha. Intente nuevamente.');
+    }
 }
-
 
 async function confirmarTurnoMananaATTF() {
     console.log('🔍 ==========================================');
@@ -2326,21 +2345,51 @@ async function confirmarTurnoMananaATTF() {
         }
 
     } 
+
+
     // --- CASO 2: DESCANSO ---
-    else {
-        console.log('✅ CASO 2: Guardando CONFIGURACIÓN DE DESCANSO');
-        
-        const fechaInicio = document.getElementById('fechaDescansoInicio')?.value;
-        const fechaFin = document.getElementById('fechaDescansoFin')?.value;
-        const turnoRegreso = document.getElementById('turnoRegreso')?.value;
+else {
+    console.log('✅ CASO 2: Guardando CONFIGURACIÓN DE DESCANSO');
+    
+    // ✅ VALIDACIÓN MEJORADA CON CAMPOS ESPECÍFICOS
+    const fechaInicioInput = document.getElementById('fechaDescansoInicio');
+    const fechaFinInput = document.getElementById('fechaDescansoFin');
+    const turnoRegresoInput = document.getElementById('turnoRegreso');
 
-        console.log('📊 Datos de descanso capturados:', { fechaInicio, fechaFin, turnoRegreso });
+    let fechaInicio = fechaInicioInput?.value?.trim();
+    let fechaFin = fechaFinInput?.value?.trim();
+    const turnoRegreso = turnoRegresoInput?.value?.trim();
 
-        if (!fechaInicio || !fechaFin || !turnoRegreso) {
-            console.error('❌ [VALIDACIÓN] Campos incompletos:', { fechaInicio, fechaFin, turnoRegreso });
-            alert('Por favor complete todos los campos del descanso');
+    console.log('🔍 DEBUG VALIDACIÓN:', { fechaInicio, fechaFin, turnoRegreso });
+
+    // Validación específica por campo
+    if (!fechaInicio) {
+        alert('⚠️ Por favor selecciona el PRIMER DÍA de descanso');
+        fechaInicioInput?.focus();
+        return;
+    }
+
+    if (!fechaFin) {
+        // Intentar calcular automáticamente si falta
+        if (fechaInicio) {
+            const fecha = new Date(fechaInicio + 'T00:00:00');
+            fecha.setDate(fecha.getDate() + 1);
+            const fechaCalculada = fecha.toISOString().split('T')[0];
+            
+            if (fechaFinInput) fechaFinInput.value = fechaCalculada;
+            fechaFin = fechaCalculada;
+            console.log('✅ Fecha fin calculada automáticamente:', fechaFin);
+        } else {
+            alert('⚠️ No se pudo calcular la fecha de fin');
             return;
         }
+    }
+
+    if (!turnoRegreso) {
+        alert('⚠️ Por favor selecciona el turno de REGRESO');
+        turnoRegresoInput?.focus();
+        return;
+    }
 
         if (!confirm(`¿Confirmas tu configuración de descanso?\nInicio: ${fechaInicio}\nFin: ${fechaFin}`)) {
             console.log('ℹ️ Usuario canceló la confirmación de descanso');
@@ -2349,8 +2398,8 @@ async function confirmarTurnoMananaATTF() {
 
         const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
-        const fechaRegresoStr = getFechaLocalISO(fechaRegresoDate);
-        const fechaTurnoMananaStr = getFechaLocalISO(new Date(fechaInicio + 'T00:00:00'));
+        const fechaRegresoStr = formatearFechaElSalvador(fechaRegresoDate);
+const fechaTurnoMananaStr = formatearFechaElSalvador(new Date(fechaInicio + 'T00:00:00'));
 
         console.log('💾 Datos a guardar (DESCANSO):', {
             turno_hoy: turnoHoy,
@@ -2492,30 +2541,6 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
 }
 
 
-// ========================================
-// 🆕 FUNCIÓN AUXILIAR: Verificar selección y mostrar botón
-// ========================================
-function verificarSeleccionDescanso() {
-    const turnoManana = document.getElementById('turnoManana').value;
-    const seccionDescanso = document.getElementById('seccionDescanso');
-    const btnConfirmar = document.getElementById('btnConfirmarManana');
-    
-    if (turnoManana === 'descanso') {
-        // Mostrar sección de descanso
-        seccionDescanso.style.display = 'block';
-        btnConfirmar.style.display = 'block';
-        btnConfirmar.textContent = '✅ Confirmar Descanso';
-    } else if (turnoManana) {
-        // Ocultar sección de descanso
-        seccionDescanso.style.display = 'none';
-        btnConfirmar.style.display = 'block';
-        btnConfirmar.textContent = '✅ Confirmar Turno';
-    } else {
-        // Ocultar todo si no hay selección
-        seccionDescanso.style.display = 'none';
-        btnConfirmar.style.display = 'none';
-    }
-}
 
 // ========================================
 // 🆕 FUNCIÓN AUXILIAR: Verificar y confirmar
