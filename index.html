@@ -6679,29 +6679,32 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     // Log para verificar si el universo de pendientes existe en memoria
     console.log('🔍 Universo de Pendientes disponible en memoria:', window.todasLasPendientesKML ? window.todasLasPendientesKML.length : 0);
 
+    
     // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE TUS ASIGNADAS
     const osNormalizadas = osAsignadas
-        .map(os => {
-            const id = (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim();
-            const tipo = os.Tipologia || os.tipologia || 'Sin tipología';
-            const coords = os.Coordenadas || os.Coordendasgis || null;
-
-            return {
-                ...os,
-                osatomo: id,
-                OSATMO: id,
-                Tipologia: tipo,
-                Coordenadas: coords,
-                esAsignada: true
-            };
-        })
-        .filter(os => {
-            if (!os.osatomo) return false;
-            if (!os.Coordenadas) {
-                console.warn(`⚠️ Tu OS ${os.osatomo} no tiene coordenadas y no servirá como centro de ruta.`);
-            }
-            return true;
-        });
+    .map(os => {
+        const id = (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim();
+        const tipo = os.Tipologia || os.tipologia || 'Sin tipología';
+        const coords = os.Coordenadas || os.Coordendasgis || null;
+        return {
+            ...os,  // ← ESTO DEBE MANTENER TODOS LOS CAMPOS
+            osatomo: id,
+            OSATMO: id,
+            Tipologia: tipo,
+            Coordenadas: coords,
+            esAsignada: true,
+            // ✅ AGREGAR ESTO:
+            Comentario: os.Comentario || os.ComentarioGeneral || '',
+            ComentarioGeneral: os.ComentarioGeneral || os.Comentario || ''
+        };
+    })
+    .filter(os => {
+        if (!os.osatomo) return false;
+        if (!os.Coordenadas) {
+            console.warn(`⚠️ Tu OS ${os.osatomo} no tiene coordenadas y no servirá como centro de ruta.`);
+        }
+        return true;
+    });
 
     // 🕵️ LOG DE VALIDACIÓN PARA OS 11195544
     if (window.todasLasPendientesKML) {
