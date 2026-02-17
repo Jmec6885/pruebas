@@ -2108,7 +2108,7 @@ async function confirmarTurnoMananaATTF() {
 
         const manana = new Date(ahora);
         manana.setDate(manana.getDate() + 1);
-        const fechaMananaStr = getFechaLocalISO(manana);
+        const fechaMananaStr = formatearFechaElSalvador(manana);
         const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
         const nuevoContador = contadorActual + 1;
 
@@ -8470,6 +8470,28 @@ function getFechaHoyElSalvador() {
     }
 }
 
+
+// ========================================
+// 🆕 FUNCIÓN: Obtener Fecha Local en Formato ISO (YYYY-MM-DD)
+// ========================================
+function getFechaLocalISO(fecha) {
+    if (!fecha) return getFechaHoyElSalvador();
+    
+    const opciones = {
+        timeZone: 'America/El_Salvador',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    };
+    
+    const f = new Intl.DateTimeFormat('en-CA', opciones).formatToParts(fecha);
+    const p = {};
+    f.forEach(({type, value}) => p[type] = value);
+    
+    return `${p.year}-${p.month}-${p.day}`;
+}
+
+
 // ========================================
 // 5️⃣ FUNCIÓN: Obtener HORA ACTUAL detallada
 // ========================================
@@ -8546,6 +8568,8 @@ verificarZonaHoraria();
   }
   return { valido: true };
 }
+
+
 
 
  	function detectarDuplicadosAsignaciones(datos) {
