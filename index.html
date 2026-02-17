@@ -1890,74 +1890,205 @@ function getTurnoConsecutivo(turnoHoyKey) {
 }
 
 
-function mostrarProgramarTurnoManana(mostrarOpcionDescanso) {
-    // 1. Identificamos dónde vamos a mostrar la información
-    // Usamos loginSection porque es donde estás construyendo tu interfaz dinámica
-    const container = document.getElementById('loginSection');
+// ========================================
+// 🔄 FUNCIÓN MAESTRA UNIFICADA (COMPATIBLE CON AMBAS LLAMADAS)
+// ========================================
+function mostrarProgramarTurnoManana(userData, mostrarOpcionDescanso = null) {
     
-    // Aseguramos que el contenedor sea visible
-    container.style.display = 'block';
+    // === 🪵 LOGS DE ENTRADA ===
+    console.log('🔍 mostrarProgramarTurnoManana llamada con:', {
+        mostrarOpcionDescanso,
+        currentUser: currentUser?.usuario,
+        turnoHoySeleccionado: window.turnoHoySeleccionado
+    });
     
-    // 🎯 LÓGICA DE TÍTULOS (Tu código original)
-    let paso, instruccion;
-    const contadorActual = parseInt(currentUser?.contador_turnos) || 0;
+    console.log('🔍 DEBUG userData:', JSON.stringify(userData, null, 2));
+    console.log('🔍 turno_hoy:', userData?.turno_hoy, typeof userData?.turno_hoy);
+    console.log('🔍 contador_turnos:', userData?.contador_turnos);
+    // === FIN LOGS DE ENTRADA ===
     
-    if (mostrarOpcionDescanso) {
-        paso = "Paso 2 de 2";
-        instruccion = "Selecciona tu turno de MAÑANA o configura DESCANSO";
-    } else {
-        paso = `Programar Turno (Día ${contadorActual + 1} → ${contadorActual + 2})`;
-        instruccion = "Selecciona tu turno de MAÑANA";
+    // 🔄 DETECTAR MODO DE LLAMADA AUTOMÁTICAMENTE
+    const esLlamadaLegacy = (typeof userData === 'boolean' || userData === null || userData === undefined);
+    
+    if (esLlamadaLegacy) {
+        // 📦 MODO LEGACY: Reconstruir userData desde fuentes disponibles
+        console.log('🔄 Modo compatibilidad: reconstruyendo userData');
+        
+        mostrarOpcionDescanso = (typeof userData === 'boolean') ? userData : mostrarOpcionDescanso;
+        
+        userData = {
+            turno_hoy: window.turnoHoySeleccionado || currentUser?.turno_hoy,
+            contador_turnos: parseInt(currentUser?.contador_turnos) || 0,
+            estado_ciclo: currentUser?.estado_ciclo || 'ciclo_normal',
+            usuario: currentUser?.usuario,
+            rol: currentUser?.rol
+        };
+        
+        // === 🪵 LOG POST-RECONSTRUCCIÓN ===
+        console.log('🔄 userData reconstruido:', {
+            turno_hoy: userData.turno_hoy,
+            contador_turnos: userData.contador_turnos,
+            estado_ciclo: userData.estado_ciclo
+        });
     }
     
-    const turnoHoyKey = window.turnoHoySeleccionado || currentUser.turno_hoy;
+    // ✅ VALIDACIÓN CRÍTICA
+    if (!userData || !userData.turno_hoy) {
+        console.error('❌ [DATOS INVÁLIDOS] userData no contiene turno_hoy:', userData);
+        alert('⚠️ Error: No se pudo cargar la configuración. Contacte al administrador.');
+        return;
+    }
+    
+    // === 🪵 LOG POST-VALIDACIÓN ===
+    console.log('🛠️ INICIANDO: mostrarProgramarTurnoManana (unificada)');
+    console.log('🛠️ Datos procesados:', {
+        turno_hoy: userData.turno_hoy,
+        contador: userData.contador_turnos,
+        mostrarDescanso: mostrarOpcionDescanso
+    });
+    
+    // ✅ OCULTAR MENÚS DURANTE CONFIGURACIÓN
+    const tableSelection = document.getElementById('tableSelectionSection');
+    if (tableSelection) tableSelection.style.display = 'none';
+    
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'none';
+        searchSection.classList.add('hidden');
+    }
+    
+    // ✅ DETERMINAR CONTENEDOR SEGÚN CONTEXTO
+    // Prioridad: configuracionInicialATTF > loginSection
+    let container = document.getElementById('configuracionInicialATTF');
+    let usarLoginSection = false;
+    
+    if (!container || container.style.display === 'none') {
+        container = document.getElementById('loginSection');
+        usarLoginSection = true;
+    }
+    
+    if (!container) {
+        console.error('❌ No se encontró contenedor válido');
+        return;
+    }
+    
+    container.style.display = 'block';
+    container.classList.remove('hidden');
+    
+    // ✅ LÓGICA DE NEGOCIO
+    const turnoHoyKey = userData.turno_hoy;
+    const contadorActual = parseInt(userData.contador_turnos) || 0;
+    const ahora = new Date();
+    
+    // Calcular fechas de descanso automático (solo si aplica)
+    const diasHastaDescanso = 5 - contadorActual;
+    const fechaDescansoInicio = new Date(ahora);
+    fechaDescansoInicio.setDate(fechaDescansoInicio.getDate() + Math.max(1, diasHastaDescanso));
+    const fechaDescansoInicioStr = fechaDescansoInicio.toISOString().split('T')[0];
+    const fechaDescansoFin = new Date(fechaDescansoInicio);
+    fechaDescansoFin.setDate(fechaDescansoFin.getDate() + 1);
+    const fechaDescansoFinStr = fechaDescansoFin.toISOString().split('T')[0];
+    
+    // Obtener turnos consecutivos prohibidos
     const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
     
+    // Generar opciones HTML
     let opcionesHTML = '';
-    
-    // Generar opciones de turnos
     Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
         if (turnosConsecutivos.includes(key)) {
-            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Consecutivo)</option>`;
         } else {
             opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
         }
     });
     
-    if (mostrarOpcionDescanso) {
-        opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>`;
+    // ✅ AGREGAR OPCIÓN DE DESCANSO (solo si corresponde)
+    const debeMostrarDescanso = (mostrarOpcionDescanso === true) || (contadorActual >= 4);
+    if (debeMostrarDescanso) {
+        opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold; border-top: 2px solid #ffc107; margin-top: 5px;">🏖️ DESCANSO (Día ${Math.max(2, diasHastaDescanso + 1)})</option>`;
     }
     
-    // 2. INYECCIÓN DEL HTML (Tu diseño original mejorado)
+    // ✅ DEFINIR TÍTULOS SEGÚN CONTEXTO
+    const esPaso2Explicito = mostrarOpcionDescanso === true || userData.forzarPaso2;
+    const tituloPaso = esPaso2Explicito ? 'Paso 2 de 2' : `Día ${contadorActual + 1} → ${contadorActual + 2}`;
+    const instruccion = esPaso2Explicito 
+        ? 'Selecciona tu turno de MAÑANA o configura DESCANSO' 
+        : 'Selecciona tu turno de MAÑANA';
+    
+    // ✅ INYECTAR HTML (adaptado al contenedor)
+    const htmlBase = usarLoginSection ? `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
+        <h1 class="titulo-degradado">CLESA</h1>
+    ` : `
+        <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 80px; display: block; margin: 0 auto;">
+        <h2 class="titulo-degradado" style="text-align: center; font-size: 24px;">CLESA</h2>
+    `;
+    
     container.innerHTML = `
-        <div class="card-configuracion" style="animation: fadeIn 0.5s;">
-            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo">
-            <h1 class="titulo-degradado">CLESA</h1>
-            <p class="subtitulo" id="pasoActual">${paso}</p>
+        <div class="card-configuracion" style="animation: slideUp 0.3s ease-out;">
+            ${htmlBase}
+            <p class="subtitulo" style="text-align: center;">${tituloPaso}</p>
             
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3; text-align: left;">
-                <strong class="paso-info">${instruccion}</strong>
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #2196f3; text-align: left;">
+                <strong>📋 ${instruccion}</strong><br>
+                <small style="color: #666;">Turno actual: ${TURNOS_ATTF[turnoHoyKey]?.nombre || '—'}</small>
             </div>
             
             <div class="form-group" style="text-align: left;">
-                <label style="font-weight: bold; display: block; margin-bottom: 8px;">Turno de MAÑANA:</label>
+                <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de MAÑANA:</label>
                 <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; font-size: 16px;">
                     <option value="">-- Seleccione --</option>
                     ${opcionesHTML}
                 </select>
             </div>
             
-            <div id="seccionDescanso" style="display: none; margin-top: 20px;"></div>
+            <!-- ✅ SECCIÓN DE DESCANSO (se muestra/oculta dinámicamente) -->
+            <div id="seccionDescanso" style="display: none; margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 10px; border-left: 4px solid #ffc107;">
+                <strong style="color: #e65100; display: block; margin-bottom: 10px;">🏖️ Configuración de Descanso</strong>
+                
+                <div style="background: white; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                    <strong>📅 Fechas programadas:</strong><br>
+                    <span style="font-size: 14px;">Inicio: <b>${fechaDescansoInicioStr}</b> | Fin: <b>${fechaDescansoFinStr}</b></span>
+                </div>
+                
+                <div class="form-group">
+                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔙 Turno de REGRESO:</label>
+                    <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        <option value="">-- Seleccione --</option>
+                        ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
+                            `<option value="${key}">${turno.nombre}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            </div>
             
-            <button class="btn" id="btnConfirmarManana" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; width: 100%; display: none;">
-                ✅ Confirmar y Acceder
+            <button id="btnConfirmarManana" class="btn" onclick="confirmarTurnoMananaATTF()" style="margin-top: 20px; width: 100%; display: none;">
+                ✅ Confirmar y Continuar
             </button>
-            <button class="btn-danger" onclick="logout()" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer;">
-                Cancelar
+            
+            ${!usarLoginSection ? `
+            <button class="btn btn-danger" onclick="logout()" style="margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer;">
+                Cancelar y Salir
             </button>
+            ` : ''}
         </div>
     `;
+    
+        // ✅ INICIALIZAR COMPORTAMIENTO DINÁMICO
+    if (typeof verificarSeleccionDescanso === 'function') {
+        setTimeout(() => verificarSeleccionDescanso(), 100);
+    }
+    
+    // === 🪵 LOG FINAL DE RENDERIZADO ===
+    console.log('✅ Interfaz renderizada - Verificando elementos creados:');
+    console.log('   • #turnoManana:', document.getElementById('turnoManana') ? '✅ Existe' : '❌ No existe');
+    console.log('   • #seccionDescanso:', document.getElementById('seccionDescanso') ? '✅ Existe' : '❌ No existe');
+    console.log('   • #btnConfirmarManana:', document.getElementById('btnConfirmarManana') ? '✅ Existe' : '❌ No existe');
+    console.log('   • Container visible:', container.style.display);
+    
+    console.log('✅ Interfaz renderizada exitosamente');
 }
+
 
 
 
@@ -2036,18 +2167,23 @@ function verificarSeleccionDescanso() {
 
 
 function calcularFechaFin() {
-    const fechaInicio = document.getElementById('fechaDescansoInicio').value;
+    const fechaInicio = document.getElementById('fechaDescansoInicio')?.value;
     const inputFin = document.getElementById('fechaDescansoFin');
     
-    if (!fechaInicio) return;
+    // ✅ Validaciones de seguridad
+    if (!fechaInicio || !inputFin) {
+        console.warn('⚠️ Elementos del DOM no encontrados para calcularFechaFin');
+        return;
+    }
     
     const fecha = new Date(fechaInicio + 'T00:00:00');
     fecha.setDate(fecha.getDate() + 1); // Día consecutivo
     
     const fechaFin = fecha.toISOString().split('T')[0];
     inputFin.value = fechaFin;
+    
+    console.log(`📅 Fecha fin calculada: ${fechaFin}`);
 }
-
 
 
 async function confirmarTurnoMananaATTF() {
@@ -2350,124 +2486,11 @@ function cerrarConfiguracionYEntrar() {
 
 
 function mostrarProgramarTurnoMañanaConDescanso(userData) {
-    console.log('🛠️ ==========================================');
-    console.log('🛠️ INICIANDO: mostrarProgramarTurnoMañanaConDescanso');
-    console.log('🛠️ Datos recibidos:', {
-        tieneUserData: !!userData,
-        turno_hoy: userData?.turno_hoy,
-        contador_turnos: userData?.contador_turnos,
-        estado_ciclo: userData?.estado_ciclo
-    });
-    console.log('🛠️ ==========================================');
-
-    // ✅ VALIDACIÓN CRÍTICA: Verificar datos mínimos
-    if (!userData || !userData.turno_hoy) {
-        console.error('❌ [DATOS INVÁLIDOS] userData no contiene turno_hoy:', userData);
-        alert('⚠️ Error: No se pudo cargar la configuración. Contacte al administrador.');
-        logout();
-        return;
-    }
-
-    // ✅ OCULTAR MENÚ DE MÓDULOS DURANTE CONFIGURACIÓN
-    const tableSelection = document.getElementById('tableSelectionSection');
-    if (tableSelection) tableSelection.style.display = 'none';
-    
-    // ✅ OCULTAR searchSection PARA ELIMINAR BOTÓN "VOLVER"
-    const searchSection = document.getElementById('searchSection');
-    if (searchSection) {
-        searchSection.style.display = 'none';
-        searchSection.classList.add('hidden');
-    }
-    
-    console.log("🛠️ Iniciando Paso 2: Configuración de Turno Mañana");
-    const turnoHoyKey = userData.turno_hoy;
-    const contadorActual = parseInt(userData.contador_turnos) || 0;
-    
-    // ... (Cálculo de fechas igual) ...
-    const ahora = new Date();
-    const diasHastaDescanso = 5 - contadorActual;
-    const fechaDescansoInicio = new Date(ahora);
-    fechaDescansoInicio.setDate(fechaDescansoInicio.getDate() + diasHastaDescanso);
-    const fechaDescansoInicioStr = fechaDescansoInicio.toISOString().split('T')[0];
-    const fechaDescansoFin = new Date(fechaDescansoInicio);
-    fechaDescansoFin.setDate(fechaDescansoFin.getDate() + 1);
-    const fechaDescansoFinStr = fechaDescansoFin.toISOString().split('T')[0];
-
-    // Obtener turnos disponibles
-    const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
-    let opcionesHTML = '';
-    // Generar opciones de turnos
-Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-    if (turnosConsecutivos.includes(key)) {
-        opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
-    } else {
-        opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
-    }
-});
-
-// ✅ AGREGAR OPCIÓN DE DESCANSO (CRÍTICO PARA CONTADOR = 0)
-opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold; border-top: 2px solid #ffc107;">🏖️ DESCANSO (Día ${diasHastaDescanso + 1})</option>`;
-
-
-    
-    // ✅ VALIDAR CONTENEDOR DE CONFIGURACIÓN
-    const targetSection = document.getElementById('configuracionInicialATTF');
-    if (!targetSection) {
-        console.error("❌ ERROR CRÍTICO: Contenedor 'configuracionInicialATTF' NO EXISTE en el HTML");
-        alert("Error de interfaz: Falta el elemento de configuración. Contacte al administrador.");
-        logout();
-        return;
-    }
-    
-    // Aseguramos visibilidad
-    targetSection.style.display = 'block';
-    targetSection.classList.remove('hidden');
-    
-    targetSection.innerHTML = `
-        <div class="card-configuracion">
-            <img src="https://cdnimg.bnamericas.com/HFvkiBpeoLTFyPBTjytdbdohtBDrWQsnxgYaUwIlxAEFZVYKsYrwygPFBPYYlShO.png" alt="Logo CLESA" class="logo" style="width: 80px; display: block; margin: 0 auto;">
-            <h2 class="titulo-degradado" style="text-align: center;">Configuración de Turnos</h2>
-            <p class="subtitulo" style="text-align: center;">Paso 2: Programar Mañana</p>
-            
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
-                <strong>📊 Día ${contadorActual + 1} de 5 en ciclo</strong>
-                <br><small>Turno hoy: ${TURNOS_ATTF[turnoHoyKey]?.nombre || 'No definido'}</small>
-            </div>
-            
-            <div class="form-group">
-                <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de MAÑANA:</label>
-                <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 10px; border-radius: 8px;">
-                    <option value="">-- Seleccione --</option>
-                    ${opcionesHTML}
-                    <option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>
-                </select>
-            </div>
-            
-            <!-- ✅ CAMPO OCULTO PARA FECHAS DE DESCANSO -->
-            <div id="seccionDescanso" style="display: none; margin-top: 15px;">
-                <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
-                    <strong>📅 Fechas de Descanso:</strong>
-                    <p style="margin: 5px 0; font-size: 13px;">Inicio: ${fechaDescansoInicioStr} | Fin: ${fechaDescansoFinStr}</p>
-                </div>
-                <div class="form-group">
-                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔙 Turno de REGRESO:</label>
-                    <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
-                        <option value="">-- Seleccione --</option>
-                        ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
-                            `<option value="${key}">${turno.nombre}</option>`
-                        ).join('')}
-                    </select>
-                </div>
-            </div>
-            
-            <button id="btnConfirmarManana" class="btn" style="width: 100%; margin-top: 20px;" onclick="verificarYConfirmarTurnoManana('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')" style="display: none;">
-                ✅ Confirmar
-            </button>
-        </div>
-    `;
-    
-    console.log('✅ Interfaz de Paso 2 renderizada exitosamente');
+    // ✅ Delega a la función maestra con mostrarOpcionDescanso = true
+    // La maestra ya valida userData y renderiza la interfaz correcta
+    mostrarProgramarTurnoManana(userData, true);
 }
+
 
 // ========================================
 // 🆕 FUNCIÓN AUXILIAR: Verificar selección y mostrar botón
