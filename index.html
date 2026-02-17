@@ -719,6 +719,77 @@ function cambiarFechasDescansoATTF() {
     `;
 }
 
+
+window.confirmarDescansoAutomaticoATTF = async function(fechaIni, fechaFin) {
+    console.log("📡 Procesando confirmación de descanso:", { fechaIni, fechaFin });
+    
+    // 1. Validar sesión
+    if (!currentUser || !currentUser.id) {
+        alert("Error: No hay sesión de usuario activa.");
+        location.reload();
+        return;
+    }
+
+    // 2. Obtener el turno de regreso (de la variable global)
+    const turnoRegreso = window.turnoRegresoManual || 'turno1';
+    
+    // 3. Calcular fecha de regreso (día después del fin del descanso)
+    const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
+    fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+    const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
+
+    try {
+        // 4. Guardar en Base de Datos
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({
+                descanso_fecha_inicio: fechaIni,
+                descanso_fecha_fin: fechaFin,
+                turno_manana: 'descanso',           // ✅ EXPLÍCITO
+                fecha_turno_manana: null,            // ✅ NULL (es descanso)
+                turno_regreso: turnoRegreso,         // ✅ DEFINIDO AHORA
+                fecha_turno_regreso: fechaRegreso,   // ✅ DEFINIDO AHORA
+                estado_ciclo: 'ciclo_normal',        // ✅ CONSISTENTE
+                contador_turnos: 0,                  // ✅ RESET
+                ultima_actividad: new Date().toISOString()
+            })
+            .eq('id', currentUser.id);
+
+        if (error) throw error;
+
+        // 5. Guardar localmente
+        localStorage.setItem('turno_hoy', 'DESCANSO');
+        localStorage.setItem('turno_manana', 'descanso');
+        localStorage.setItem('descanso_confirmado', 'true');
+        localStorage.setItem('turno_regreso', turnoRegreso);
+        localStorage.setItem('fecha_turno_regreso', fechaRegreso);
+
+        // 6. LIMPIEZA DE INTERFAZ
+        const configSec = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
+        if (configSec) {
+            configSec.innerHTML = '';
+            configSec.style.display = 'none';
+        }
+
+        // 7. Entrar al menú
+        console.log("✅ Descanso guardado. Accediendo al menú...");
+        
+        if (typeof accederMenuATTF === 'function') {
+            accederMenuATTF();
+        } else {
+            const menu = document.getElementById('menuModulosATTF');
+            if (menu) menu.style.display = 'block';
+        }
+
+    } catch (err) {
+        console.error("❌ Error al confirmar descanso:", err);
+        alert("Hubo un problema al guardar la información: " + err.message);
+    }
+};
+
+
+
+
 function procesarCambioFechasManual() {
     const inicio = document.getElementById('fechaInicioInput').value;
     const fin = document.getElementById('fechaFinInput').value;
@@ -743,7 +814,7 @@ function procesarCambioFechasManual() {
 
 
 async function confirmarDescansoPersonalizadoATTF() {
-    // 🔍 1. Obtener el turno de forma flexible (Evita errores de lectura)
+    // 1. Obtener el turno de regreso
     const turnoRegreso = window.turnoRegresoManual || 
                          document.getElementById('turnoRegreso')?.value || 
                          document.getElementById('turnoRegresoInput')?.value;
@@ -759,7 +830,7 @@ async function confirmarDescansoPersonalizadoATTF() {
         return;
     }
 
-    // 🔍 2. Confirmación al usuario
+    // 2. Confirmación al usuario
     const confirmar = confirm(
         `¿Confirmar descanso personalizado?\n` +
         `📅 Inicio: ${inicio}\n` +
@@ -777,7 +848,7 @@ async function confirmarDescansoPersonalizadoATTF() {
         fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
         const fechaRegreso = fechaRegresoDate.toISOString().split('T')[0];
 
-        // 🔍 3. Guardar en Supabase
+        // 3. Guardar en Supabase
         const { error } = await supabaseClient
             .from('usuarios')
             .update({
@@ -786,30 +857,32 @@ async function confirmarDescansoPersonalizadoATTF() {
                 turno_regreso: turnoRegreso,
                 fecha_turno_regreso: fechaRegreso,
                 contador_turnos: 0,
-                estado_ciclo: 'ciclo_normal',
+                estado_ciclo: 'ciclo_normal',        // ✅ CONSISTENTE
                 turno_manana: 'descanso', 
-                fecha_turno_manana: null,
+                fecha_turno_manana: null,            // ✅ CONSISTENTE
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
             .eq('id', currentUser.id);
 
         if (error) throw error;
 
-        // 🔍 4. ACTUALIZAR LOCALSTORAGE (Evita el regreso al Paso 1)
+        // 4. ACTUALIZAR LOCALSTORAGE
         localStorage.setItem('turno_manana', 'descanso');
         localStorage.setItem('descanso_inicio', inicio);
         localStorage.setItem('descanso_fin', fin);
+        localStorage.setItem('turno_regreso', turnoRegreso);
+        localStorage.setItem('fecha_turno_regreso', fechaRegreso);
 
-        // 🔍 5. LIMPIAR LA INTERFAZ (Elimina la pantalla de abajo)
+        // 5. LIMPIAR LA INTERFAZ
         const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
         if (targetSection) {
-            targetSection.innerHTML = ''; // Borra el formulario
-            targetSection.style.display = 'none'; // Oculta el contenedor
+            targetSection.innerHTML = '';
+            targetSection.style.display = 'none';
         }
 
         alert('✅ Descanso guardado correctamente');
         
-        // 🔍 6. Ir al menú directamente (Ahora entrará limpio)
+        // 6. Ir al menú
         accederMenuATTF();
 
     } catch (error) {
@@ -818,64 +891,6 @@ async function confirmarDescansoPersonalizadoATTF() {
     }
 }
 
-
-window.confirmarDescansoAutomaticoATTF = async function(fechaIni, fechaFin) {
-    console.log("📡 Procesando confirmación de descanso:", { fechaIni, fechaFin });
-    
-    // 1. Validar sesión
-    if (!currentUser || !currentUser.id) {
-        alert("Error: No hay sesión de usuario activa.");
-        location.reload();
-        return;
-    }
-
-    // 2. Obtener el turno (si no hay uno seleccionado, usamos 'descanso' por defecto)
-    const turnoMañana = window.turnoMañanaSeleccionado || 'descanso';
-
-    try {
-        // 3. Guardar en Base de Datos
-        const { error } = await supabaseClient
-            .from('usuarios')
-            .update({ 
-                descanso_fecha_inicio: fechaIni,
-                descanso_fecha_fin: fechaFin,
-                turno_manana: turnoMañana,
-                estado_ciclo: 'en_descanso', 
-                ultima_actividad: new Date().toISOString()
-            })
-            .eq('id', currentUser.id);
-
-        if (error) throw error;
-
-        // ✨ PASO CLAVE: Guardar localmente para que accederMenuATTF() sepa que ya terminaste
-        localStorage.setItem('turno_hoy', 'DESCANSO');
-        localStorage.setItem('turno_manana', turnoMañana);
-        localStorage.setItem('descanso_confirmado', 'true');
-
-        // 4. LIMPIEZA TOTAL DE INTERFAZ (Para que no salga nada abajo)
-        const configSec = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
-        if (configSec) {
-            configSec.innerHTML = ''; // Borra la tarjeta de descanso físicamente
-            configSec.style.display = 'none'; // Oculta el contenedor
-        }
-
-        // 5. ENTRAR AL MENÚ DIRECTAMENTE (Sin recargar la página)
-        console.log("✅ Descanso guardado. Accediendo al menú...");
-        
-        // Si tienes una función para mostrar el menú, llámala aquí
-        if (typeof accederMenuATTF === 'function') {
-            accederMenuATTF();
-        } else {
-            // Si no, forzamos la visibilidad del menú
-            const menu = document.getElementById('menuModulosATTF');
-            if (menu) menu.style.display = 'block';
-        }
-
-    } catch (err) {
-        console.error("❌ Error al confirmar descanso:", err);
-        alert("Hubo un problema al guardar la información: " + err.message);
-    }
-};
 
 function verificarHorarioPermitido(rol, userData = null) {
     // ✅ Obtener fecha/hora exacta de El Salvador (Sincronización SV)
@@ -2412,14 +2427,32 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
             
             <div class="form-group">
                 <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔄 Turno de MAÑANA:</label>
-                <select id="turnoManana" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
+                <select id="turnoManana" class="form-control" onchange="verificarSeleccionDescanso()" style="width: 100%; padding: 10px; border-radius: 8px;">
                     <option value="">-- Seleccione --</option>
                     ${opcionesHTML}
+                    <option value="descanso" style="background: #fff3cd; font-weight: bold;">🏖️ DESCANSO</option>
                 </select>
             </div>
             
-            <button class="btn" style="width: 100%; margin-top: 20px;" onclick="validarDescansoATTF('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')">
-                ✅ Continuar al Descanso
+            <!-- ✅ CAMPO OCULTO PARA FECHAS DE DESCANSO -->
+            <div id="seccionDescanso" style="display: none; margin-top: 15px;">
+                <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
+                    <strong>📅 Fechas de Descanso:</strong>
+                    <p style="margin: 5px 0; font-size: 13px;">Inicio: ${fechaDescansoInicioStr} | Fin: ${fechaDescansoFinStr}</p>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">🔙 Turno de REGRESO:</label>
+                    <select id="turnoRegreso" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px;">
+                        <option value="">-- Seleccione --</option>
+                        ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
+                            `<option value="${key}">${turno.nombre}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            </div>
+            
+            <button id="btnConfirmarManana" class="btn" style="width: 100%; margin-top: 20px;" onclick="verificarYConfirmarTurnoManana('${fechaDescansoInicioStr}', '${fechaDescansoFinStr}')" style="display: none;">
+                ✅ Confirmar
             </button>
         </div>
     `;
@@ -2427,6 +2460,51 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
     console.log('✅ Interfaz de Paso 2 renderizada exitosamente');
 }
 
+// ========================================
+// 🆕 FUNCIÓN AUXILIAR: Verificar selección y mostrar botón
+// ========================================
+function verificarSeleccionDescanso() {
+    const turnoManana = document.getElementById('turnoManana').value;
+    const seccionDescanso = document.getElementById('seccionDescanso');
+    const btnConfirmar = document.getElementById('btnConfirmarManana');
+    
+    if (turnoManana === 'descanso') {
+        // Mostrar sección de descanso
+        seccionDescanso.style.display = 'block';
+        btnConfirmar.style.display = 'block';
+        btnConfirmar.textContent = '✅ Confirmar Descanso';
+    } else if (turnoManana) {
+        // Ocultar sección de descanso
+        seccionDescanso.style.display = 'none';
+        btnConfirmar.style.display = 'block';
+        btnConfirmar.textContent = '✅ Confirmar Turno';
+    } else {
+        // Ocultar todo si no hay selección
+        seccionDescanso.style.display = 'none';
+        btnConfirmar.style.display = 'none';
+    }
+}
+
+// ========================================
+// 🆕 FUNCIÓN AUXILIAR: Verificar y confirmar
+// ========================================
+function verificarYConfirmarTurnoManana(fechaDescansoInicioStr, fechaDescansoFinStr) {
+    const turnoManana = document.getElementById('turnoManana').value;
+    
+    if (turnoManana === 'descanso') {
+        // Validar que se seleccionó turno de regreso
+        const turnoRegreso = document.getElementById('turnoRegreso').value;
+        if (!turnoRegreso) {
+            alert('⚠️ Por favor seleccione el turno de regreso');
+            return;
+        }
+        // Llamar a validarDescansoATTF
+        validarDescansoATTF(fechaDescansoInicioStr, fechaDescansoFinStr);
+    } else {
+        // Llamar a confirmarTurnoMananaATTF directamente
+        confirmarTurnoMananaATTF();
+    }
+}
 
 	// ========================================
 // ⚠️ VALIDAR DESCANSO PROGRAMADO (CORREGIDA)
@@ -2441,14 +2519,9 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
     const turnoMananaSelect = document.getElementById('turnoManana');
     const turnoManana = turnoMananaSelect?.value;
     
+    // ✅ VALIDACIÓN ÚNICA (eliminar duplicado)
     if (!turnoManana || !turnoMananaSelect) {
         console.error('❌ [VALIDACIÓN] Turno de mañana no disponible en DOM');
-        alert('Por favor seleccione el turno de mañana antes de continuar');
-        return;
-    }
-    
-    if (!turnoManana) {
-        console.warn('⚠️ [VALIDACIÓN] Turno de mañana vacío');
         alert('Por favor seleccione el turno de mañana antes de continuar');
         return;
     }
@@ -2501,6 +2574,7 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
     
     console.log('✅ Interfaz de confirmación de descanso renderizada');
 }
+
 
 
 function accederMenuATTF() {
