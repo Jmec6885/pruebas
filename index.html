@@ -2396,13 +2396,19 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
     // Obtener turnos disponibles
     const turnosConsecutivos = getTurnoConsecutivo(turnoHoyKey);
     let opcionesHTML = '';
-    Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
-        if (turnosConsecutivos.includes(key)) {
-            opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
-        } else {
-            opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
-        }
-    });
+    // Generar opciones de turnos
+Object.entries(TURNOS_ATTF).forEach(([key, turno]) => {
+    if (turnosConsecutivos.includes(key)) {
+        opcionesHTML += `<option value="${key}" disabled style="background: #ffdddd; color: #999;">${turno.nombre} (🚫 Turno Consecutivo)</option>`;
+    } else {
+        opcionesHTML += `<option value="${key}">${turno.nombre}</option>`;
+    }
+});
+
+// ✅ AGREGAR OPCIÓN DE DESCANSO (CRÍTICO PARA CONTADOR = 0)
+opcionesHTML += `<option value="descanso" style="background: #fff3cd; font-weight: bold; border-top: 2px solid #ffc107;">🏖️ DESCANSO (Día ${diasHastaDescanso + 1})</option>`;
+
+
     
     // ✅ VALIDAR CONTENEDOR DE CONFIGURACIÓN
     const targetSection = document.getElementById('configuracionInicialATTF');
