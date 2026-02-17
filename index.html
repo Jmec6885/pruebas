@@ -1396,6 +1396,14 @@ if (userData.turno_hoy && !userData.fecha_turno_hoy) {
         console.error('❌ Error corrigiendo fecha_turno_hoy:', err);
     }
 
+console.group('🔍 DIAGNÓSTICO loginATTF');
+    console.log('currentUser:', currentUser);
+    console.log('turno_hoy:', currentUser?.turno_hoy);
+    console.log('turno_manana:', currentUser?.turno_manana);
+    console.log('descanso_fecha_inicio:', currentUser?.descanso_fecha_inicio);
+    console.log('descanso_fecha_fin:', currentUser?.descanso_fecha_fin);
+    console.groupEnd();
+
     console.log('🔍 Verificación post-corrección de integridad:');
     console.log(`   • turno_hoy: ${userData.turno_hoy}`);
     console.log(`   • fecha_turno_hoy: ${userData.fecha_turno_hoy}`);
@@ -1610,6 +1618,13 @@ if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
   if (!tieneHoyAlDia) {
     console.log('🚪 CASO 2: NO TIENE TURNO DE HOY');
     console.log('🔧 Redirigiendo a Paso 1...');
+
+// ✅ Limpiar cualquier interfaz residual antes de mostrar nueva
+    const configSec = document.getElementById('configuracionInicialATTF');
+    if (configSec) {
+        configSec.innerHTML = '';
+        configSec.style.display = 'block';
+    }
     mostrarConfiguracionInicialATTF();
     return;
   }
@@ -1635,7 +1650,42 @@ if (contadorTurnos === 0 || contadorTurnos >= 5) {
 }
 } // ✅ ¡CORREGIDO! Cierre definitivo de loginATTF
 
-
+async function resetearTurnosUsuario() {
+    if (!currentUser?.id) return;
+    
+    const confirmar = confirm('¿Resetear configuración de turnos? Esto te permitirá configurar desde cero.');
+    if (!confirmar) return;
+    
+    try {
+        await supabaseClient
+            .from('usuarios')
+            .update({
+                turno_hoy: null,
+                fecha_turno_hoy: null,
+                turno_manana: null,
+                fecha_turno_manana: null,
+                descanso_fecha_inicio: null,
+                descanso_fecha_fin: null,
+                turno_regreso: null,
+                fecha_turno_regreso: null,
+                contador_turnos: 0,
+                estado_ciclo: 'primera_vez'
+            })
+            .eq('id', currentUser.id);
+        
+        // Limpiar localStorage
+        localStorage.removeItem('turno_hoy');
+        localStorage.removeItem('turno_manana');
+        localStorage.removeItem('descanso_inicio');
+        localStorage.removeItem('descanso_fin');
+        
+        alert('✅ Configuración reseteada. Serás redirigido al inicio.');
+        logout();
+    } catch (err) {
+        console.error('Error reseteando turnos:', err);
+        alert('❌ Error: ' + err.message);
+    }
+}
 
 function calcularDiasSinActividad(ultimaActividad) {
   if (!ultimaActividad) {
@@ -2108,6 +2158,16 @@ function verificarSeleccionDescanso() {
         console.warn('⚠️ Elementos DOM no encontrados');
         return;
     }
+
+// 🔍 AGREGA ESTE DIAGNÓSTICO AQUÍ:
+    console.group('🔍 DIAGNÓSTICO verifSeleccionDescanso');
+    console.log('1. currentUser existe:', !!currentUser);
+    console.log('2. Rol:', currentUser?.rol);
+    console.log('3. Select turnoManana existe:', !!document.getElementById('turnoManana'));
+    console.log('4. Sección descanso existe:', !!seccionDescanso);
+    console.log('5. Valor seleccionado:', turnoManana);
+    console.log('6. Descanso activo en BD:', currentUser?.descanso_fecha_inicio);
+    console.groupEnd();
     
     if (turnoManana === 'descanso') {
         const { min, max } = obtenerLimitesFechasDescanso();
@@ -2212,6 +2272,11 @@ async function confirmarTurnoMananaATTF() {
     console.log('🔍 ID Usuario:', currentUser?.id || 'NO DISPONIBLE');
     console.log('🔍 Estado currentUser:', currentUser ? '✅ EXISTE' : '❌ NULL/UNDEFINED');
     console.log('🔍 ==========================================');
+console.log('currentUser:', currentUser);
+    console.log('turno_hoy:', currentUser?.turno_hoy);
+    console.log('turno_manana:', currentUser?.turno_manana);
+    console.log('descanso_fecha_inicio:', currentUser?.descanso_fecha_inicio);
+    console.log('descanso_fecha_fin:', currentUser?.descanso_fecha_fin);
 
     // ✅ VALIDACIÓN CRÍTICA 0: Verificar sesión activa
     if (!currentUser || !currentUser.id) {
