@@ -11281,43 +11281,48 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
             iconAnchor: [17.5, 35]
         });
 
+        // ... (dentro de osEnRadio.forEach(os => { )
+
         // 1. PRIMERO preparamos los datos (FUERA del marcador)
-const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function'
-    ? escapeJSONForHTMLAttribute(os, ['OSATMO', 'Tipologia', 'Deuda', 'Coordenadas', 'Coordendasgis', 'Unidad'])
-    : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        // Usamos 'var' o simplemente omitimos el prefijo si sospechamos de colisión de nombres
+        let currentOsDataEscaped = typeof escapeJSONForHTMLAttribute === 'function'
+            ? escapeJSONForHTMLAttribute(os, ['OSATMO', 'Tipologia', 'Deuda', 'Coordenadas', 'Coordendasgis', 'Unidad'])
+            : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-const labelEscaped = labelEstado.replace(/'/g, "\\'");
+        let currentLabelEscaped = labelEstado.replace(/'/g, "\\'");
 
-// 2. AHORA creamos el marcador y el popup de forma limpia
-const marker = L.marker([coords.lat, coords.lng], { icon: icono })
-    .addTo(window.mapaLeafletInstance)
-    .bindPopup(`
-        <div style="min-width: 250px;">
-            <strong style="color: ${colorFondo};">#${os.numeroOrden || 'X'} - ${labelEstado}</strong><br>
-            <strong>OS:</strong> ${os.OSATMO}<br>
-            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-            ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
-            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-            
-            <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){ mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEscaped}'); }"
-                style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-                📋 Ver Detalle Completo
-            </button>
-        </div>
-    `);
+        // 2. AHORA creamos el marcador
+        let newMarker = L.marker([coords.lat, coords.lng], { icon: icono })
+            .addTo(window.mapaLeafletInstance)
+            .bindPopup(`
+                <div style="min-width: 250px;">
+                    <strong style="color: ${colorFondo};">#${os.numeroOrden || 'X'} - ${labelEstado}</strong><br>
+                    <strong>OS:</strong> ${os.OSATMO}<br>
+                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
+                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                    
+                    <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){ mostrarDetalleOSEnPanel(${currentOsDataEscaped}, '${currentLabelEscaped}'); }"
+                        style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                        📋 Ver Detalle Completo
+                    </button>
+                </div>
+            `);
 
+        // Cambiamos 'marker' por 'newMarker' para evitar conflictos con otras partes del script
         if (os.OSATMO === 'PON_AQUI_UN_NUMERO_QUE_FALLE') {
             console.log(`Análisis OS ${os.OSATMO}: Deuda=${deuda}, Asignada=${estaAsignada}, Key asignada=${estadoKey}`);
         }
 
-        // ✅ AGRUPAR (Tu lógica original)
-        window.markersPorEstado[estadoKey].push(marker);
+        // ✅ AGRUPAR (Usando el nombre de variable nuevo)
+        window.markersPorEstado[estadoKey].push(newMarker);
 
         const tip = os.Tipologia || 'Sin tipología';
         if (!window.markersPorTipologia[tip]) {
             window.markersPorTipologia[tip] = [];
         }
-        window.markersPorTipologia[tip].push(marker);
+        window.markersPorTipologia[tip].push(newMarker);
+// ...
     });
 
     // ✅ 4. Ajustar vista (Tu lógica original)
