@@ -11281,28 +11281,30 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
             iconAnchor: [17.5, 35]
         });
 
-        const marker = L.marker([coords.lat, coords.lng], { icon: icono })
-            .addTo(window.mapaLeafletInstance)
-            .bindPopup(`
-                <div style="min-width: 250px;">
-                    <strong style="color: ${colorFondo};">#${os.numeroOrden || 'X'} - ${labelEstado}</strong><br>
-                    <strong>OS:</strong> ${os.OSATMO}<br>
-                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
-                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                    // ✅ Usar función de escape existente para seguridad HTML
+        // 1. PRIMERO preparamos los datos (FUERA del marcador)
 const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function'
     ? escapeJSONForHTMLAttribute(os, ['OSATMO', 'Tipologia', 'Deuda', 'Coordenadas', 'Coordendasgis', 'Unidad'])
     : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-// Luego en el onclick del botón:
-popupContent += `
-<button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
-    style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-    📋 Ver Detalle Completo
-</button>
-                </div>
-            `);
+const labelEscaped = labelEstado.replace(/'/g, "\\'");
+
+// 2. AHORA creamos el marcador y el popup de forma limpia
+const marker = L.marker([coords.lat, coords.lng], { icon: icono })
+    .addTo(window.mapaLeafletInstance)
+    .bindPopup(`
+        <div style="min-width: 250px;">
+            <strong style="color: ${colorFondo};">#${os.numeroOrden || 'X'} - ${labelEstado}</strong><br>
+            <strong>OS:</strong> ${os.OSATMO}<br>
+            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+            ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
+            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+            
+            <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){ mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEscaped}'); }"
+                style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                📋 Ver Detalle Completo
+            </button>
+        </div>
+    `);
 
         if (os.OSATMO === 'PON_AQUI_UN_NUMERO_QUE_FALLE') {
             console.log(`Análisis OS ${os.OSATMO}: Deuda=${deuda}, Asignada=${estaAsignada}, Key asignada=${estadoKey}`);
