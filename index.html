@@ -1641,7 +1641,7 @@ console.log('🔢 Contador de turnos:', contadorTurnos);
 // - Contador >= 5: Después de 5 días → FORZAR descanso (obligatorio)
 if (contadorTurnos === 0 || contadorTurnos >= 5) {
     console.log('⚠️ Contador = 0 (primer día/después de descanso) O contador >= 5 - Forzando descanso');
-    mostrarForzarDescansoATTF();
+    mostrarConfiguracionDescansoCiclo();
     return; // ✅ Detener ejecución inmediatamente
 } else {
     console.log('➡️ Redirigiendo a Paso 2 (días 1-4 de trabajo)...');
@@ -2557,6 +2557,133 @@ const fechaTurnoMananaStr = formatearFechaElSalvador(new Date(fechaInicio + 'T00
 }
 
 
+// ✅ AGREGAR SOLO SI TIENES: mostrarForzarDescansoATTF()
+// Estas funciones son para el flujo cuando contador_turnos >= 5
+
+// 1. Función auxiliar para guardar descanso (refactorización opcional)
+async function guardarConfiguracionDescanso(fechaInicio, fechaFin, turnoRegreso, fechaHoy, turnoHoy) {
+    const fechaRegresoDate = new Date(fechaFin + 'T00:00:00');
+    fechaRegresoDate.setDate(fechaRegresoDate.getDate() + 1);
+    const fechaRegresoStr = formatearFechaElSalvador(fechaRegresoDate);
+    const fechaTurnoMananaStr = formatearFechaElSalvador(new Date(fechaInicio + 'T00:00:00'));
+
+    const { error } = await supabaseClient
+        .from('usuarios')
+        .update({
+            turno_hoy: turnoHoy,
+            fecha_turno_hoy: fechaHoy,
+            descanso_fecha_inicio: fechaInicio,
+            descanso_fecha_fin: fechaFin,
+            turno_regreso: turnoRegreso,
+            fecha_turno_regreso: fechaRegresoStr,
+            contador_turnos: 0,
+            estado_ciclo: 'ciclo_normal',
+            turno_manana: 'descanso',
+            fecha_turno_manana: fechaTurnoMananaStr,
+            ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador()),
+            ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+        })
+        .eq('id', currentUser.id);
+
+    return { error, fechaRegresoStr, fechaTurnoMananaStr };
+}
+
+// 2. Función para mostrar interfaz de descanso por ciclo completado
+function mostrarConfiguracionDescansoCiclo() {
+    const targetSection = document.getElementById('configuracionInicialATTF') || 
+                         document.getElementById('searchSection');
+    if (!targetSection) return;
+
+    targetSection.innerHTML = `
+        <div class="card-configuracion" style="padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto;">
+            <h2 class="titulo-degradado" style="text-align: center;">🎯 Ciclo Completado - Descanso Obligatorio</h2>
+            <p style="text-align: center; color: #666; font-size: 14px; margin-bottom: 20px;">
+                Has completado 5 turnos. Configura tu descanso de 2 días.
+            </p>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>🗓️ Primer día de descanso:</label>
+                <input type="date" id="descansoInicioCiclo" class="form-control" 
+                       min="${getFechaHoyElSalvador()}" onchange="calcularFinDescansoCiclo()">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>🗓️ Segundo día de descanso:</label>
+                <input type="date" id="descansoFinCiclo" class="form-control" readonly>
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label>🔙 Turno de REGRESO:</label>
+                <select id="turnoRegresoCiclo" class="form-control">
+                    <option value="">-- Seleccione --</option>
+                    ${Object.entries(TURNOS_ATTF).map(([key, turno]) => 
+                        `<option value="${key}">${turno.nombre}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn" onclick="guardarDescansoCiclo()" style="background: #4caf50; color: white;">✅ Confirmar</button>
+                <button class="btn" onclick="accederMenuATTF()" style="background: #e2e8f0; color: #475569;">↩ Cancelar</button>
+            </div>
+        </div>
+    `;
+    targetSection.style.display = 'block';
+}
+
+// 3. Función para calcular fecha fin automáticamente
+function calcularFinDescansoCiclo() {
+    const inicio = document.getElementById('descansoInicioCiclo')?.value;
+    const finInput = document.getElementById('descansoFinCiclo');
+    
+    if (!inicio || !finInput) return;
+    
+    const fecha = new Date(inicio + 'T00:00:00');
+    fecha.setDate(fecha.getDate() + 1);
+    finInput.value = fecha.toISOString().split('T')[0];
+}
+
+// 4. Función para guardar descanso del ciclo
+async function guardarDescansoCiclo() {
+    const fechaInicio = document.getElementById('descansoInicioCiclo')?.value;
+    const fechaFin = document.getElementById('descansoFinCiclo')?.value;
+    const turnoRegreso = document.getElementById('turnoRegresoCiclo')?.value;
+
+    if (!fechaInicio || !fechaFin || !turnoRegreso) {
+        alert('⚠️ Por favor complete todos los campos');
+        return;
+    }
+
+    const { error } = await guardarConfiguracionDescanso(
+        fechaInicio, 
+        fechaFin, 
+        turnoRegreso, 
+        getFechaHoyElSalvador(), 
+        currentUser.turno_hoy
+    );
+
+    if (error) {
+        alert('❌ Error al guardar: ' + error.message);
+        return;
+    }
+
+    // Actualizar localStorage
+    localStorage.setItem('turno_manana', 'descanso');
+    localStorage.setItem('descanso_inicio', fechaInicio);
+    localStorage.setItem('descanso_fin', fechaFin);
+    
+    alert('✅ Descanso obligatorio configurado');
+    accederMenuATTF();
+}
+
+// 5. Función auxiliar para formatear fecha (si no la tienes)
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('es-ES', { 
+        weekday: 'short', 
+        day: 'numeric', 
+        month: 'short' 
+    });
+}
+
+
 /**
  * Función auxiliar para evitar repetir código de salida
  */
@@ -2600,8 +2727,15 @@ function cerrarConfiguracionYEntrar() {
 
 
 function mostrarProgramarTurnoMañanaConDescanso(userData) {
-    // ✅ Delega a la función maestra con mostrarOpcionDescanso = true
-    // La maestra ya valida userData y renderiza la interfaz correcta
+    if (!userData) {
+        console.error('❌ userData no proporcionado');
+        return;
+    }
+    if (typeof mostrarProgramarTurnoManana !== 'function') {
+        console.error('❌ mostrarProgramarTurnoManana no está definida');
+        alert('Error de sistema. Contacte al administrador.');
+        return;
+    }
     mostrarProgramarTurnoManana(userData, true);
 }
 
@@ -2611,7 +2745,12 @@ function mostrarProgramarTurnoMañanaConDescanso(userData) {
 // 🆕 FUNCIÓN AUXILIAR: Verificar y confirmar
 // ========================================
 function verificarYConfirmarTurnoManana(fechaDescansoInicioStr, fechaDescansoFinStr) {
-    const turnoManana = document.getElementById('turnoManana').value;
+    const turnoMananaSelect = document.getElementById('turnoManana');
+if (!turnoMananaSelect) {
+    console.error('❌ Select turnoManana no encontrado en DOM');
+    return;
+}
+const turnoManana = turnoMananaSelect.value;
     
     if (turnoManana === 'descanso') {
         // Validar que se seleccionó turno de regreso
@@ -2887,10 +3026,7 @@ if (!targetSection) {
 }
     const menuPrincipal = document.getElementById('menuModulosATTF') || document.querySelector('.main-menu-container');
 
-    if (!targetSection) {
-        console.error("No se encontró contenedor para el Descanso Obligatorio.");
-        return;
-    }
+  
 
     // 2. ⚡ CRÍTICO: Ocultamos el menú principal para que no se vea doble (Pantalla limpia)
     if (menuPrincipal) {
@@ -2994,7 +3130,12 @@ async function confirmarDescansoObligatorioATTF() {
                 turno_manana: 'descanso',
                 ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
             })
-            .eq('id', currentUser.id);
+            if (!currentUser?.id) {
+    console.error('❌ currentUser.id no disponible');
+    alert('Error de sesión. Por favor, inicie sesión nuevamente.');
+    logout();
+    return;
+}
 
         if (error) throw error;
 
@@ -6119,7 +6260,7 @@ async function guardarFiltrosPorUnidad() {
                                  .map(cb => cb.value);
 
     let fechaInput = document.getElementById('fechaVigenciaFiltros')?.value;
-    const hoy = new Date();
+    const hoy = getFechaElSalvador();
     const fechaHoy = hoy.toISOString().split('T')[0];
     const fechaFinal = fechaInput || fechaHoy;
 
@@ -6360,14 +6501,16 @@ const miUnidadNorm = unidadSeleccionada.trim().toUpperCase();
 // --- AHORA (CON LIMPIEZA) ---
 const miUnidadLimpiaComparar = unidadSeleccionada.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
+// ✅ CORREGIDO: Normalización consistente de unidades
+const miUnidadLimpia = unidadSeleccionada.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
 const misAsignadasReales = fuenteDatos.filter(os => {
-    const uOS = (os.Unidad || os.unidad || "").toString();
-    const uOSLimpia = uOS.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    // Comparamos versiones limpias para que encuentre tus órdenes aunque tengan guiones
-    return uOSLimpia === miUnidadLimpiaComparar;
+    const uOS = (os.Unidad || os.unidad || "").toString().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    // Comparamos versiones limpias para que encuentre órdenes aunque tengan guiones
+    return uOS === miUnidadLimpia;
 });
 
-console.log(`✅ ${misAsignadasReales.length} OS encontradas para mi unidad (${miUnidadNorm})`);
+console.log(`✅ ${misAsignadasReales.length} OS encontradas para unidad: ${unidadSeleccionada}`);
 
 // Validación de seguridad: si no hay órdenes para TU unidad, avisamos al usuario
 if (misAsignadasReales.length === 0) {
@@ -6412,15 +6555,24 @@ if (!osCentro) {
 }
 
 // 🛠️ CORRECCIÓN AQUÍ: Definición de 'partes', 'latCentro' y 'lngCentro'
-const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
-const partes = coordsTexto.split(','); // <--- AQUÍ SE CREA LA VARIABLE 'partes'
+const coordsCentro = getCoordsCompat(osCentro, true);
+let latCentro, lngCentro;
 
-if (partes.length !== 2) {
-    throw new Error("La OS de partida tiene un formato de coordenadas inválido. Debe ser 'Lat, Lng'");
+if (coordsCentro) {
+    ({ lat: latCentro, lng: lngCentro } = coordsCentro);
+} else {
+    const coordsTexto = osCentro.Coordenadas || osCentro.Coordendasgis;
+    if (!coordsTexto || !coordsTexto.includes(',')) {
+        throw new Error("La OS de partida no tiene coordenadas válidas");
+    }
+    const partes = coordsTexto.split(',');
+    latCentro = parseFloat(partes[0].trim());
+    lngCentro = parseFloat(partes[1].trim());
 }
 
-const latCentro = parseFloat(partes[0].trim());
-const lngCentro = parseFloat(partes[1].trim());
+if (isNaN(latCentro) || isNaN(lngCentro)) {
+    throw new Error("Coordenadas inválidas para el centro del mapa");
+}
 
 console.log(`📍 Punto de origen definido en: ${latCentro}, ${lngCentro} (OS: ${osCentro.osatomo || osCentro.OSATMO})`);
 
@@ -6664,7 +6816,7 @@ console.log('📊 ==========================================');
         // ✅ 1. Normalizar tus órdenes (las que te pertenecen)
         // Usamos 'misAsignadasReales' que filtramos en el paso 3
         const osAsignadasNormalizadas = misAsignadasReales.map(os => {
-            const coordsStr = os.Coordenadas || os.Coordendasgis;
+            const coords = extraerCoordenadas(os);
             if (!coordsStr || typeof coordsStr !== 'string' || !coordsStr.includes(',')) return null;
 
             const [lat, lng] = coordsStr.split(',').map(c => parseFloat(c.trim()));
@@ -9909,21 +10061,76 @@ async function guardarFiltrosMapa() {
     }
 }
 
+/**
+ * Heartbeat automático para mantener sesión activa durante procesos largos
+ * @param {number} intervaloMs - Intervalo en milisegundos (default: 25000)
+ * @returns {Function} - Función para detener el heartbeat
+ */
+function iniciarHeartbeatSesion(intervaloMs = 25000) {
+    if (!currentUser?.id) return () => {};
+    
+    let heartbeatId = null;
+    let ultimoEnvio = 0;
+    
+    const enviarHeartbeat = async () => {
+        // Evitar enviar demasiado seguido
+        if (Date.now() - ultimoEnvio < intervaloMs) return;
+        
+        try {
+            await supabaseClient
+                .from('usuarios')
+                .update({ 
+                    ultima_actividad: new Date().toISOString(),
+                    ultimaconexion: formatearFechaCompletaElSalvador(getFechaElSalvador())
+                })
+                .eq('id', currentUser.id);
+            ultimoEnvio = Date.now();
+            console.log('💓 Heartbeat de sesión enviado');
+        } catch (error) {
+            console.warn('⚠️ Error enviando heartbeat:', error.message);
+        }
+    };
+    
+    // Enviar inmediatamente al iniciar
+    enviarHeartbeat();
+    
+    // Configurar intervalo
+    heartbeatId = setInterval(enviarHeartbeat, intervaloMs);
+    
+    // Retornar función de limpieza
+    return () => {
+        if (heartbeatId) {
+            clearInterval(heartbeatId);
+            console.log('🛑 Heartbeat detenido');
+        }
+    };
+}
+
+
+
 // ========================================
-// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CON COMENTARIOS DE CONSULTA SUMINISTRO)
+// 🗺️ FUNCIÓN PRINCIPAL: cargarYMostrarMapa (VERSIÓN UNIFICADA Y ROBUSTA)
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
+    // ✅ GUARDAR REFERENCIAS GLOBALES PARA RECARGA
+    window.osCentroActual = osCentro;
+    window.unidadFiltroActual = unidadFiltro;
+    // ✅ 1. INICIAR HEARTBEAT PARA MANTENER SESIÓN ACTIVA
+    const detenerHeartbeat = iniciarHeartbeatSesion(25000);
     const resultsContainer = document.getElementById('searchResults');
+    
     resultsContainer.innerHTML = `
-    <div class="result-card">
-        <div class="loading" style="display: block; margin: 20px auto;"></div>
-        <p style="text-align: center; color: #666;">Cargando mapa y aplicando filtros de despacho...</p>
-    </div>`;
+        <div class="result-card">
+            <div class="loading" style="display: block; margin: 20px auto;"></div>
+            <p style="text-align: center; color: #666;">Cargando mapa y aplicando filtros de despacho...</p>
+        </div>`;
     
     console.log('🗺️ --- INICIANDO PROCESAMIENTO DE MAPA ---');
     
     try {
-        // 1. CARGAR FILTROS UNIVERSALES
+        // ========================================
+        // ✅ 2. CARGAR FILTROS UNIVERSALES
+        // ========================================
         let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
         if (!filtrosAplicar) {
             console.warn('⚠️ Filtros no encontrados, usando valores por defecto');
@@ -9932,7 +10139,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         window.filtrosAplicados = filtrosAplicar;
         const radioKm = filtrosAplicar.radio_km || 3;
         
-        // ✅ LOGS DE FILTROS
+        // ✅ LOGS DE FILTROS PARA AUDITORÍA
         console.log('📋 ==========================================');
         console.log('📋 FILTROS CARGADOS DESDE TABLA');
         console.log('📋 ==========================================');
@@ -9944,126 +10151,124 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         });
         console.log('📋 ==========================================');
         
-        // 2. Coordenadas del Punto Central
+        // ========================================
+        // ✅ 3. COORDENADAS DEL PUNTO CENTRAL
+        // ========================================
         const coordsCentroStr = osCentro.Coordenadas || osCentro.Coordendasgis;
         if (!coordsCentroStr) throw new Error("La OS de referencia no tiene coordenadas.");
         const [latCentro, lngCentro] = coordsCentroStr.split(',').map(c => parseFloat(c.trim()));
         
-        // 3. 🛡️ CARGAR OS ASIGNADAS
+        // ========================================
+        // ✅ 4. CARGAR OS ASIGNADAS PARA BLOQUEO
+        // ========================================
         console.log('📥 Sincronizando OS asignadas para bloqueo...');
         const { data: osAsignadasBD } = await supabaseClient.from('os_asignadas').select('osatomo');
         const osAsignadasSet = new Set(osAsignadasBD?.map(a => String(a.osatomo).trim()) || []);
         console.log(`✅ ${osAsignadasSet.size} OS bloqueadas por estar asignadas.`);
         
-        // 4. CARGAR OS PENDIENTES (Paginado)
+        // ========================================
+        // ✅ 5. CARGAR OS PENDIENTES (PAGINADO)
+        // ========================================
         let todasOSRegistradas = [];
         let offset = 0;
         const BATCH_SIZE = 1000;
+        
         while (true) {
-           const { data, error } = await supabaseClient
-.from('OS Pendientes')
-.select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato, Estado_SAP, Direccion, Unicom')
+            const { data, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato, Estado_SAP, Direccion, Unicom, Rango, Dias, Condicion')
                 .in('Estado_ATOMO', ['Registrada', 'Asignada'])
                 .range(offset, offset + BATCH_SIZE - 1);
+            
             if (error || !data || data.length === 0) break;
             todasOSRegistradas.push(...data);
             if (data.length < BATCH_SIZE) break;
             offset += BATCH_SIZE;
         }
-        
         console.log(`✅ ${todasOSRegistradas.length} OS Pendientes cargadas`);
         
         // ========================================
-// ✅ 🆕 PASO NUEVO: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
-// ========================================
-console.log('📝 ==========================================');
-console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
-console.log('📝 ==========================================');
-
-// Extraer medidores únicos de todas las OS
-const medidoresUnicos = [...new Set(todasOSRegistradas
-    .map(os => os.Medidor)
-    .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
-
-const cuentasUnicas = [...new Set(todasOSRegistradas
-    .map(os => os.CuentaContrato)
-    .filter(c => c && String(c).trim() !== '' && String(c).trim() !== 'N/A'))];
-
-console.log(`🔍 Medidores únicos encontrados: ${medidoresUnicos.length}`);
-console.log(`🔍 Cuentas únicas encontradas: ${cuentasUnicas.length}`);
-
-// Mapa para almacenar comentarios por Medidor
-const comentariosPorMedidor = new Map();
-
-// Consultar comentarios en lotes de 100 medidores
-if (medidoresUnicos.length > 0) {
-    const BATCH_MEDIDORES = 1000;
-    for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
-        const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
+        // ✅ 6. OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
+        // ========================================
+        console.log('📝 ==========================================');
+        console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
+        console.log('📝 ==========================================');
         
-        console.log(`📡 Consultando lote ${i/BATCH_MEDIDORES + 1}: ${batchMedidores.length} medidores`);
+        // Extraer medidores únicos (FILTRO ESTRICTO: excluir vacíos y 'N/A')
+        const medidoresUnicos = [...new Set(todasOSRegistradas
+            .map(os => os.Medidor)
+            .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
         
-        const { data: comentariosData, error: errorComentarios } = await supabaseClient
-            .from('consultas_servicios')
-            .select('Medidor, CuentaContrato, ComentarioGeneral')
-            .in('Medidor', batchMedidores);
+        const cuentasUnicas = [...new Set(todasOSRegistradas
+            .map(os => os.CuentaContrato)
+            .filter(c => c && String(c).trim() !== '' && String(c).trim() !== 'N/A'))];
         
-        if (!errorComentarios && comentariosData) {
-            comentariosData.forEach(item => {
-                if (item.Medidor) {
-                    comentariosPorMedidor.set(String(item.Medidor).trim(), {
-                        ComentarioGeneral: item.ComentarioGeneral || '',
-                        CuentaContrato: item.CuentaContrato
+        console.log(`🔍 Medidores únicos: ${medidoresUnicos.length} | Cuentas únicas: ${cuentasUnicas.length}`);
+        
+        const comentariosPorMedidor = new Map();
+        
+        // Consultar en lotes de 200 (equilibrio entre velocidad y estabilidad)
+        if (medidoresUnicos.length > 0) {
+            const BATCH_MEDIDORES = 200;
+            for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
+                const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
+                console.log(`📡 Lote ${Math.floor(i/BATCH_MEDIDORES) + 1}: ${batchMedidores.length} medidores`);
+                
+                const { data: comentariosData, error: errorComentarios } = await supabaseClient
+                    .from('consultas_servicios')
+                    .select('Medidor, CuentaContrato, ComentarioGeneral')
+                    .in('Medidor', batchMedidores);
+                
+                if (!errorComentarios && comentariosData) {
+                    comentariosData.forEach(item => {
+                        if (item.Medidor) {
+                            comentariosPorMedidor.set(String(item.Medidor).trim(), {
+                                ComentarioGeneral: item.ComentarioGeneral || '',
+                                CuentaContrato: item.CuentaContrato
+                            });
+                        }
                     });
+                    console.log(`✅ Lote: ${comentariosData.length} comentarios encontrados`);
                 }
-            });
-            console.log(`✅ Lote ${i/BATCH_MEDIDORES + 1}: ${comentariosData.length} comentarios encontrados`);
+                await new Promise(resolve => setTimeout(resolve, 50)); // Pausa para no saturar
+            }
         }
+        console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
+        console.log('📝 ==========================================');
         
-        // Pequeña pausa para no saturar
-        await new Promise(resolve => setTimeout(resolve, 50));
-    }
-}
-
-console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
-console.log('📝 ==========================================');
-
-// ========================================
-// ✅ INYECTAR COMENTARIOS EN LAS OS
-// ========================================
-todasOSRegistradas.forEach(os => {
-    const medidorKey = String(os.Medidor).trim();
-    const comentarioData = comentariosPorMedidor.get(medidorKey);
-    
-    if (comentarioData && comentarioData.ComentarioGeneral) {
-        // ✅ INYECTAR ComentarioGeneral desde consulta_servicios
-        os.Comentario = comentarioData.ComentarioGeneral;
-        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
-        console.log(`💬 OS ${os.OSATMO}: Comentario inyectado (${comentarioData.ComentarioGeneral?.length || 0} caracteres)`);
-    } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario !== '') {
-        // Ya tiene comentario de OS Pendientes
-        os.ComentarioGeneral = os.Comentario;
-        console.log(`💬 OS ${os.OSATMO}: Usa comentario de OS Pendientes`);
-    } else {
-        os.Comentario = 'Sin comentario disponible';
-        os.ComentarioGeneral = 'Sin comentario disponible';
-        console.log(`⚠️ OS ${os.OSATMO}: Sin comentario`);
-    }
-});
-
+        // ========================================
+        // ✅ 7. INYECTAR COMENTARIOS EN LAS OS (LÓGICA SEGURA)
+        // ========================================
+        todasOSRegistradas.forEach(os => {
+            const medidorKey = String(os.Medidor).trim();
+            const comentarioData = comentariosPorMedidor.get(medidorKey);
+            
+            if (comentarioData && comentarioData.ComentarioGeneral) {
+                // ✅ PRIORIDAD: Comentario de consulta_servicios si existe y es válido
+                os.Comentario = comentarioData.ComentarioGeneral;
+                os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+                console.log(`💬 OS ${os.OSATMO}: Comentario inyectado desde consulta_servicios`);
+            } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario !== '' && os.Comentario !== 'Sin comentario disponible') {
+                // ✅ PRESERVAR: Comentario original de OS Pendientes si es válido
+                os.ComentarioGeneral = os.Comentario;
+                console.log(`💬 OS ${os.OSATMO}: Usa comentario original de OS Pendientes`);
+            } else {
+                // ✅ FALLBACK: Valor por defecto
+                os.Comentario = 'Sin comentario disponible';
+                os.ComentarioGeneral = 'Sin comentario disponible';
+            }
+        });
         
-        // 5. 🔍 PROCESAMIENTO Y FILTRADO INICIAL (Radio y Estado)
+        // ========================================
+        // ✅ 8. FILTRADO INICIAL: RADIO Y ESTADO
+        // ========================================
         const osFinalesParaFiltrar = [];
         let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, prohibidas: 0 };
         
         for (const os of todasOSRegistradas) {
             const osatmoActual = String(os.OSATMO).trim();
             if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
-            
-            if (osAsignadasSet.has(osatmoActual)) {
-                stats.asignadasOcultas++;
-                continue;
-            }
+            if (osAsignadasSet.has(osatmoActual)) { stats.asignadasOcultas++; continue; }
             
             const cStr = os.Coordenadas || os.Coordendasgis;
             if (!cStr || !cStr.includes(',')) { stats.sinCoords++; continue; }
@@ -10093,7 +10298,9 @@ todasOSRegistradas.forEach(os => {
             }
         }
         
-        // 6. FILTRADO FINAL CON AUDITORÍA
+        // ========================================
+        // ✅ 9. FILTRADO FINAL CON VALIDACIÓN DE FILTROS
+        // ========================================
         let aprobadas = [];
         let resumenFiltrado = { porPrioridad: 0, porFiltroTabla: 0, descartadas: 0 };
         
@@ -10109,24 +10316,31 @@ todasOSRegistradas.forEach(os => {
             }
         });
         
-        // ✅ LOG DE RESULTADOS FINAL
+        // ✅ LOG FINAL DE AUDITORÍA
         console.log("%c📊 RESUMEN TÉCNICO DE FILTRADO", "background: #222; color: #bada55; font-size: 12px; padding: 5px;");
         console.table({
-            "Total en Radio": osFinalesParaFiltrar.length,
-            "Pasan por Prioridad (Regulada/Deuda)": resumenFiltrado.porPrioridad,
-            "Pasan por Filtro de Tabla": resumenFiltrado.porFiltroTabla,
-            "Descartadas (No cumplen filtros)": resumenFiltrado.descartadas
+            "Total procesadas": todasOSRegistradas.length,
+            "Sin coordenadas": stats.sinCoords,
+            "Fuera de radio": stats.fueraRadio,
+            "Asignadas (ocultas)": stats.asignadasOcultas,
+            "Prohibidas por unidad/estado": stats.prohibidas,
+            "Total en radio válidas": osFinalesParaFiltrar.length,
+            "✅ Pasan por prioridad (Reg/Deuda)": resumenFiltrado.porPrioridad,
+            "✅ Pasan por filtro de tabla": resumenFiltrado.porFiltroTabla,
+            "❌ Descartadas por filtros": resumenFiltrado.descartadas,
+            "🎯 TOTAL FINAL EN MAPA": aprobadas.length
         });
         
-        let osConFiltros = aprobadas;
+        // ========================================
+        // ✅ 10. GENERAR MAPA
+        // ========================================
+        console.log('📊 TOTAL FINAL EN MAPA:', aprobadas.length);
         
-        // 7. DIBUJAR MAPA
-        console.log('📊 TOTAL FINAL EN MAPA:', osConFiltros.length);
-        if (osConFiltros.length === 0) {
+        if (aprobadas.length === 0) {
             alert('ℹ️ No hay órdenes que cumplan los filtros en este radio.');
         }
         
-        const osFinalesMapa = [osCentro, ...osConFiltros];
+        const osFinalesMapa = [osCentro, ...aprobadas];
         const osOptimizadas = optimizarRutaVecinoCercano(
             osFinalesMapa, 
             osCentro.OSATMO, 
@@ -10136,13 +10350,23 @@ todasOSRegistradas.forEach(os => {
         generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
         
     } catch (err) {
-        console.error('❌ Error Crítico:', err);
+        console.error('❌ Error Crítico en cargarYMostrarMapa:', err);
+        console.error('Stack:', err.stack);
         resultsContainer.innerHTML = `
-        <div class="result-card" style="border-left: 5px solid red;">
-            <strong>❌ Error:</strong> ${err.message}
-        </div>`;
+            <div class="result-card" style="border-left: 5px solid red; background: #fef2f2;">
+                <div class="result-header" style="color: #dc2626;">❌ Error de Procesamiento</div>
+                <p style="color: #7f1d1d; margin: 10px 0;"><strong>Detalle:</strong> ${err.message}</p>
+                <p style="color: #991b1b; font-size: 12px;">💡 Verifique la conexión y los datos de la OS de referencia.</p>
+            </div>`;
+    } finally {
+        // ✅ 11. DETENER HEARTBEAT (LIMPIEZA GARANTIZADA)
+        if (typeof detenerHeartbeat === 'function') {
+            detenerHeartbeat();
+            console.log('🛑 Heartbeat detenido');
+        }
     }
 }
+
 
 
 // ========================================
@@ -10363,225 +10587,6 @@ function tipologiaPermitidaParaRol(tipologia, rol) {
     return true;
 }
 
-// ========================================
-// FUNCIÓN PRINCIPAL: cargarYMostrarMapa (CON AUDITORÍA ESTRICTA)
-// ========================================
-async function cargarYMostrarMapa(osCentro, unidadFiltro) {
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = `
-        <div class="result-card">
-            <div class="loading" style="display: block; margin: 20px auto;"></div>
-            <p style="text-align: center; color: #666;">Cargando mapa y aplicando filtros de despacho...</p>
-        </div>`;
-
-    console.log('🗺️ --- INICIANDO PROCESAMIENTO DE MAPA ---');
-
-    try {
-        // 1. CARGAR FILTROS UNIVERSALES
-        let filtrosAplicar = await cargarFiltrosUniversales(unidadFiltro);
-        
-        if (!filtrosAplicar) {
-            console.warn('⚠️ Filtros no encontrados, usando valores por defecto');
-            filtrosAplicar = { rangos: null, tipologias: null, radio_km: 3 };
-        }
-        
-        window.filtrosAplicados = filtrosAplicar;
-        const radioKm = filtrosAplicar.radio_km || 3;
-
-        // ✅ LOGS DE FILTROS (MANTENIDOS)
-        console.log('📋 ==========================================');
-        console.log('📋 FILTROS CARGADOS DESDE TABLA');
-        console.log('📋 ==========================================');
-        console.table({
-            'Tipologías seleccionadas': filtrosAplicar.tipologias?.length > 0 ? filtrosAplicar.tipologias.join(', ') : 'NINGUNA',
-            'Rangos seleccionados': filtrosAplicar.rangos?.length > 0 ? filtrosAplicar.rangos.join(', ') : 'NINGUNO',
-            'Radio (km)': radioKm,
-            'Unidad': unidadFiltro
-        });
-        console.log('📋 ==========================================');
-
-        // 2. Coordenadas del Punto Central
-        const coordsCentroStr = osCentro.Coordenadas || osCentro.Coordendasgis;
-        if (!coordsCentroStr) throw new Error("La OS de referencia no tiene coordenadas.");
-        const [latCentro, lngCentro] = coordsCentroStr.split(',').map(c => parseFloat(c.trim()));
-
-        // 3. 🛡️ CARGAR OS ASIGNADAS
-        console.log('📥 Sincronizando OS asignadas para bloqueo...');
-        const { data: osAsignadasBD } = await supabaseClient.from('os_asignadas').select('osatomo');
-        const osAsignadasSet = new Set(osAsignadasBD?.map(a => String(a.osatomo).trim()) || []);
-        console.log(`✅ ${osAsignadasSet.size} OS bloqueadas por estar asignadas.`);
-
-
-        // 4. CARGAR OS PENDIENTES (Paginado)
-         let todasOSRegistradas = [];
-        let offset = 0;
-        const BATCH_SIZE = 1000;
-        while (true) {
-            const { data, error } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Medidor, CuentaContrato, Estado_SAP, Direccion, Unicom, Rango, Dias, Condicion')
-                .in('Estado_ATOMO', ['Registrada', 'Asignada'])
-                .range(offset, offset + BATCH_SIZE - 1);
-            
-            if (error || !data || data.length === 0) break;
-            todasOSRegistradas.push(...data);
-            if (data.length < BATCH_SIZE) break;
-            offset += BATCH_SIZE;
-        }
-
-// ========================================
-// ✅ 🆕 PASO NUEVO: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
-// ========================================
-console.log('📝 ==========================================');
-console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
-console.log('📝 ==========================================');
-
-// Extraer medidores únicos de todas las OS
-const medidoresUnicos = [...new Set(todasOSRegistradas
-    .map(os => os.Medidor)
-    .filter(m => m && String(m).trim() !== ''))];
-
-const cuentasUnicas = [...new Set(todasOSRegistradas
-    .map(os => os.CuentaContrato)
-    .filter(c => c && String(c).trim() !== ''))];
-
-console.log(`🔍 Buscando comentarios para ${medidoresUnicos.length} medidores únicos`);
-
-// Mapa para almacenar comentarios por Medidor
-const comentariosPorMedidor = new Map();
-
-// Consultar comentarios en lotes de 100 medidores
-const BATCH_MEDIDORES = 100;
-for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
-    const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
-    
-    const { data: comentariosData, error: errorComentarios } = await supabaseClient
-        .from('consultas_servicios')
-        .select('Medidor, CuentaContrato, ComentarioGeneral')
-        .in('Medidor', batchMedidores);
-    
-    if (!errorComentarios && comentariosData) {
-        comentariosData.forEach(item => {
-            if (item.Medidor) {
-                comentariosPorMedidor.set(String(item.Medidor).trim(), {
-                    ComentarioGeneral: item.ComentarioGeneral || '',
-                    CuentaContrato: item.CuentaContrato
-                });
-            }
-        });
-        console.log(`✅ Lote ${i/BATCH_MEDIDORES + 1}: ${comentariosData.length} comentarios encontrados`);
-    }
-    
-    // Pequeña pausa para no saturar
-    await new Promise(resolve => setTimeout(resolve, 50));
-}
-
-console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
-console.log('📝 ==========================================');
-
-// ========================================
-// ✅ INYECTAR COMENTARIOS EN LAS OS
-// ========================================
-todasOSRegistradas.forEach(os => {
-    const medidorKey = String(os.Medidor).trim();
-    const comentarioData = comentariosPorMedidor.get(medidorKey);
-    
-    if (comentarioData) {
-        // ✅ INYECTAR ComentarioGeneral desde consulta_servicios
-        os.Comentario = comentarioData.ComentarioGeneral;
-        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
-        console.log(`💬 OS ${os.OSATMO}: Comentario inyectado (${comentarioData.ComentarioGeneral?.length || 0} caracteres)`);
-    } else {
-        os.Comentario = 'Sin comentario disponible';
-        os.ComentarioGeneral = 'Sin comentario disponible';
-    }
-});
-
-
-        // 5. 🔍 PROCESAMIENTO Y FILTRADO INICIAL (Radio y Estado)
-        const osFinalesParaFiltrar = []; 
-        let stats = { sinCoords: 0, fueraRadio: 0, asignadasOcultas: 0, prohibidas: 0 };
-
-        for (const os of todasOSRegistradas) {
-            const osatmoActual = String(os.OSATMO).trim();
-            if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
-            if (osAsignadasSet.has(osatmoActual)) {
-                stats.asignadasOcultas++;
-                continue; 
-            }
-
-            const cStr = os.Coordenadas || os.Coordendasgis;
-            if (!cStr || !cStr.includes(',')) { stats.sinCoords++; continue; }
-            
-            const [lat, lng] = cStr.split(',').map(c => parseFloat(c.trim()));
-            const dist = calcularDistancia(latCentro, lngCentro, lat, lng);
-            if (dist > radioKm) { stats.fueraRadio++; continue; }
-
-            const tipoOS = (os.Tipo_de_OS || '').toUpperCase();
-            const deuda = parseFloat(os.Deuda) || 0;
-            const esPrioritaria = (tipoOS.includes('REGULADA') && !tipoOS.includes('NO REGULADA')) || deuda >= 500;
-
-            if (esPrioritaria) {
-                osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: true });
-                continue;
-            }
-
-            const unidad = (os.Unidad || "").trim();
-            const estadoAtomo = (os.Estado_ATOMO || "").trim().toUpperCase();
-            const esLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
-            const esRegistradaBD = estadoAtomo === "REGISTRADA";
-
-            if (esLibre && esRegistradaBD) {
-                osFinalesParaFiltrar.push({ ...os, lat, lng, distancia: dist, esPrioritaria: false });
-            } else {
-                stats.prohibidas++;
-            }
-        }
-
-        // 🚩 6. FILTRADO FINAL CON AUDITORÍA (BLOQUE NUEVO)
-        let aprobadas = [];
-        let resumenFiltrado = { porPrioridad: 0, porFiltroTabla: 0, descartadas: 0 };
-
-        osFinalesParaFiltrar.forEach(os => {
-            if (os.esPrioritaria) {
-                aprobadas.push(os);
-                resumenFiltrado.porPrioridad++;
-            } else if (validarFiltrosOS(os, filtrosAplicar)) {
-                aprobadas.push(os);
-                resumenFiltrado.porFiltroTabla++;
-            } else {
-                resumenFiltrado.descartadas++;
-            }
-        });
-
-        // ✅ LOG DE RESULTADOS FINAL (TABLA RESUMEN)
-        console.log("%c📊 RESUMEN TÉCNICO DE FILTRADO", "background: #222; color: #bada55; font-size: 12px; padding: 5px;");
-        console.table({
-            "Total en Radio": osFinalesParaFiltrar.length,
-            "Pasan por Prioridad (Regulada/Deuda)": resumenFiltrado.porPrioridad,
-            "Pasan por Filtro de Tabla": resumenFiltrado.porFiltroTabla,
-            "Descartadas (No cumplen filtros)": resumenFiltrado.descartadas
-        });
-
-        let osConFiltros = aprobadas;
-
-        // 7. DIBUJAR MAPA
-        console.log('📊 TOTAL FINAL EN MAPA:', osConFiltros.length);
-        
-        if (osConFiltros.length === 0) {
-            alert('ℹ️ No hay órdenes que cumplan los filtros en este radio.');
-        }
-
-        const osFinalesMapa = [osCentro, ...osConFiltros];
-        const osOptimizadas = optimizarRutaVecinoCercano(osFinalesMapa, osCentro.OSATMO, { lat: latCentro, lng: lngCentro });
-        
-        generarMapaLeaflet(osCentro, osOptimizadas, latCentro, lngCentro, radioKm);
-
-    } catch (err) {
-        console.error('❌ Error Crítico:', err);
-        resultsContainer.innerHTML = `<div class="result-card" style="border-left: 5px solid red;"><strong>❌ Error:</strong> ${err.message}</div>`;
-    }
-}
 
 
 // ========================================
@@ -10611,105 +10616,105 @@ function validarFormatoCoordenadas(coordenadas) {
 
 
 /**
- * Extrae coordenadas de un objeto OS buscando en múltiples campos posibles.
- * @param {Object} os - Objeto de Orden de Servicio
- * @returns {Object|null} - { latitud, longitud } o null si no hay coordenadas válidas
- */
+ * Extrae coordenadas con prioridad EXPLÍCITA y validación robusta
+ * Prioridad: 1.Coordendasgis → 2.Coordenadas → 3.Alternativos → 4.Separados
+ * @param {Object} os - Objeto de Orden de Servicio
+ * @returns {Object|null} - { latitud, longitud, campoOrigen, coordenadasRaw }
+ */
 function extraerCoordenadas(os) {
-    // ✅ Buscar en múltiples campos de coordenadas (case-insensitive)
-    const camposCoordenadas = [
-        'Coordenadas',      // Campo principal
-        'Coordendasgis',    // Campo GIS alternativo
-        'coordenadas',
-        'coordendasgis',
-        'Coordenada',
-        'coordenada',
-        'latitud_longitud',
-        'ubicacion'
-    ];
- 
-    let coordenadas = null;
-    let campoEncontrado = null;
- 
-    for (const campo of camposCoordenadas) {
-        if (os[campo]) {
-            coordenadas = os[campo];
-            campoEncontrado = campo;
-            console.log(`✅ Coordenadas encontradas en campo "${campo}":`, coordenadas);
-            break;
-        }
-    }
- 
-    // ✅ Si no se encontraron coordenadas, buscar en campos separados
-    if (!coordenadas && (os.latitud || os.latitude || os.Latitud)) {
-        const lat = os.latitud || os.latitude || os.Latitud;
-        const lng = os.longitud || os.longitude || os.Longitud;
- 
-        if (lat && lng) {
-            coordenadas = `${lat},${lng}`;
-            campoEncontrado = 'campos separados (lat/lng)';
-            console.log(`✅ Coordenadas separadas encontradas: ${coordenadas}`);
-        }
-    }
- 
-    if (!coordenadas) {
-        console.warn(`⚠️ OS ${os.OSATMO || os.OSATOMO || os.osatomo || 'SIN ID'} no tiene coordenadas en ningún campo`);
-        return null;
-    }
- 
-    // ✅ Parsear coordenadas (formato: "lat,lng" o "lng,lat")
-    const partes = coordenadas.toString().split(',').map(p => p.trim());
- 
-    if (partes.length !== 2) {
-        console.error(`❌ Formato de coordenadas inválido para OS ${os.OSATMO || 'SIN ID'}:`, coordenadas);
-        return null;
-    }
- 
-    // ✅ Determinar si es lat,lng o lng,lat
-    let lat, lng;
- 
-    const num1 = parseFloat(partes[0]);
-    const num2 = parseFloat(partes[1]);
- 
-    if (Math.abs(num1) <= 90 && Math.abs(num2) <= 180) {
-        // ✅ Formato: lat,lng
-        lat = num1;
-        lng = num2;
-    } else if (Math.abs(num2) <= 90 && Math.abs(num1) <= 180) {
-        // ✅ Formato: lng,lat
-        lat = num2;
-        lng = num1;
-    } else {
-        console.error(`❌ Coordenadas fuera de rango para OS ${os.OSATMO || 'SIN ID'}:`, coordenadas);
-        return null;
-    }
- 
-    // ✅ Verificar que las coordenadas sean de El Salvador (aproximadamente)
-    if (lat < 13 || lat > 14.5 || lng < -90 || lng > -87) {
-        console.warn(`⚠️ Coordenadas fuera de rango de El Salvador para OS ${os.OSATMO || 'SIN ID'}: (${lat}, ${lng})`);
-        // Opcional: return null; // Descomentar para filtrar coordenadas fuera de rango
-    }
- 
-    return {
-        latitud: lat,
-        longitud: lng,
-        campoOrigen: campoEncontrado,
-        coordenadasRaw: coordenadas
-    };
+    // ========================================
+    // ✅ PRIORIDAD 1: Coordendasgis (GIS) - EXPLÍCITO
+    // ========================================
+    if (os.Coordendasgis && typeof os.Coordendasgis === 'string' && os.Coordendasgis.includes(',')) {
+        const partes = os.Coordendasgis.split(',').map(c => parseFloat(c.trim()));
+        if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
+            Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+            console.log(`✅ Coordenadas encontradas en "Coordendasgis": ${os.Coordendasgis}`);
+            return {
+                latitud: partes[0],
+                longitud: partes[1],
+                campoOrigen: 'Coordendasgis',
+                coordenadasRaw: os.Coordendasgis
+            };
+        }
+    }
+    
+    // ========================================
+    // ✅ PRIORIDAD 2: Coordenadas (Lector) - EXPLÍCITO
+    // ========================================
+    if (os.Coordenadas && typeof os.Coordenadas === 'string' && os.Coordenadas.includes(',')) {
+        const partes = os.Coordenadas.split(',').map(c => parseFloat(c.trim()));
+        if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
+            Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+            console.log(`✅ Coordenadas encontradas en "Coordenadas": ${os.Coordenadas}`);
+            return {
+                latitud: partes[0],
+                longitud: partes[1],
+                campoOrigen: 'Coordenadas',
+                coordenadasRaw: os.Coordenadas
+            };
+        }
+    }
+    
+    // ========================================
+    // ✅ PRIORIDAD 3: Campos alternativos (case-insensitive)
+    // ========================================
+    const camposAlternativos = [
+        'coordenadas', 'coordendasgis', 'Coordenada', 'coordenada',
+        'latitud_longitud', 'ubicacion'
+    ];
+    
+    for (const campo of camposAlternativos) {
+        if (os[campo] && typeof os[campo] === 'string' && os[campo].includes(',')) {
+            const partes = os[campo].split(',').map(c => parseFloat(c.trim()));
+            if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
+                Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+                console.log(`✅ Coordenadas encontradas en "${campo}": ${os[campo]}`);
+                return {
+                    latitud: partes[0],
+                    longitud: partes[1],
+                    campoOrigen: campo,
+                    coordenadasRaw: os[campo]
+                };
+            }
+        }
+    }
+    
+    // ========================================
+    // ✅ PRIORIDAD 4: Campos separados (lat/lng)
+    // ========================================
+    const latVal = os.Latitud || os.latitud || os.latitude;
+    const lngVal = os.Longitud || os.longitud || os.longitude;
+    
+    if (latVal && lngVal) {
+        const lat = parseFloat(latVal);
+        const lng = parseFloat(lngVal);
+        if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+            console.log(`✅ Coordenadas separadas encontradas: ${lat},${lng}`);
+            return {
+                latitud: lat,
+                longitud: lng,
+                campoOrigen: 'campos_separados',
+                coordenadasRaw: `${lat},${lng}`
+            };
+        }
+    }
+    
+    // ========================================
+    // ❌ Sin coordenadas válidas
+    // ========================================
+    console.warn(`⚠️ OS ${os.OSATMO || os.OSATOMO || os.osatomo || 'SIN ID'} no tiene coordenadas válidas en ningún campo`);
+    return null;
 }
+
+
 
 // ==========================================
 // 🛡️ MOTOR GEOGRÁFICO GLOBAL (Corregido)
 // ==========================================
 
-// ==========================================
-// 🛡️ MOTOR GEOGRÁFICO (VERSIÓN ORIGINAL PROTEGIDA)
-// ==========================================
-
 function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
-    // Mantengo tu protección original: es la mejor para datos masivos
     if (lat1 === undefined || lat2 === undefined || isNaN(lat1) || isNaN(lat2)) return Infinity;
-
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -10719,6 +10724,8 @@ function calcularDistanciaKm(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return parseFloat((R * c).toFixed(2));
 }
+
+
 
 // Alias globales para que el mapa y los filtros los encuentren siempre
 window.calcularDistancia = calcularDistanciaKm;
@@ -10741,97 +10748,69 @@ console.log("✅ Motor de distancias y coordenadas original listo.");
 
 
 
-/// ========================================
-// ✅ VALIDAR SI OS CUMPLE FILTROS (VERSION FINAL ESTRICTA)
-// ========================================
+/**
+ * Valida si una OS cumple con los filtros aplicados
+ * @param {Object} os - Objeto de Orden de Servicio  
+ * @param {Object|null} filtros - Objeto de filtros o null
+ * @returns {boolean} - true si cumple los filtros o si no hay filtros que aplicar
+ */
 function validarFiltrosOS(os, filtros) {
-    // Normalización mínima: Solo quitamos tildes para evitar errores de teclado.
-    // Mantenemos puntos, conectores ("DE") y palabras intactas.
-    const normalizar = (texto) => {
-        return (texto || "").toString()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "") // Solo quita tildes
-            .trim()                          // Espacios inicio/final
-            .toUpperCase();
-    };
-
+    // ✅ Sin filtros = permitir (las OS ya pasaron prioridad y estado)
+    if (!filtros) return true;
+    
+    const normalizar = (texto) => (texto || "")
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toUpperCase();
+    
     const osID = os.OSATMO || "Sin ID";
-
-    // --- 🛡️ 1. PASE LIBRE: PRIORIDADES DE NEGOCIO ---
-    // Estas pasan solo por estar en el radio (No se les aplica filtro de tabla)
+    
+    // ✅ PRIORIDAD: Reguladas y Deuda >= $500 pasan siempre
     const tipoOS_Texto = (os.Tipo_de_OS || '').toLowerCase();
     const esRegulada = tipoOS_Texto.includes('regulad') && !tipoOS_Texto.includes('no');
     const deudaTotal = parseFloat(os.Deuda) || 0;
     const esDeudaAlta = deudaTotal >= 500;
-
-    if (esRegulada || esDeudaAlta) {
-        console.log(`%c✅ OS ${osID} PASA POR PRIORIDAD: [Regulada: ${esRegulada} | Deuda: $${deudaTotal}]`, "color: #4caf50; font-weight: bold;");
-        return true;
-    }
-
-    // --- 🛡️ 2. REQUISITOS OBLIGATORIOS PARA EL RESTO ---
-    // Si no es prioridad, debe estar libre y registrada para ser evaluada por la tabla
+    
+    if (esRegulada || esDeudaAlta) return true;
+    
+    // ✅ Validar disponibilidad
     const unidad = (os.Unidad || "").trim();
     const estado = (os.Estado_ATOMO || "").trim().toUpperCase();
     const estaLibre = unidad === "" || unidad === "--------------------" || unidad.includes("---");
     const esRegistrada = estado === "REGISTRADA";
-
-    if (!estaLibre || !esRegistrada) {
-        return false; 
-    }
-
-    // --- 🛡️ 3. FILTRO DE TABLA (COMPARACIÓN ESTRICTA) ---
-    if (!filtros) return false;
-
-    const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 ? filtros.tipologias : null;
-    const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 ? filtros.rangos : null;
-
-    if (!tipologiasActivas && !rangosActivos) return false;
-
-    // A. Validación de Tipología (Estricta: OS debe ser igual al filtro)
-    let tipOk = true;
+    
+    if (!estaLibre || !esRegistrada) return false;
+    
+    // ✅ Preparar filtros activos (normalizar UNA vez)
+    const tipologiasActivas = Array.isArray(filtros.tipologias) && filtros.tipologias.length > 0 
+        ? filtros.tipologias.map(t => normalizar(t)) 
+        : null;
+    
+    const rangosActivos = Array.isArray(filtros.rangos) && filtros.rangos.length > 0 
+        ? filtros.rangos 
+        : null;
+    
+    // ✅ Sin criterios activos = permitir
+    if (!tipologiasActivas && !rangosActivos) return true;
+    
+    // ✅ Validar tipología
     if (tipologiasActivas) {
         const tipOS_Actual = normalizar(os.Tipologia);
-        
-        tipOk = tipologiasActivas.some(t => {
-            const tNorm = normalizar(t);
-            // COMPARACIÓN ESTRICTA (===)
-            const coincide = tipOS_Actual === tNorm; 
-            
-            // Log informativo si la tipología se parece pero no es idéntica
-            if (!coincide && tipOS_Actual.includes("MEDIDOR") && tNorm.includes("MEDIDOR")) {
-                console.log(`%c🔍 Descarte Estricto: OS [${tipOS_Actual}] ≠ Filtro [${tNorm}]`, "color: #9e9e9e; font-size: 10px;");
-            }
-            
-            return coincide;
-        });
-
-        if (!tipOk) return false; // No coincide ninguna tipología guardada
+        if (!tipologiasActivas.some(t => tipOS_Actual === t)) return false;
     }
-
-    // B. Validación de Rango (Antigüedad)
-    let rangoOk = true;
+    
+    // ✅ Validar rango
     if (rangosActivos) {
         if (!os['Fecha Gen.']) return false;
         const dias = calcularDias(os['Fecha Gen.']);
         const miRango = determinarRango(dias);
-        rangoOk = rangosActivos.includes(miRango);
-        
-        if (!rangoOk) {
-            console.log(`%c🚫 OS ${osID} DESCARTADA: Fuera de rango (${miRango})`, "color: #ff9800;");
-            return false;
-        }
+        if (!rangosActivos.includes(miRango)) return false;
     }
-
-    const resultado = tipOk && rangoOk;
-    if (resultado) {
-        console.log(`%c🎯 OS ${osID} CUMPLE FILTROS DE TABLA: [${os.Tipologia}]`, "color: #2196f3; font-weight: bold;");
-    }
- 
-    return resultado;
+    
+    return true;
 }
-
-
 // ========================================
 // 💾 GUARDAR FILTROS (ADMIN GLOBAL / DESPACHO PERSONAL) - CON FECHA DE VIGENCIA
 // ========================================
@@ -10958,13 +10937,55 @@ async function guardarFiltrosMapaGlobales() {
     }
 } // <--- ASEGÚRATE DE QUE ESTA LLAVE CIERRE LA FUNCIÓN PRINCIPAL (guardarFiltrosMapa)
 
-
+/**
+ * Inicializa variables globales del mapa de forma segura
+ */
+function inicializarVariablesGlobalesMapa() {
+    // ✅ Inicializar solo si no existen (evita sobrescribir durante recargas)
+    if (!window.markersPorTipologia) {
+        window.markersPorTipologia = {};
+    }
+    
+    if (!window.markersPorEstado) {
+        window.markersPorEstado = {
+            'centro': [],
+            'asignada': [],
+            'regulada': [],
+            'no_regulada': [],
+            'deuda_alta': [],
+            'deuda_media': [],
+            'deuda_baja': []
+        };
+    }
+    
+    if (!window.filtrosAplicados) {
+        window.filtrosAplicados = { 
+            rangos: null, 
+            tipologias: null, 
+            radio_km: 3 
+        };
+    }
+    
+    // ✅ Limpiar marcadores previos para evitar duplicados
+    if (window.mapaLeafletInstance) {
+        try {
+            Object.values(window.markersPorEstado).forEach(arr => {
+                arr.forEach(marker => {
+                    if (window.mapaLeafletInstance.hasLayer(marker)) {
+                        window.mapaLeafletInstance.removeLayer(marker);
+                    }
+                });
+            });
+        } catch (e) {
+            console.warn('⚠️ Error limpiando marcadores previos:', e);
+        }
+    }
+}
  
 
-// ========================================
-// 🗺️ GENERAR MAPA LEAFLET (VERSIÓN FINAL CORREGIDA)
-// ========================================
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
+    // ✅ Inicializar variables globales primero
+    inicializarVariablesGlobalesMapa();
     console.log('🗺️ ==========================================');
     console.log('🗺️ GENERANDO MAPA LEAFLET');
     console.log('🗺️ OS recibidas:', osEnRadio?.length || 0);
@@ -11269,10 +11290,17 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
                     <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
                     ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
                     ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                    <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                            style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-                        📋 Ver Detalle Completo
-                    </button>
+                    // ✅ Usar función de escape existente para seguridad HTML
+const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function'
+    ? escapeJSONForHTMLAttribute(os, ['OSATMO', 'Tipologia', 'Deuda', 'Coordenadas', 'Coordendasgis', 'Unidad'])
+    : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// Luego en el onclick del botón:
+popupContent += `
+<button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
+    style="margin-top: 10px; background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+    📋 Ver Detalle Completo
+</button>
                 </div>
             `);
 
@@ -11434,14 +11462,20 @@ function buscarOSEnMapa() {
 
 
 
+// 🔄 RECARGAR MAPA CON FILTROS ACTUALIZADOS
+// ========================================
 async function recargarMapaConFiltrosActualizados() {
-    if (!window.osCentroActual) {
-        alert('No hay mapa cargado');
-        return;
-    }
- 
-    await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
+    if (!window.osCentroActual) {
+        alert('No hay mapa cargado');
+        return;
+    }
+    
+    console.log('🔄 Recargando mapa con filtros actualizados...');
+    await cargarYMostrarMapa(window.osCentroActual, window.unidadFiltroActual);
 }
+
+// ✅ Exponer globalmente para que funcione en onclick
+window.recargarMapaConFiltrosActualizados = recargarMapaConFiltrosActualizados;
 
 
 
@@ -11650,8 +11684,54 @@ function ejecutarGuardiaNavegacion() {
 }
 
 
+function escapeJSONForHTMLAttribute(obj, fields = null) {
+    if (!obj) return 'null';
+    
+    // 1. Filtrar campos si se especifica
+    const dataToEscape = fields ? 
+        fields.reduce((acc, field) => { 
+            acc[field] = obj[field]; 
+            return acc; 
+        }, {}) : 
+        obj;
 
-// 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN CORREGIDA CON AGRUPAMIENTO INTERNO)
+    // 2. Convertir a JSON
+    let jsonStr = JSON.stringify(dataToEscape);
+    
+    // 3. Escapar para atributo HTML (orden correcto)
+    return jsonStr
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
+}
+
+// ✅ Exponer globalmente
+window.escapeJSONForHTMLAttribute = escapeJSONForHTMLAttribute;
+
+/**
+ * Alias para compatibilidad con código existente
+ * @deprecated Usa directamente extraerCoordenadas()
+ */
+function obtenerCoordenadasOS(os) {
+    const resultado = extraerCoordenadas(os);
+    if (resultado) {
+        // Normalizar nombres de propiedades si el código antiguo espera {lat, lng}
+        return {
+            lat: resultado.latitud,
+            lng: resultado.longitud,
+            fuente: resultado.campoOrigen
+        };
+    }
+    return null;
+}
+
+
+// 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     console.log('🗺️ ==========================================');
@@ -11662,24 +11742,45 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('📊 Radio configurado:', radioKm, 'km');
     console.log('🗺️ ==========================================');
 
-    const mapaDiv = document.getElementById('mapaLeaflet');
-    if (!mapaDiv) {
-        console.error('❌ Div del mapa no encontrado');
+    // ✅ VALIDACIÓN DE PARÁMETROS
+    if (!osCentro || !Array.isArray(osEnRadio) || isNaN(latCentro) || isNaN(lngCentro)) {
+        console.error('❌ Parámetros inválidos para inicializarMapaLeaflet');
         return;
     }
 
-    // Limpiar mapa anterior
-    if (window.mapaLeafletInstance) {
-        window.mapaLeafletInstance.remove();
+    const mapaDiv = document.getElementById('mapaLeaflet');
+    if (!mapaDiv) {
+        console.error('❌ Div del mapa no encontrado: #mapaLeaflet');
+        return;
     }
 
-    // Crear mapa
-    const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
-    window.mapaLeafletInstance = mapa;
+    // ✅ LIMPIAR MAPA ANTERIOR DE FORMA SEGURA
+    if (window.mapaLeafletInstance) {
+        try {
+            window.mapaLeafletInstance.remove();
+        } catch (e) {
+            console.warn('⚠️ Error limpiando instancia previa:', e);
+        }
+        window.mapaLeafletInstance = null;
+    }
 
-    // Capa de mapa
+    // ✅ CREAR MAPA CON VALIDACIÓN
+    try {
+        const mapa = L.map('mapaLeaflet', {
+            zoomControl: true,
+            attributionControl: true
+        }).setView([latCentro, lngCentro], 14);
+        window.mapaLeafletInstance = mapa;
+    } catch (e) {
+        console.error('❌ Error creando instancia de Leaflet:', e);
+        return;
+    }
+
+    // ✅ CAPA DE MAPA BASE
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        minZoom: 3
     }).addTo(mapa);
 
     // ========================================
@@ -11691,16 +11792,21 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         weight: 3,
         opacity: 0.8,
         fillOpacity: 0.15,
-        fillColor: '#3b82f6'
+        fillColor: '#3b82f6',
+        interactive: true
     }).addTo(mapa)
     .bindPopup(`
-        <div style="min-width: 200px;">
-            <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
-            <strong>Radio:</strong> ${radioKm} km<br>
-            <strong>OS en radio:</strong> ${osEnRadio.length}
+        <div style="min-width: 200px; font-family: sans-serif;">
+            <strong style="color: #3b82f6; font-size: 16px; display: block; margin-bottom: 8px;">
+                📍 ÁREA DE BÚSQUEDA
+            </strong>
+            <div style="font-size: 14px; line-height: 1.5;">
+                <strong>Radio:</strong> ${radioKm} km<br>
+                <strong>OS en radio:</strong> ${osEnRadio.length}
+            </div>
         </div>
-    `)
-    .openPopup();
+    `, { maxWidth: 300 });
+    
     window.circuloRadio = circuloRadio;
 
     // ========================================
@@ -11721,26 +11827,37 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             font-size: 20px;
             box-shadow: 0 4px 12px rgba(76,175,80,0.6);
             border: 4px solid white;
+            user-select: none;
         ">0</div>`,
         iconSize: [50, 50],
-        iconAnchor: [25, 50]
+        iconAnchor: [25, 50],
+        popupAnchor: [0, -50]
     });
 
-    const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoVerde })
-        .addTo(mapa)
-        .bindPopup(`
-            <div style="min-width: 200px;">
-                <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA (0)</strong><br>
-                <strong>OS:</strong> ${osCentro.OSATMO}<br>
+    const markerCentro = L.marker([latCentro, lngCentro], { 
+        icon: iconoVerde,
+        zIndexOffset: 1000 // Prioridad visual
+    })
+    .addTo(mapa)
+    .bindPopup(`
+        <div style="min-width: 200px; font-family: sans-serif;">
+            <strong style="color: #2e7d32; font-size: 16px; display: block; margin-bottom: 8px;">
+                🎯 OS DE REFERENCIA (0)
+            </strong>
+            <div style="font-size: 14px; line-height: 1.5;">
+                <strong>OS:</strong> ${osCentro.OSATMO || 'N/A'}<br>
                 <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
             </div>
-        `)
-        .on('click', function() {
+        </div>
+    `, { maxWidth: 300 })
+    .on('click', function() {
+        if (typeof mostrarDetalleOSEnPanel === 'function') {
             mostrarDetalleOSEnPanel(osCentro, 'OS DE REFERENCIA');
-        });
+        }
+    });
 
     // ========================================
-    // ✅ 🆕 AGRUPAR OS POR COORDENADAS EXACTAS (DENTRO DE ESTA FUNCIÓN)
+    // ✅ AGRUPAR OS POR COORDENADAS EXACTAS
     // ========================================
     console.log('📍 ==========================================');
     console.log('📍 AGRUPANDO OS POR COORDENADAS');
@@ -11748,44 +11865,39 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('📍 ==========================================');
 
     const coordenadasAgrupadas = {};
+    let osProcesadas = 0;
+    let osSinCoordenadas = 0;
 
-    osEnRadio.forEach((os, index) => {
+    for (const [index, os] of osEnRadio.entries()) {
         // Saltar la OS centro si está en la lista
         if (os.OSATMO === osCentro.OSATMO) {
-            return;
+            continue;
         }
 
-        // Obtener coordenadas (BUSCAR EN MÚLTIPLES CAMPOS)
-        let lat, lng;
-        
-        // Opción 1: Campos separados
-        if (os.Latitud || os.lat) {
-            lat = parseFloat(os.Latitud || os.lat);
-            lng = parseFloat(os.Longitud || os.lng);
-        }
-        // Opción 2: Campo Coordenadas (texto "lat,lng")
-        else if (os.Coordenadas || os.Coordendasgis) {
-            const coordsStr = os.Coordenadas || os.Coordendasgis;
-            if (coordsStr && coordsStr.includes(',')) {
-                const partes = coordsStr.split(',');
-                lat = parseFloat(partes[0].trim());
-                lng = parseFloat(partes[1].trim());
-            }
+        // ✅ USAR FUNCIÓN CENTRALIZADA CON VALIDACIÓN ROBUSTA
+        const coords = extraerCoordenadas(os);
+        if (!coords || isNaN(coords.latitud) || isNaN(coords.longitud)) {
+            osSinCoordenadas++;
+            console.warn(`⚠️ OS ${os.OSATMO || index} sin coordenadas válidas`);
+            continue;
         }
 
-        if (isNaN(lat) || isNaN(lng)) {
-            console.warn(`⚠️ OS ${os.OSATMO} sin coordenadas válidas`);
-            return;
+        const { latitud: lat, longitud: lng } = coords;
+
+        // Validar rango geográfico válido
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+            console.warn(`⚠️ OS ${os.OSATMO} con coordenadas fuera de rango: ${lat}, ${lng}`);
+            continue;
         }
 
-        // Crear clave única para coordenadas (6 decimales para precisión)
+        // Crear clave única para coordenadas (6 decimales para precisión ~11cm)
         const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
 
         // Agrupar OS por coordenadas
         if (!coordenadasAgrupadas[claveCoordenadas]) {
             coordenadasAgrupadas[claveCoordenadas] = {
-                lat: lat,
-                lng: lng,
+                lat,
+                lng,
                 osList: []
             };
         }
@@ -11793,13 +11905,14 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         coordenadasAgrupadas[claveCoordenadas].osList.push({
             ...os,
             numeroOrden: index + 1,
-            lat: lat,
-            lng: lng
+            lat,
+            lng
         });
-    });
+        osProcesadas++;
+    }
 
     console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
-    console.log(`📍 OS agrupadas: ${osEnRadio.length - 1}`);
+    console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas}`);
     console.log('📍 ==========================================');
 
     // ========================================
@@ -11832,7 +11945,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         asignadas: 0
     };
 
-    Object.values(coordenadasAgrupadas).forEach(grupo => {
+    for (const grupo of Object.values(coordenadasAgrupadas)) {
         const { lat, lng, osList } = grupo;
         const esMultiple = osList.length > 1;
 
@@ -11840,6 +11953,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         const primeraOS = osList[0];
         const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
         const deuda = parseFloat(primeraOS.Deuda) || 0;
+        
         let colorFondo, labelEstado, estadoKey;
 
         if (deuda > 500) {
@@ -11888,32 +12002,51 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                     border: 2px solid white;
                     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
                     position: relative;
+                    user-select: none;
                 ">
                     <span style="
                         transform: rotate(45deg);
                         color: white;
                         font-weight: bold;
                         font-size: ${esMultiple ? '16px' : '13px'};
+                        line-height: 1;
                     ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
-                    ${esMultiple ? '<div style="position:absolute;top:-5px;right:-5px;background:#ff5722;color:white;border-radius:50%;width:20px;height:20px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid white;">' + osList.length + '</div>' : ''}
+                    ${esMultiple ? `
+                        <div style="
+                            position:absolute;
+                            top:-5px;
+                            right:-5px;
+                            background:#ff5722;
+                            color:white;
+                            border-radius:50%;
+                            width:20px;
+                            height:20px;
+                            font-size:10px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            border:2px solid white;
+                            font-weight:bold;
+                        ">${osList.length}</div>` : ''}
                 </div>`,
             iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
-            iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32]
+            iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32],
+            popupAnchor: [0, esMultiple ? -40 : -32]
         });
 
         // ========================================
-        // ✅ 🆕 CREAR POPUP CON LISTA DE TODAS LAS OS
+        // ✅ CREAR POPUP CON LISTA DE TODAS LAS OS
         // ========================================
         let popupContent = `
-            <div style="min-width: 300px; max-height: 400px; overflow-y: auto;">
-                <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px;">
+            <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
+                <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
                     📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
                 </strong>
         `;
 
         if (esMultiple) {
             // Mostrar lista de todas las OS en este punto
-            osList.forEach((os, idx) => {
+            for (const [idx, os] of osList.entries()) {
                 const osDeuda = parseFloat(os.Deuda) || 0;
                 const osTipo = (os.Tipo_de_OS || '').toLowerCase();
                 let osColor = '#2196f3';
@@ -11924,6 +12057,11 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                 else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
                 else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
 
+                // ✅ USAR FUNCIÓN AUXILIAR PARA ESCAPE SEGURO DE HTML
+                const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+                    ? escapeJSONForHTMLAttribute(os) 
+                    : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
                 popupContent += `
                     <div style="
                         background: #f8f9fa;
@@ -11932,13 +12070,15 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                         border-radius: 6px;
                         border-left: 4px solid ${osColor};
                         cursor: pointer;
-                        transition: all 0.2s;
-                    " onclick="seleccionarOSDeLista('${os.OSATMO}', ${os.lat}, ${os.lng})"
-                       onmouseover="this.style.background='#e3f2fd'"
-                       onmouseout="this.style.background='#f8f9fa'">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO}</strong>
-                            <span style="background: ${osColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${os.Tipo_de_OS || 'Normal'}</span>
+                        transition: all 0.2s ease;
+                    " onclick="seleccionarOSDeLista('${os.OSATMO || ''}', ${os.lat}, ${os.lng}); return false;"
+                       onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(3px)';"
+                       onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 5px;">
+                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO || 'N/A'}</strong>
+                            <span style="background: ${osColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap;">
+                                ${os.Tipo_de_OS || 'Normal'}
+                            </span>
                         </div>
                         <div style="font-size: 12px; color: #666; line-height: 1.4;">
                             <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
@@ -11946,25 +12086,31 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                             ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
                             <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
                         </div>
-                        <button onclick="event.stopPropagation(); mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px;">
+                        <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
+                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
                             📋 Ver Detalle Completo
                         </button>
                     </div>
                 `;
-            });
+            }
         } else {
             // Popup normal para OS única
             const os = osList[0];
+            const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+                ? escapeJSONForHTMLAttribute(os) 
+                : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            
             popupContent += `
-                <div style="margin-bottom: 10px;">
-                    <strong>OS:</strong> ${os.OSATMO}<br>
+                <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
+                    <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
                     <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
                     ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
                     ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                    ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
                 </div>
-                <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
+                <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
+                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
+                    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                     📋 Ver Detalle Completo
                 </button>
             `;
@@ -11973,20 +12119,27 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         popupContent += `</div>`;
 
         // Crear marcador con popup
-        const marker = L.marker([lat, lng], { icon: iconoConNumero })
+        try {
+            const marker = L.marker([lat, lng], { 
+                icon: iconoConNumero,
+                zIndexOffset: esMultiple ? 500 : 100
+            })
             .addTo(mapa)
-            .bindPopup(popupContent);
+            .bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
 
-        window.markersPorEstado[estadoKey].push(marker);
-        bounds.extend([lat, lng]);
+            window.markersPorEstado[estadoKey].push(marker);
+            bounds.extend([lat, lng]);
 
-        // Agrupar por tipología
-        const tip = primeraOS.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologia[tip]) {
-            window.markersPorTipologia[tip] = [];
+            // Agrupar por tipología
+            const tip = primeraOS.Tipologia || 'Sin tipología';
+            if (!window.markersPorTipologia[tip]) {
+                window.markersPorTipologia[tip] = [];
+            }
+            window.markersPorTipologia[tip].push(marker);
+        } catch (e) {
+            console.error(`❌ Error creando marcador para OS ${primeraOS?.OSATMO}:`, e);
         }
-        window.markersPorTipologia[tip].push(marker);
-    });
+    }
 
     // ========================================
     // 📊 LOG FINAL DE MARCADORES
@@ -11996,382 +12149,104 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('📍 ==========================================');
     console.table({
         'Total procesadas': contadorProcesadas,
-        'Marcadores creados': Object.keys(coordenadasAgrupadas).length
+        'Marcadores creados': Object.keys(coordenadasAgrupadas).length,
+        'OS sin coordenadas': osSinCoordenadas
     });
     console.log('📊 DISTRIBUCIÓN POR ESTADO:');
     console.table(estadisticas);
     console.log('📍 ==========================================');
 
-    if (bounds.isValid()) {
-        mapa.fitBounds(bounds, { padding: [50, 50] });
+    // ✅ AJUSTAR VISTA DEL MAPA CON VALIDACIÓN
+    if (bounds.isValid() && bounds.getSouthWest().lat !== bounds.getNorthEast().lat) {
+        try {
+            mapa.fitBounds(bounds, { 
+                padding: [50, 50],
+                maxZoom: 16,
+                animate: true
+            });
+        } catch (e) {
+            console.warn('⚠️ Error ajustando bounds del mapa:', e);
+            mapa.setView([latCentro, lngCentro], 14);
+        }
+    } else {
+        console.warn('⚠️ Bounds inválidos, usando vista por defecto');
+        mapa.setView([latCentro, lngCentro], 14);
     }
 
-    L.control.scale().addTo(mapa);
-    console.log(`✅ Mapa inicializado con ${Object.keys(coordenadasAgrupadas).length} marcadores.`);
+    // ✅ AGREGAR CONTROL DE ESCALA
+    if (!mapa.hasControl?.(L.control.scale)) {
+        L.control.scale({ 
+            position: 'bottomleft',
+            metric: true,
+            imperial: false,
+            maxWidth: 120
+        }).addTo(mapa);
+    }
+
+    console.log(`✅ Mapa inicializado exitosamente con ${Object.keys(coordenadasAgrupadas).length} marcadores.`);
+    
+    // ✅ DISPARAR EVENTO DE MAPA LISTO (para integraciones)
+    if (typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('mapaLeafletListo', { 
+            detail: { 
+                mapa, 
+                totalMarcadores: Object.keys(coordenadasAgrupadas).length,
+                estadisticas 
+            } 
+        }));
+    }
 }
 
 
 
-
-// ========================================
-// 🗺️ INICIALIZAR MAPA LEAFLET (VERSIÓN CORREGIDA CON AGRUPAMIENTO INTERNO)
-// ========================================
-function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-    console.log('🗺️ ==========================================');
-    console.log('🗺️ INICIALIZANDO MAPA LEAFLET CON AGRUPAMIENTO');
-    console.log('🗺️ ==========================================');
-    console.log('📊 OS Centro:', osCentro?.OSATMO);
-    console.log('📊 Total OS recibidas para mapa:', osEnRadio?.length || 0);
-    console.log('📊 Radio configurado:', radioKm, 'km');
-    console.log('🗺️ ==========================================');
-
-    const mapaDiv = document.getElementById('mapaLeaflet');
-    if (!mapaDiv) {
-        console.error('❌ Div del mapa no encontrado');
+/**
+ * Selecciona una OS específica de un grupo de coordenadas y centra el mapa
+ * @param {string} osatomo - ID de la OS a seleccionar
+ * @param {number} lat - Latitud del punto
+ * @param {number} lng - Longitud del punto
+ */
+function seleccionarOSDeLista(osatomo, lat, lng) {
+    if (!window.mapaLeafletInstance) {
+        console.error('❌ Mapa no inicializado');
         return;
     }
-
-    // Limpiar mapa anterior
-    if (window.mapaLeafletInstance) {
-        window.mapaLeafletInstance.remove();
-    }
-
-    // Crear mapa
-    const mapa = L.map('mapaLeaflet').setView([latCentro, lngCentro], 14);
-    window.mapaLeafletInstance = mapa;
-
-    // Capa de mapa
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(mapa);
-
-    // ========================================
-    // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
-    // ========================================
-    const circuloRadio = L.circle([latCentro, lngCentro], {
-        radius: radioKm * 1000,
-        color: '#3b82f6',
-        weight: 3,
-        opacity: 0.8,
-        fillOpacity: 0.15,
-        fillColor: '#3b82f6'
-    }).addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px;">
-            <strong style="color: #3b82f6; font-size: 16px;">📍 ÁREA DE BÚSQUEDA</strong><br>
-            <strong>Radio:</strong> ${radioKm} km<br>
-            <strong>OS en radio:</strong> ${osEnRadio.length}
-        </div>
-    `)
-    .openPopup();
-    window.circuloRadio = circuloRadio;
-
-    // ========================================
-    // ✅ MARCADOR "0" PARA PUNTO DE PARTIDA (VERDE)
-    // ========================================
-    const iconoVerde = L.divIcon({
-        className: 'custom-marker',
-        html: `<div style="
-            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 20px;
-            box-shadow: 0 4px 12px rgba(76,175,80,0.6);
-            border: 4px solid white;
-        ">0</div>`,
-        iconSize: [50, 50],
-        iconAnchor: [25, 50]
+    
+    // Centrar mapa en las coordenadas
+    window.mapaLeafletInstance.setView([lat, lng], 17, {
+        animate: true,
+        duration: 0.5
     });
-
-    const markerCentro = L.marker([latCentro, lngCentro], { icon: iconoVerde })
-        .addTo(mapa)
-        .bindPopup(`
-            <div style="min-width: 200px;">
-                <strong style="color: #2e7d32; font-size: 16px;">🎯 OS DE REFERENCIA (0)</strong><br>
-                <strong>OS:</strong> ${osCentro.OSATMO}<br>
-                <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
-            </div>
-        `)
-        .on('click', function() {
-            mostrarDetalleOSEnPanel(osCentro, 'OS DE REFERENCIA');
-        });
-
-    // ========================================
-    // ✅ 🆕 AGRUPAR OS POR COORDENADAS EXACTAS (DENTRO DE ESTA FUNCIÓN)
-    // ========================================
-    console.log('📍 ==========================================');
-    console.log('📍 AGRUPANDO OS POR COORDENADAS');
-    console.log('📍 Total OS a procesar:', osEnRadio.length);
-    console.log('📍 ==========================================');
-
-    const coordenadasAgrupadas = {};
-
-    osEnRadio.forEach((os, index) => {
-        // Saltar la OS centro si está en la lista
-        if (os.OSATMO === osCentro.OSATMO) {
-            return;
-        }
-
-        // Obtener coordenadas (BUSCAR EN MÚLTIPLES CAMPOS)
-        let lat, lng;
+    
+    // Buscar el marcador específico y abrir su popup
+    const markers = Object.values(window.markersPorEstado).flat();
+    const markerEncontrado = markers.find(m => {
+        const popupContent = m.getPopup()?.getContent();
+        return popupContent && popupContent.includes(osatomo);
+    });
+    
+    if (markerEncontrado) {
+        markerEncontrado.openPopup();
         
-        // Opción 1: Campos separados
-        if (os.Latitud || os.lat) {
-            lat = parseFloat(os.Latitud || os.lat);
-            lng = parseFloat(os.Longitud || os.lng);
+        // Animación visual
+        const iconEl = markerEncontrado.getElement();
+        if (iconEl) {
+            iconEl.style.transition = 'transform 0.3s ease';
+            iconEl.style.transform = 'scale(1.3)';
+            setTimeout(() => {
+                iconEl.style.transform = 'scale(1)';
+            }, 500);
         }
-        // Opción 2: Campo Coordenadas (texto "lat,lng")
-        else if (os.Coordenadas || os.Coordendasgis) {
-            const coordsStr = os.Coordenadas || os.Coordendasgis;
-            if (coordsStr && coordsStr.includes(',')) {
-                const partes = coordsStr.split(',');
-                lat = parseFloat(partes[0].trim());
-                lng = parseFloat(partes[1].trim());
-            }
-        }
-
-        if (isNaN(lat) || isNaN(lng)) {
-            console.warn(`⚠️ OS ${os.OSATMO} sin coordenadas válidas`);
-            return;
-        }
-
-        // Crear clave única para coordenadas (6 decimales para precisión)
-        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-
-        // Agrupar OS por coordenadas
-        if (!coordenadasAgrupadas[claveCoordenadas]) {
-            coordenadasAgrupadas[claveCoordenadas] = {
-                lat: lat,
-                lng: lng,
-                osList: []
-            };
-        }
-
-        coordenadasAgrupadas[claveCoordenadas].osList.push({
-            ...os,
-            numeroOrden: index + 1,
-            lat: lat,
-            lng: lng
-        });
-    });
-
-    console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
-    console.log(`📍 OS agrupadas: ${osEnRadio.length - 1}`);
-    console.log('📍 ==========================================');
-
-    // ========================================
-    // ✅ INICIALIZAR AGRUPACIONES PARA FILTROS
-    // ========================================
-    window.markersPorTipologia = {};
-    window.markersPorEstado = {
-        'centro': [markerCentro],
-        'asignada': [],
-        'regulada': [],
-        'no_regulada': [],
-        'deuda_alta': [],
-        'deuda_media': [],
-        'deuda_baja': []
-    };
-
-    const bounds = L.latLngBounds();
-    bounds.extend([latCentro, lngCentro]);
-
-    // ========================================
-    // ✅ CREAR MARCADORES CON AGRUPAMIENTO
-    // ========================================
-    let contadorProcesadas = 0;
-    let estadisticas = {
-        reguladas: 0,
-        no_reguladas: 0,
-        deuda_alta: 0,
-        deuda_media: 0,
-        deuda_baja: 0,
-        asignadas: 0
-    };
-
-    Object.values(coordenadasAgrupadas).forEach(grupo => {
-        const { lat, lng, osList } = grupo;
-        const esMultiple = osList.length > 1;
-
-        // Determinar estado y color del marcador principal
-        const primeraOS = osList[0];
-        const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
-        const deuda = parseFloat(primeraOS.Deuda) || 0;
-        let colorFondo, labelEstado, estadoKey;
-
-        if (deuda > 500) {
-            colorFondo = '#fdd835';
-            labelEstado = 'DEUDA ALTA';
-            estadoKey = 'deuda_alta';
-        } else if (deuda >= 100 && deuda <= 500) {
-            colorFondo = '#ff9800';
-            labelEstado = 'DEUDA MEDIA';
-            estadoKey = 'deuda_media';
-        } else if (deuda >= 50 && deuda < 100) {
-            colorFondo = '#f48fb1';
-            labelEstado = 'DEUDA BAJA';
-            estadoKey = 'deuda_baja';
-        } else if (primeraOS.Estado_ATOMO === 'Asignada' || primeraOS.Estado_SAP === 'ASIGNADA') {
-            colorFondo = '#ff9800';
-            labelEstado = 'OS ASIGNADA';
-            estadoKey = 'asignada';
-        } else if (tipoOS.includes('regulad') && !tipoOS.includes('no')) {
-            colorFondo = '#f44336';
-            labelEstado = 'OS REGULADA';
-            estadoKey = 'regulada';
-        } else {
-            colorFondo = '#2196f3';
-            labelEstado = 'OS NO REGULADA';
-            estadoKey = 'no_regulada';
-        }
-
-        // Contabilizar estadísticas
-        contadorProcesadas++;
-        estadisticas[estadoKey] += osList.length;
-
-        // Crear icono con indicador de múltiple si aplica
-        const iconoConNumero = L.divIcon({
-            className: 'custom-marker',
-            html: `
-                <div style="
-                    background-color: ${colorFondo};
-                    width: ${esMultiple ? '40px' : '32px'};
-                    height: ${esMultiple ? '40px' : '32px'};
-                    border-radius: 50% 50% 50% 0;
-                    transform: rotate(-45deg);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                    position: relative;
-                ">
-                    <span style="
-                        transform: rotate(45deg);
-                        color: white;
-                        font-weight: bold;
-                        font-size: ${esMultiple ? '16px' : '13px'};
-                    ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
-                    ${esMultiple ? '<div style="position:absolute;top:-5px;right:-5px;background:#ff5722;color:white;border-radius:50%;width:20px;height:20px;font-size:10px;display:flex;align-items:center;justify-content:center;border:2px solid white;">' + osList.length + '</div>' : ''}
-                </div>`,
-            iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
-            iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32]
-        });
-
-        // ========================================
-        // ✅ 🆕 CREAR POPUP CON LISTA DE TODAS LAS OS
-        // ========================================
-        let popupContent = `
-            <div style="min-width: 300px; max-height: 400px; overflow-y: auto;">
-                <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px;">
-                    📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
-                </strong>
-        `;
-
-        if (esMultiple) {
-            // Mostrar lista de todas las OS en este punto
-            osList.forEach((os, idx) => {
-                const osDeuda = parseFloat(os.Deuda) || 0;
-                const osTipo = (os.Tipo_de_OS || '').toLowerCase();
-                let osColor = '#2196f3';
-
-                if (osDeuda > 500) osColor = '#fdd835';
-                else if (osDeuda >= 100) osColor = '#ff9800';
-                else if (osDeuda >= 50) osColor = '#f48fb1';
-                else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
-                else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
-
-                popupContent += `
-                    <div style="
-                        background: #f8f9fa;
-                        padding: 10px;
-                        margin-bottom: 8px;
-                        border-radius: 6px;
-                        border-left: 4px solid ${osColor};
-                        cursor: pointer;
-                        transition: all 0.2s;
-                    " onclick="seleccionarOSDeLista('${os.OSATMO}', ${os.lat}, ${os.lng})"
-                       onmouseover="this.style.background='#e3f2fd'"
-                       onmouseout="this.style.background='#f8f9fa'">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO}</strong>
-                            <span style="background: ${osColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${os.Tipo_de_OS || 'Normal'}</span>
-                        </div>
-                        <div style="font-size: 12px; color: #666; line-height: 1.4;">
-                            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                            ${osDeuda > 0 ? `<strong>Deuda:</strong> $${osDeuda.toFixed(2)}<br>` : ''}
-                            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                            <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
-                        </div>
-                        <button onclick="event.stopPropagation(); mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px;">
-                            📋 Ver Detalle Completo
-                        </button>
-                    </div>
-                `;
-            });
-        } else {
-            // Popup normal para OS única
-            const os = osList[0];
-            popupContent += `
-                <div style="margin-bottom: 10px;">
-                    <strong>OS:</strong> ${os.OSATMO}<br>
-                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
-                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                </div>
-                <button onclick="mostrarDetalleOSEnPanel(${JSON.stringify(os).replace(/"/g, '&quot;')}, '${labelEstado}')"
-                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%;">
-                    📋 Ver Detalle Completo
-                </button>
-            `;
-        }
-
-        popupContent += `</div>`;
-
-        // Crear marcador con popup
-        const marker = L.marker([lat, lng], { icon: iconoConNumero })
-            .addTo(mapa)
-            .bindPopup(popupContent);
-
-        window.markersPorEstado[estadoKey].push(marker);
-        bounds.extend([lat, lng]);
-
-        // Agrupar por tipología
-        const tip = primeraOS.Tipologia || 'Sin tipología';
-        if (!window.markersPorTipologia[tip]) {
-            window.markersPorTipologia[tip] = [];
-        }
-        window.markersPorTipologia[tip].push(marker);
-    });
-
-    // ========================================
-    // 📊 LOG FINAL DE MARCADORES
-    // ========================================
-    console.log('📍 ==========================================');
-    console.log('📍 RESUMEN DE MARCADORES CREADOS');
-    console.log('📍 ==========================================');
-    console.table({
-        'Total procesadas': contadorProcesadas,
-        'Marcadores creados': Object.keys(coordenadasAgrupadas).length
-    });
-    console.log('📊 DISTRIBUCIÓN POR ESTADO:');
-    console.table(estadisticas);
-    console.log('📍 ==========================================');
-
-    if (bounds.isValid()) {
-        mapa.fitBounds(bounds, { padding: [50, 50] });
     }
-
-    L.control.scale().addTo(mapa);
-    console.log(`✅ Mapa inicializado con ${Object.keys(coordenadasAgrupadas).length} marcadores.`);
+    
+    // Mostrar detalle en panel lateral
+    const osData = window.datosMapaExportar?.find(o => o.OSATMO === osatomo);
+    if (osData) {
+        mostrarDetalleOSEnPanel(osData, 'OS SELECCIONADA');
+    }
 }
+
+// ✅ Exponer globalmente para que funcione en los onclick del HTML
+window.seleccionarOSDeLista = seleccionarOSDeLista;
 
 
  	// ========================================
@@ -12384,6 +12259,11 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
         console.error('❌ Panel de detalle no encontrado');
         return;
     }
+
+// ✅ Escape seguro si el objeto viene de HTML
+    const osData = typeof os === 'string' 
+        ? JSON.parse(os.replace(/&quot;/g, '"').replace(/&#39;/g, "'"))
+        : os;
 
     // ========================================
     // 🕵️ LOGS DE DEBUG - VER QUÉ DATOS RECIBIMOS
@@ -13416,7 +13296,9 @@ async function limpiarRegistrosViejosIPR() {
     try {
         const fechaLimite = new Date();
         fechaLimite.setDate(fechaLimite.getDate() - 30);
-        const fechaLimiteStr = fechaLimite.toISOString().split('T')[0];
+        const fechaLimite = new Date();
+fechaLimite.setDate(fechaLimite.getDate() - 2);
+const fechaLimiteStr = formatearFechaElSalvador(fechaLimite);
  
         const { error } = await supabaseClient
             .from('retiro_medidores')
@@ -13887,7 +13769,7 @@ async function cargarFestivos() {
 function calcularDiasHabiles(fechaGen) {
     if (!fechaGen) return null;
  
-    const hoy = new Date();
+    const hoy = getFechaElSalvador();
     hoy.setHours(0, 0, 0, 0);
  
     const fechaInicio = new Date(fechaGen);
@@ -13919,7 +13801,7 @@ function calcularDias(fechaGen) {
     if (!fechaGen) return 999;
  
     const fechaGeneracion = new Date(fechaGen);
-    const hoy = new Date();
+    const hoy = getFechaElSalvador();
  
     const diffMs = hoy - fechaGeneracion;
     const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -15008,6 +14890,8 @@ function toggleDetalleUnicomCondicion(unicom, condicion) {
 }
 
 
+
+
  	// ========================================
 // 📍 CAPTURAR COORDENADA REAL
 // ========================================
@@ -15293,6 +15177,7 @@ async function verificarCoordenadaReal(cuentaContrato, medidor, index) {
 
 function formatearComentario(valor, esDireccion = false) {
     if (!valor || valor === "Sin Datos") return '<br><em>Sin Datos</em>';
+
  
     let texto = valor.toString();
 
@@ -15933,6 +15818,23 @@ function seleccionarTabla(tableName, retryCount = 0) {
     }
 }
 
+function getCoordsCompat(os, legacyMode = false) {
+    if (legacyMode) {
+        // Comportamiento antiguo para código heredado
+       const coords = extraerCoordenadas(os);
+        if (!coordsStr || !coordsStr.includes(',')) return null;
+        const [lat, lng] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+        return isNaN(lat) || isNaN(lng) ? null : { lat, lng };
+    }
+    // Nuevo comportamiento con prioridad de campos
+    return extraerCoordenadas(os); // ← Nota: usa extraerCoordenadas (ya existe en tu código)
+}
+
+// Alias para mantener compatibilidad con llamadas existentes
+window.getCoordsCompat = getCoordsCompat;
+
+
+
 // ==========================================================
 // 🚀 INICIALIZACIÓN Y EVENTOS
 // ==========================================================
@@ -15983,9 +15885,10 @@ async function limpiarFiltrosObsoletos() {
         }
 
         const { error: errorDelete } = await supabaseClient
-            .from('filtros_por_unidad')
-            .delete()
-            .lt('fecha_programada', fechaLimiteStr);
+    .from('filtros_por_unidad')
+    .delete()
+    .not('fecha_programada', 'is', null)  // ✅ Excluir NULLs primero
+    .lt('fecha_programada', fechaLimiteStr);
 
         if (errorDelete) {
             console.error('❌ Error eliminando filtros:', errorDelete);
@@ -16052,9 +15955,10 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
         if (!confirm(mensaje)) return;
 
         const { error: errorDelete } = await supabaseClient
-            .from('filtros_por_unidad')
-            .delete()
-            .lt('fecha_programada', fechaLimiteStr);
+    .from('filtros_por_unidad')
+    .delete()
+    .not('fecha_programada', 'is', null)  // ✅ Excluir NULLs primero
+    .lt('fecha_programada', fechaLimiteStr);
 
         if (errorDelete) {
             throw errorDelete;
@@ -16068,7 +15972,36 @@ async function limpiarFiltrosObsoletosConConfirmacion() {
     }
 }
 
+// Exponer funciones al scope global para eventos HTML
+window.guardarConfiguracionDescanso = guardarConfiguracionDescanso;
+window.mostrarConfiguracionDescansoCiclo = mostrarConfiguracionDescansoCiclo;
+window.calcularFinDescansoCiclo = calcularFinDescansoCiclo;
+window.guardarDescansoCiclo = guardarDescansoCiclo;
+window.formatDate = formatDate;
 
+// ========================================
+// 🧪 BLOQUE DE PRUEBA (SOLO PARA VALIDACIÓN)
+// ========================================
+// ⚠️ Eliminar este bloque en producción o envolver en condición de debug
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.log('🧪 Validando funciones de coordenadas...');
+    // Pegar en consola para validar la prioridad
+const osPrueba = {
+    OSATMO: 'TEST-001',
+    Coordenadas: '14.0000,-90.0000',      // Debería ignorarse
+    Coordendasgis: '13.6488,-89.9183',    // Debería usarse (prioridad 1)
+    Latitud: '13.6400',
+    Longitud: '-89.9100'
+};
+
+const resultado = extraerCoordenadas(osPrueba);
+console.log('✅ Resultado:', resultado);
+// Esperado: { latitud: 13.6488, longitud: -89.9183, campoOrigen: 'Coordendasgis', ... }
+
+    console.log('🔹 Modo legacy:', getCoordsCompat(osPrueba, true));
+    console.log('🔹 Modo nuevo:', getCoordsCompat(osPrueba, false));
+    console.log('✅ Funciones de coordenadas cargadas correctamente');
+}
 
 
 
