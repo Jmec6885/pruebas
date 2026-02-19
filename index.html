@@ -1718,24 +1718,18 @@ async function loginATTF(userData) {
     }
 
     // 🚪 CASO 3: TIENE HOY PERO FALTA MAÑANA/DESCANSO = PASO 2
-    console.log('🚪 ==========================================');
-    console.log('🚪 CASO 3: TIENE TURNO HOY - FALTA CONFIGURAR MAÑANA');
-    console.log('🚪 ==========================================');
-    
-    // ✅ Obtener y validar contador de turnos
-    const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-    
-    console.log('🔢 DIAGNÓSTICO DE CONTADOR:');
-    console.log('   • Valor en BD:', userData.contador_turnos);
-    console.log('   • Valor parseado:', contadorTurnos);
-    console.log('   • Tipo:', typeof contadorTurnos);
+console.log('🚪 ==========================================');
+console.log('🚪 CASO 3: TIENE TURNO HOY - FALTA CONFIGURAR MAÑANA');
+console.log('🚪 ==========================================');
 
-    // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
-console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
-
+// ✅ Obtener y validar contador de turnos (DECLARACIÓN ÚNICA)
 const contadorTurnos = parseInt(userData.contador_turnos) || 0;
 const hoy = getFechaHoyElSalvador();
+
+console.log('🔢 DIAGNÓSTICO DE CONTADOR:');
+console.log('   • Valor en BD:', userData.contador_turnos);
+console.log('   • Valor parseado:', contadorTurnos);
+console.log('   • Tipo:', typeof contadorTurnos);
 
 // 🔍 LÓGICA CORREGIDA: Diferenciar entre "primer login" y "después de descanso"
 let debeForzarDescanso = false;
