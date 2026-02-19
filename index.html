@@ -1651,31 +1651,53 @@ if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
   }
 
    // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+console.log('🚪 ==========================================');
 console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
+console.log('🚪 ==========================================');
 console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
-const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-console.log('🔢 Contador de turnos:', contadorTurnos);
 
+// ✅ Obtener y validar contador de turnos
 const contadorTurnos = parseInt(userData.contador_turnos) || 0;
 
-// ✅ NUEVO: Log informativo para contador === 0
+// 📊 LOGS DE DIAGNÓSTICO DEL CONTADOR
+console.log('🔢 ==========================================');
+console.log('🔢 DIAGNÓSTICO DE CONTADOR DE TURNOS:');
+console.log('🔢 Valor crudo en userData:', userData.contador_turnos);
+console.log('🔢 Valor parseado:', contadorTurnos);
+console.log('🔢 Tipo de dato:', typeof contadorTurnos);
+console.log('🔢 ==========================================');
+
+// ✅ Log informativo según el valor del contador
 if (contadorTurnos === 0) {
-    console.warn('ℹ️ Usuario en primer día o post-descanso. Forzando configuración de descanso.');
-    // No mostrar como error, sino como flujo normal
+    console.log('ℹ️ [CONTADOR = 0] Usuario en primer día o post-descanso → Flujo normal: Forzar configuración de descanso');
+} else if (contadorTurnos >= 1 && contadorTurnos <= 4) {
+    console.log('ℹ️ [CONTADOR 1-4] Usuario en días laborales activos → Permitir selección de turno');
+} else if (contadorTurnos >= 5) {
+    console.log('ℹ️ [CONTADOR >= 5] Ciclo de 5 días completado → Forzar descanso obligatorio');
 }
 
-console.log('🔢 Contador de turnos:', contadorTurnos);
+// ✅ LÓGICA DE NEGOCIO SEGÚN CONTADOR
+console.log('🔄 ==========================================');
+console.log('🔄 EVALUANDO LÓGICA DE NEGOCIO:');
+console.log('🔄 ==========================================');
 
-// ✅ LÓGICA CORREGIDA SEGÚN TU LÓGICA:
-// - Contador 0: Primer día (o después de descanso) → FORZAR descanso (debe programar cuándo descansar)
-// - Contador 1-4: Días de trabajo (1-4 de 5) → Permitir selección de turno
-// - Contador >= 5: Después de 5 días → FORZAR descanso (obligatorio)
 if (contadorTurnos === 0 || contadorTurnos >= 5) {
-    console.log('⚠️ Contador = 0 (primer día/después de descanso) O contador >= 5 - Forzando descanso');
+    // 🎯 CASO A: Forzar descanso (inicio de ciclo o fin de ciclo)
+    console.log('✅ CONDICIÓN CUMPLIDA: contadorTurnos === 0 || contadorTurnos >= 5');
+    console.log(`📊 Valor evaluado: ${contadorTurnos}`);
+    console.log('🏖️ Acción: Redirigiendo a mostrarConfiguracionDescansoCiclo()');
+    console.log('🚪 ==========================================');
+    
     mostrarConfiguracionDescansoCiclo();
     return; // ✅ Detener ejecución inmediatamente
+    
 } else {
-    console.log('➡️ Redirigiendo a Paso 2 (días 1-4 de trabajo)...');
+    // 🎯 CASO B: Permitir selección de turno (días 1-4 de trabajo)
+    console.log('✅ CONDICIÓN NO CUMPLIDA: contadorTurnos está entre 1 y 4');
+    console.log(`📊 Valor evaluado: ${contadorTurnos}`);
+    console.log('🔄 Acción: Redirigiendo a mostrarProgramarTurnoMañanaConDescanso()');
+    console.log('🚪 ==========================================');
+    
     mostrarProgramarTurnoMañanaConDescanso(userData);
     return; // ✅ Detener ejecución inmediatamente
 }
