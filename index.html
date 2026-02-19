@@ -11753,8 +11753,13 @@ function obtenerCoordenadasOS(os) {
 // 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL (CORREGIDA)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-// ========================================
-    // 🧪 BLOQUE DE DIAGNÓSTICO INICIAL (AGREGAR AQUÍ)
+    // ========================================
+    // ✅ 0. OBTENER ELEMENTO DOM PRIMERO (para usar en diagnóstico)
+    // ========================================
+    const mapaDiv = document.getElementById('mapaLeaflet');
+    
+    // ========================================
+    // 🧪 BLOQUE DE DIAGNÓSTICO INICIAL
     // ========================================
     console.group('🔍 DIAGNÓSTICO: inicializarMapaLeaflet');
     
@@ -11767,7 +11772,6 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('🔧 mostrarDetalleOSEnPanel:', typeof mostrarDetalleOSEnPanel === 'function' ? '✅ Definida' : '❌ NO definida');
     
     // ✅ 3. Elemento DOM existe
-    const mapaDiv = document.getElementById('mapaLeaflet');
     console.log('📦 Div #mapaLeaflet:', mapaDiv ? '✅ Existe' : '❌ NO existe');
     
     // ✅ 4. Datos válidos
@@ -11781,9 +11785,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('📊 Total OS a procesar:', osEnRadio?.length || 0);
     
     console.groupEnd();
-    // ========================================
-    // FIN BLOQUE DE DIAGNÓSTICO
-    // ========================================
+    
     // ========================================
     // 🪵 LOG DE ENTRADA CON DIAGNÓSTICO COMPLETO
     // ========================================
@@ -11800,21 +11802,6 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     console.log('🗺️ ==========================================');
     console.groupEnd();
 
-// 1. Agregar validación para escapeJSONForHTMLAttribute si se usa en la función
-if (typeof escapeJSONForHTMLAttribute !== 'function') {
-    console.warn('⚠️ escapeJSONForHTMLAttribute no definida. Los popups podrían tener problemas de XSS.');
-    // Podrías definir un fallback simple:
-    window.escapeJSONForHTMLAttribute = (obj) => JSON.stringify(obj).replace(/"/g, '&quot;');
-}
-
-// 2. Validar que el div del mapa esté visible (no display:none)
-if (mapaDiv && mapaDiv.offsetParent === null) {
-    console.warn('⚠️ #mapaLeaflet existe pero está oculto (display:none). El mapa podría no renderizarse correctamente.');
-}
-
-// 3. Agregar un timestamp para correlacionar logs si hay múltiples inicializaciones
-console.log('⏱️ Timestamp:', new Date().toISOString());
-
     // ========================================
     // ✅ VALIDACIÓN DE DEPENDENCIAS CRÍTICAS
     // ========================================
@@ -11826,6 +11813,18 @@ console.log('⏱️ Timestamp:', new Date().toISOString());
     if (typeof extraerCoordenadas !== 'function') {
         console.error('❌ Función extraerCoordenadas no definida. No se pueden procesar coordenadas.');
         return;
+    }
+
+    // ✅ Fallback seguro para escapeJSONForHTMLAttribute
+    if (typeof escapeJSONForHTMLAttribute !== 'function') {
+        console.warn('⚠️ escapeJSONForHTMLAttribute no definida. Usando fallback básico.');
+        window.escapeJSONForHTMLAttribute = (obj) => {
+            try {
+                return JSON.stringify(obj).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            } catch (e) {
+                return '{}';
+            }
+        };
     }
 
     // ========================================
@@ -11853,15 +11852,19 @@ console.log('⏱️ Timestamp:', new Date().toISOString());
     }
 
     // ========================================
-    // ✅ VALIDAR ELEMENTO DEL DOM
+    // ✅ VALIDAR ELEMENTO DEL DOM (YA OBTENIDO ARRIBA)
     // ========================================
-    const mapaDiv = document.getElementById('mapaLeaflet');
     if (!mapaDiv) {
         console.error('❌ Div del mapa no encontrado: #mapaLeaflet');
         console.log('🔍 Elementos con id que contienen "mapa":', 
             Array.from(document.querySelectorAll('[id*="mapa"]')).map(el => el.id)
         );
         return;
+    }
+
+    // ✅ Validar que el div esté visible (no display:none)
+    if (mapaDiv.offsetParent === null && mapaDiv.style.display !== 'none') {
+        console.warn('⚠️ #mapaLeaflet podría estar oculto. El mapa podría no renderizarse correctamente.');
     }
 
     // ========================================
@@ -11903,6 +11906,7 @@ console.log('⏱️ Timestamp:', new Date().toISOString());
         'deuda_media': [],
         'deuda_baja': []
     };
+
 
     // ========================================
     // ✅ CREAR MAPA CON MANEJO DE ERRORES
