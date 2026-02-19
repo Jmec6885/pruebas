@@ -13288,30 +13288,31 @@ function extraerDatosComentario(comentario) {
  	// ========================================
 // 🗑️ LIMPIAR REGISTROS VIEJOS (30+ DÍAS)
 // ========================================
+// ========================================
+// 🗑️ LIMPIAR REGISTROS VIEJOS (30+ DÍAS)
+// ========================================
 async function limpiarRegistrosViejosIPR() {
-    try {
-        const fechaLimite = new Date();
-        fechaLimite.setDate(fechaLimite.getDate() - 30);
-        const fechaLimite = new Date();
-fechaLimite.setDate(fechaLimite.getDate() - 2);
-const fechaLimiteStr = formatearFechaElSalvador(fechaLimite);
- 
-        const { error } = await supabaseClient
-            .from('retiro_medidores')
-            .delete()
-            .lt('fecha', fechaLimiteStr);
- 
-        if (error) {
-            console.error('Error limpiando registros viejos:', error);
-        } else {
-            console.log('🗑️ Registros viejos limpiados (30+ días)');
-        }
-    } catch (err) {
-        console.error('Error en limpieza automática:', err);
-    }
+    try {
+        // ✅ ÚNICA declaración de fechaLimite
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 30); // ← 30 días atrás
+        
+        const fechaLimiteStr = formatearFechaElSalvador(fechaLimite);
+        
+        const { error } = await supabaseClient
+            .from('retiro_medidores')
+            .delete()
+            .lt('fecha', fechaLimiteStr);
+        
+        if (error) {
+            console.error('Error limpiando registros viejos:', error);
+        } else {
+            console.log('🗑️ Registros viejos limpiados (30+ días)');
+        }
+    } catch (err) {
+        console.error('Error en limpieza automática:', err);
+    }
 }
-
-
  	// ========================================
 // 📋 CARGAR REGISTROS IPR
 // ========================================
