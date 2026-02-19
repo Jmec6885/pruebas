@@ -2910,48 +2910,63 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 
 
+// ========================================
+// 🚪 ACCEDER AL MENÚ ATTF (VERSIÓN CORREGIDA Y ROBUSTA)
+// ========================================
 function accederMenuATTF() {
-    console.log('🔐 Validando acceso al menú ATTF...');
+    console.log('🔐 ==========================================');
+    console.log('🔐 INICIANDO: accederMenuATTF');
+    console.log('🔐 Usuario actual:', currentUser?.usuario || 'NO DEFINIDO');
+    console.log('🔐 Rol:', currentUser?.rol || 'NO DEFINIDO');
+    console.log('🔐 ==========================================');
 
-// ✅ NUEVO: Verificar que el contenedor de configuración esté REALMENTE oculto
+    // ========================================
+    // ✅ PASO 1: VALIDACIÓN DE CONFIGURACIÓN ACTIVA
+    // ========================================
+    console.log('🔍 [PASO 1] Verificando estado de configuración...');
+    
     const configSection = document.getElementById('configuracionInicialATTF');
-    if (configSection && configSection.offsetParent !== null) {
-        console.warn('⚠️ Configuración aún visible en DOM, esperando...');
+    
+    // 🛡️ Verificación robusta: ¿Está visible la configuración?
+    const configEstaVisible = configSection && (
+        configSection.style.display !== 'none' && 
+        configSection.style.display !== '' && 
+        configSection.offsetParent !== null &&
+        configSection.offsetHeight > 0
+    );
+    
+    console.log('📊 Estado configSection:', {
+        existe: !!configSection,
+        display: configSection?.style.display,
+        offsetParent: configSection?.offsetParent !== null,
+        offsetHeight: configSection?.offsetHeight,
+        estaVisible: configEstaVisible
+    });
+    
+    if (configEstaVisible) {
+        console.warn('⚠️ CONFIGURACIÓN AÚN ACTIVA - Bloqueando acceso al menú');
+        console.log('⏳ Reintentando en 200ms...');
         setTimeout(() => accederMenuATTF(), 200);
-        return; // ⛔ Detener ejecución hasta que esté oculto
+        return; // ⛔ DETENER EJECUCIÓN
     }
+    console.log('✅ Configuración inactiva - Continuando con acceso al menú');
 
-    // ✅ BLOQUEO CRÍTICO: Verificar si hay configuración activa
-    const configSection = document.getElementById('configuracionInicialATTF');
-    if (configSection && configSection.style.display === 'block') {
-        console.warn('⚠️ CONFIGURACIÓN ACTIVA - Bloqueando acceso al menú');
-        return; // ✅ SALIR INMEDIATAMENTE SIN MOSTRAR MENÚ
-    }
-
-// ✅ NUEVO: Verificar y restaurar searchGrid si fue destruido
-    const searchGrid = document.getElementById('searchGrid');
+    // ========================================
+    // ✅ PASO 2: VERIFICAR Y RESTAURAR INTERFAZ DE BÚSQUEDA
+    // ========================================
+    console.log('🔍 [PASO 2] Verificando integridad de searchGrid...');
+    
+    let searchGrid = document.getElementById('searchGrid');
+    
     if (!searchGrid) {
-        console.warn('⚠️ searchGrid destruido durante configuración. Restaurando...');
+        console.warn('⚠️ searchGrid NO ENCONTRADO - Intentando restaurar...');
+        
         const searchSection = document.getElementById('searchSection');
+        
         if (searchSection) {
-            searchSection.innerHTML = `
-                <div class="card">
-                    <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
-                    <div class="header"><h2 id="searchTitle">Consultar Información</h2></div>
-                    <div class="search-grid" id="searchGrid"></div>
-                    <div id="searchResults"></div>
-                </div>`;
-            console.log('✅ searchGrid restaurado exitosamente');
-        }
-    }
-
- // ✅ NUEVO: Verificar y restaurar searchGrid si fue destruido
-    const searchGrid = document.getElementById('searchGrid');
-    if (!searchGrid) {
-        console.warn('⚠️ searchGrid destruido durante configuración. Restaurando...');
-        const searchSection = document.getElementById('searchSection');
-        if (searchSection) {
-            // Restaurar estructura mínima requerida
+            console.log('🔧 Restaurando estructura de searchSection...');
+            
+            // ✅ Restaurar estructura completa con IDs críticos
             searchSection.innerHTML = `
                 <div class="card">
                     <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
@@ -2962,141 +2977,241 @@ function accederMenuATTF() {
                     <div id="searchResults"></div>
                 </div>
             `;
-            console.log('✅ searchGrid restaurado exitosamente');
+            
+            // ✅ Verificar que se restauró correctamente
+            searchGrid = document.getElementById('searchGrid');
+            
+            if (searchGrid) {
+                console.log('✅ searchGrid restaurado exitosamente');
+            } else {
+                console.error('❌ ERROR CRÍTICO: No se pudo restaurar searchGrid');
+                alert('⚠️ Error de interfaz: Recargue la página para continuar.');
+                return;
+            }
         } else {
-            console.error('❌ searchSection no existe. Imposible restaurar interfaz');
-            alert('Error crítico: Interfaz de búsqueda dañada. Recargue la página.');
+            console.error('❌ ERROR CRÍTICO: searchSection no existe en el DOM');
+            alert('❌ Error crítico: Interfaz dañada. Contacte al administrador.');
             return;
         }
+    } else {
+        console.log('✅ searchGrid ya existe - No requiere restauración');
     }
 
-    // ✅ RECUPERAR DATOS DE BD SI LOCALSTORAGE ESTÁ VACÍO
-    if (currentUser && currentUser.turno_hoy && !localStorage.getItem('turno_hoy')) {
-        localStorage.setItem('turno_hoy', currentUser.turno_hoy);
-        console.log('🔄 Recuperado turno_hoy desde BD');
-    }
+    // ========================================
+    // ✅ PASO 3: SINCRONIZAR DATOS DE TURNO (BD ↔ localStorage)
+    // ========================================
+    console.log('🔍 [PASO 3] Sincronizando datos de turno...');
     
-    if (currentUser && currentUser.turno_manana && !localStorage.getItem('turno_manana')) {
-        localStorage.setItem('turno_manana', currentUser.turno_manana);
-        console.log('🔄 Recuperado turno_manana desde BD');
+    if (currentUser) {
+        // 🔁 Sincronizar turno_hoy
+        if (currentUser.turno_hoy && !localStorage.getItem('turno_hoy')) {
+            localStorage.setItem('turno_hoy', currentUser.turno_hoy);
+            console.log('🔄 turno_hoy sincronizado desde BD:', currentUser.turno_hoy);
+        }
+        
+        // 🔁 Sincronizar fecha_turno_hoy
+        if (currentUser.fecha_turno_hoy && !localStorage.getItem('fecha_turno_hoy')) {
+            localStorage.setItem('fecha_turno_hoy', currentUser.fecha_turno_hoy);
+            console.log('🔄 fecha_turno_hoy sincronizado desde BD:', currentUser.fecha_turno_hoy);
+        }
+        
+        // 🔁 Sincronizar turno_manana
+        if (currentUser.turno_manana && !localStorage.getItem('turno_manana')) {
+            localStorage.setItem('turno_manana', currentUser.turno_manana);
+            console.log('🔄 turno_manana sincronizado desde BD:', currentUser.turno_manana);
+        }
+        
+        // 🔁 Sincronizar fecha_turno_manana
+        if (currentUser.fecha_turno_manana && !localStorage.getItem('fecha_turno_manana')) {
+            localStorage.setItem('fecha_turno_manana', currentUser.fecha_turno_manana);
+            console.log('🔄 fecha_turno_manana sincronizado desde BD:', currentUser.fecha_turno_manana);
+        }
+        
+        console.log('📊 Datos de turno en currentUser:', {
+            turno_hoy: currentUser.turno_hoy,
+            fecha_turno_hoy: currentUser.fecha_turno_hoy,
+            turno_manana: currentUser.turno_manana,
+            fecha_turno_manana: currentUser.fecha_turno_manana,
+            contador_turnos: currentUser.contador_turnos
+        });
     }
-    console.log('📊 currentUser:', {
-        usuario: currentUser?.usuario,
-        turno_hoy: currentUser?.turno_hoy,
-        fecha_turno_hoy: currentUser?.fecha_turno_hoy,
-        turno_manana: currentUser?.turno_manana
-    });
 
-    // 1. RECUPERACIÓN DE SESIÓN (Seguridad)
+    // ========================================
+    // ✅ PASO 4: RECUPERACIÓN DE SESIÓN (Fallback de seguridad)
+    // ========================================
+    console.log('🔍 [PASO 4] Validando sesión activa...');
+    
     if (!currentUser) {
-        const sessionStore = localStorage.getItem('cleca_user_session') || localStorage.getItem('usuario_logueado');
+        console.warn('⚠️ currentUser no definido - Intentando recuperar desde storage...');
+        
+        const sessionStore = localStorage.getItem('cleca_user_session') || 
+                            localStorage.getItem('usuario_logueado');
+        
         if (sessionStore) {
-            currentUser = JSON.parse(sessionStore).user || JSON.parse(sessionStore);
-            console.log('✅ Sesión restaurada desde storage');
+            try {
+                const parsed = JSON.parse(sessionStore);
+                currentUser = parsed.user || parsed;
+                console.log('✅ Sesión recuperada desde storage:', {
+                    usuario: currentUser?.usuario,
+                    rol: currentUser?.rol
+                });
+            } catch (err) {
+                console.error('❌ Error parseando sesión:', err);
+            }
         } else {
-            console.warn('❌ No hay sesión guardada, recargando...');
-            location.reload(); 
+            console.error('❌ No hay sesión guardada - Redirigiendo a login');
+            location.reload();
             return;
         }
+    } else {
+        console.log('✅ currentUser ya está definido:', currentUser.usuario);
     }
 
-    // ✅ ELIMINADO: Validación de localStorage (redundante - ya validó loginATTF)
-
-    // 2. ⚡ LIMPIEZA TOTAL Y RENDERIZADO DE INTERFAZ
+    // ========================================
+    // ✅ PASO 5: LIMPIEZA Y RENDERIZADO DE INTERFAZ
+    // ========================================
+    console.log('🔍 [PASO 5] Renderizando interfaz de menú...');
+    
     try {
-        console.log('🧹 Limpiando interfaz...');
+        console.log('🧹 Limpiando elementos de configuración previa...');
         
-        // A. OCULTAR LOGIN Y CONFIGURACIÓN
+        // 🅰️ OCULTAR LOGIN
         const loginSec = document.getElementById('loginSection');
-        if (loginSec) {
+        if (loginSec && loginSec.style.display !== 'none') {
             loginSec.style.display = 'none';
             console.log('✅ loginSection oculto');
         }
-
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) {
-            configSec.innerHTML = '';
-            configSec.style.display = 'none';
-            console.log('✅ configuracionInicialATTF limpio y oculto');
-        }
-
-        // B. MOSTRAR MENÚ PRINCIPAL
-        const menuModulos = document.getElementById('menuModulosATTF');
-        if (menuModulos) {
-            menuModulos.style.display = 'block';
-            menuModulos.classList.remove('hidden');
-            console.log('✅ menuModulosATTF visible');
-        }
-
-        // C. CONFIGURAR SECCIÓN DE BÚSQUEDA
-        const searchSection = document.getElementById('searchSection');
-if (searchSection) {
-    searchSection.style.display = 'none';  // ✅ CORREGIDO
-    searchSection.classList.add('hidden');
-}
-        // D. MOSTRAR BOTONES DE MÓDULOS
-        const tableSelection = document.getElementById('tableSelectionSection');
-if (tableSelection) {
-    tableSelection.style.display = 'block';
-    tableSelection.classList.remove('hidden');
-}
-        // E. IDENTIDAD DE USUARIO
-        const userLabel = document.getElementById('currentUser');
-        if (userLabel) {
-            userLabel.textContent = `Bienvenido, ${currentUser.usuario} (ATTF)`;
-            console.log('✅ Etiqueta de usuario actualizada');
+        
+        // 🅱️ LIMPIAR Y OCULTAR CONFIGURACIÓN
+        if (configSection) {
+            if (configSection.innerHTML !== '') {
+                configSection.innerHTML = '';
+                console.log('🧹 configuracionInicialATTF contenido limpiado');
+            }
+            if (configSection.style.display !== 'none') {
+                configSection.style.display = 'none';
+                console.log('✅ configuracionInicialATTF oculto');
+            }
         }
         
-        if (document.getElementById('userInfo')) {
-            document.getElementById('userInfo').classList.remove('hidden');
+        // 🆎 MOSTRAR MENÚ DE MÓDULOS
+        const menuModulos = document.getElementById('menuModulosATTF') || 
+                           document.getElementById('tableSelectionSection');
+        
+        if (menuModulos) {
+            if (menuModulos.style.display === 'none' || 
+                menuModulos.classList.contains('hidden')) {
+                menuModulos.style.display = 'block';
+                menuModulos.classList.remove('hidden');
+                console.log('✅ Menú de módulos visible');
+            }
+        } else {
+            console.warn('⚠️ menuModulosATTF/tableSelectionSection no encontrado');
         }
-
-                // 3. EJECUTAR PROCESOS DE FONDO
-        console.log('⚙️ Ejecutando procesos de fondo...');
-        mostrarTablasSegunRol();
-        iniciarVerificacionSesion();
+        
+        // 🆑 OCULTAR SECCIÓN DE BÚSQUEDA (inicialmente)
+        const searchSection = document.getElementById('searchSection');
+        if (searchSection) {
+            if (searchSection.style.display !== 'none') {
+                searchSection.style.display = 'none';
+                searchSection.classList.add('hidden');
+                console.log('✅ searchSection oculto (se mostrará al seleccionar módulo)');
+            }
+        }
+        
+        // 🆒 ACTUALIZAR IDENTIDAD DE USUARIO
+        const userLabel = document.getElementById('currentUser');
+        if (userLabel && currentUser?.usuario) {
+            const nuevoTexto = `Bienvenido, ${currentUser.usuario} (ATTF)`;
+            if (userLabel.textContent !== nuevoTexto) {
+                userLabel.textContent = nuevoTexto;
+                console.log('✅ Etiqueta de usuario actualizada');
+            }
+        }
+        
+        // 🆓 MOSTRAR INFO DE USUARIO
+        const userInfo = document.getElementById('userInfo');
+        if (userInfo && userInfo.classList.contains('hidden')) {
+            userInfo.classList.remove('hidden');
+            console.log('✅ userInfo visible');
+        }
+        
+        // ========================================
+        // ✅ PASO 6: EJECUTAR PROCESOS DE FONDO
+        // ========================================
+        console.log('⚙️ [PASO 6] Ejecutando procesos de fondo...');
+        
+        // 🔄 Actualizar filtros según rol
+        if (typeof mostrarTablasSegunRol === 'function') {
+            mostrarTablasSegunRol();
+            console.log('✅ mostrarTablasSegunRol() ejecutado');
+        } else {
+            console.warn('⚠️ mostrarTablasSegunRol no está definida');
+        }
+        
+        // ⏰ Iniciar verificación de sesión
+        if (typeof iniciarVerificacionSesion === 'function') {
+            iniciarVerificacionSesion();
+            console.log('✅ iniciarVerificacionSesion() ejecutado');
+        } else {
+            console.warn('⚠️ iniciarVerificacionSesion no está definida');
+        }
         
         console.log('✅✅✅ Menú ATTF renderizado correctamente ✅✅✅');
-
+        
     } catch (error) {
-        console.error('❌ Error crítico al renderizar el menú:', error);
-
+        console.error('❌ ERROR CRÍTICO en renderizado de menú:', {
+            mensaje: error.message,
+            stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+            timestamp: new Date().toISOString()
+        });
+        
+        // 🆘 Fallback: Recargar página si hay error crítico
+        if (confirm('❌ Error al cargar el menú. ¿Desea recargar la página?')) {
+            location.reload();
+        }
     }
 
-
-// ✅ FORZAR CARGA COMPLETA DEL DOM
-setTimeout(() => {
-    console.log('✅ DOM completamente cargado y listo');
-}, 500);
-
-
-    // ✅ DEBUG: Verificar elementos visibles (FUERA del try-catch)
-    setTimeout(() => {
-        console.log('🔍 ELEMENTOS VISIBLES EN PANTALLA:');
-        const visibleElements = document.querySelectorAll('*');
-        visibleElements.forEach(el => {
-            if (el.offsetWidth > 0 && el.offsetHeight > 0 && el.style.display !== 'none') {
-                const id = el.id || 'sin-id';
-                const classes = el.className || 'sin-clase';
-                console.log(`   ✅ ${id} - ${classes}`);
+    // ========================================
+    // ✅ PASO 7: LOGS DE VERIFICACIÓN FINAL (DEBUG)
+    // ========================================
+    console.log('🔍 ==========================================');
+    console.log('🔍 VERIFICACIÓN FINAL DE ELEMENTOS');
+    console.log('🔍 ==========================================');
+    
+    // 🔹 Verificar elementos críticos (solo los necesarios)
+    const elementosCriticos = [
+        { id: 'loginSection', esperado: 'none' },
+        { id: 'configuracionInicialATTF', esperado: 'none' },
+        { id: 'tableSelectionSection', esperado: 'block' },
+        { id: 'searchSection', esperado: 'none' },
+        { id: 'userInfo', esperado: 'visible' },
+        { id: 'currentUser', esperado: 'texto' }
+    ];
+    
+    elementosCriticos.forEach(el => {
+        const elemento = document.getElementById(el.id);
+        if (elemento) {
+            let estado = '';
+            if (el.esperado === 'none') {
+                estado = elemento.style.display === 'none' ? '✅ OCULTO' : '⚠️ VISIBLE';
+            } else if (el.esperado === 'block') {
+                estado = elemento.style.display === 'block' ? '✅ VISIBLE' : '⚠️ OCULTO';
+            } else if (el.esperado === 'visible') {
+                estado = !elemento.classList.contains('hidden') ? '✅ VISIBLE' : '⚠️ OCULTO';
+            } else if (el.esperado === 'texto') {
+                estado = elemento.textContent ? `✅ "${elemento.textContent}"` : '⚠️ VACÍO';
             }
-        });
-    }, 1000);
-
-
-setTimeout(() => {
-    const searchSection = document.getElementById('searchSection');
-    if (searchSection) {
-        console.log('🔍 searchSection estado:', {
-            display: searchSection.style.display,
-            classList: Array.from(searchSection.classList),
-            offsetHeight: searchSection.offsetHeight,
-            offsetWidth: searchSection.offsetWidth
-        });
-    }
-}, 1000);
+            console.log(`📊 ${el.id}: ${estado}`);
+        } else {
+            console.error(`❌ ${el.id}: NO ENCONTRADO`);
+        }
+    });
+    
+    console.log('🔍 ==========================================');
+    console.log('🔐 FINALIZADO: accederMenuATTF');
+    console.log('🔐 ==========================================');
 }
-
 
 
 
