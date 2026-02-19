@@ -3015,7 +3015,7 @@ function retryWithLimit(fn, maxRetries = 3, delay = 300) {
 // ========================================
 // 🚪 ACCEDER AL MENÚ ATTF (VERSIÓN CORREGIDA Y ROBUSTA)
 // ========================================
-function accederMenuATTF() {
+async function accederMenuATTF() {
     console.log('🔐 ==========================================');
     console.log('🔐 INICIANDO: accederMenuATTF');
     console.log('🔐 Usuario actual:', currentUser?.usuario || 'NO DEFINIDO');
