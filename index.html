@@ -7154,6 +7154,67 @@ const osatmosAsignadosGlobal = new Set(
     (todasAsignadas || []).map(os => String(os.osatomo).trim())
 );
 console.log(`✅ ${osatmosAsignadosGlobal.size} OS asignadas globalmente`);
+
+// ========================================
+// ✅ 🆕 AGREGAR: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS (PARA KML)
+// ========================================
+console.log('📝 ==========================================');
+console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS (KML)');
+console.log('📝 ==========================================');
+
+// Extraer medidores únicos de OS Pendientes
+const medidoresUnicos = [...new Set(osPendientes
+    .map(os => os.Medidor)
+    .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
+
+console.log(`🔍 Medidores únicos para comentarios: ${medidoresUnicos.length}`);
+
+const comentariosPorMedidor = new Map();
+
+// Consultar en lotes para no saturar
+if (medidoresUnicos.length > 0) {
+    const BATCH_MEDIDORES = 1000;
+    for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
+        const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
+        
+        const { data: comentariosData, error: errorComentarios } = await supabaseClient
+            .from('consultas_servicios')
+            .select('Medidor, CuentaContrato, ComentarioGeneral')
+            .in('Medidor', batchMedidores);
+        
+        if (!errorComentarios && comentariosData) {
+            comentariosData.forEach(item => {
+                if (item.Medidor) {
+                    comentariosPorMedidor.set(String(item.Medidor).trim(), {
+                        ComentarioGeneral: item.ComentarioGeneral || '',
+                        CuentaContrato: item.CuentaContrato
+                    });
+                }
+            });
+            console.log(`✅ Lote: ${comentariosData.length} comentarios obtenidos`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50)); // Pausa anti-saturación
+    }
+}
+
+// ========================================
+// ✅ INYECTAR COMENTARIOS EN OS PENDIENTES
+// ========================================
+osPendientes.forEach(os => {
+    const medidorKey = String(os.Medidor).trim();
+    const comentarioData = comentariosPorMedidor.get(medidorKey);
+    
+    if (comentarioData && comentarioData.ComentarioGeneral) {
+        os.Comentario = comentarioData.ComentarioGeneral;
+        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+    } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario !== '') {
+        os.ComentarioGeneral = os.Comentario;
+    } else {
+        os.Comentario = 'Sin comentario disponible';
+        os.ComentarioGeneral = 'Sin comentario disponible';
+    }
+});
+
  
         // ========================================
         // ✅ 6️⃣ FILTRAR OS EN RADIO (UNIFICADO Y AUDITADO)
@@ -7391,6 +7452,24 @@ console.log('📊 ==========================================');
         console.log(`🗺️ Órdenes Sugeridas (Filtro): ${osEnRadio.length}`);
         console.log(`🗺️ Total en Mapa: ${osParaMapa.length}`);
         console.log('🗺️ ==========================================');
+
+// ========================================
+// ✅ INYECTAR COMENTARIOS EN OS ASIGNADAS (si no los tienen)
+// ========================================
+misAsignadasReales.forEach(os => {
+    if (!os.ComentarioGeneral && os.Medidor) {
+        const medidorKey = String(os.Medidor).trim();
+        const comentarioData = comentariosPorMedidor.get(medidorKey);
+        
+        if (comentarioData && comentarioData.ComentarioGeneral) {
+            os.Comentario = comentarioData.ComentarioGeneral;
+            os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+        } else if (os.Comentario && os.Comentario !== 'N/A') {
+            os.ComentarioGeneral = os.Comentario;
+        }
+    }
+});
+
 
         // 🔥 PASO NUEVO: OPTIMIZACIÓN DE RUTA (Vecino más cercano + 2-OPT)
         console.log("🔄 Optimizando secuencia de visita para ruta lógica...");
@@ -12632,26 +12711,29 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             continue;
         }
 
-        // Crear clave única para coordenadas (6 decimales para precisión ~11cm)
-        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        // 1️⃣ AGRUPAMIENTO: Solo agrupar, SIN asignar numeroOrden aún
+const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
 
-        // Agrupar OS por coordenadas
-        if (!coordenadasAgrupadas[claveCoordenadas]) {
-            coordenadasAgrupadas[claveCoordenadas] = {
-                lat,
-                lng,
-                osList: []
-            };
-        }
+if (!coordenadasAgrupadas[claveCoordenadas]) {
+    coordenadasAgrupadas[claveCoordenadas] = { lat, lng, osList: [] };
+}
 
-        coordenadasAgrupadas[claveCoordenadas].osList.push({
-            ...os,
-            numeroOrden: index + 1,
-            lat,
-            lng
-        });
-        osProcesadas++;
-    }
+coordenadasAgrupadas[claveCoordenadas].osList.push({
+    ...os,
+    lat,  // aseguramos que sean números
+    lng
+});
+osProcesadas++; // útil para logs
+
+// 2️⃣ DESPUÉS DEL AGRUPAMIENTO: Asignar numeroOrden por grupo
+let ordenGlobal = 1;
+for (const grupo of Object.values(coordenadasAgrupadas)) {
+    grupo.osList.forEach(os => {
+        os.numeroOrden = ordenGlobal; // Todos en el mismo grupo tienen el mismo número
+    });
+    ordenGlobal++; // Siguiente número para el siguiente grupo
+}
+
 
     console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
     console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas} | Inválidas: ${osCoordenadasInvalidas}`);
