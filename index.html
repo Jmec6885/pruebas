@@ -1730,38 +1730,39 @@ async function loginATTF(userData) {
     console.log('   • Valor parseado:', contadorTurnos);
     console.log('   • Tipo:', typeof contadorTurnos);
 
-    // ✅ LÓGICA DE NEGOCIO SEGÚN CONTADOR
-    if (contadorTurnos === 0 || contadorTurnos >= 5) {
-        // 🎯 FORZAR DESCANSO: Inicio de ciclo o fin de ciclo de 5 días
-        console.log('✅ CONDICIÓN: contadorTurnos === 0 || >= 5');
-        console.log(`📊 Valor: ${contadorTurnos} → 🏖️ Forzar configuración de descanso`);
-        
-        // Limpiar interfaz antes de mostrar nueva
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) {
-            configSec.innerHTML = '';
-            configSec.style.display = 'block';
-        }
-        
-        mostrarConfiguracionDescansoCiclo();
-        return;
-        
+    // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
+console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
+console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+
+const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+const hoy = getFechaHoyElSalvador();
+
+// 🔍 LÓGICA CORREGIDA: Diferenciar entre "primer login" y "después de descanso"
+let debeForzarDescanso = false;
+
+if (contadorTurnos >= 5) {
+    debeForzarDescanso = true;
+    console.log('📊 Contador >= 5: Forzando descanso');
+} 
+else if (contadorTurnos === 0) {
+    const descansoFin = userData.descanso_fecha_fin;
+    if (descansoFin && descansoFin <= hoy) {
+        debeForzarDescanso = true;
+        console.log('📊 Contador=0 + descanso previo terminado: Forzando descanso');
     } else {
-        // 🎯 PERMITIR SELECCIÓN: Días 1-4 de trabajo normal
-        console.log('✅ CONDICIÓN: contadorTurnos entre 1 y 4');
-        console.log(`📊 Valor: ${contadorTurnos} → 🔄 Permitir selección de turno`);
-        
-        // Limpiar interfaz antes de mostrar nueva
-        const configSec = document.getElementById('configuracionInicialATTF');
-        if (configSec) {
-            configSec.innerHTML = '';
-            configSec.style.display = 'block';
-        }
-        
-        console.log('🔄 Llamando a mostrarProgramarTurnoMañanaConDescanso()...');
-        mostrarProgramarTurnoMañanaConDescanso(userData);
-        return;
+        console.log('📊 Contador=0 sin descanso previo: Permitiendo flujo normal');
     }
+}
+
+if (debeForzarDescanso) {
+    console.log('🏖️ Redirigiendo a configuración de descanso obligatorio');
+    mostrarConfiguracionDescansoCiclo();
+    return;
+} else {
+    console.log('➡️ Redirigiendo a Paso 2: Selección de turno de mañana');
+    mostrarProgramarTurnoMañanaConDescanso(userData);
+    return;
+}
 } // ✅ ✅ ✅ CIERRE CORRECTO DE loginATTF ✅ ✅ ✅
 
 
@@ -3016,6 +3017,7 @@ function retryWithLimit(fn, maxRetries = 3, delay = 300) {
     attempt();
 }
 
+
 // ========================================
 // 🚪 ACCEDER AL MENÚ ATTF (VERSIÓN CORREGIDA Y ROBUSTA)
 // ========================================
@@ -3080,6 +3082,149 @@ function accederMenuATTF() {
     }
     
     console.log('✅ Configuración inactiva - Continuando con acceso al menú');
+
+    // ========================================
+    // ✅ PASO 1.5: ROLL FORWARD + VALIDACIÓN DE CONFIGURACIÓN COMPLETA
+    // ========================================
+    console.log('🔍 [PASO 1.5] Ejecutando Roll Forward y validando configuración...');
+    
+    try {
+        const fechaHoy = getFechaHoyElSalvador();
+        const horaActual = new Date().getHours();
+        let necesitaActualizacion = false;
+        
+        // 🔄 ROLL FORWARD: ¿El "mañana" programado AYER es HOY?
+        if (currentUser.fecha_turno_manana === fechaHoy && 
+            currentUser.turno_manana && 
+            currentUser.turno_manana !== 'null' && 
+            currentUser.turno_manana !== '' && 
+            currentUser.turno_manana !== 'descanso') {
+            
+            console.log('✅ 🟢 ROLL FORWARD ACTIVADO en accederMenuATTF');
+            console.log(`   📅 fecha_turno_manana: ${currentUser.fecha_turno_manana} === HOY: ${fechaHoy}`);
+            console.log(`   🔄 Promoviendo: ${currentUser.turno_manana} → turno_hoy`);
+            
+            // Promover turno_manana a turno_hoy
+            currentUser.turno_hoy = currentUser.turno_manana;
+            currentUser.fecha_turno_hoy = fechaHoy;
+            currentUser.contador_turnos = (parseInt(currentUser.contador_turnos) || 0) + 1;
+            
+            // Limpiar campos de mañana
+            currentUser.turno_manana = null;
+            currentUser.fecha_turno_manana = null;
+            
+            // Actualizar BD
+            const { error: updateError } = await supabaseClient
+                .from('usuarios')
+                .update({
+                    turno_hoy: currentUser.turno_hoy,
+                    fecha_turno_hoy: fechaHoy,
+                    turno_manana: null,
+                    fecha_turno_manana: null,
+                    contador_turnos: currentUser.contador_turnos,
+                    ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador())
+                })
+                .eq('id', currentUser.id);
+            
+            if (updateError) {
+                console.error('❌ Error actualizando Roll Forward:', updateError);
+            } else {
+                console.log('✅ Roll Forward guardado en BD');
+            }
+            
+            // Actualizar localStorage
+            localStorage.setItem('turno_hoy', currentUser.turno_hoy);
+            localStorage.setItem('fecha_turno_hoy', currentUser.fecha_turno_hoy);
+            localStorage.setItem('turno_manana', 'null');
+            localStorage.setItem('fecha_turno_manana', 'null');
+            localStorage.setItem('contador_turnos', currentUser.contador_turnos.toString());
+            
+            necesitaActualizacion = true;
+        }
+        
+        // 🔍 VALIDACIÓN: ¿Tiene configuración completa para acceder al menú?
+        const tieneHoyAlDia = currentUser.turno_hoy && 
+                             currentUser.fecha_turno_hoy === fechaHoy;
+        const tieneTurnoManana = currentUser.turno_manana && 
+                                currentUser.turno_manana !== 'null' && 
+                                currentUser.turno_manana !== '' && 
+                                currentUser.turno_manana !== 'descanso';
+        const tieneDescansoActivo = currentUser.descanso_fecha_inicio && 
+                                   currentUser.descanso_fecha_inicio >= fechaHoy;
+        
+        console.log('📊 Estado de configuración para acceso:', {
+            tieneHoyAlDia,
+            tieneTurnoManana,
+            tieneDescansoActivo,
+            turno_hoy: currentUser.turno_hoy,
+            fecha_turno_hoy: currentUser.fecha_turno_hoy
+        });
+        
+        // 🚫 CASO A: NO TIENE TURNO DE HOY → REDIRIGIR A PASO 1
+        if (!tieneHoyAlDia) {
+            console.log('🚪 CASO A: Usuario sin turno de hoy válido - Redirigiendo a Paso 1');
+            
+            // Ocultar cualquier menú que pueda estar visible
+            const tableSelection = document.getElementById('tableSelectionSection');
+            if (tableSelection) {
+                tableSelection.style.display = 'none';
+                tableSelection.classList.add('hidden');
+            }
+            
+            // Mostrar configuración inicial
+            const configSection = document.getElementById('configuracionInicialATTF');
+            if (configSection) {
+                configSection.innerHTML = '';
+                configSection.style.display = 'block';
+                configSection.classList.remove('hidden');
+            }
+            
+            // Ejecutar función de configuración
+            if (typeof mostrarConfiguracionInicialATTF === 'function') {
+                mostrarConfiguracionInicialATTF();
+            }
+            
+            console.log('✅ Redirigido a mostrarConfiguracionInicialATTF()');
+            return; // ⛔ DETENER EJECUCIÓN - No continuar con el menú
+        }
+        
+        // 🚫 CASO B: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO → REDIRIGIR A PASO 2
+        if (!tieneTurnoManana && !tieneDescansoActivo) {
+            console.log('🚪 CASO B: Usuario tiene hoy pero falta configurar mañana - Redirigiendo a Paso 2');
+            
+            // Ocultar menú de módulos
+            const tableSelection = document.getElementById('tableSelectionSection');
+            if (tableSelection) {
+                tableSelection.style.display = 'none';
+                tableSelection.classList.add('hidden');
+            }
+            
+            // Preparar userData para el siguiente paso
+            const userDataParaPaso2 = {
+                turno_hoy: currentUser.turno_hoy,
+                contador_turnos: parseInt(currentUser.contador_turnos) || 0,
+                estado_ciclo: currentUser.estado_ciclo || 'ciclo_normal'
+            };
+            
+            // Ejecutar función de programación de turno mañana
+            if (typeof mostrarProgramarTurnoMañanaConDescanso === 'function') {
+                mostrarProgramarTurnoMañanaConDescanso(userDataParaPaso2);
+            }
+            
+            console.log('✅ Redirigido a mostrarProgramarTurnoMañanaConDescanso()');
+            return; // ⛔ DETENER EJECUCIÓN - No continuar con el menú
+        }
+        
+        // ✅ CASO C: CONFIGURACIÓN COMPLETA - Puede acceder al menú
+        if (necesitaActualizacion) {
+            console.log('✅ Roll Forward ejecutado - Configuración actualizada');
+        }
+        console.log('✅ Usuario con configuración completa - Acceso al menú permitido');
+        
+    } catch (err) {
+        console.error('❌ Error en validación de configuración:', err);
+        // En caso de error, continuar con el flujo normal (fail-safe)
+    }
 
     // ========================================
     // ✅ PASO 2: VERIFICAR Y RESTAURAR INTERFAZ DE BÚSQUEDA
@@ -3369,6 +3514,8 @@ function accederMenuATTF() {
     console.log('🔐 Timestamp fin:', new Date().toISOString());
     console.log('🔐 ==========================================');
 }
+
+
 
 // ========================================
 // 🧪 DIAGNÓSTICO ADICIONAL (Ejecutar en consola si hay problemas)
