@@ -13166,21 +13166,21 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
     // ✅ 🆕 BUSCAR COMENTARIO EN MÚLTIPLES CAMPOS
     // ========================================
     const comentarioTexto = 
-        os.Comentario || 
-        os.ComentarioGeneral ||
-        os.comentario || 
-        os.comentarioGeneral || 
-        os.Observaciones || 
-        os.observaciones || 
-        os.Comentarios || 
-        os.comentarios ||
-        os.Detalle || 
-        os.detalle ||
-        os.descripcion ||
-        os.Descripcion ||
-        os.Nota ||
-        os.nota ||
-        '';
+    os.ComentarioGeneral ||    // ← Inyectado desde consultas_servicios (PRIORIDAD 1)
+    os.Comentario ||           // ← Original de OS Pendientes (PRIORIDAD 2)
+    os.comentarioGeneral ||
+    os.comentario ||
+    os.Observaciones ||
+    os.observaciones ||
+    os.Comentarios ||
+    os.comentarios ||
+    os.Detalle ||
+    os.detalle ||
+    os.descripcion ||
+    os.Descripcion ||
+    os.Nota ||
+    os.nota ||
+    '';
 
     console.log('🔍 DEBUG COMENTARIO:', {
         OS: os.OSATMO || os.osatomo,
@@ -13191,10 +13191,22 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
         LongitudComentario: comentarioTexto.length
     });
 
-    // Formatear comentario usando tu función existente
-    const comentarioFormateado = comentarioTexto && comentarioTexto.trim() !== '' && comentarioTexto !== 'Sin comentario disponible' && comentarioTexto !== 'Sin Datos'
-        ? formatearComentario(comentarioTexto)
-        : '<em style="color: #999;">Sin comentario disponible</em>';
+    // ✅ DECLARACIÓN ÚNICA CORREGIDA
+const comentarioFormateado = (() => {
+    if (!comentarioTexto || comentarioTexto.trim() === '' || 
+        comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
+        // Fallback con información alternativa
+        return `
+        <div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
+            <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
+            <small style="color: #666;">
+                Medidor: ${os.Medidor || 'N/A'}<br>
+                Tipología: ${os.Tipologia || 'N/A'}
+            </small>
+        </div>`;
+    }
+    return formatearComentario(comentarioTexto);
+})();
 
 
     // ========================================
@@ -16924,6 +16936,35 @@ function diagnosticarMapa() {
     
     console.log('7. window.mapaLeafletInstance:', window.mapaLeafletInstance);
     console.log('==============================');
+}
+
+function diagnosticarComentarios() {
+    console.group('🔍 DIAGNÓSTICO COMENTARIOS');
+    
+    // 1. Verificar Map de comentarios
+    console.log('1. comentariosPorMedidor size:', window.comentariosPorMedidor?.size || 'No definido');
+    
+    // 2. Verificar OS con medidor
+    const osConMedidor = window.datosMapaExportar?.filter(os => os.Medidor)?.length || 0;
+    console.log(`2. OS con medidor: ${osConMedidor}`);
+    
+    // 3. Probar búsqueda manual
+    const osPrueba = window.datosMapaExportar?.find(o => o.OSATMO === '11126031');
+    if (osPrueba?.Medidor) {
+        const key = String(osPrueba.Medidor).trim().toUpperCase();
+        const encontrado = window.comentariosPorMedidor?.get(key);
+        console.log('3. Búsqueda manual:', {
+            medidor: osPrueba.Medidor,
+            key: key,
+            encontrado: !!encontrado,
+            comentario: encontrado?.ComentarioGeneral?.substring(0, 50)
+        });
+    }
+    
+    // 4. Verificar función mostrarDetalleOSEnPanel
+    console.log('4. Función disponible:', typeof mostrarDetalleOSEnPanel === 'function' ? '✅' : '❌');
+    
+    console.groupEnd();
 }
 
 
