@@ -7155,6 +7155,7 @@ const osatmosAsignadosGlobal = new Set(
 );
 console.log(`✅ ${osatmosAsignadosGlobal.size} OS asignadas globalmente`);
 
+
 // ========================================
 // ✅ 🆕 AGREGAR: OBTENER COMENTARIOS DE CONSULTA SUMINISTROS (PARA KML)
 // ========================================
@@ -7214,7 +7215,6 @@ osPendientes.forEach(os => {
         os.ComentarioGeneral = 'Sin comentario disponible';
     }
 });
-
  
         // ========================================
         // ✅ 6️⃣ FILTRAR OS EN RADIO (UNIFICADO Y AUDITADO)
@@ -12711,29 +12711,26 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             continue;
         }
 
-        // 1️⃣ AGRUPAMIENTO: Solo agrupar, SIN asignar numeroOrden aún
-const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        // Crear clave única para coordenadas (6 decimales para precisión ~11cm)
+        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
 
-if (!coordenadasAgrupadas[claveCoordenadas]) {
-    coordenadasAgrupadas[claveCoordenadas] = { lat, lng, osList: [] };
-}
+        // Agrupar OS por coordenadas
+        if (!coordenadasAgrupadas[claveCoordenadas]) {
+            coordenadasAgrupadas[claveCoordenadas] = {
+                lat,
+                lng,
+                osList: []
+            };
+        }
 
-coordenadasAgrupadas[claveCoordenadas].osList.push({
-    ...os,
-    lat,  // aseguramos que sean números
-    lng
-});
-osProcesadas++; // útil para logs
-
-// 2️⃣ DESPUÉS DEL AGRUPAMIENTO: Asignar numeroOrden por grupo
-let ordenGlobal = 1;
-for (const grupo of Object.values(coordenadasAgrupadas)) {
-    grupo.osList.forEach(os => {
-        os.numeroOrden = ordenGlobal; // Todos en el mismo grupo tienen el mismo número
-    });
-    ordenGlobal++; // Siguiente número para el siguiente grupo
-}
-
+        coordenadasAgrupadas[claveCoordenadas].osList.push({
+            ...os,
+            numeroOrden: index + 1,
+            lat,
+            lng
+        });
+        osProcesadas++;
+    }
 
     console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
     console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas} | Inválidas: ${osCoordenadasInvalidas}`);
