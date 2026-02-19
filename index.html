@@ -1345,15 +1345,36 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
 }
 
 async function loginATTF(userData) {
-  console.log('👷 ==========================================');
-  console.log('👷 INICIANDO loginATTF - DATOS RECIBIDOS:');
-  console.log('👷 Usuario:', userData.usuario);
-  console.log('👷 ID:', userData.id);
-  console.log('👷 Rol:', userData.rol);
-  console.log('👷 ==========================================');
-  
-  const fechaHoy = getFechaHoyElSalvador();
-  const horaActual = new Date().getHours();
+    console.log('👷 ==========================================');
+    console.log('👷 INICIANDO loginATTF - DATOS RECIBIDOS:');
+    console.log('👷 Usuario:', userData.usuario);
+    console.log('👷 ID:', userData.id);
+    console.log('👷 Rol:', userData.rol);
+    console.log('👷 ==========================================');
+    
+    // ✅ NUEVO: Verificar inconsistencia de contador entre BD y localStorage
+    try {
+        const { data: bdData } = await supabaseClient
+            .from('usuarios')
+            .select('contador_turnos, estado_ciclo')
+            .eq('id', userData.id)
+            .single();
+        
+        if (bdData?.contador_turnos !== currentUser.contador_turnos) {
+            console.warn('⚠️ Inconsistencia en contador, sincronizando...');
+            console.log('💾 Sync contador:', {
+                local: currentUser.contador_turnos,
+                bd: bdData?.contador_turnos
+            });
+            currentUser.contador_turnos = bdData.contador_turnos;
+            localStorage.setItem('contador_turnos', String(bdData.contador_turnos || 0));
+        }
+    } catch (err) {
+        console.warn('⚠️ No se pudo verificar contador con BD:', err.message);
+    }
+    
+    const fechaHoy = getFechaHoyElSalvador();
+    const horaActual = new Date().getHours();
   
   console.log('📅 Fecha hoy (SV):', fechaHoy);
   console.log('🕐 Hora actual:', horaActual);
@@ -1635,6 +1656,16 @@ console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
 const contadorTurnos = parseInt(userData.contador_turnos) || 0;
 console.log('🔢 Contador de turnos:', contadorTurnos);
 
+const contadorTurnos = parseInt(userData.contador_turnos) || 0;
+
+// ✅ NUEVO: Log informativo para contador === 0
+if (contadorTurnos === 0) {
+    console.warn('ℹ️ Usuario en primer día o post-descanso. Forzando configuración de descanso.');
+    // No mostrar como error, sino como flujo normal
+}
+
+console.log('🔢 Contador de turnos:', contadorTurnos);
+
 // ✅ LÓGICA CORREGIDA SEGÚN TU LÓGICA:
 // - Contador 0: Primer día (o después de descanso) → FORZAR descanso (debe programar cuándo descansar)
 // - Contador 1-4: Días de trabajo (1-4 de 5) → Permitir selección de turno
@@ -1649,6 +1680,10 @@ if (contadorTurnos === 0 || contadorTurnos >= 5) {
     return; // ✅ Detener ejecución inmediatamente
 }
 } // ✅ ¡CORREGIDO! Cierre definitivo de loginATTF
+
+
+
+
 
 async function resetearTurnosUsuario() {
     if (!currentUser?.id) return;
@@ -2329,6 +2364,13 @@ console.log('currentUser:', currentUser);
             return;
         }
 
+// ✅ NUEVO: Log detallado del contador
+        console.log('💾 Guardando contador:', {
+            antes: currentUser.contador_turnos,
+            despues: nuevoContador,
+            usuario: currentUser.id
+        });
+
         const manana = new Date(ahora);
         manana.setDate(manana.getDate() + 1);
         const fechaMananaStr = formatearFechaElSalvador(manana);
@@ -2371,6 +2413,10 @@ console.log('currentUser:', currentUser);
             if (data && data[0]) {
                 // Actualizar currentUser con datos frescos de BD
                 Object.assign(currentUser, data[0]);
+
+// ✅ NUEVO: Sincronización inmediata en localStorage
+                localStorage.setItem('contador_turnos', nuevoContador.toString());
+                console.log('✅ [LOCALSTORAGE] Contador sincronizado:', nuevoContador);
                 
                 console.log('✅ [ÉXITO] Datos sincronizados en currentUser:', {
                     turno_hoy: currentUser.turno_hoy,
@@ -2644,33 +2690,37 @@ async function guardarDescansoCiclo() {
     const fechaInicio = document.getElementById('descansoInicioCiclo')?.value;
     const fechaFin = document.getElementById('descansoFinCiclo')?.value;
     const turnoRegreso = document.getElementById('turnoRegresoCiclo')?.value;
-
+    
     if (!fechaInicio || !fechaFin || !turnoRegreso) {
         alert('⚠️ Por favor complete todos los campos');
         return;
     }
-
+    
     const { error } = await guardarConfiguracionDescanso(
-        fechaInicio, 
-        fechaFin, 
-        turnoRegreso, 
-        getFechaHoyElSalvador(), 
-        currentUser.turno_hoy
+        fechaInicio, fechaFin, turnoRegreso,
+        getFechaHoyElSalvador(), currentUser.turno_hoy
     );
-
+    
     if (error) {
         alert('❌ Error al guardar: ' + error.message);
         return;
     }
-
+    
     // Actualizar localStorage
     localStorage.setItem('turno_manana', 'descanso');
     localStorage.setItem('descanso_inicio', fechaInicio);
     localStorage.setItem('descanso_fin', fechaFin);
     
     alert('✅ Descanso obligatorio configurado');
+    
+    // ✅ NUEVO: Pequeño delay para asegurar que la BD procesó el update
+    await new Promise(resolve => setTimeout(resolve, 100)); // Esperar 100ms
+    
+    // Ahora sí, acceder al menú
     accederMenuATTF();
 }
+
+
 
 // 5. Función auxiliar para formatear fecha (si no la tienes)
 function formatDate(dateStr) {
@@ -2841,11 +2891,36 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 function accederMenuATTF() {
     console.log('🔐 Validando acceso al menú ATTF...');
 
+// ✅ NUEVO: Verificar que el contenedor de configuración esté REALMENTE oculto
+    const configSection = document.getElementById('configuracionInicialATTF');
+    if (configSection && configSection.offsetParent !== null) {
+        console.warn('⚠️ Configuración aún visible en DOM, esperando...');
+        setTimeout(() => accederMenuATTF(), 200);
+        return; // ⛔ Detener ejecución hasta que esté oculto
+    }
+
     // ✅ BLOQUEO CRÍTICO: Verificar si hay configuración activa
     const configSection = document.getElementById('configuracionInicialATTF');
     if (configSection && configSection.style.display === 'block') {
         console.warn('⚠️ CONFIGURACIÓN ACTIVA - Bloqueando acceso al menú');
         return; // ✅ SALIR INMEDIATAMENTE SIN MOSTRAR MENÚ
+    }
+
+// ✅ NUEVO: Verificar y restaurar searchGrid si fue destruido
+    const searchGrid = document.getElementById('searchGrid');
+    if (!searchGrid) {
+        console.warn('⚠️ searchGrid destruido durante configuración. Restaurando...');
+        const searchSection = document.getElementById('searchSection');
+        if (searchSection) {
+            searchSection.innerHTML = `
+                <div class="card">
+                    <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
+                    <div class="header"><h2 id="searchTitle">Consultar Información</h2></div>
+                    <div class="search-grid" id="searchGrid"></div>
+                    <div id="searchResults"></div>
+                </div>`;
+            console.log('✅ searchGrid restaurado exitosamente');
+        }
     }
 
  // ✅ NUEVO: Verificar y restaurar searchGrid si fue destruido
