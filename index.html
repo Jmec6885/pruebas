@@ -10209,7 +10209,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
         
         // Consultar en lotes de 200 (equilibrio entre velocidad y estabilidad)
         if (medidoresUnicos.length > 0) {
-            const BATCH_MEDIDORES = 200;
+            const BATCH_MEDIDORES = 1500;
             for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
                 const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
                 console.log(`📡 Lote ${Math.floor(i/BATCH_MEDIDORES) + 1}: ${batchMedidores.length} medidores`);
@@ -10233,8 +10233,7 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
                 await new Promise(resolve => setTimeout(resolve, 50)); // Pausa para no saturar
             }
         }
-        console.log(`📝 Total comentarios obtenidos: ${comentariosPorMedidor.size}`);
-        console.log('📝 ==========================================');
+        
         
         // ========================================
         // ✅ 7. INYECTAR COMENTARIOS EN LAS OS (LÓGICA SEGURA)
@@ -10619,7 +10618,7 @@ function validarFormatoCoordenadas(coordenadas) {
  * Extrae coordenadas con prioridad EXPLÍCITA y validación robusta
  * Prioridad: 1.Coordendasgis → 2.Coordenadas → 3.Alternativos → 4.Separados
  * @param {Object} os - Objeto de Orden de Servicio
- * @returns {Object|null} - { latitud, longitud, campoOrigen, coordenadasRaw }
+ * @returns {Object|null} - { lat, lng, latitud, longitud, campoOrigen, coordenadasRaw }
  */
 function extraerCoordenadas(os) {
     // ========================================
@@ -10629,10 +10628,19 @@ function extraerCoordenadas(os) {
         const partes = os.Coordendasgis.split(',').map(c => parseFloat(c.trim()));
         if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
             Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+            
+            const lat = partes[0];
+            const lng = partes[1];
+            
             console.log(`✅ Coordenadas encontradas en "Coordendasgis": ${os.Coordendasgis}`);
             return {
-                latitud: partes[0],
-                longitud: partes[1],
+                // ✅ Compatibilidad con Leaflet y código moderno
+                lat: lat,
+                lng: lng,
+                // ✅ Compatibilidad con código legacy
+                latitud: lat,
+                longitud: lng,
+                // ✅ Metadatos para debugging
                 campoOrigen: 'Coordendasgis',
                 coordenadasRaw: os.Coordendasgis
             };
@@ -10646,10 +10654,16 @@ function extraerCoordenadas(os) {
         const partes = os.Coordenadas.split(',').map(c => parseFloat(c.trim()));
         if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
             Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+            
+            const lat = partes[0];
+            const lng = partes[1];
+            
             console.log(`✅ Coordenadas encontradas en "Coordenadas": ${os.Coordenadas}`);
             return {
-                latitud: partes[0],
-                longitud: partes[1],
+                lat: lat,
+                lng: lng,
+                latitud: lat,
+                longitud: lng,
                 campoOrigen: 'Coordenadas',
                 coordenadasRaw: os.Coordenadas
             };
@@ -10669,10 +10683,16 @@ function extraerCoordenadas(os) {
             const partes = os[campo].split(',').map(c => parseFloat(c.trim()));
             if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
                 Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+                
+                const lat = partes[0];
+                const lng = partes[1];
+                
                 console.log(`✅ Coordenadas encontradas en "${campo}": ${os[campo]}`);
                 return {
-                    latitud: partes[0],
-                    longitud: partes[1],
+                    lat: lat,
+                    lng: lng,
+                    latitud: lat,
+                    longitud: lng,
                     campoOrigen: campo,
                     coordenadasRaw: os[campo]
                 };
@@ -10692,6 +10712,8 @@ function extraerCoordenadas(os) {
         if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
             console.log(`✅ Coordenadas separadas encontradas: ${lat},${lng}`);
             return {
+                lat: lat,
+                lng: lng,
                 latitud: lat,
                 longitud: lng,
                 campoOrigen: 'campos_separados',
@@ -10706,6 +10728,7 @@ function extraerCoordenadas(os) {
     console.warn(`⚠️ OS ${os.OSATMO || os.OSATOMO || os.osatomo || 'SIN ID'} no tiene coordenadas válidas en ningún campo`);
     return null;
 }
+
 
 
 
@@ -11125,7 +11148,7 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
                 console.error('Stack:', error.stack);
             }
         }
-    }, 300);
+    }, 700);
 
     window.datosMapaExportar = osValidadasParaMapa;
 }
@@ -11727,135 +11750,292 @@ function obtenerCoordenadasOS(os) {
 }
 
 
-// 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL
+// 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL (CORREGIDA)
 // ========================================
 function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-    console.log('🗺️ ==========================================');
+// ========================================
+    // 🧪 BLOQUE DE DIAGNÓSTICO INICIAL (AGREGAR AQUÍ)
+    // ========================================
+    console.group('🔍 DIAGNÓSTICO: inicializarMapaLeaflet');
+    
+    // ✅ 1. Leaflet cargado
+    console.log('🗺️ Leaflet disponible:', typeof L === 'object' ? '✅ SÍ' : '❌ NO');
+    
+    // ✅ 2. Funciones dependientes definidas
+    console.log('🔧 extraerCoordenadas:', typeof extraerCoordenadas === 'function' ? '✅ Definida' : '❌ NO definida');
+    console.log('🔧 escapeJSONForHTMLAttribute:', typeof escapeJSONForHTMLAttribute === 'function' ? '✅ Definida' : '❌ NO definida');
+    console.log('🔧 mostrarDetalleOSEnPanel:', typeof mostrarDetalleOSEnPanel === 'function' ? '✅ Definida' : '❌ NO definida');
+    
+    // ✅ 3. Elemento DOM existe
+    const mapaDiv = document.getElementById('mapaLeaflet');
+    console.log('📦 Div #mapaLeaflet:', mapaDiv ? '✅ Existe' : '❌ NO existe');
+    
+    // ✅ 4. Datos válidos
+    console.log('📊 osCentro.OSATMO:', osCentro?.OSATMO || '⚠️ undefined');
+    console.log('📊 osEnRadio es array:', Array.isArray(osEnRadio) ? '✅ SÍ' : '❌ NO');
+    console.log('📊 latCentro:', typeof latCentro, '| lngCentro:', typeof lngCentro);
+    console.log('📊 Coordenadas válidas:', !isNaN(latCentro) && !isNaN(lngCentro) ? '✅ SÍ' : '❌ NO');
+    
+    // ✅ 5. Parámetros adicionales
+    console.log('📊 radioKm:', radioKm, 'km');
+    console.log('📊 Total OS a procesar:', osEnRadio?.length || 0);
+    
+    console.groupEnd();
+    // ========================================
+    // FIN BLOQUE DE DIAGNÓSTICO
+    // ========================================
+    // ========================================
+    // 🪵 LOG DE ENTRADA CON DIAGNÓSTICO COMPLETO
+    // ========================================
+    console.group('🗺️ ==========================================');
     console.log('🗺️ INICIALIZANDO MAPA LEAFLET CON AGRUPAMIENTO');
     console.log('🗺️ ==========================================');
-    console.log('📊 OS Centro:', osCentro?.OSATMO);
-    console.log('📊 Total OS recibidas para mapa:', osEnRadio?.length || 0);
-    console.log('📊 Radio configurado:', radioKm, 'km');
+    console.log('📊 Parámetros recibidos:', {
+        osCentro: osCentro ? { OSATMO: osCentro.OSATMO, Tipologia: osCentro.Tipologia } : null,
+        osEnRadioCount: Array.isArray(osEnRadio) ? osEnRadio.length : 'NO ES ARRAY',
+        latCentro,
+        lngCentro,
+        radioKm
+    });
     console.log('🗺️ ==========================================');
+    console.groupEnd();
 
-    // ✅ VALIDACIÓN DE PARÁMETROS
-    if (!osCentro || !Array.isArray(osEnRadio) || isNaN(latCentro) || isNaN(lngCentro)) {
-        console.error('❌ Parámetros inválidos para inicializarMapaLeaflet');
+// 1. Agregar validación para escapeJSONForHTMLAttribute si se usa en la función
+if (typeof escapeJSONForHTMLAttribute !== 'function') {
+    console.warn('⚠️ escapeJSONForHTMLAttribute no definida. Los popups podrían tener problemas de XSS.');
+    // Podrías definir un fallback simple:
+    window.escapeJSONForHTMLAttribute = (obj) => JSON.stringify(obj).replace(/"/g, '&quot;');
+}
+
+// 2. Validar que el div del mapa esté visible (no display:none)
+if (mapaDiv && mapaDiv.offsetParent === null) {
+    console.warn('⚠️ #mapaLeaflet existe pero está oculto (display:none). El mapa podría no renderizarse correctamente.');
+}
+
+// 3. Agregar un timestamp para correlacionar logs si hay múltiples inicializaciones
+console.log('⏱️ Timestamp:', new Date().toISOString());
+
+    // ========================================
+    // ✅ VALIDACIÓN DE DEPENDENCIAS CRÍTICAS
+    // ========================================
+    if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado. Verifica que el script de Leaflet se haya incluido correctamente.');
         return;
     }
 
+    if (typeof extraerCoordenadas !== 'function') {
+        console.error('❌ Función extraerCoordenadas no definida. No se pueden procesar coordenadas.');
+        return;
+    }
+
+    // ========================================
+    // ✅ VALIDACIÓN DE PARÁMETROS (MEJORADA)
+    // ========================================
+    if (!osCentro) {
+        console.error('❌ osCentro es null o undefined');
+        return;
+    }
+    if (!Array.isArray(osEnRadio)) {
+        console.error('❌ osEnRadio no es un array:', typeof osEnRadio);
+        return;
+    }
+    if (typeof latCentro !== 'number' || isNaN(latCentro)) {
+        console.error('❌ latCentro no es un número válido:', latCentro);
+        return;
+    }
+    if (typeof lngCentro !== 'number' || isNaN(lngCentro)) {
+        console.error('❌ lngCentro no es un número válido:', lngCentro);
+        return;
+    }
+    if (typeof radioKm !== 'number' || radioKm <= 0) {
+        console.warn('⚠️ radioKm inválido, usando valor por defecto: 3 km');
+        radioKm = 3;
+    }
+
+    // ========================================
+    // ✅ VALIDAR ELEMENTO DEL DOM
+    // ========================================
     const mapaDiv = document.getElementById('mapaLeaflet');
     if (!mapaDiv) {
         console.error('❌ Div del mapa no encontrado: #mapaLeaflet');
+        console.log('🔍 Elementos con id que contienen "mapa":', 
+            Array.from(document.querySelectorAll('[id*="mapa"]')).map(el => el.id)
+        );
         return;
     }
 
-    // ✅ LIMPIAR MAPA ANTERIOR DE FORMA SEGURA
+    // ========================================
+    // ✅ LIMPIAR ESTADO PREVIO COMPLETAMENTE
+    // ========================================
+    console.log('🧹 Limpiando estado previo del mapa...');
+    
+    // 1. Remover instancia de mapa
     if (window.mapaLeafletInstance) {
         try {
+            console.log('🗑️ Removiendo instancia previa del mapa');
             window.mapaLeafletInstance.remove();
         } catch (e) {
-            console.warn('⚠️ Error limpiando instancia previa:', e);
+            console.warn('⚠️ Error removiendo instancia previa:', e.message);
         }
         window.mapaLeafletInstance = null;
     }
 
-    // ✅ CREAR MAPA CON VALIDACIÓN
+    // 2. Limpiar referencias a marcadores y capas
+    if (window.circuloRadio) {
+        try {
+            if (window.mapaLeafletInstance?.hasLayer(window.circuloRadio)) {
+                window.mapaLeafletInstance.removeLayer(window.circuloRadio);
+            }
+        } catch (e) {
+            console.warn('⚠️ Error limpiando circuloRadio:', e.message);
+        }
+        window.circuloRadio = null;
+    }
+
+    // 3. Reinicializar agrupaciones de marcadores
+    window.markersPorTipologia = {};
+    window.markersPorEstado = {
+        'centro': [],
+        'asignada': [],
+        'regulada': [],
+        'no_regulada': [],
+        'deuda_alta': [],
+        'deuda_media': [],
+        'deuda_baja': []
+    };
+
+    // ========================================
+    // ✅ CREAR MAPA CON MANEJO DE ERRORES
+    // ========================================
+    let mapa;
     try {
-        const mapa = L.map('mapaLeaflet', {
+        console.log(`🗺️ Creando mapa Leaflet en [${latCentro}, ${lngCentro}] zoom 14`);
+        mapa = L.map('mapaLeaflet', {
             zoomControl: true,
-            attributionControl: true
+            attributionControl: true,
+            preferCanvas: true // Mejora rendimiento con muchos marcadores
         }).setView([latCentro, lngCentro], 14);
+        
         window.mapaLeafletInstance = mapa;
+        console.log('✅ Instancia de mapa creada exitosamente');
     } catch (e) {
-        console.error('❌ Error creando instancia de Leaflet:', e);
+        console.error('❌ Error crítico creando instancia de Leaflet:', {
+            mensaje: e.message,
+            stack: e.stack?.split('\n')[0]
+        });
         return;
     }
 
+    // ========================================
     // ✅ CAPA DE MAPA BASE
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-        minZoom: 3
-    }).addTo(mapa);
+    // ========================================
+    try {
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+            minZoom: 3,
+            detectRetina: true
+        }).addTo(mapa);
+        console.log('✅ Capa de mapa base agregada');
+    } catch (e) {
+        console.error('❌ Error agregando capa de mapa:', e.message);
+    }
 
     // ========================================
     // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
     // ========================================
-    const circuloRadio = L.circle([latCentro, lngCentro], {
-        radius: radioKm * 1000,
-        color: '#3b82f6',
-        weight: 3,
-        opacity: 0.8,
-        fillOpacity: 0.15,
-        fillColor: '#3b82f6',
-        interactive: true
-    }).addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px; font-family: sans-serif;">
-            <strong style="color: #3b82f6; font-size: 16px; display: block; margin-bottom: 8px;">
-                📍 ÁREA DE BÚSQUEDA
-            </strong>
-            <div style="font-size: 14px; line-height: 1.5;">
-                <strong>Radio:</strong> ${radioKm} km<br>
-                <strong>OS en radio:</strong> ${osEnRadio.length}
+    try {
+        console.log(`🔵 Dibujando círculo de radio: ${radioKm} km`);
+        const circuloRadio = L.circle([latCentro, lngCentro], {
+            radius: radioKm * 1000,
+            color: '#3b82f6',
+            weight: 3,
+            opacity: 0.8,
+            fillOpacity: 0.15,
+            fillColor: '#3b82f6',
+            interactive: true
+        }).addTo(mapa)
+        .bindPopup(`
+            <div style="min-width: 200px; font-family: sans-serif;">
+                <strong style="color: #3b82f6; font-size: 16px; display: block; margin-bottom: 8px;">
+                    📍 ÁREA DE BÚSQUEDA
+                </strong>
+                <div style="font-size: 14px; line-height: 1.5;">
+                    <strong>Radio:</strong> ${radioKm} km<br>
+                    <strong>OS en radio:</strong> ${osEnRadio.length}
+                </div>
             </div>
-        </div>
-    `, { maxWidth: 300 });
-    
-    window.circuloRadio = circuloRadio;
+        `, { maxWidth: 300 });
+        
+        window.circuloRadio = circuloRadio;
+        console.log('✅ Círculo de búsqueda dibujado');
+    } catch (e) {
+        console.error('❌ Error dibujando círculo de radio:', e.message);
+    }
 
     // ========================================
     // ✅ MARCADOR "0" PARA PUNTO DE PARTIDA (VERDE)
     // ========================================
-    const iconoVerde = L.divIcon({
-        className: 'custom-marker',
-        html: `<div style="
-            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 20px;
-            box-shadow: 0 4px 12px rgba(76,175,80,0.6);
-            border: 4px solid white;
-            user-select: none;
-        ">0</div>`,
-        iconSize: [50, 50],
-        iconAnchor: [25, 50],
-        popupAnchor: [0, -50]
-    });
+    let markerCentro;
+    try {
+        console.log('🟢 Creando marcador de referencia (OS Centro)');
+        
+        const iconoVerde = L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+                background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+                color: white;
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 20px;
+                box-shadow: 0 4px 12px rgba(76,175,80,0.6);
+                border: 4px solid white;
+                user-select: none;
+            ">0</div>`,
+            iconSize: [50, 50],
+            iconAnchor: [25, 50],
+            popupAnchor: [0, -50]
+        });
 
-    const markerCentro = L.marker([latCentro, lngCentro], { 
-        icon: iconoVerde,
-        zIndexOffset: 1000 // Prioridad visual
-    })
-    .addTo(mapa)
-    .bindPopup(`
-        <div style="min-width: 200px; font-family: sans-serif;">
-            <strong style="color: #2e7d32; font-size: 16px; display: block; margin-bottom: 8px;">
-                🎯 OS DE REFERENCIA (0)
-            </strong>
-            <div style="font-size: 14px; line-height: 1.5;">
-                <strong>OS:</strong> ${osCentro.OSATMO || 'N/A'}<br>
-                <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
+        markerCentro = L.marker([latCentro, lngCentro], { 
+            icon: iconoVerde,
+            zIndexOffset: 1000
+        })
+        .addTo(mapa)
+        .bindPopup(`
+            <div style="min-width: 200px; font-family: sans-serif;">
+                <strong style="color: #2e7d32; font-size: 16px; display: block; margin-bottom: 8px;">
+                    🎯 OS DE REFERENCIA (0)
+                </strong>
+                <div style="font-size: 14px; line-height: 1.5;">
+                    <strong>OS:</strong> ${osCentro.OSATMO || 'N/A'}<br>
+                    <strong>Tipología:</strong> ${osCentro.Tipologia || 'N/A'}
+                </div>
             </div>
-        </div>
-    `, { maxWidth: 300 })
-    .on('click', function() {
-        if (typeof mostrarDetalleOSEnPanel === 'function') {
-            mostrarDetalleOSEnPanel(osCentro, 'OS DE REFERENCIA');
-        }
-    });
+        `, { maxWidth: 300 })
+        .on('click', function() {
+            if (typeof mostrarDetalleOSEnPanel === 'function') {
+                mostrarDetalleOSEnPanel(osCentro, 'OS DE REFERENCIA');
+            } else {
+                console.warn('⚠️ Función mostrarDetalleOSEnPanel no disponible');
+            }
+        });
+
+        window.markersPorEstado['centro'].push(markerCentro);
+        console.log('✅ Marcador de referencia creado');
+    } catch (e) {
+        console.error('❌ Error creando marcador de referencia:', e.message);
+    }
 
     // ========================================
     // ✅ AGRUPAR OS POR COORDENADAS EXACTAS
     // ========================================
-    console.log('📍 ==========================================');
+    console.group('📍 ==========================================');
     console.log('📍 AGRUPANDO OS POR COORDENADAS');
     console.log('📍 Total OS a procesar:', osEnRadio.length);
     console.log('📍 ==========================================');
@@ -11863,26 +12043,43 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     const coordenadasAgrupadas = {};
     let osProcesadas = 0;
     let osSinCoordenadas = 0;
+    let osCoordenadasInvalidas = 0;
 
     for (const [index, os] of osEnRadio.entries()) {
         // Saltar la OS centro si está en la lista
         if (os.OSATMO === osCentro.OSATMO) {
+            console.log(`⏭️ Saltando OS centro: ${os.OSATMO}`);
             continue;
         }
 
-        // ✅ USAR FUNCIÓN CENTRALIZADA CON VALIDACIÓN ROBUSTA
-        const coords = extraerCoordenadas(os);
-        if (!coords || isNaN(coords.latitud) || isNaN(coords.longitud)) {
+        // ✅ EXTRAER COORDENADAS CON VALIDACIÓN
+        let coords;
+        try {
+            coords = extraerCoordenadas(os);
+        } catch (e) {
+            console.warn(`⚠️ Error extrayendo coordenadas para OS ${os.OSATMO || index}:`, e.message);
+            coords = null;
+        }
+
+        if (!coords) {
             osSinCoordenadas++;
-            console.warn(`⚠️ OS ${os.OSATMO || index} sin coordenadas válidas`);
+            console.debug(`⚠️ OS ${os.OSATMO || index} sin coordenadas (campo vacío o formato incorrecto)`);
             continue;
         }
 
         const { latitud: lat, longitud: lng } = coords;
 
+        // Validar que sean números
+        if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+            osCoordenadasInvalidas++;
+            console.warn(`⚠️ OS ${os.OSATMO} con coordenadas no numéricas: lat=${lat}, lng=${lng}`);
+            continue;
+        }
+
         // Validar rango geográfico válido
         if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-            console.warn(`⚠️ OS ${os.OSATMO} con coordenadas fuera de rango: ${lat}, ${lng}`);
+            osCoordenadasInvalidas++;
+            console.warn(`⚠️ OS ${os.OSATMO} con coordenadas fuera de rango: [${lat}, ${lng}]`);
             continue;
         }
 
@@ -11908,23 +12105,12 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     }
 
     console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
-    console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas}`);
-    console.log('📍 ==========================================');
+    console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas} | Inválidas: ${osCoordenadasInvalidas}`);
+    console.groupEnd();
 
     // ========================================
-    // ✅ INICIALIZAR AGRUPACIONES PARA FILTROS
+    // ✅ PREPARAR BOUNDS PARA AJUSTE DE VISTA
     // ========================================
-    window.markersPorTipologia = {};
-    window.markersPorEstado = {
-        'centro': [markerCentro],
-        'asignada': [],
-        'regulada': [],
-        'no_regulada': [],
-        'deuda_alta': [],
-        'deuda_media': [],
-        'deuda_baja': []
-    };
-
     const bounds = L.latLngBounds();
     bounds.extend([latCentro, lngCentro]);
 
@@ -11940,6 +12126,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         deuda_baja: 0,
         asignadas: 0
     };
+    let erroresMarcadores = 0;
 
     for (const grupo of Object.values(coordenadasAgrupadas)) {
         const { lat, lng, osList } = grupo;
@@ -12053,10 +12240,22 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                 else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
                 else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
 
-                // ✅ USAR FUNCIÓN AUXILIAR PARA ESCAPE SEGURO DE HTML
+                // ✅ ESCAPE SEGURO PARA DATOS EN POPUP
                 const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
                     ? escapeJSONForHTMLAttribute(os) 
-                    : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    : JSON.stringify(os)
+                        .replace(/\\/g, '\\\\')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '\\n')
+                        .replace(/\r/g, '\\r')
+                        .replace(/\t/g, '\\t');
+
+                // Escape seguro para labelEstado en el onclick
+                const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                 popupContent += `
                     <div style="
@@ -12067,7 +12266,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                         border-left: 4px solid ${osColor};
                         cursor: pointer;
                         transition: all 0.2s ease;
-                    " onclick="seleccionarOSDeLista('${os.OSATMO || ''}', ${os.lat}, ${os.lng}); return false;"
+                    " onclick="seleccionarOSDeLista('${osATMO}', ${os.lat}, ${os.lng}); return false;"
                        onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(3px)';"
                        onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 5px;">
@@ -12082,7 +12281,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                             ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
                             <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
                         </div>
-                        <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
+                        <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
                             style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
                             📋 Ver Detalle Completo
                         </button>
@@ -12094,7 +12293,17 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             const os = osList[0];
             const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
                 ? escapeJSONForHTMLAttribute(os) 
-                : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                : JSON.stringify(os)
+                    .replace(/\\/g, '\\\\')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '\\n')
+                    .replace(/\r/g, '\\r')
+                    .replace(/\t/g, '\\t');
+            
+            const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             
             popupContent += `
                 <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
@@ -12104,7 +12313,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                     ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
                     ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
                 </div>
-                <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstado.replace(/'/g, "\\'")}');}"
+                <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
                     style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
                     onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                     📋 Ver Detalle Completo
@@ -12114,7 +12323,9 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 
         popupContent += `</div>`;
 
-        // Crear marcador con popup
+        // ========================================
+        // ✅ CREAR MARCADOR CON POPUP
+        // ========================================
         try {
             const marker = L.marker([lat, lng], { 
                 icon: iconoConNumero,
@@ -12132,66 +12343,113 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                 window.markersPorTipologia[tip] = [];
             }
             window.markersPorTipologia[tip].push(marker);
+            
         } catch (e) {
-            console.error(`❌ Error creando marcador para OS ${primeraOS?.OSATMO}:`, e);
+            erroresMarcadores++;
+            console.error(`❌ Error creando marcador para OS ${primeraOS?.OSATMO || 'desconocida'}:`, {
+                mensaje: e.message,
+                coordenadas: [lat, lng],
+                estadoKey
+            });
         }
     }
 
     // ========================================
     // 📊 LOG FINAL DE MARCADORES
     // ========================================
-    console.log('📍 ==========================================');
+    console.group('📍 ==========================================');
     console.log('📍 RESUMEN DE MARCADORES CREADOS');
     console.log('📍 ==========================================');
     console.table({
         'Total procesadas': contadorProcesadas,
         'Marcadores creados': Object.keys(coordenadasAgrupadas).length,
-        'OS sin coordenadas': osSinCoordenadas
+        'OS sin coordenadas': osSinCoordenadas,
+        'OS coordenadas inválidas': osCoordenadasInvalidas,
+        'Errores al crear marcadores': erroresMarcadores
     });
     console.log('📊 DISTRIBUCIÓN POR ESTADO:');
     console.table(estadisticas);
     console.log('📍 ==========================================');
+    console.groupEnd();
 
-    // ✅ AJUSTAR VISTA DEL MAPA CON VALIDACIÓN
-    if (bounds.isValid() && bounds.getSouthWest().lat !== bounds.getNorthEast().lat) {
-        try {
+    // ========================================
+    // ✅ AJUSTAR VISTA DEL MAPA CON VALIDACIÓN ROBUSTA
+    // ========================================
+    try {
+        // Verificación robusta de bounds válido
+        const southWest = bounds.getSouthWest();
+        const northEast = bounds.getNorthEast();
+        const boundsValid = bounds.isValid() && 
+                           typeof southWest.lat === 'number' && 
+                           typeof northEast.lat === 'number' &&
+                           Math.abs(southWest.lat - northEast.lat) > 0.00001; // Evita bounds de un solo punto
+
+        if (boundsValid) {
+            console.log('🔍 Ajustando vista del mapa a bounds calculados');
             mapa.fitBounds(bounds, { 
                 padding: [50, 50],
                 maxZoom: 16,
                 animate: true
             });
-        } catch (e) {
-            console.warn('⚠️ Error ajustando bounds del mapa:', e);
+        } else {
+            console.warn('⚠️ Bounds inválidos o muy pequeños, usando vista por defecto');
+            console.debug('🔍 Debug bounds:', { southWest, northEast, isValid: bounds.isValid() });
             mapa.setView([latCentro, lngCentro], 14);
         }
-    } else {
-        console.warn('⚠️ Bounds inválidos, usando vista por defecto');
+    } catch (e) {
+        console.error('❌ Error ajustando vista del mapa:', e.message);
         mapa.setView([latCentro, lngCentro], 14);
     }
 
+    // ========================================
     // ✅ AGREGAR CONTROL DE ESCALA
-    if (!mapa.hasControl?.(L.control.scale)) {
-        L.control.scale({ 
-            position: 'bottomleft',
-            metric: true,
-            imperial: false,
-            maxWidth: 120
-        }).addTo(mapa);
+    // ========================================
+    try {
+        if (typeof L.control?.scale === 'function') {
+            L.control.scale({ 
+                position: 'bottomleft',
+                metric: true,
+                imperial: false,
+                maxWidth: 120
+            }).addTo(mapa);
+            console.log('✅ Control de escala agregado');
+        } else {
+            console.warn('⚠️ L.control.scale no disponible, omitiendo control de escala');
+        }
+    } catch (e) {
+        console.warn('⚠️ Error agregando control de escala:', e.message);
     }
 
+    // ========================================
+    // ✅ LOG DE ÉXITO Y EVENTO DE FINALIZACIÓN
+    // ========================================
     console.log(`✅ Mapa inicializado exitosamente con ${Object.keys(coordenadasAgrupadas).length} marcadores.`);
     
-    // ✅ DISPARAR EVENTO DE MAPA LISTO (para integraciones)
-    if (typeof window.dispatchEvent === 'function') {
-        window.dispatchEvent(new CustomEvent('mapaLeafletListo', { 
-            detail: { 
-                mapa, 
-                totalMarcadores: Object.keys(coordenadasAgrupadas).length,
-                estadisticas 
-            } 
-        }));
+    // Disparar evento de mapa listo (con verificación de soporte)
+    if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        try {
+            window.dispatchEvent(new CustomEvent('mapaLeafletListo', { 
+                detail: { 
+                    mapa, 
+                    totalMarcadores: Object.keys(coordenadasAgrupadas).length,
+                    estadisticas 
+                } 
+            }));
+            console.log('📡 Evento mapaLeafletListo disparado');
+        } catch (e) {
+            console.warn('⚠️ Error disparando evento mapaLeafletListo:', e.message);
+        }
     }
+
+    // ========================================
+    // 🪵 LOG DE SALIDA
+    // ========================================
+    console.groupEnd(); // Cierra el grupo inicial
+    console.log('🗺️ ==========================================');
+    console.log('🗺️ INICIALIZACIÓN DE MAPA COMPLETADA');
+    console.log('🗺️ ==========================================');
 }
+
 
 
 
@@ -16016,6 +16274,28 @@ console.log('✅ Resultado:', resultado);
     console.log('🔹 Modo legacy:', getCoordsCompat(osPrueba, true));
     console.log('🔹 Modo nuevo:', getCoordsCompat(osPrueba, false));
     console.log('✅ Funciones de coordenadas cargadas correctamente');
+}
+
+// 🧪 DIAGNÓSTICO: Ejecutar en consola después del error
+function diagnosticarMapa() {
+    console.log('🔍 === DIAGNÓSTICO DE MAPA ===');
+    console.log('1. #mapaLeaflet existe:', !!document.getElementById('mapaLeaflet'));
+    
+    const div = document.getElementById('mapaLeaflet');
+    if (div) {
+        const style = window.getComputedStyle(div);
+        console.log('2. Dimensiones:', div.offsetWidth, 'x', div.offsetHeight);
+        console.log('3. Display:', style.display, '| Visibility:', style.visibility);
+        console.log('4. Parent visible:', div.offsetParent !== null);
+    }
+    
+    console.log('5. Leaflet cargado:', typeof L !== 'undefined');
+    if (typeof L !== 'undefined') {
+        console.log('6. Versión Leaflet:', L.version);
+    }
+    
+    console.log('7. window.mapaLeafletInstance:', window.mapaLeafletInstance);
+    console.log('==============================');
 }
 
 
