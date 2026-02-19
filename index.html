@@ -2384,7 +2384,7 @@ async function confirmarTurnoMananaATTF() {
     console.log('🔍 ID Usuario:', currentUser?.id || 'NO DISPONIBLE');
     console.log('🔍 Estado currentUser:', currentUser ? '✅ EXISTE' : '❌ NULL/UNDEFINED');
     console.log('🔍 ==========================================');
-console.log('currentUser:', currentUser);
+    console.log('currentUser:', currentUser);
     console.log('turno_hoy:', currentUser?.turno_hoy);
     console.log('turno_manana:', currentUser?.turno_manana);
     console.log('descanso_fecha_inicio:', currentUser?.descanso_fecha_inicio);
@@ -2441,18 +2441,20 @@ console.log('currentUser:', currentUser);
             return;
         }
 
-// ✅ NUEVO: Log detallado del contador
+        const manana = new Date(ahora);
+        manana.setDate(manana.getDate() + 1);
+        const fechaMananaStr = formatearFechaElSalvador(manana);
+        
+        // ✅ CALCULAR CONTADOR PRIMERO (para que los logs lo puedan usar)
+        const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
+        const nuevoContador = contadorActual + 1;
+
+        // ✅ LOG DEL CONTADOR (AHORA que nuevoContador ya está definido)
         console.log('💾 Guardando contador:', {
             antes: currentUser.contador_turnos,
             despues: nuevoContador,
             usuario: currentUser.id
         });
-
-        const manana = new Date(ahora);
-        manana.setDate(manana.getDate() + 1);
-        const fechaMananaStr = formatearFechaElSalvador(manana);
-        const contadorActual = parseFloat(currentUser.contador_turnos) || 0;
-        const nuevoContador = contadorActual + 1;
 
         console.log('💾 Datos a guardar (TURNO NORMAL):', {
             turno_hoy: turnoHoy,
@@ -2491,7 +2493,7 @@ console.log('currentUser:', currentUser);
                 // Actualizar currentUser con datos frescos de BD
                 Object.assign(currentUser, data[0]);
 
-// ✅ NUEVO: Sincronización inmediata en localStorage
+                // ✅ NUEVO: Sincronización inmediata en localStorage
                 localStorage.setItem('contador_turnos', nuevoContador.toString());
                 console.log('✅ [LOCALSTORAGE] Contador sincronizado:', nuevoContador);
                 
@@ -2532,7 +2534,7 @@ console.log('currentUser:', currentUser);
             alert(`❌ Error al guardar turno:\n${err.message}\n\nVerifique la consola para detalles.`);
         }
 
-    } 
+    }
 
 
     // --- CASO 2: DESCANSO ---
