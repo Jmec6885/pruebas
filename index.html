@@ -1344,365 +1344,425 @@ function validarFechaDescansoMaxima(fechaInicio, fechaHoy) {
     return { valido: true };
 }
 
+// ========================================
+// 👷 FUNCIÓN PRINCIPAL: loginATTF (VERSIÓN CORREGIDA Y ROBUSTA)
+// ========================================
 async function loginATTF(userData) {
     console.log('👷 ==========================================');
     console.log('👷 INICIANDO loginATTF - DATOS RECIBIDOS:');
-    console.log('👷 Usuario:', userData.usuario);
-    console.log('👷 ID:', userData.id);
-    console.log('👷 Rol:', userData.rol);
+    console.log('👷 Usuario:', userData?.usuario || 'NO DISPONIBLE');
+    console.log('👷 ID:', userData?.id || 'NO DISPONIBLE');
+    console.log('👷 Rol:', userData?.rol || 'NO DISPONIBLE');
     console.log('👷 ==========================================');
-    
-    // ✅ NUEVO: Verificar inconsistencia de contador entre BD y localStorage
+
+    // ✅ VALIDACIÓN CRÍTICA 0: Verificar que userData sea válido
+    if (!userData || !userData.id) {
+        console.error('❌ ERROR FATAL: userData inválido en loginATTF');
+        alert('Error crítico: Sesión corrupta. Por favor, inicie sesión nuevamente.');
+        logout();
+        return;
+    }
+
+    // ========================================
+    // ✅ 1. SINCRONIZACIÓN DE CONTADOR ENTRE BD Y MEMORIA
+    // ========================================
     try {
-        const { data: bdData } = await supabaseClient
+        console.log('🔄 Sincronizando contador de turnos con BD...');
+        const { data: bdData, error: errorSync } = await supabaseClient
             .from('usuarios')
-            .select('contador_turnos, estado_ciclo')
+            .select('contador_turnos, estado_ciclo, turno_hoy, fecha_turno_hoy, turno_manana, fecha_turno_manana')
             .eq('id', userData.id)
             .single();
-        
-        if (bdData?.contador_turnos !== currentUser.contador_turnos) {
-            console.warn('⚠️ Inconsistencia en contador, sincronizando...');
-            console.log('💾 Sync contador:', {
-                local: currentUser.contador_turnos,
-                bd: bdData?.contador_turnos
-            });
-            currentUser.contador_turnos = bdData.contador_turnos;
-            localStorage.setItem('contador_turnos', String(bdData.contador_turnos || 0));
+
+        if (errorSync) {
+            console.warn('⚠️ No se pudo sincronizar con BD:', errorSync.message);
+        } else if (bdData) {
+            // Comparar y sincronizar contador
+            const contadorBD = parseInt(bdData.contador_turnos) || 0;
+            const contadorLocal = parseInt(userData.contador_turnos) || 0;
+            
+            if (contadorBD !== contadorLocal) {
+                console.warn('⚠️ Inconsistencia en contador, sincronizando...');
+                console.log('💾 Sync contador:', {
+                    local: contadorLocal,
+                    bd: contadorBD,
+                    accion: 'Actualizando memoria local'
+                });
+                // Actualizar userData (el objeto principal que usamos)
+                userData.contador_turnos = contadorBD;
+                // Actualizar currentUser si existe
+                if (currentUser && currentUser.id === userData.id) {
+                    currentUser.contador_turnos = contadorBD;
+                }
+                // Actualizar localStorage como backup
+                localStorage.setItem('contador_turnos', String(contadorBD));
+            }
+
+            // ✅ Sincronizar otros campos críticos si hay diferencias
+            if (bdData.turno_hoy && !userData.turno_hoy) {
+                console.log('🔄 Sincronizando turno_hoy desde BD');
+                userData.turno_hoy = bdData.turno_hoy;
+                if (currentUser) currentUser.turno_hoy = bdData.turno_hoy;
+            }
+            if (bdData.fecha_turno_hoy && !userData.fecha_turno_hoy) {
+                console.log('🔄 Sincronizando fecha_turno_hoy desde BD');
+                userData.fecha_turno_hoy = bdData.fecha_turno_hoy;
+                if (currentUser) currentUser.fecha_turno_hoy = bdData.fecha_turno_hoy;
+            }
         }
     } catch (err) {
-        console.warn('⚠️ No se pudo verificar contador con BD:', err.message);
+        console.warn('⚠️ Error en sincronización de contador:', err.message);
+        // No bloquear el flujo, continuar con los datos disponibles
     }
-    
+
+    // ========================================
+    // ✅ 2. OBTENER FECHAS Y HORAS DE EL SALVADOR
+    // ========================================
     const fechaHoy = getFechaHoyElSalvador();
     const horaActual = new Date().getHours();
-  
-  console.log('📅 Fecha hoy (SV):', fechaHoy);
-  console.log('🕐 Hora actual:', horaActual);
-
-
-  
-  
-  // ✅ ROLL FORWARD CORREGIDO: Si "mañana" configurado ayer ES HOY, promoverlo + limpiar
-console.log('🔍 ==========================================');
-console.log('🔍 VALIDACIÓN DE ROLL FORWARD (PROMOCIÓN DE TURNO)');
-console.log('🔍 Fecha hoy (SV):', fechaHoy);
-console.log('🔍 fecha_turno_manana en BD:', userData.fecha_turno_manana);
-console.log('🔍 turno_manana en BD:', userData.turno_manana);
-console.log('🔍 turno_hoy actual en BD:', userData.turno_hoy);
-console.log('🔍 fecha_turno_hoy actual en BD:', userData.fecha_turno_hoy);
-console.log('🔍 ==========================================');
-
-
-// ✅ CORRECCIÓN DE INTEGRIDAD DE DATOS: Si turno_hoy existe pero fecha es NULL, INFERIR fecha
-if (userData.turno_hoy && !userData.fecha_turno_hoy) {
-    console.warn('⚠️ ALERTA DE INTEGRIDAD: fecha_turno_hoy es NULL pero turno_hoy existe. Corrigiendo...');
+    const fechaActualCompleta = getFechaElSalvador();
     
-    if (userData.turno_hoy === 'turno3' && horaActual < 9) {
-        const ayer = new Date(getFechaElSalvador());
-        ayer.setDate(ayer.getDate() - 1);
-        userData.fecha_turno_hoy = ayer.toISOString().split('T')[0];
-        console.log(`✅ Corregido: turno3 activo desde AYER (${userData.fecha_turno_hoy})`);
-    } else {
-        userData.fecha_turno_hoy = fechaHoy;
-        console.log(`✅ Corregido: fecha_turno_hoy establecida a HOY (${fechaHoy})`);
-    }
-    
-    try {
-        await supabaseClient
-            .from('usuarios')
-            .update({ fecha_turno_hoy: userData.fecha_turno_hoy })
-            .eq('id', userData.id);
-        console.log('✅ fecha_turno_hoy corregida en base de datos');
-    } catch (err) {
-        console.error('❌ Error corrigiendo fecha_turno_hoy:', err);
-    }
+    console.log('📅 Fecha hoy (SV):', fechaHoy);
+    console.log('🕐 Hora actual:', horaActual);
 
-console.group('🔍 DIAGNÓSTICO loginATTF');
-    console.log('currentUser:', currentUser);
-    console.log('turno_hoy:', currentUser?.turno_hoy);
-    console.log('turno_manana:', currentUser?.turno_manana);
-    console.log('descanso_fecha_inicio:', currentUser?.descanso_fecha_inicio);
-    console.log('descanso_fecha_fin:', currentUser?.descanso_fecha_fin);
-    console.groupEnd();
+    // ========================================
+    // ✅ 3. CORRECCIÓN DE INTEGRIDAD: fecha_turno_hoy NULL
+    // ========================================
+    console.log('🔍 ==========================================');
+    console.log('🔍 VALIDACIÓN DE INTEGRIDAD DE DATOS');
+    console.log('🔍 turno_hoy:', userData.turno_hoy);
+    console.log('🔍 fecha_turno_hoy:', userData.fecha_turno_hoy);
+    console.log('🔍 ==========================================');
 
-    console.log('🔍 Verificación post-corrección de integridad:');
-    console.log(`   • turno_hoy: ${userData.turno_hoy}`);
-    console.log(`   • fecha_turno_hoy: ${userData.fecha_turno_hoy}`);
-    console.log(`   • Estado: ${userData.fecha_turno_hoy ? '✅ CORREGIDO' : '❌ FALLÓ'}`);
-}
-
-// ✅ VALIDACIÓN DE SEGURIDAD: userData válido
-if (!userData || !userData.id) {
-    console.error('❌ ERROR FATAL: userData inválido en loginATTF');
-    alert('Error crítico: Sesión corrupta. Por favor, inicie sesión nuevamente.');
-    logout();
-    return;
-}
-
-// 🎯 CONDICIÓN CLAVE: ¿El "mañana" programado AYER es HOY?
-if (userData.fecha_turno_manana === fechaHoy) {
-    // ✅ NUEVA VALIDACIÓN: Verificar que turno_manana exista y sea válido
-    if (!userData.turno_manana || 
-        userData.turno_manana === 'null' || 
-        userData.turno_manana === '' || 
-        userData.turno_manana === 'descanso') {
+    if (userData.turno_hoy && !userData.fecha_turno_hoy) {
+        console.warn('⚠️ ALERTA DE INTEGRIDAD: fecha_turno_hoy es NULL pero turno_hoy existe. Corrigiendo...');
         
-        console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana inválido o ausente');
-        // Forzar limpieza de campos inconsistentes
-        try {
-            await supabaseClient
-                .from('usuarios')
-                .update({ 
-                    turno_manana: null,
-                    fecha_turno_manana: null 
-                })
-                .eq('id', userData.id);
-            console.log('🧹 Campos inconsistentes limpiados en BD');
-        } catch (err) {
-            console.error('❌ Error limpiando campos inconsistentes:', err);
-        }
-        userData.turno_manana = null;
-        userData.fecha_turno_manana = null;
-    } else {
-        // --- AQUÍ EMPIEZA LA PROMOCIÓN SI EL TURNO ES VÁLIDO ---
-        console.log('✅ 🟢 ROLL FORWARD ACTIVADO: fecha_turno_manana COINCIDE con HOY');
-        console.log(`    📅 fecha_turno_manana: ${userData.fecha_turno_manana} === HOY: ${fechaHoy}`);
-        console.log(`    🔄 turno_manana a promover: ${userData.turno_manana}`);
-        
-        // 🛡️ Validaciones de seguridad antes de promover (manteniendo tus logs)
-        const esDescanso = userData.turno_manana === 'descanso';
-        const esInvalido = !userData.turno_manana || userData.turno_manana === 'null' || userData.turno_manana === '';
-        
-        if (esDescanso) {
-            console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es "descanso" (manejado por verificarDiaDescanso)');
-        } else if (esInvalido) {
-            console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana es nulo/vacío');
+        // Lógica para inferir la fecha correcta
+        if (userData.turno_hoy === 'turno3' && horaActual < 9) {
+            // Turno nocturno que podría haber empezado ayer
+            const ayer = new Date(fechaActualCompleta);
+            ayer.setDate(ayer.getDate() - 1);
+            userData.fecha_turno_hoy = ayer.toISOString().split('T')[0];
+            console.log(`✅ Corregido: turno3 activo desde AYER (${userData.fecha_turno_hoy})`);
         } else {
-            // ✅ PROMOVER "MAÑANA" A "HOY"
-            console.log('🔄 PROMOVIENDO turno_manana a turno_hoy...');
-            userData.turno_hoy = userData.turno_manana;
+            // Asumir que es hoy
             userData.fecha_turno_hoy = fechaHoy;
+            console.log(`✅ Corregido: fecha_turno_hoy establecida a HOY (${fechaHoy})`);
+        }
+        
+        // Persistir corrección en BD
+        try {
+            console.log('💾 Guardando corrección de fecha en BD...');
+            const { error } = await supabaseClient
+                .from('usuarios')
+                .update({ fecha_turno_hoy: userData.fecha_turno_hoy })
+                .eq('id', userData.id);
+            
+            if (error) throw error;
+            console.log('✅ fecha_turno_hoy corregida y guardada en BD');
+        } catch (err) {
+            console.error('❌ Error guardando corrección de fecha:', err.message);
+            // No bloquear, continuar con la corrección en memoria
+        }
+    }
+
+    // ========================================
+    // ✅ 4. ROLL FORWARD: Promover "mañana" a "hoy" si corresponde
+    // ========================================
+    console.log('🔄 ==========================================');
+    console.log('🔄 VALIDACIÓN DE ROLL FORWARD (PROMOCIÓN DE TURNO)');
+    console.log('🔄 Fecha hoy:', fechaHoy);
+    console.log('🔄 fecha_turno_manana en BD:', userData.fecha_turno_manana);
+    console.log('🔄 turno_manana en BD:', userData.turno_manana);
+    console.log('🔄 ==========================================');
+
+    if (userData.fecha_turno_manana === fechaHoy) {
+        console.log('✅ 🟢 CONDICIÓN CUMPLIDA: fecha_turno_manana === fechaHoy');
+        
+        // Validar que turno_manana sea válido para promover
+        const turnoMananaValido = userData.turno_manana && 
+                                  userData.turno_manana !== 'null' && 
+                                  userData.turno_manana !== '' && 
+                                  userData.turno_manana !== 'descanso';
+        
+        if (!turnoMananaValido) {
+            console.warn('⚠️ 🟠 Roll forward OMITIDO: turno_manana inválido:', userData.turno_manana);
+            // Limpiar campos inconsistentes
+            try {
+                await supabaseClient
+                    .from('usuarios')
+                    .update({ 
+                        turno_manana: null,
+                        fecha_turno_manana: null 
+                    })
+                    .eq('id', userData.id);
+                console.log('🧹 Campos inconsistentes limpiados en BD');
+            } catch (err) {
+                console.error('❌ Error limpiando campos:', err.message);
+            }
+            userData.turno_manana = null;
+            userData.fecha_turno_manana = null;
+        } else {
+            // ✅ PROMOCIONAR: "mañana" se convierte en "hoy"
+            console.log('🔄 PROMOVIENDO turno_manana a turno_hoy...');
+            console.log(`   📋 De: ${userData.turno_manana} (${userData.fecha_turno_manana})`);
+            console.log(`   📋 A: ${userData.turno_manana} (${fechaHoy})`);
             
             try {
-                console.log('💾 Guardando promoción en BD...');
                 const { error } = await supabaseClient
                     .from('usuarios')
                     .update({ 
-                        turno_hoy: userData.turno_hoy,
+                        turno_hoy: userData.turno_manana,
                         fecha_turno_hoy: fechaHoy,
                         turno_manana: null,
                         fecha_turno_manana: null,
+                        // Mantener el contador actual
                         contador_turnos: userData.contador_turnos
                     })
                     .eq('id', userData.id);
                 
                 if (error) throw error;
-                console.log('✅ 🎯 ROLL FORWARD EXITOSO: turno_manana promovido a HOY y campos de mañana LIMPIADOS');
-                console.log(`    ✅ Nuevo turno_hoy: ${userData.turno_hoy} (${fechaHoy})`);
-                console.log(`    ✅ Campos turno_manana y fecha_turno_manana BORRADOS (listos para nuevo Paso 2)`);
                 
-                // ✅ 🔑 Sincronizar MEMORIA con BD
+                console.log('✅ 🎯 ROLL FORWARD EXITOSO');
+                console.log(`   ✅ Nuevo turno_hoy: ${userData.turno_manana}`);
+                console.log(`   ✅ Nueva fecha_turno_hoy: ${fechaHoy}`);
+                console.log(`   ✅ Campos de mañana limpiados`);
+                
+                // ✅ Sincronizar memoria local con BD
+                userData.turno_hoy = userData.turno_manana;
+                userData.fecha_turno_hoy = fechaHoy;
                 userData.turno_manana = null;
                 userData.fecha_turno_manana = null;
-                console.log('✅ MEMORIA SINCRONIZADA: userData.turno_manana y fecha_turno_manana = null');
+                
+                if (currentUser && currentUser.id === userData.id) {
+                    currentUser.turno_hoy = userData.turno_hoy;
+                    currentUser.fecha_turno_hoy = userData.fecha_turno_hoy;
+                    currentUser.turno_manana = null;
+                    currentUser.fecha_turno_manana = null;
+                }
+                
             } catch (err) {
-                console.error('❌ ⚠️ Error guardando roll forward:', err);
-                alert('⚠️ Error al actualizar turno. Por favor contacte al administrador.');
+                console.error('❌ ⚠️ Error en roll forward:', err.message);
+                alert('⚠️ Error al actualizar turno. Contacte al administrador.');
             }
         }
-    } // <-- Cierre del "else" del turno_manana válido
-} else {
-    // ✅ AHORA ESTE ELSE ESTÁ CORRECTAMENTE VINCULADO AL IF DE LA FECHA
-    console.log('❌ 🔴 ROLL FORWARD NO APLICABLE: fecha_turno_manana no coincide con HOY');
-    if (userData.fecha_turno_manana) {
-        console.log(`    📅 fecha_turno_manana: ${userData.fecha_turno_manana} ≠ HOY: ${fechaHoy}`);
     } else {
-        console.log('    📅 fecha_turno_manana NO ESTÁ DEFINIDA en la base de datos');
-    }
-}
-
-
-// 📊 LOG POST-ROLL FORWARD (ESTADO ACTUALIZADO)
-console.log('📊 ==========================================');
-console.log('📊 ESTADO TRAS ROLL FORWARD:');
-console.log('📊 turno_hoy:', userData.turno_hoy);
-console.log('📊 fecha_turno_hoy:', userData.fecha_turno_hoy);
-console.log('📊 turno_manana:', userData.turno_manana);
-console.log('📊 fecha_turno_manana:', userData.fecha_turno_manana);
-console.log('📊 contador_turnos:', userData.contador_turnos);
-console.log('📊 ==========================================');
-  
-  // ✅ ACTUALIZAR última_actividad al hacer login
-  try {
-    await supabaseClient.from('usuarios').update({ 
-      ultima_actividad: formatearFechaCompletaElSalvador(getFechaElSalvador()) 
-    }).eq('id', userData.id);
-    console.log('✅ ultima_actividad actualizada en BD');
-  } catch (err) {
-    console.error('⚠️ Error actualizando ultima_actividad:', err);
-  }
-
-  // 1. Verificar descanso programado (Prioridad Máxima)
-  console.log('🔍 Verificando día de descanso...');
-  if (verificarDiaDescanso(userData)) {
-    console.log('✅ Es día de descanso - bloqueando acceso');
-    alert('📅 Hoy es día de descanso programado.');
-    logout();
-    return;
-  }
-
-  // ✅ 2. VALIDACIÓN PRINCIPAL - LOGS DETALLADOS
-  console.log('📊 ==========================================');
-  console.log('📊 DATOS DE TURNO EN BD:');
-  console.log('📊 turno_hoy:', userData.turno_hoy);
-  console.log('📊 fecha_turno_hoy:', userData.fecha_turno_hoy);
-  console.log('📊 turno_manana:', userData.turno_manana);
-  console.log('📊 fecha_turno_manana:', userData.fecha_turno_manana);
-  console.log('📊 descanso_fecha_inicio:', userData.descanso_fecha_inicio);
-  console.log('📊 descanso_fecha_fin:', userData.descanso_fecha_fin);
-  console.log('📊 contador_turnos:', userData.contador_turnos);
-  console.log('📊 estado_ciclo:', userData.estado_ciclo);
-  console.log('📊 ultima_actividad:', userData.ultima_actividad);
-  console.log('📊 ==========================================');
-
-  // ✅ EVALUACIÓN MEJORADA: Incluir validación de ventana para turnos nocturnos activos
-console.log('✅ ==========================================');
-console.log('✅ EVALUACIÓN DE CONDICIONES MEJORADA:');
-console.log('✅ tieneHoyAlDia (original):', userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy);
-console.log('✅ turno_hoy:', userData.turno_hoy, '| fecha_turno_hoy:', userData.fecha_turno_hoy, '| fechaHoy:', fechaHoy);
-
-
-
-/// ✅ VERSIÓN PROFESIONAL OPTIMIZADA
-let enVentanaTurnoNocturno = false;
-
-if (userData.turno_hoy === 'turno3' && userData.fecha_turno_hoy) {
-    try {
-        const fechaTurno = new Date(userData.fecha_turno_hoy + 'T00:00:00');
-        const hoyDate = new Date(fechaHoy + 'T00:00:00');
-        const diffMs = hoyDate - fechaTurno;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-        // CASO A: Es el mismo día que empezó el turno (Ej: Entra a las 10 PM del día programado)
-        if (diffDias === 0 && horaActual >= 20) { 
-            enVentanaTurnoNocturno = true;
-        } 
-        // CASO B: Es el día siguiente (Ventana de gracia 0-9 AM)
-        else if (diffDias === 1 && horaActual >= 0 && horaActual < 9) {
-            enVentanaTurnoNocturno = true;
-            console.log("🌙 Trabajando en ventana de gracia del turno de ayer.");
+        console.log('❌ 🔴 ROLL FORWARD NO APLICABLE');
+        if (userData.fecha_turno_manana) {
+            console.log(`   📅 fecha_turno_manana (${userData.fecha_turno_manana}) ≠ HOY (${fechaHoy})`);
+        } else {
+            console.log('   📅 fecha_turno_manana NO DEFINIDA');
         }
-    } catch (e) {
-        console.error("❌ Error en cálculo de fechas nocturnas", e);
     }
-}
 
+    // ========================================
+    // ✅ 5. LOG POST-ROLL FORWARD
+    // ========================================
+    console.log('📊 ==========================================');
+    console.log('📊 ESTADO ACTUALIZADO TRAS ROLL FORWARD:');
+    console.log('📊 turno_hoy:', userData.turno_hoy);
+    console.log('📊 fecha_turno_hoy:', userData.fecha_turno_hoy);
+    console.log('📊 turno_manana:', userData.turno_manana);
+    console.log('📊 fecha_turno_manana:', userData.fecha_turno_manana);
+    console.log('📊 contador_turnos:', userData.contador_turnos);
+    console.log('📊 ==========================================');
 
-const tieneHoyAlDia = (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) || enVentanaTurnoNocturno;
-const tieneTurnoManana = userData.turno_manana && 
-                         userData.turno_manana !== "null" && 
-                         userData.turno_manana !== "" &&
-                         userData.turno_manana !== "descanso";
-const tieneDescansoActivo = userData.descanso_fecha_inicio && 
-                            userData.descanso_fecha_inicio >= fechaHoy;
+    // ========================================
+    // ✅ 6. ACTUALIZAR última_actividad
+    // ========================================
+    try {
+        await supabaseClient
+            .from('usuarios')
+            .update({ 
+                ultima_actividad: formatearFechaCompletaElSalvador(fechaActualCompleta)
+            })
+            .eq('id', userData.id);
+        console.log('✅ ultima_actividad actualizada en BD');
+    } catch (err) {
+        console.error('⚠️ Error actualizando ultima_actividad:', err.message);
+    }
 
-console.log('✅ tieneHoyAlDia (MEJORADO):', tieneHoyAlDia, 
-    `(turno_hoy=${userData.turno_hoy}, fecha_turno_hoy=${userData.fecha_turno_hoy}, enVentanaNocturno=${enVentanaTurnoNocturno})`);
-console.log('✅ tieneTurnoManana:', tieneTurnoManana, '(turno_manana:', userData.turno_manana, ')');
-console.log('✅ tieneDescansoActivo:', tieneDescansoActivo, '(descanso_fecha_inicio:', userData.descanso_fecha_inicio, '| fechaHoy:', fechaHoy, ')');
-console.log('✅ ==========================================');
-
-  // ✅ CASO 1: TIENE HOY + (MAÑANA o DESCANSO) = ENTRAR AL MENÚ
-if (tieneHoyAlDia && (tieneTurnoManana || tieneDescansoActivo)) {
-    console.log('🚪 CASO 1: TIENE HOY + (MAÑANA o DESCANSO)');
+    // ========================================
+    // ✅ 7. VERIFICAR DÍA DE DESCANSO (PRIORIDAD MÁXIMA)
+    // ========================================
+    console.log('🔍 Verificando día de descanso programado...');
     
-    // 🌙 EXCEPCIÓN: Si está en ventana de gracia de turno nocturno, NO validar ventana
-    if (enVentanaTurnoNocturno) {
-        console.log('🌙 En ventana de gracia de turno nocturno - Saltando validación de horario');
-    } else {
-        console.log('🚪 Validando ventana de turno...');
-        if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
-            const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
-            console.log('❌ Fuera de ventana de turno:', turnoInfo.nombre);
-            alert(`⚠️ Fuera de horario (${turnoInfo.nombre}).`);
+    // ✅ Lógica robusta para verificar descanso
+    const tieneDescansoActivo = userData.descanso_fecha_inicio && 
+                                userData.descanso_fecha_fin &&
+                                fechaHoy >= userData.descanso_fecha_inicio && 
+                                fechaHoy <= userData.descanso_fecha_fin;
+    
+    if (tieneDescansoActivo) {
+        // 🌙 Excepción: turno nocturno que termina en primer día de descanso
+        if (userData.rol === 'ATTF' && 
+            fechaHoy === userData.descanso_fecha_inicio && 
+            userData.turno_hoy === 'turno3' && 
+            horaActual >= 0 && horaActual < 9) {
+            console.log('🌙 Permitiendo terminar turno nocturno en primer día de descanso');
+        } else {
+            console.log('✅ Es día de descanso - bloqueando acceso');
+            alert('📅 Hoy es día de descanso programado.');
             logout();
             return;
         }
+    } else {
+        console.log('✅ No es día de descanso programado');
     }
+
+    // ========================================
+    // ✅ 8. EVALUACIÓN DE CONDICIONES DE ACCESO
+    // ========================================
+    console.log('✅ ==========================================');
+    console.log('✅ EVALUACIÓN DE CONDICIONES DE ACCESO');
+    console.log('✅ ==========================================');
+
+    // 🌙 Validación de ventana para turnos nocturnos (turno3)
+    let enVentanaTurnoNocturno = false;
+    if (userData.turno_hoy === 'turno3' && userData.fecha_turno_hoy) {
+        try {
+            const fechaTurno = new Date(userData.fecha_turno_hoy + 'T00:00:00');
+            const hoyDate = new Date(fechaHoy + 'T00:00:00');
+            const diffMs = hoyDate - fechaTurno;
+            const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            // CASO A: Mismo día, entrada después de 20:00
+            if (diffDias === 0 && horaActual >= 20) { 
+                enVentanaTurnoNocturno = true;
+                console.log('🌙 Turno nocturno: entrada válida (mismo día, >= 20:00)');
+            } 
+            // CASO B: Día siguiente, ventana de gracia 00:00 - 09:00
+            else if (diffDias === 1 && horaActual >= 0 && horaActual < 9) {
+                enVentanaTurnoNocturno = true;
+                console.log('🌙 Turno nocturno: ventana de gracia (00:00 - 09:00)');
+            }
+        } catch (e) {
+            console.error('❌ Error calculando ventana nocturna:', e.message);
+        }
+    }
+
+    // Evaluar condiciones principales
+    const tieneHoyAlDia = (userData.turno_hoy && userData.fecha_turno_hoy === fechaHoy) || enVentanaTurnoNocturno;
     
-    console.log("✅ ✅ ✅ TODO CONFIGURADO - ACCEDIENDO AL MENÚ ✅ ✅ ✅");
-    accederMenuATTF();
-    return;
-}
+    const tieneTurnoManana = userData.turno_manana && 
+                             userData.turno_manana !== 'null' && 
+                             userData.turno_manana !== '' &&
+                             userData.turno_manana !== 'descanso';
+    
+    // ✅ Lógica de descanso corregida (usa ambas fechas)
+    const descansoActivo = userData.descanso_fecha_inicio && 
+                          userData.descanso_fecha_fin &&
+                          fechaHoy >= userData.descanso_fecha_inicio && 
+                          fechaHoy <= userData.descanso_fecha_fin;
 
-  // ✅ CASO 2: NO TIENE HOY = PASO 1
-  if (!tieneHoyAlDia) {
-    console.log('🚪 CASO 2: NO TIENE TURNO DE HOY');
-    console.log('🔧 Redirigiendo a Paso 1...');
+    console.log('📋 CONDICIONES EVALUADAS:');
+    console.log('   • tieneHoyAlDia:', tieneHoyAlDia, `(turno: ${userData.turno_hoy}, fecha: ${userData.fecha_turno_hoy})`);
+    console.log('   • tieneTurnoManana:', tieneTurnoManana, `(turno: ${userData.turno_manana})`);
+    console.log('   • descansoActivo:', descansoActivo, `(rango: ${userData.descanso_fecha_inicio} a ${userData.descanso_fecha_fin})`);
+    console.log('   • enVentanaTurnoNocturno:', enVentanaTurnoNocturno);
+    console.log('✅ ==========================================');
 
-// ✅ Limpiar cualquier interfaz residual antes de mostrar nueva
-    const configSec = document.getElementById('configuracionInicialATTF');
-    if (configSec) {
-        configSec.innerHTML = '';
-        configSec.style.display = 'block';
+    // ========================================
+    // ✅ 9. DECISIÓN DE FLUJO SEGÚN CONDICIONES
+    // ========================================
+
+    // 🚪 CASO 1: TIENE HOY + (MAÑANA o DESCANSO) = ACCEDER AL MENÚ
+    if (tieneHoyAlDia && (tieneTurnoManana || descansoActivo)) {
+        console.log('🚪 CASO 1: ACCESO CONCEDIDO - Tiene turno hoy + configuración futura');
+        
+        // Validar ventana de turno (excepto en ventana nocturna de gracia)
+        if (!enVentanaTurnoNocturno) {
+            console.log('🚪 Validando ventana de horario...');
+            if (!validarVentanaTurno(userData.turno_hoy, horaActual)) {
+                const turnoInfo = TURNOS_ATTF[userData.turno_hoy] || { nombre: userData.turno_hoy };
+                console.log('❌ Fuera de ventana de turno:', turnoInfo.nombre);
+                alert(`⚠️ Fuera de horario permitido para ${turnoInfo.nombre}.`);
+                logout();
+                return;
+            }
+            console.log('✅ Dentro de ventana de turno válida');
+        } else {
+            console.log('🌙 Saltando validación de ventana (gracia nocturna)');
+        }
+        
+        console.log('✅ ✅ ✅ TODO CONFIGURADO - ACCEDIENDO AL MENÚ ✅ ✅ ✅');
+        accederMenuATTF();
+        return;
     }
-    mostrarConfiguracionInicialATTF();
-    return;
-  }
 
-   // ✅ CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO = PASO 2
-console.log('🚪 ==========================================');
-console.log('🚪 CASO 3: TIENE HOY PERO NO TIENE MAÑANA/DESCANSO');
-console.log('🚪 ==========================================');
-console.log('⚠️ Tiene turno de hoy pero falta configurar mañana.');
+    // 🚪 CASO 2: NO TIENE TURNO DE HOY = PASO 1 (Configurar turno hoy)
+    if (!tieneHoyAlDia) {
+        console.log('🚪 CASO 2: NO TIENE TURNO DE HOY - Redirigiendo a Paso 1');
+        
+        // Limpiar interfaz residual
+        const configSec = document.getElementById('configuracionInicialATTF');
+        if (configSec) {
+            configSec.innerHTML = '';
+            configSec.style.display = 'block';
+            configSec.classList.remove('hidden');
+        }
+        
+        // Ocultar otros contenedores para evitar superposición
+        const tableSelection = document.getElementById('tableSelectionSection');
+        if (tableSelection) tableSelection.style.display = 'none';
+        
+        const searchSection = document.getElementById('searchSection');
+        if (searchSection) {
+            searchSection.style.display = 'none';
+            searchSection.classList.add('hidden');
+        }
+        
+        console.log('🔧 Mostrando configuración inicial de turno...');
+        mostrarConfiguracionInicialATTF();
+        return;
+    }
 
-// ✅ Obtener y validar contador de turnos
-const contadorTurnos = parseInt(userData.contador_turnos) || 0;
-
-// 📊 LOGS DE DIAGNÓSTICO DEL CONTADOR
-console.log('🔢 ==========================================');
-console.log('🔢 DIAGNÓSTICO DE CONTADOR DE TURNOS:');
-console.log('🔢 Valor crudo en userData:', userData.contador_turnos);
-console.log('🔢 Valor parseado:', contadorTurnos);
-console.log('🔢 Tipo de dato:', typeof contadorTurnos);
-console.log('🔢 ==========================================');
-
-// ✅ Log informativo según el valor del contador
-if (contadorTurnos === 0) {
-    console.log('ℹ️ [CONTADOR = 0] Usuario en primer día o post-descanso → Flujo normal: Forzar configuración de descanso');
-} else if (contadorTurnos >= 1 && contadorTurnos <= 4) {
-    console.log('ℹ️ [CONTADOR 1-4] Usuario en días laborales activos → Permitir selección de turno');
-} else if (contadorTurnos >= 5) {
-    console.log('ℹ️ [CONTADOR >= 5] Ciclo de 5 días completado → Forzar descanso obligatorio');
-}
-
-// ✅ LÓGICA DE NEGOCIO SEGÚN CONTADOR
-console.log('🔄 ==========================================');
-console.log('🔄 EVALUANDO LÓGICA DE NEGOCIO:');
-console.log('🔄 ==========================================');
-
-if (contadorTurnos === 0 || contadorTurnos >= 5) {
-    // 🎯 CASO A: Forzar descanso (inicio de ciclo o fin de ciclo)
-    console.log('✅ CONDICIÓN CUMPLIDA: contadorTurnos === 0 || contadorTurnos >= 5');
-    console.log(`📊 Valor evaluado: ${contadorTurnos}`);
-    console.log('🏖️ Acción: Redirigiendo a mostrarConfiguracionDescansoCiclo()');
+    // 🚪 CASO 3: TIENE HOY PERO FALTA MAÑANA/DESCANSO = PASO 2
+    console.log('🚪 ==========================================');
+    console.log('🚪 CASO 3: TIENE TURNO HOY - FALTA CONFIGURAR MAÑANA');
     console.log('🚪 ==========================================');
     
-    mostrarConfiguracionDescansoCiclo();
-    return; // ✅ Detener ejecución inmediatamente
+    // ✅ Obtener y validar contador de turnos
+    const contadorTurnos = parseInt(userData.contador_turnos) || 0;
     
-} else {
-    // 🎯 CASO B: Permitir selección de turno (días 1-4 de trabajo)
-    console.log('✅ CONDICIÓN NO CUMPLIDA: contadorTurnos está entre 1 y 4');
-    console.log(`📊 Valor evaluado: ${contadorTurnos}`);
-    console.log('🔄 Acción: Redirigiendo a mostrarProgramarTurnoMañanaConDescanso()');
-    console.log('🚪 ==========================================');
-    
-    mostrarProgramarTurnoMañanaConDescanso(userData);
-    return; // ✅ Detener ejecución inmediatamente
-}
-} // ✅ ¡CORREGIDO! Cierre definitivo de loginATTF
+    console.log('🔢 DIAGNÓSTICO DE CONTADOR:');
+    console.log('   • Valor en BD:', userData.contador_turnos);
+    console.log('   • Valor parseado:', contadorTurnos);
+    console.log('   • Tipo:', typeof contadorTurnos);
 
+    // ✅ LÓGICA DE NEGOCIO SEGÚN CONTADOR
+    if (contadorTurnos === 0 || contadorTurnos >= 5) {
+        // 🎯 FORZAR DESCANSO: Inicio de ciclo o fin de ciclo de 5 días
+        console.log('✅ CONDICIÓN: contadorTurnos === 0 || >= 5');
+        console.log(`📊 Valor: ${contadorTurnos} → 🏖️ Forzar configuración de descanso`);
+        
+        // Limpiar interfaz antes de mostrar nueva
+        const configSec = document.getElementById('configuracionInicialATTF');
+        if (configSec) {
+            configSec.innerHTML = '';
+            configSec.style.display = 'block';
+        }
+        
+        mostrarConfiguracionDescansoCiclo();
+        return;
+        
+    } else {
+        // 🎯 PERMITIR SELECCIÓN: Días 1-4 de trabajo normal
+        console.log('✅ CONDICIÓN: contadorTurnos entre 1 y 4');
+        console.log(`📊 Valor: ${contadorTurnos} → 🔄 Permitir selección de turno`);
+        
+        // Limpiar interfaz antes de mostrar nueva
+        const configSec = document.getElementById('configuracionInicialATTF');
+        if (configSec) {
+            configSec.innerHTML = '';
+            configSec.style.display = 'block';
+        }
+        
+        console.log('🔄 Llamando a mostrarProgramarTurnoMañanaConDescanso()...');
+        mostrarProgramarTurnoMañanaConDescanso(userData);
+        return;
+    }
+} // ✅ ✅ ✅ CIERRE CORRECTO DE loginATTF ✅ ✅ ✅
 
 
 
@@ -2911,6 +2971,52 @@ function validarDescansoATTF(fechaInicioAuto, fechaFinAuto) {
 
 
 // ========================================
+// 🛠️ FUNCIONES AUXILIARES (Agregar en scope global, antes de accederMenuATTF)
+// ========================================
+
+/**
+ * Controla visibilidad de elementos con reflow forzado
+ * @param {string} elementId - ID del elemento DOM
+ * @param {boolean} visible - true para mostrar, false para ocultar
+ */
+function setElementVisibility(elementId, visible) {
+    const el = document.getElementById(elementId);
+    if (!el) {
+        console.warn(`⚠️ Elemento #${elementId} no encontrado`);
+        return;
+    }
+    el.style.display = visible ? 'block' : 'none';
+    el.classList.toggle('hidden', !visible);
+    // Forzar reflow para aplicar cambios inmediatamente
+    void el.offsetHeight;
+    console.log(`🎨 ${elementId}: ${visible ? 'VISIBLE' : 'OCULTO'}`);
+}
+
+/**
+ * Reintenta ejecutar una función con límite de intentos
+ * @param {Function} fn - Función a ejecutar (debe retornar true si éxito)
+ * @param {number} maxRetries - Máximo de intentos
+ * @param {number} delay - Delay entre intentos en ms
+ */
+function retryWithLimit(fn, maxRetries = 3, delay = 300) {
+    let attempts = 0;
+    function attempt() {
+        try {
+            if (fn()) return; // Éxito
+        } catch (e) {
+            console.warn(`⚠️ Intento ${attempts + 1} fallido:`, e.message);
+        }
+        if (++attempts >= maxRetries) {
+            console.error(`❌ Máximos ${maxRetries} intentos fallidos para: ${fn.name || 'función anónima'}`);
+            return;
+        }
+        console.log(`🔄 Reintentando en ${delay}ms... (intento ${attempts + 1}/${maxRetries})`);
+        setTimeout(attempt, delay);
+    }
+    attempt();
+}
+
+// ========================================
 // 🚪 ACCEDER AL MENÚ ATTF (VERSIÓN CORREGIDA Y ROBUSTA)
 // ========================================
 function accederMenuATTF() {
@@ -2918,7 +3024,17 @@ function accederMenuATTF() {
     console.log('🔐 INICIANDO: accederMenuATTF');
     console.log('🔐 Usuario actual:', currentUser?.usuario || 'NO DEFINIDO');
     console.log('🔐 Rol:', currentUser?.rol || 'NO DEFINIDO');
+    console.log('🔐 Timestamp:', new Date().toISOString());
     console.log('🔐 ==========================================');
+
+    // ========================================
+    // ✅ PASO 0: VALIDACIÓN DE SEGURIDAD BÁSICA
+    // ========================================
+    if (!currentUser || !currentUser.id) {
+        console.error('❌ [FATAL] currentUser no válido - Redirigiendo a login');
+        location.reload();
+        return;
+    }
 
     // ========================================
     // ✅ PASO 1: VALIDACIÓN DE CONFIGURACIÓN ACTIVA
@@ -2943,12 +3059,26 @@ function accederMenuATTF() {
         estaVisible: configEstaVisible
     });
     
+    // 🚫 Si la configuración está visible, DETENER ejecución (usuario debe completar configuración primero)
     if (configEstaVisible) {
-        console.warn('⚠️ CONFIGURACIÓN AÚN ACTIVA - Bloqueando acceso al menú');
-        console.log('⏳ Reintentando en 200ms...');
-        setTimeout(() => accederMenuATTF(), 200);
-        return; // ⛔ DETENER EJECUCIÓN
+        console.warn('⚠️ ACCESO DENEGADO: Configuración de turnos activa');
+        console.log('💡 El usuario debe completar la configuración antes de acceder al menú');
+        return; // ✅ SALIR SIN MOSTRAR MENÚ
     }
+    
+    // ✅ Si existe pero está oculto, limpiar contenido por seguridad
+    if (configSection) {
+        configSection.style.display = 'none';
+        configSection.classList.add('hidden');
+        if (configSection.innerHTML !== '') {
+            configSection.innerHTML = '';
+            console.log('🧹 configuracionInicialATTF limpiado');
+        }
+        // Forzar reflow para aplicar cambios inmediatamente
+        void configSection.offsetHeight;
+        console.log('✅ Configuración forzada a oculto');
+    }
+    
     console.log('✅ Configuración inactiva - Continuando con acceso al menú');
 
     // ========================================
@@ -3027,19 +3157,68 @@ function accederMenuATTF() {
             console.log('🔄 fecha_turno_manana sincronizado desde BD:', currentUser.fecha_turno_manana);
         }
         
+        // 🔁 Sincronizar datos de descanso si existen
+        if (currentUser.descanso_fecha_inicio) {
+            localStorage.setItem('descanso_inicio', currentUser.descanso_fecha_inicio);
+            console.log('🔄 descanso_fecha_inicio sincronizado:', currentUser.descanso_fecha_inicio);
+        }
+        if (currentUser.descanso_fecha_fin) {
+            localStorage.setItem('descanso_fin', currentUser.descanso_fecha_fin);
+            console.log('🔄 descanso_fecha_fin sincronizado:', currentUser.descanso_fecha_fin);
+        }
+        
         console.log('📊 Datos de turno en currentUser:', {
             turno_hoy: currentUser.turno_hoy,
             fecha_turno_hoy: currentUser.fecha_turno_hoy,
             turno_manana: currentUser.turno_manana,
             fecha_turno_manana: currentUser.fecha_turno_manana,
-            contador_turnos: currentUser.contador_turnos
+            contador_turnos: currentUser.contador_turnos,
+            descanso_inicio: currentUser.descanso_fecha_inicio,
+            descanso_fin: currentUser.descanso_fecha_fin
         });
     }
 
     // ========================================
-    // ✅ PASO 4: RECUPERACIÓN DE SESIÓN (Fallback de seguridad)
+    // ✅ PASO 4: VERIFICACIÓN DE DESCANSO (LÓGICA INTEGRADA)
     // ========================================
-    console.log('🔍 [PASO 4] Validando sesión activa...');
+    console.log('🔍 [PASO 4] Verificando estado de descanso...');
+    
+    if (currentUser.descanso_fecha_inicio && currentUser.descanso_fecha_fin) {
+        try {
+            // ✅ Usar función del sistema para consistencia de zona horaria
+            const fechaHoy = getFechaHoyElSalvador();
+            const hoy = new Date(fechaHoy + 'T00:00:00');
+            const inicio = new Date(currentUser.descanso_fecha_inicio + 'T00:00:00');
+            const fin = new Date(currentUser.descanso_fecha_fin + 'T00:00:00');
+            const enDescanso = hoy >= inicio && hoy <= fin;
+            
+            console.log('📅 Verificación de descanso:', {
+                fechaHoy,
+                inicio: currentUser.descanso_fecha_inicio,
+                fin: currentUser.descanso_fecha_fin,
+                enDescanso
+            });
+            
+            // 🚫 Si está en descanso, bloquear acceso
+            if (enDescanso) {
+                console.warn('⚠️ USUARIO EN DÍA DE DESCANSO - Acceso denegado');
+                alert(`📅 Hoy (${fechaHoy}) es día de descanso programado.\n\nPróximo turno: ${currentUser.turno_regreso || 'Por configurar'}`);
+                logout();
+                return;
+            }
+            console.log('✅ Usuario NO está en descanso - Acceso permitido');
+        } catch (err) {
+            console.error('❌ Error verificando descanso:', err);
+            // Continuar si hay error en la verificación (fail-safe)
+        }
+    } else {
+        console.log('ℹ️ Usuario sin fechas de descanso configuradas');
+    }
+
+    // ========================================
+    // ✅ PASO 5: RECUPERACIÓN DE SESIÓN (Fallback de seguridad)
+    // ========================================
+    console.log('🔍 [PASO 5] Validando sesión activa...');
     
     if (!currentUser) {
         console.warn('⚠️ currentUser no definido - Intentando recuperar desde storage...');
@@ -3068,56 +3247,36 @@ function accederMenuATTF() {
     }
 
     // ========================================
-    // ✅ PASO 5: LIMPIEZA Y RENDERIZADO DE INTERFAZ
+    // ✅ PASO 6: LIMPIEZA Y RENDERIZADO DE INTERFAZ
     // ========================================
-    console.log('🔍 [PASO 5] Renderizando interfaz de menú...');
+    console.log('🔍 [PASO 6] Renderizando interfaz de menú...');
     
     try {
         console.log('🧹 Limpiando elementos de configuración previa...');
         
-        // 🅰️ OCULTAR LOGIN
-        const loginSec = document.getElementById('loginSection');
-        if (loginSec && loginSec.style.display !== 'none') {
-            loginSec.style.display = 'none';
-            console.log('✅ loginSection oculto');
-        }
+        // 🅰️ OCULTAR LOGIN (usando función auxiliar)
+        setElementVisibility('loginSection', false);
         
-        // 🅱️ LIMPIAR Y OCULTAR CONFIGURACIÓN
-        if (configSection) {
-            if (configSection.innerHTML !== '') {
-                configSection.innerHTML = '';
-                console.log('🧹 configuracionInicialATTF contenido limpiado');
-            }
-            if (configSection.style.display !== 'none') {
-                configSection.style.display = 'none';
-                console.log('✅ configuracionInicialATTF oculto');
-            }
-        }
+        // 🅱️ CONFIGURACIÓN YA LIMPIADA EN PASO 1
         
-        // 🆎 MOSTRAR MENÚ DE MÓDULOS
-        const menuModulos = document.getElementById('menuModulosATTF') || 
-                           document.getElementById('tableSelectionSection');
-        
-        if (menuModulos) {
-            if (menuModulos.style.display === 'none' || 
-                menuModulos.classList.contains('hidden')) {
+        // 🆎 MOSTRAR MENÚ DE MÓDULOS con retry
+        retryWithLimit(() => {
+            const menuModulos = document.getElementById('menuModulosATTF') || 
+                               document.getElementById('tableSelectionSection');
+            
+            if (menuModulos) {
                 menuModulos.style.display = 'block';
                 menuModulos.classList.remove('hidden');
+                void menuModulos.offsetHeight; // Forzar reflow
                 console.log('✅ Menú de módulos visible');
+                return true; // Éxito
             }
-        } else {
-            console.warn('⚠️ menuModulosATTF/tableSelectionSection no encontrado');
-        }
+            console.warn('⚠️ menuModulosATTF/tableSelectionSection no encontrado, reintentando...');
+            return false; // Falló, reintentar
+        }, 3, 200);
         
         // 🆑 OCULTAR SECCIÓN DE BÚSQUEDA (inicialmente)
-        const searchSection = document.getElementById('searchSection');
-        if (searchSection) {
-            if (searchSection.style.display !== 'none') {
-                searchSection.style.display = 'none';
-                searchSection.classList.add('hidden');
-                console.log('✅ searchSection oculto (se mostrará al seleccionar módulo)');
-            }
-        }
+        setElementVisibility('searchSection', false);
         
         // 🆒 ACTUALIZAR IDENTIDAD DE USUARIO
         const userLabel = document.getElementById('currentUser');
@@ -3130,16 +3289,12 @@ function accederMenuATTF() {
         }
         
         // 🆓 MOSTRAR INFO DE USUARIO
-        const userInfo = document.getElementById('userInfo');
-        if (userInfo && userInfo.classList.contains('hidden')) {
-            userInfo.classList.remove('hidden');
-            console.log('✅ userInfo visible');
-        }
+        setElementVisibility('userInfo', true);
         
         // ========================================
-        // ✅ PASO 6: EJECUTAR PROCESOS DE FONDO
+        // ✅ PASO 7: EJECUTAR PROCESOS DE FONDO
         // ========================================
-        console.log('⚙️ [PASO 6] Ejecutando procesos de fondo...');
+        console.log('⚙️ [PASO 7] Ejecutando procesos de fondo...');
         
         // 🔄 Actualizar filtros según rol
         if (typeof mostrarTablasSegunRol === 'function') {
@@ -3173,47 +3328,82 @@ function accederMenuATTF() {
     }
 
     // ========================================
-    // ✅ PASO 7: LOGS DE VERIFICACIÓN FINAL (DEBUG)
+    // ✅ PASO 8: CHECKLIST POST-FIX (DEBUG FINAL)
     // ========================================
     console.log('🔍 ==========================================');
-    console.log('🔍 VERIFICACIÓN FINAL DE ELEMENTOS');
+    console.log('🔍 CHECKLIST POST-FIX - VERIFICACIÓN FINAL');
     console.log('🔍 ==========================================');
     
-    // 🔹 Verificar elementos críticos (solo los necesarios)
-    const elementosCriticos = [
-        { id: 'loginSection', esperado: 'none' },
-        { id: 'configuracionInicialATTF', esperado: 'none' },
-        { id: 'tableSelectionSection', esperado: 'block' },
-        { id: 'searchSection', esperado: 'none' },
-        { id: 'userInfo', esperado: 'visible' },
-        { id: 'currentUser', esperado: 'texto' }
-    ];
+    // 🔹 Verificar elementos críticos
+    console.log('1. configSection oculto:', 
+        document.getElementById('configuracionInicialATTF')?.style.display === 'none' ? '✅' : '❌');
     
-    elementosCriticos.forEach(el => {
-        const elemento = document.getElementById(el.id);
-        if (elemento) {
-            let estado = '';
-            if (el.esperado === 'none') {
-                estado = elemento.style.display === 'none' ? '✅ OCULTO' : '⚠️ VISIBLE';
-            } else if (el.esperado === 'block') {
-                estado = elemento.style.display === 'block' ? '✅ VISIBLE' : '⚠️ OCULTO';
-            } else if (el.esperado === 'visible') {
-                estado = !elemento.classList.contains('hidden') ? '✅ VISIBLE' : '⚠️ OCULTO';
-            } else if (el.esperado === 'texto') {
-                estado = elemento.textContent ? `✅ "${elemento.textContent}"` : '⚠️ VACÍO';
-            }
-            console.log(`📊 ${el.id}: ${estado}`);
-        } else {
-            console.error(`❌ ${el.id}: NO ENCONTRADO`);
-        }
-    });
+    const tableSelection = document.getElementById('tableSelectionSection');
+    const tableVisible = tableSelection && (
+        tableSelection.style.display === 'block' && 
+        !tableSelection.classList.contains('hidden') &&
+        tableSelection.offsetHeight > 0
+    );
+    console.log('2. tableSelection visible:', tableVisible ? '✅' : '⚠️ OCULTO');
+    
+    // 🛠️ Si tableSelection está oculto, mostrarlo (corrección adicional)
+    if (tableSelection && !tableVisible) {
+        console.log('🔧 Corrigiendo visibilidad de tableSelection...');
+        tableSelection.style.display = 'block';
+        tableSelection.classList.remove('hidden');
+        void tableSelection.offsetHeight;
+    }
+    
+    console.log('3. searchSection oculto:', 
+        document.getElementById('searchSection')?.style.display === 'none' ? '✅' : '❌');
+    
+    const userInfo = document.getElementById('userInfo');
+    console.log('4. userInfo visible:', 
+        userInfo && !userInfo.classList.contains('hidden') ? '✅' : '❌');
+    
+    console.log('5. currentUser texto:', 
+        document.getElementById('currentUser')?.textContent || '⚠️ VACÍO');
     
     console.log('🔍 ==========================================');
     console.log('🔐 FINALIZADO: accederMenuATTF');
+    console.log('🔐 Timestamp fin:', new Date().toISOString());
     console.log('🔐 ==========================================');
 }
 
+// ========================================
+// 🧪 DIAGNÓSTICO ADICIONAL (Ejecutar en consola si hay problemas)
+// ========================================
+function diagnosticarMenuATTF() {
+    console.group('🔍 DIAGNÓSTICO COMPLETO - accederMenuATTF');
+    
+    console.log('📦 currentUser:', currentUser ? '✅ Definido' : '❌ Undefined');
+    if (currentUser) {
+        console.log('   • usuario:', currentUser.usuario);
+        console.log('   • rol:', currentUser.rol);
+        console.log('   • turno_hoy:', currentUser.turno_hoy);
+    }
+    
+    console.log('📦 Elementos DOM:');
+    ['configuracionInicialATTF', 'tableSelectionSection', 'searchSection', 'loginSection', 'userInfo', 'currentUser'].forEach(id => {
+        const el = document.getElementById(id);
+        console.log(`   • #${id}:`, el ? `✅ Existe (display: ${el.style.display || 'auto'})` : '❌ No existe');
+    });
+    
+    console.log('📦 localStorage:');
+    ['turno_hoy', 'turno_manana', 'cleca_user_session'].forEach(key => {
+        const val = localStorage.getItem(key);
+        console.log(`   • ${key}:`, val ? `✅ "${val}"` : '❌ Vacío');
+    });
+    
+    console.groupEnd();
+}
 
+
+
+// Exponer funciones al scope global
+window.setElementVisibility = setElementVisibility;
+window.retryWithLimit = retryWithLimit;
+window.diagnosticarMenuATTF = diagnosticarMenuATTF;
 
 function mostrarForzarDescansoATTF() {
     // ✅ OCULTAR MENÚ DE MÓDULOS DURANTE CONFIGURACIÓN
