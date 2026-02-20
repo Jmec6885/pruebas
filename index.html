@@ -7697,11 +7697,51 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
 
         // Guardamos en memoria global (Tus órdenes de trabajo)
     window.osAsignadasKML = osNormalizadas;
-    window.osKMLData = osNormalizadas;
+window.osKMLData = osNormalizadas;
 
-    // ========================================
-// ✅ INYECTAR COMENTARIOS CON NORMALIZACIÓN ROBUSTA
 // ========================================
+// ✅ 🆕 PASO: OBTENER E INYECTAR COMENTARIOS (PARA KML RUTA)
+// ========================================
+console.log('📝 [KML] Obteniendo comentarios de consulta_servicios...');
+
+// 1️⃣ Extraer medidores únicos de las OS normalizadas
+const medidoresUnicos = [...new Set(osNormalizadas
+    .map(os => os.Medidor)
+    .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
+
+console.log(`🔍 Medidores únicos para comentarios: ${medidoresUnicos.length}`);
+
+// 2️⃣ Declarar el Map para almacenar comentarios
+const comentariosPorMedidor = new Map();
+
+// 3️⃣ Consultar en lotes para no saturar Supabase
+if (medidoresUnicos.length > 0) {
+    const BATCH = 1000;
+    for (let i = 0; i < medidoresUnicos.length; i += BATCH) {
+        const batch = medidoresUnicos.slice(i, i + BATCH);
+        console.log(`📡 Lote ${Math.floor(i/BATCH) + 1}: ${batch.length} medidores`);
+        
+        const {  comData, error: errorCom } = await supabaseClient
+            .from('consultas_servicios')
+            .select('Medidor, ComentarioGeneral')
+            .in('Medidor', batch);
+        
+        if (!errorCom && comData) {
+            comData.forEach(item => {
+                if (item.Medidor && item.ComentarioGeneral) {
+                    // Normalizar clave para búsqueda consistente
+                    const key = String(item.Medidor).trim().toUpperCase();
+                    comentariosPorMedidor.set(key, item.ComentarioGeneral);
+                }
+            });
+            console.log(`✅ Lote: ${comData.length} comentarios obtenidos`);
+        }
+        // Pequeña pausa para evitar rate limiting
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+}
+
+// 4️⃣ INYECTAR COMENTARIOS EN LAS OS NORMALIZADAS
 console.log('🔍 [DEBUG] Iniciando inyección de comentarios...');
 
 osNormalizadas.forEach((os, idx) => {
@@ -7718,13 +7758,16 @@ osNormalizadas.forEach((os, idx) => {
     const comentario = comentariosPorMedidor.get(medidorKey);
     
     if (comentario) {
+        // ✅ PRIORIDAD: Comentario de consulta_servicios
         os.Comentario = comentario;
         os.ComentarioGeneral = comentario;
         console.log(`✅ [${idx}] OS ${os.OSATMO}: Comentario inyectado (${comentario.substring(0, 30)}...)`);
     } else if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
+        // ✅ PRESERVAR: Comentario original si existe
         os.ComentarioGeneral = os.Comentario;
         console.log(`ℹ️ [${idx}] OS ${os.OSATMO}: Usa comentario original`);
     } else {
+        // ✅ FALLBACK: Valor por defecto
         os.Comentario = 'Sin comentario disponible';
         os.ComentarioGeneral = 'Sin comentario disponible';
         console.log(`⚠️ [${idx}] OS ${os.OSATMO}: Sin comentario (Medidor: "${medidorRaw}")`);
@@ -7733,9 +7776,7 @@ osNormalizadas.forEach((os, idx) => {
 
 console.log('✅ Comentarios procesados en OS asignadas');
 
-// ========================================
-// ✅ 🆕 AGREGAR AQUÍ: LOGS DE DIAGNÓSTICO AUTOMÁTICO
-// ========================================
+// 5️⃣ LOGS DE DIAGNÓSTICO AUTOMÁTICO (para depurar OS específicas)
 console.log('🔍 ==========================================');
 console.log('🔍 [AUTO-DIAGNÓSTICO] Verificando inyección para OS 11126031');
 console.log('🔍 ==========================================');
@@ -7746,12 +7787,9 @@ if (osPruebaAuto) {
         OSATMO: osPruebaAuto.OSATMO,
         Medidor: osPruebaAuto.Medidor,
         MedidorTipo: typeof osPruebaAuto.Medidor,
-        MedidorTrim: osPruebaAuto.Medidor?.toString()?.trim(),
-        MedidorUpper: osPruebaAuto.Medidor?.toString()?.trim()?.toUpperCase(),
         ComentarioResultado: osPruebaAuto.Comentario?.substring(0, 50)
     });
     
-    // Verificar en el Map de comentarios
     const keyBusqueda = String(osPruebaAuto.Medidor || '').trim().toUpperCase();
     const encontradoEnMap = comentariosPorMedidor.get(keyBusqueda);
     
@@ -7765,9 +7803,6 @@ if (osPruebaAuto) {
     console.log('⚠️ OS 11126031 NO encontrada en osNormalizadas');
 }
 console.log('🔍 ==========================================');
-    // ========================================
-    // ✅ FIN DEL BLOQUE DE COMENTARIOS
-    // ========================================
 
     // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE  ← ← ← AQUÍ CONTINÚA TU CÓDIGO ORIGINAL
     const HOY = getFechaHoyElSalvador();
