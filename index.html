@@ -4932,6 +4932,25 @@ async function logout() {
 
 
    function generarCamposBusqueda(config) {
+// ✅ FILTRAR CAMPOS DE BÚSQUEDA SEGÚN ROL
+    const camposFiltrados = config.fields.filter(field => {
+        if (field.key === 'NombreCliente' && 
+            !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
+            return false; // Ocultar campo de búsqueda
+        }
+        return true;
+    });
+const container = document.getElementById('searchFieldsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    config.fields.forEach(field => {
+        // ✅ NUEVA VALIDACIÓN: Ocultar campo de búsqueda NombreCliente para roles no autorizados
+        if (field.key === 'NombreCliente' && 
+            !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
+            return; // ← No generar el input de búsqueda para este campo
+        }
     console.log('📝 Generando campos de búsqueda para:', selectedTable);
     
     // ✅ ELIMINADO: renovarSesion() - Interfiere con la carga
@@ -16274,21 +16293,23 @@ if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes'
     verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
 }
         config.resultFields.forEach(field => {
-    // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
-if (
-  field === 'NombreCliente' &&
-  selectedTable === 'consultas_servicios' &&
-  !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
-) {
-  return; // No mostrar
-}
- 
-    let valor = String(item[field] || 'N/A');
- 
-    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
-        valor = formatearComentario(valor);
-        html += `<div class="result-item"><strong>${field}:</strong><div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-    } else {
+    // 🚫 OCULTAR SOLO EN CONSULTAS_SERVICIOS Y SOLO PARA BÚSQUEDA, NO PARA VISUALIZACIÓN
+    // ✅ PERMITIR QUE NOMBRECLIENTE SE MUESTRE EN RESULTADOS PARA TODOS (puede venir en comentario)
+    if (field === 'NombreCliente' && 
+        selectedTable === 'consultas_servicios' && 
+        !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol) &&
+        !esCampoDeComentario) {  // ← NUEVA VARIABLE: detectar si viene dentro de un comentario
+        return; // No mostrar como campo independiente
+    }
+    
+    let valor = String(item[field] || 'N/A');
+    
+    // ✅ FORMATEAR COMENTARIOS (aquí sí se muestra el nombre si viene dentro del texto)
+    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
+        valor = formatearComentario(valor);
+        html += `<div class="result-item"><strong>${field}:</strong>
+            <div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
+    } else {
         html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
     }
 });
