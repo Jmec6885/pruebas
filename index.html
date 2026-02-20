@@ -7643,242 +7643,308 @@ async function generarKMLAdminPorUnidad(tipo) {
 
  
 
+// ========================================
+// 🗺️ GENERAR MAPA KML RUTA (VERSIÓN OPTIMIZADA Y ROBUSTA)
+// ========================================
 async function generarMapaKMLRuta(osAsignadas, unidad) {
     const resultsContainer = document.getElementById('searchResults');
     const unidadSeleccionada = unidad;
-
-    console.log('🗺️ Iniciando generarMapaKMLRuta para:', unidadSeleccionada);
-    // Log para verificar si el universo de pendientes existe en memoria
-    console.log('🔍 Universo de Pendientes disponible en memoria:', window.todasLasPendientesKML ? window.todasLasPendientesKML.length : 0);
-
     
-    // 1️⃣ NORMALIZACIÓN Y LIMPIEZA DE TUS ASIGNADAS
-    const osNormalizadas = osAsignadas
-    .map(os => {
-        const id = (os.osatomo || os.OSATMO || os.OSATOMO || '').toString().trim();
-        const tipo = os.Tipologia || os.tipologia || 'Sin tipología';
-        const coords = os.Coordenadas || os.Coordendasgis || null;
-        return {
-            ...os,  // ← ESTO DEBE MANTENER TODOS LOS CAMPOS
-            osatomo: id,
-            OSATMO: id,
-            Tipologia: tipo,
-            Coordenadas: coords,
-            esAsignada: true,
-            // ✅ AGREGAR ESTO:
-            Comentario: os.Comentario || os.ComentarioGeneral || '',
-            ComentarioGeneral: os.ComentarioGeneral || os.Comentario || ''
-        };
-    })
-    .filter(os => {
-        if (!os.osatomo) return false;
-        if (!os.Coordenadas) {
-            console.warn(`⚠️ Tu OS ${os.osatomo} no tiene coordenadas y no servirá como centro de ruta.`);
-        }
-        return true;
-    });
+    console.group('🗺️ ==========================================');
+    console.log('🗺️ INICIANDO: generarMapaKMLRuta');
+    console.log('🗺️ Unidad:', unidadSeleccionada);
+    console.log('🗺️ OS asignadas recibidas:', osAsignadas?.length || 0);
+    console.groupEnd();
 
-    // 🕵️ LOG DE VALIDACIÓN PARA OS 11195544
-    if (window.todasLasPendientesKML) {
-        const osBusqueda = window.todasLasPendientesKML.find(p => String(p.OSATMO).trim() === '11195544');
-        if (osBusqueda) {
-            console.log("✅ VALIDACIÓN: La OS 11195544 está LISTA para ser filtrada por radio.");
-        } else {
-            console.error("❌ ERROR: La OS 11195544 no está en el universo de pendientes. No aparecerá ni con filtros.");
-        }
-    }
-
-    console.log(`✅ Mis OS Normalizadas: ${osNormalizadas.length}`);
-
-    if (osNormalizadas.length === 0) {
-        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS válidas con coordenadas para esta unidad</div>';
+    // Validación inicial
+    if (!resultsContainer) {
+        console.error('❌ Contenedor searchResults no encontrado');
         return;
     }
 
-        // Guardamos en memoria global (Tus órdenes de trabajo)
+    if (!osAsignadas || !Array.isArray(osAsignadas) || osAsignadas.length === 0) {
+        resultsContainer.innerHTML = '<div class="result-card">⚠️ No hay OS asignadas para procesar</div>';
+        return;
+    }
+
+    // ========================================
+    // ✅ 1️⃣ NORMALIZACIÓN DE OS ASIGNADAS
+    // ========================================
+    console.log('🔄 Normalizando OS asignadas...');
+    
+    const osNormalizadas = osAsignadas
+        .map(os => {
+            // Extraer y normalizar ID de OS (prioridad de campos)
+            const id = String(os.osatomo || os.OSATMO || os.OSATOMO || '').trim();
+            
+            // Extraer coordenadas con prioridad explícita
+            const coords = os.Coordenadas || os.Coordendasgis || null;
+            
+            // Extraer comentario con fallback en cadena
+            const comentarioOriginal = os.Comentario || os.ComentarioGeneral || os.comentario || '';
+            
+            return {
+                ...os,  // Mantener todos los campos originales
+                osatomo: id,
+                OSATMO: id,  // Normalizar para consistencia
+                Tipologia: os.Tipologia || os.tipologia || 'Sin tipología',
+                Coordenadas: coords,
+                esAsignada: true,
+                // Normalizar comentarios
+                Comentario: comentarioOriginal,
+                ComentarioGeneral: comentarioOriginal
+            };
+        })
+        .filter(os => {
+            // Filtrar OS sin ID válido
+            if (!os.OSATMO) {
+                console.warn(`⚠️ OS filtrada: Sin ID válido`, os);
+                return false;
+            }
+            // Filtrar OS sin coordenadas (no pueden ser centro de ruta)
+            if (!os.Coordenadas || !String(os.Coordenadas).includes(',')) {
+                console.warn(`⚠️ OS ${os.OSATMO} sin coordenadas válidas - excluida como centro`);
+            }
+            return true;
+        });
+
+    console.log(`✅ OS normalizadas: ${osNormalizadas.length} de ${osAsignadas.length}`);
+
+    if (osNormalizadas.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                <div class="result-header">⚠️ Sin OS válidas</div>
+                <p style="text-align: center; color: #666;">
+                    No se encontraron OS con coordenadas válidas para la unidad <b>${unidadSeleccionada}</b>.
+                </p>
+            </div>`;
+        return;
+    }
+
+    // ========================================
+    // ✅ 2️⃣ GUARDAR EN MEMORIA GLOBAL
+    // ========================================
     window.osAsignadasKML = osNormalizadas;
-window.osKMLData = osNormalizadas;
+    window.osKMLData = osNormalizadas;
+    console.log('💾 OS guardadas en memoria global');
 
-// ========================================
-// ✅ 🆕 PASO: OBTENER E INYECTAR COMENTARIOS (PARA KML RUTA)
-// ========================================
-console.log('📝 [KML] Obteniendo comentarios de consulta_servicios...');
-
-// 1️⃣ Extraer medidores únicos de las OS normalizadas
-const medidoresUnicos = [...new Set(osNormalizadas
-    .map(os => os.Medidor)
-    .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
-
-console.log(`🔍 Medidores únicos para comentarios: ${medidoresUnicos.length}`);
-
-// 2️⃣ Declarar el Map para almacenar comentarios
-const comentariosPorMedidor = new Map();
-
-// 3️⃣ Consultar en lotes para no saturar Supabase
-if (medidoresUnicos.length > 0) {
-    const BATCH = 1000;
-    for (let i = 0; i < medidoresUnicos.length; i += BATCH) {
-        const batch = medidoresUnicos.slice(i, i + BATCH);
-        console.log(`📡 Lote ${Math.floor(i/BATCH) + 1}: ${batch.length} medidores`);
+    // ========================================
+    // ✅ 3️⃣ OBTENER E INYECTAR COMENTARIOS (OPTIMIZADO)
+    // ========================================
+    console.group('📝 Obteniendo comentarios de consulta_servicios...');
+    
+    // Extraer medidores únicos válidos
+    const medidoresUnicos = [...new Set(
+        osNormalizadas
+            .map(os => os.Medidor)
+            .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A')
+    )];
+    
+    console.log(`🔍 Medidores únicos para consultar: ${medidoresUnicos.length}`);
+    
+    // Map local para comentarios (evita conflicto con variable global)
+    const comentariosLocales = new Map();
+    
+    // Consultar en lotes para evitar saturación
+    if (medidoresUnicos.length > 0) {
+        const BATCH_SIZE = 1000;
+        let totalObtenidos = 0;
         
-        const {  comData, error: errorCom } = await supabaseClient
-            .from('consultas_servicios')
-            .select('Medidor, ComentarioGeneral')
-            .in('Medidor', batch);
-        
-        if (!errorCom && comData) {
-            comData.forEach(item => {
-                if (item.Medidor && item.ComentarioGeneral) {
-                    // Normalizar clave para búsqueda consistente
-                    const key = String(item.Medidor).trim().toUpperCase();
-                    comentariosPorMedidor.set(key, item.ComentarioGeneral);
+        for (let i = 0; i < medidoresUnicos.length; i += BATCH_SIZE) {
+            const batch = medidoresUnicos.slice(i, i + BATCH_SIZE);
+            
+            try {
+                const { data: comData, error: errorCom } = await supabaseClient
+                    .from('consultas_servicios')
+                    .select('Medidor, ComentarioGeneral')
+                    .in('Medidor', batch);
+                
+                if (errorCom) {
+                    console.warn(`⚠️ Error en lote ${Math.floor(i/BATCH_SIZE)+1}:`, errorCom.message);
+                    continue;
                 }
-            });
-            console.log(`✅ Lote: ${comData.length} comentarios obtenidos`);
+                
+                if (comData && comData.length > 0) {
+                    comData.forEach(item => {
+                        if (item.Medidor && item.ComentarioGeneral) {
+                            // Normalizar clave para búsqueda consistente (case-insensitive)
+                            const key = String(item.Medidor).trim().toUpperCase();
+                            comentariosLocales.set(key, String(item.ComentarioGeneral).trim());
+                        }
+                    });
+                    totalObtenidos += comData.length;
+                    console.log(`✅ Lote ${Math.floor(i/BATCH_SIZE)+1}: ${comData.length} comentarios`);
+                }
+                
+                // Pausa anti-rate-limiting
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+            } catch (err) {
+                console.error(`❌ Error procesando lote:`, err);
+            }
         }
-        // Pequeña pausa para evitar rate limiting
-        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        console.log(`📊 Total comentarios obtenidos: ${totalObtenidos}`);
     }
-}
-
-// 4️⃣ INYECTAR COMENTARIOS EN LAS OS NORMALIZADAS
-console.log('🔍 [DEBUG] Iniciando inyección de comentarios...');
-
-osNormalizadas.forEach((os, idx) => {
-    const medidorRaw = os.Medidor;
-    const medidorKey = medidorRaw ? String(medidorRaw).trim().toUpperCase() : '';
     
-    console.log(`🔎 [${idx}] OS ${os.OSATMO}:`, {
-        medidorRaw,
-        medidorKey,
-        tieneComentarioOriginal: !!os.Comentario,
-        comentarioOriginal: os.Comentario?.substring(0, 30)
+    // Inyectar comentarios en las OS
+    console.log('🔍 Inyectando comentarios en OS...');
+    let inyeccionesExitosas = 0;
+    let sinComentario = 0;
+    
+    osNormalizadas.forEach(os => {
+        const medidorKey = os.Medidor ? String(os.Medidor).trim().toUpperCase() : '';
+        const comentarioEncontrado = comentariosLocales.get(medidorKey);
+        
+        if (comentarioEncontrado) {
+            // ✅ PRIORIDAD: Comentario de consulta_servicios
+            os.Comentario = comentarioEncontrado;
+            os.ComentarioGeneral = comentarioEncontrado;
+            inyeccionesExitosas++;
+        } else if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
+            // ✅ PRESERVAR: Comentario original si existe
+            os.ComentarioGeneral = os.Comentario;
+        } else {
+            // ✅ FALLBACK: Valor por defecto
+            os.Comentario = 'Sin comentario disponible';
+            os.ComentarioGeneral = 'Sin comentario disponible';
+            sinComentario++;
+        }
     });
     
-    const comentario = comentariosPorMedidor.get(medidorKey);
+    console.log(`✅ Inyección completada: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
+    console.groupEnd();
+
+    // ========================================
+    // ✅ 4️⃣ DIAGNÓSTICO AUTOMÁTICO PARA OS ESPECÍFICAS
+    // ========================================
+    const osParaDiagnosticar = ['11126031', '11195544'];
     
-    if (comentario) {
-        // ✅ PRIORIDAD: Comentario de consulta_servicios
-        os.Comentario = comentario;
-        os.ComentarioGeneral = comentario;
-        console.log(`✅ [${idx}] OS ${os.OSATMO}: Comentario inyectado (${comentario.substring(0, 30)}...)`);
-    } else if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
-        // ✅ PRESERVAR: Comentario original si existe
-        os.ComentarioGeneral = os.Comentario;
-        console.log(`ℹ️ [${idx}] OS ${os.OSATMO}: Usa comentario original`);
-    } else {
-        // ✅ FALLBACK: Valor por defecto
-        os.Comentario = 'Sin comentario disponible';
-        os.ComentarioGeneral = 'Sin comentario disponible';
-        console.log(`⚠️ [${idx}] OS ${os.OSATMO}: Sin comentario (Medidor: "${medidorRaw}")`);
-    }
-});
-
-console.log('✅ Comentarios procesados en OS asignadas');
-
-// 5️⃣ LOGS DE DIAGNÓSTICO AUTOMÁTICO (para depurar OS específicas)
-console.log('🔍 ==========================================');
-console.log('🔍 [AUTO-DIAGNÓSTICO] Verificando inyección para OS 11126031');
-console.log('🔍 ==========================================');
-
-const osPruebaAuto = osNormalizadas.find(o => o.OSATMO === '11126031');
-if (osPruebaAuto) {
-    console.log('🔍 OS encontrada en osNormalizadas:', {
-        OSATMO: osPruebaAuto.OSATMO,
-        Medidor: osPruebaAuto.Medidor,
-        MedidorTipo: typeof osPruebaAuto.Medidor,
-        ComentarioResultado: osPruebaAuto.Comentario?.substring(0, 50)
+    osParaDiagnosticar.forEach(osId => {
+        const osPrueba = osNormalizadas.find(o => o.OSATMO === osId);
+        if (osPrueba) {
+            console.group(`🔍 DIAGNÓSTICO OS ${osId}`);
+            console.log('Medidor:', osPrueba.Medidor);
+            console.log('Comentario final:', osPrueba.Comentario?.substring(0, 100));
+            console.log('Clave de búsqueda:', osPrueba.Medidor ? String(osPrueba.Medidor).trim().toUpperCase() : 'N/A');
+            console.log('Encontrado en Map:', comentariosLocales.has(osPrueba.Medidor?.toString().trim().toUpperCase()));
+            console.groupEnd();
+        }
     });
-    
-    const keyBusqueda = String(osPruebaAuto.Medidor || '').trim().toUpperCase();
-    const encontradoEnMap = comentariosPorMedidor.get(keyBusqueda);
-    
-    console.log('🔍 Búsqueda en comentariosPorMedidor:', {
-        claveBusqueda: keyBusqueda,
-        encontrado: !!encontradoEnMap,
-        comentarioEncontrado: encontradoEnMap?.substring(0, 50),
-        tamañoMap: comentariosPorMedidor.size
-    });
-} else {
-    console.log('⚠️ OS 11126031 NO encontrada en osNormalizadas');
-}
-console.log('🔍 ==========================================');
 
-    // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE  ← ← ← AQUÍ CONTINÚA TU CÓDIGO ORIGINAL
+    // ========================================
+    // ✅ 5️⃣ CARGAR FILTROS DESDE SUPABASE
+    // ========================================
+    console.log('📅 Consultando filtros para unidad:', unidadSeleccionada);
+    
     const HOY = getFechaHoyElSalvador();
-    console.log('📅 Consultando filtros en Supabase para:', HOY);
-
-    let { data: filtrosUnidadHoy } = await supabaseClient
-        .from('filtros_por_unidad')
-        .select('*')
-        .eq('Unidad', unidadSeleccionada)
-        .eq('fecha_programada', HOY)
-        .maybeSingle();
-
-    if (!filtrosUnidadHoy) {
-        console.log("🔍 No hay filtros para hoy, buscando filtro base (null) para:", unidadSeleccionada);
-        const { data: filtroBase } = await supabaseClient
+    let filtrosUnidadHoy = null;
+    
+    try {
+        // Intentar filtros para hoy primero
+        const { data: filtrosHoy } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
             .eq('Unidad', unidadSeleccionada)
-            .is('fecha_programada', null)
+            .eq('fecha_programada', HOY)
             .maybeSingle();
-        filtrosUnidadHoy = filtroBase;
+        
+        if (filtrosHoy) {
+            filtrosUnidadHoy = filtrosHoy;
+            console.log('✅ Filtros encontrados para HOY');
+        } else {
+            // Fallback a filtros base (fecha_programada = null)
+            const { data: filtrosBase } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadSeleccionada)
+                .is('fecha_programada', null)
+                .maybeSingle();
+            
+            filtrosUnidadHoy = filtrosBase;
+            console.log(filtrosBase ? '✅ Filtros base encontrados' : 'ℹ️ Sin filtros configurados');
+        }
+    } catch (err) {
+        console.warn('⚠️ Error consultando filtros:', err.message);
     }
-
-    const filtrosFinales = filtrosUnidadHoy || { tipologias: [], rangos: [], radio_km: 3 };
-    window.filtrosAplicados = filtrosFinales; 
+    
+    // Configurar filtros finales con valores por defecto
+    const filtrosFinales = filtrosUnidadHoy || { 
+        tipologias: [], 
+        rangos: [], 
+        radio_km: 3,
+        deuda_amarillo: false,
+        deuda_naranja: false,
+        deuda_rosado: false
+    };
+    
+    window.filtrosAplicados = filtrosFinales;
     const radioConfigurado = filtrosFinales.radio_km || 3;
-    const tieneFiltros = !!filtrosUnidadHoy;
+    const tieneFiltros = !!(filtrosUnidadHoy && (filtrosUnidadHoy.tipologias?.length > 0 || filtrosUnidadHoy.rangos?.length > 0));
 
-    // 3️⃣ MENSAJE DINÁMICO DE FILTROS
-    let mensajeFiltros;
-    if (tieneFiltros) {
-        const tCount = Array.isArray(filtrosFinales.tipologias) ? filtrosFinales.tipologias.length : 
-                       (filtrosFinales.tipologias ? filtrosFinales.tipologias.split(',').length : 0);
-        const rCount = Array.isArray(filtrosFinales.rangos) ? filtrosFinales.rangos.length :
-                       (filtrosFinales.rangos ? filtrosFinales.rangos.split(',').length : 0);
-        mensajeFiltros = `✅ <b>${tCount}</b> Tipologías y <b>${rCount}</b> Rangos permitidos (Radio: ${radioConfigurado}km)`;
-    } else {
-        mensajeFiltros = "⚠️ <b>Sin filtros programados:</b> Solo se mostrarán Reguladas y Deuda Alta.";
-    }
+    // ========================================
+    // ✅ 6️⃣ GENERAR MENSAJE DINÁMICO DE FILTROS
+    // ========================================
+    const formatArrayCount = (arr) => {
+        if (!arr) return 0;
+        if (Array.isArray(arr)) return arr.length;
+        if (typeof arr === 'string') return arr.split(',').filter(s => s.trim()).length;
+        return 0;
+    };
+    
+    const tCount = formatArrayCount(filtrosFinales.tipologias);
+    const rCount = formatArrayCount(filtrosFinales.rangos);
+    
+    const mensajeFiltros = tieneFiltros 
+        ? `✅ <b>${tCount}</b> Tipologías y <b>${rCount}</b> Rangos permitidos (Radio: ${radioConfigurado}km)`
+        : "⚠️ <b>Sin filtros programados:</b> Solo se mostrarán Reguladas y Deuda ≥ $500";
 
-    // 4️⃣ GENERACIÓN DE INTERFAZ HTML
+    // ========================================
+    // ✅ 7️⃣ GENERAR INTERFAZ HTML
+    // ========================================
     const htmlSelector = `
         <div class="result-card" style="background: #ffffff; border: 1px solid #3b82f6; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid #f0f9ff; padding-bottom: 10px;">
-                📍 KML Ruta - <span style="color: #2563eb;">${unidad}</span>
+                📍 KML Ruta - <span style="color: #2563eb;">${unidadSeleccionada}</span>
             </h3>
 
             <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #4b5563;">Punto de Partida (Tus Asignadas):</label>
-                <select id="selectPuntoPartidaKML" onchange="window.osPartidaSeleccionada = this.value; console.log('📍 Punto de partida seleccionado:', this.value);" 
+                <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #4b5563;">
+                    Punto de Partida (Tus Asignadas):
+                </label>
+                <select id="selectPuntoPartidaKML" 
+                    onchange="window.osPartidaSeleccionada = this.value; console.log('📍 Punto seleccionado:', this.value);" 
                     style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; background: #f8fafc;">
                     <option value="">-- Seleccione una de las ${osNormalizadas.length} OS --</option>
-                    ${osNormalizadas.map(os =>
-                        `<option value="${os.osatomo}">${os.osatomo} - ${os.Tipologia}</option>`
+                    ${osNormalizadas.map(os => 
+                        `<option value="${os.OSATMO}">${os.OSATMO} - ${os.Tipologia}</option>`
                     ).join('')}
                 </select>
             </div>
 
-            <div style="background: ${tieneFiltros ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${tieneFiltros ? '#bbf7d0' : '#fef08a'}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="background: ${tieneFiltros ? '#f0fdf4' : '#fffbeb'}; 
+                        border: 1px solid ${tieneFiltros ? '#bbf7d0' : '#fef08a'}; 
+                        padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <strong style="color: #1e293b; display: block; margin-bottom: 5px;">📊 Configuración de Filtros:</strong>
                 <p style="margin: 0; color: #475569; font-size: 14px;">${mensajeFiltros}</p>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-                <button class="btn" onclick="generarMapaKMLSoloAsignadas('${unidad}')"
+                <button class="btn" onclick="generarMapaKMLSoloAsignadas('${unidadSeleccionada}')"
                         style="background: #64748b; color: white; padding: 12px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">
                     📋 Solo Mis Asignadas (${osNormalizadas.length})
                 </button>
-                <button id="btnAplicarFiltro" class="btn" onclick="generarMapaKMLConFiltrosGuardados('${unidad}')"
+                <button id="btnAplicarFiltro" class="btn" 
+                        onclick="generarMapaKMLConFiltrosGuardados('${unidadSeleccionada}')"
                         style="background: #2563eb; color: white; padding: 12px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">
                     🎯 Aplicar Filtro Radio
                 </button>
             </div>
 
             <div style="border-top: 1px solid #e2e8f0; padding-top: 15px;">
-                <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; text-transform: uppercase;">O rutas desde ciudad:</label>
+                <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 10px; text-transform: uppercase;">
+                    O rutas desde ciudad:
+                </label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <button class="btn-fijo" onclick="generarRutaDesdePuntoFijo('Ahuachapán', 13.924670, -89.842820)">📍 Ahuachapán</button>
                     <button class="btn-fijo" onclick="generarRutaDesdePuntoFijo('Sonsonate', 13.727937, -89.717790)">📍 Sonsonate</button>
@@ -7899,15 +7965,15 @@ console.log('🔍 ==========================================');
                 cursor: pointer;
                 transition: all 0.2s;
             }
-            .btn-fijo:hover { background: #e2e8f0; }
+            .btn-fijo:hover { background: #e2e8f0; transform: translateY(-1px); }
             .btn:active { transform: scale(0.98); }
         </style>
     `;
 
     resultsContainer.innerHTML = htmlSelector;
-    console.log("✅ Interfaz generada exitosamente.");
+    console.log('✅ Interfaz KML Ruta generada exitosamente');
+    console.log('🗺️ ==========================================');
 }
-
 
 
 
