@@ -16279,12 +16279,7 @@ if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes'
         config.resultFields.forEach(field => {
     // 🚫 OCULTAR SOLO EN CONSULTAS_SERVICIOS Y SOLO PARA BÚSQUEDA, NO PARA VISUALIZACIÓN
     // ✅ PERMITIR QUE NOMBRECLIENTE SE MUESTRE EN RESULTADOS PARA TODOS (puede venir en comentario)
-    if (field === 'NombreCliente' && 
-        selectedTable === 'consultas_servicios' && 
-        !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol) &&
-        !esCampoDeComentario) {  // ← NUEVA VARIABLE: detectar si viene dentro de un comentario
-        return; // No mostrar como campo independiente
-    }
+    
     
     let valor = String(item[field] || 'N/A');
     
