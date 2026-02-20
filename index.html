@@ -6559,20 +6559,27 @@ async function cargarInterfazKMLRuta() {
         
         // Inyectar comentarios en cada OS asignada
         let comentariosInyectados = 0;
-        misAsignacionesPropias.forEach(os => {
-            if (os.Medidor) {
-                const medidorKey = String(os.Medidor).trim().toUpperCase();
-                const comentarioEncontrado = comentariosPorMedidor.get(medidorKey);
-                
-                if (comentarioEncontrado && comentarioEncontrado.trim() !== '') {
-                    // ✅ PRIORIDAD: Comentario de consulta_servicios
-                    os.Comentario = comentarioEncontrado;
-                    os.ComentarioGeneral = comentarioEncontrado;
-                    comentariosInyectados++;
-                }
-                // Si no hay comentario externo, se mantiene el original de OS Pendientes
-            }
-        });
+        // ✅ INYECTAR COMENTARIOS CON PRIORIDAD CONSISTENTE
+misAsignacionesPropias.forEach(os => {
+    if (os.Medidor) {
+        const medidorKey = String(os.Medidor).trim().toUpperCase();
+        const comentarioEncontrado = comentariosPorMedidor.get(medidorKey);
+        
+        // ✅ PRIORIDAD: Mantener comentario de OS Pendientes si existe
+        if (os.Comentario && os.Comentario.trim() !== '' && 
+            os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+            os.ComentarioGeneral = os.Comentario;
+            os.esDeConsultasServicios = false;
+        } 
+        // ✅ FALLBACK: Solo usar consultas_servicios si NO hay comentario en OS Pendientes
+        else if (comentarioEncontrado && comentarioEncontrado.trim() !== '') {
+            os.Comentario = comentarioEncontrado;
+            os.ComentarioGeneral = comentarioEncontrado;
+            os.esDeConsultasServicios = true;
+            comentariosInyectados++;
+        }
+    }
+});
         
         console.log(`✅ Comentarios inyectados: ${comentariosInyectados} de ${misAsignacionesPropias.length} OS`);
 
@@ -7307,21 +7314,31 @@ if (medidoresUnicos.length > 0) {
 // ========================================
 // ✅ INYECTAR COMENTARIOS EN OS PENDIENTES
 // ========================================
+// ✅ INYECTAR COMENTARIOS CON FLAG DE ORIGEN
 osPendientes.forEach(os => {
     const medidorKey = String(os.Medidor).trim();
     const comentarioData = comentariosPorMedidor.get(medidorKey);
     
-    if (comentarioData && comentarioData.ComentarioGeneral) {
-        os.Comentario = comentarioData.ComentarioGeneral;
-        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
-    } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario !== '') {
+    // ✅ PRIORIDAD ABSOLUTA: Comentario de OS Pendientes
+    if (os.Comentario && os.Comentario.trim() !== '' && 
+        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
         os.ComentarioGeneral = os.Comentario;
-    } else {
+        os.esDeConsultasServicios = false;  // ← FLAG: viene de OS Pendientes
+        console.log(`💬 OS ${os.OSATMO}: Usa comentario de OS Pendientes`);
+    } 
+    // ✅ FALLBACK: Solo si NO hay comentario en OS Pendientes
+    else if (comentarioData?.ComentarioGeneral?.trim()) {
+        os.ComentarioGeneral = comentarioData.ComentarioGeneral;
+        os.esDeConsultasServicios = true;  // ← FLAG: viene de consultas_servicios
+        console.log(`💬 OS ${os.OSATMO}: Usa comentario de consultas_servicios (fallback)`);
+    } 
+    // ✅ ÚLTIMO RECURSO
+    else {
         os.Comentario = 'Sin comentario disponible';
         os.ComentarioGeneral = 'Sin comentario disponible';
+        os.esDeConsultasServicios = false;
     }
-});
- 
+}); 
         // ========================================
         // ✅ 6️⃣ FILTRAR OS EN RADIO (UNIFICADO Y AUDITADO)
         // ========================================
@@ -13374,6 +13391,11 @@ window.seleccionarOSDeLista = seleccionarOSDeLista;
 // 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
+// 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de OS Pendientes
+if (os.Comentario && os.Comentario.trim() !== '' && 
+    os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+    os.ComentarioGeneral = os.Comentario;  // Asegurar que ComentarioGeneral refleje OS Pendientes
+}
 
  // 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de comentario de OS Pendientes
     if (os.ComentarioOriginal) {
@@ -13415,29 +13437,30 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
 // ✅ 🆕 BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA PARA KML
 // ========================================
 const comentarioTexto = (() => {
-    // ✅ PRIORIDAD 1: Comentario específico de KML (inyectado desde OS Pendientes)
-    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && os.ComentarioKML !== 'Sin comentario disponible') {
+    // ✅ PRIORIDAD 1: Comentario específico de KML
+    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && 
+        os.ComentarioKML !== 'Sin comentario disponible') {
         return os.ComentarioKML;
     }
     
-    // ✅ PRIORIDAD 2: Comentario original de OS Pendientes
-    if (os.Comentario && os.Comentario.trim() !== '' && os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+    // ✅ PRIORIDAD 2: Comentario de OS Pendientes (SIEMPRE prioritario)
+    if (os.Comentario && os.Comentario.trim() !== '' && 
+        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible' &&
+        os.esDeConsultasServicios === false) {  // ← VERIFICAR FLAG
         return os.Comentario;
     }
     
-    // ✅ PRIORIDAD 3: ComentarioGeneral (solo si no viene de consultas_servicios para KML)
-    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && os.ComentarioGeneral !== 'Sin comentario disponible') {
-        // Verificar que no sea el comentario genérico de consultas_servicios
-        const esDeConsultas = os.esDeConsultasServicios; // Flag que agregaremos
-        if (!esDeConsultas) {
-            return os.ComentarioGeneral;
-        }
+    // ✅ PRIORIDAD 3: ComentarioGeneral SOLO si viene de OS Pendientes
+    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && 
+        os.ComentarioGeneral !== 'Sin comentario disponible' &&
+        os.esDeConsultasServicios !== true) {  // ← NO usar si es de consultas_servicios
+        return os.ComentarioGeneral;
     }
     
     // ✅ FALLBACK: Otros campos
     return os.comentario || os.Observaciones || os.comentarioGeneral || 
-           os.observaciones || os.Comentarios || os.comentarios || 
-           os.Detalle || os.detalle || os.descripcion || os.Descripcion || 
+           os.observaciones || os.Comentarios || os.comentarios ||
+           os.Detalle || os.detalle || os.descripcion || os.Descripcion ||
            os.Nota || os.nota || 'Sin comentario disponible';
 })();
 
