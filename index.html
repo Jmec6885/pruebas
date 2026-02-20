@@ -7695,11 +7695,80 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         return;
     }
 
-    // Guardamos en memoria global (Tus órdenes de trabajo)
+        // Guardamos en memoria global (Tus órdenes de trabajo)
     window.osAsignadasKML = osNormalizadas;
     window.osKMLData = osNormalizadas;
 
-    // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE
+    // ========================================
+    // ✅ 🆕 INSERTAR AQUÍ: OBTENER E INYECTAR COMENTARIOS
+    // ========================================
+    console.log('📝 [KML] Obteniendo comentarios de consulta_servicios...');
+
+    // Extraer medidores únicos de las OS asignadas
+    const medidoresUnicos = [...new Set(osNormalizadas  // ← Usar osNormalizadas, no osAsignadas
+        .map(os => os.Medidor)
+        .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
+
+    console.log(`🔍 Medidores únicos para comentarios: ${medidoresUnicos.length}`);
+
+    const comentariosPorMedidor = new Map();
+
+    // Consultar en lotes para no saturar Supabase
+    if (medidoresUnicos.length > 0) {
+        const BATCH = 1000;
+        for (let i = 0; i < medidoresUnicos.length; i += BATCH) {
+            const batch = medidoresUnicos.slice(i, i + BATCH);
+            console.log(`📡 Lote ${Math.floor(i/BATCH) + 1}: ${batch.length} medidores`);
+            
+            const {  comData, error: errorCom } = await supabaseClient
+                .from('consultas_servicios')
+                .select('Medidor, ComentarioGeneral')
+                .in('Medidor', batch);
+            
+            if (!errorCom && comData) {
+                comData.forEach(item => {
+                    if (item.Medidor && item.ComentarioGeneral) {
+                        // Normalizar clave para búsqueda consistente
+                        const key = String(item.Medidor).trim().toUpperCase();
+                        comentariosPorMedidor.set(key, item.ComentarioGeneral);
+                    }
+                });
+                console.log(`✅ Lote: ${comData.length} comentarios obtenidos`);
+            }
+            // Pequeña pausa para evitar rate limiting
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+
+    // ========================================
+    // ✅ INYECTAR COMENTARIOS EN LAS OS NORMALIZADAS
+    // ========================================
+    osNormalizadas.forEach(os => {  // ← Usar osNormalizadas, no osAsignadas
+        const medidorKey = String(os.Medidor || '').trim().toUpperCase();
+        const comentario = comentariosPorMedidor.get(medidorKey);
+        
+        if (comentario) {
+            // ✅ PRIORIDAD: Comentario de consulta_servicios
+            os.Comentario = comentario;
+            os.ComentarioGeneral = comentario;
+            console.log(`💬 OS ${os.OSATMO}: Comentario inyectado desde consulta_servicios`);
+        } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario.trim() !== '') {
+            // ✅ PRESERVAR: Comentario original si existe
+            os.ComentarioGeneral = os.Comentario;
+            console.log(`💬 OS ${os.OSATMO}: Usa comentario original de OS Pendientes`);
+        } else {
+            // ✅ FALLBACK: Valor por defecto
+            os.Comentario = 'Sin comentario disponible';
+            os.ComentarioGeneral = 'Sin comentario disponible';
+        }
+    });
+
+    console.log('✅ Comentarios inyectados en OS asignadas');
+    // ========================================
+    // ✅ FIN DEL BLOQUE DE COMENTARIOS
+    // ========================================
+
+    // 2️⃣ BÚSQUEDA DE FILTROS EN SUPABASE  ← ← ← AQUÍ CONTINÚA TU CÓDIGO ORIGINAL
     const HOY = getFechaHoyElSalvador();
     console.log('📅 Consultando filtros en Supabase para:', HOY);
 
@@ -7802,6 +7871,9 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     resultsContainer.innerHTML = htmlSelector;
     console.log("✅ Interfaz generada exitosamente.");
 }
+
+
+
 
 function generarMapaKMLSoloAsignadas(unidad) {
     // Obtenemos el valor directamente para asegurar frescura
@@ -12747,8 +12819,8 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // ========================================
     let contadorProcesadas = 0;
     let estadisticas = {
-        reguladas: 0,
-        no_reguladas: 0,
+        regulada: 0,
+        no_regulada: 0,
         deuda_alta: 0,
         deuda_media: 0,
         deuda_baja: 0,
