@@ -16896,7 +16896,7 @@ const PERMISOS_MODULOS = {
  * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración + Verificación robusta de contenedores
  */
 function seleccionarTabla(tableName, retryCount = 0) {
- // ✅ VALIDACIÓN DE PERMISOS POR ROL
+    // ✅ VALIDACIÓN DE PERMISOS POR ROL (UNA SOLA VEZ)
     const rolActual = currentUser?.rol || 'Invitado';
     const permisosModulo = PERMISOS_MODULOS[tableName];
     
@@ -16913,7 +16913,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
         return;
     }
     
-    // ✅ BLOQUEO CRÍTICO 1: Verificar existencia del contenedor de configuración (evita fallback destructivo)
+    // ✅ BLOQUEO CRÍTICO 1: Verificar existencia del contenedor de configuración
     const configContainer = document.getElementById('configuracionInicialATTF');
     if (currentUser?.rol === 'ATTF' && !configContainer) {
         console.error('❌ CONTENEDOR CRÍTICO NO ENCONTRADO: #configuracionInicialATTF');
@@ -16921,11 +16921,11 @@ function seleccionarTabla(tableName, retryCount = 0) {
         return;
     }
 
-    // ✅ BLOQUEO CRÍTICO 2: Si está en configuración de turnos (ATTF), BLOQUEAR acceso a módulos
+    // ✅ BLOQUEO CRÍTICO 2: Si está en configuración de turnos (ATTF), BLOQUEAR acceso
     if (currentUser?.rol === 'ATTF' && configContainer) {
         const esVisible = configContainer.style.display !== 'none' && 
                          configContainer.style.display !== '' &&
-                         configContainer.offsetHeight > 0; // ✅ Verificación física adicional
+                         configContainer.offsetHeight > 0;
         
         if (esVisible) {
             console.warn('⚠️ ACCESO BLOQUEADO: Configuración de turnos activa');
@@ -16934,7 +16934,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
         }
     }
 
-    // ✅ BLOQUEO CRÍTICO 3: Verificar existencia de searchGrid ANTES de intentar usarlo
+    // ✅ BLOQUEO CRÍTICO 3: Verificar existencia de searchGrid
     const searchGrid = document.getElementById('searchGrid');
     if (!searchGrid) {
         if (retryCount < 10) {
@@ -16942,7 +16942,6 @@ function seleccionarTabla(tableName, retryCount = 0) {
             setTimeout(() => seleccionarTabla(tableName, retryCount + 1), 100);
             return;
         } else {
-            // ✅ ÚLTIMA LÍNEA DE DEFENSA: Verificar si searchSection existe pero está vacío
             const searchSection = document.getElementById('searchSection');
             if (searchSection && searchSection.innerHTML.trim() === '') {
                 console.error('❌ searchSection está vacío. Posible destrucción por fallback de configuración.');
@@ -16957,17 +16956,9 @@ function seleccionarTabla(tableName, retryCount = 0) {
 
     // ✅ FLUJO NORMAL: Continuar con validaciones y carga
     renovarSesion();
-    const rolActual = currentUser?.rol || 'Invitado';
+    
+    // ✅ Usar la variable ya declarada (NO volver a declarar con const)
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser?.usuario} (Rol: ${rolActual})`);
-
-    // 1. VALIDACIÓN DE PERMISOS DINÁMICA
-    const rolesPermitidos = PERMISOS_MODULOS[tableName];
-    if (!rolesPermitidos) {
-        console.warn(`⚠️ El módulo ${tableName} no tiene reglas de seguridad definidas.`);
-    } else if (!rolesPermitidos.includes(rolActual)) {
-        alert(`⚠️ Acceso Denegado: Su rol '${rolActual}' no tiene permisos para ${tableName.replace('_', ' ').toUpperCase()}.`);
-        return;
-    }
 
     // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
@@ -17003,7 +16994,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
         searchTitle.innerHTML = `${config.icon} ${config.title}`;
     }
 
-    // ✅ GENERAR CAMPOS (con validación interna mejorada)
+    // ✅ GENERAR CAMPOS
     generarCamposBusqueda(config);
 
     // Mostrar sección de búsqueda y ocultar menú
@@ -17017,6 +17008,8 @@ function seleccionarTabla(tableName, retryCount = 0) {
         console.log('✅ searchSection visible y activo');
     }
 }
+
+
 
 function getCoordsCompat(os, legacyMode = false) {
     if (legacyMode) {
