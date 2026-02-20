@@ -4932,32 +4932,10 @@ async function logout() {
 
 
    function generarCamposBusqueda(config) {
-// ✅ FILTRAR CAMPOS DE BÚSQUEDA SEGÚN ROL
-    const camposFiltrados = config.fields.filter(field => {
-        if (field.key === 'NombreCliente' && 
-            !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
-            return false; // Ocultar campo de búsqueda
-        }
-        return true;
-    });
-const container = document.getElementById('searchFieldsContainer');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    config.fields.forEach(field => {
-        // ✅ NUEVA VALIDACIÓN: Ocultar campo de búsqueda NombreCliente para roles no autorizados
-        if (field.key === 'NombreCliente' && 
-            !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
-            return; // ← No generar el input de búsqueda para este campo
-        }
     console.log('📝 Generando campos de búsqueda para:', selectedTable);
     
-    // ✅ ELIMINADO: renovarSesion() - Interfiere con la carga
-    
+    // ✅ VALIDACIÓN: Verificar que searchGrid exista
     const searchGrid = document.getElementById('searchGrid');
-    
-    // ✅ VALIDACIÓN: Verificar que el elemento exista
     if (!searchGrid) {
         console.error('❌ Error: searchGrid no encontrado en el DOM');
         alert('Error: La interfaz de búsqueda no está disponible. Por favor recargue la página.');
@@ -4965,7 +4943,10 @@ const container = document.getElementById('searchFieldsContainer');
     }
     
     try {
-        // --- Mantenemos tus casos especiales intactos ---
+        // ========================================
+        // 🎯 CASOS ESPECIALES (mantener intactos)
+        // ========================================
+        
         if (selectedTable === 'usuarios') {
             searchGrid.innerHTML = `
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
@@ -5012,19 +4993,21 @@ const container = document.getElementById('searchFieldsContainer');
             return; 
         }
 
-        // ✅ CORRECCIÓN PARA CASO NORMAL (OS Pendientes, Cerradas, etc.)
+        // ========================================
+        // 🎯 CASO NORMAL: Generar campos dinámicos
+        // ========================================
         console.log('📝 Generando campos estándar para:', selectedTable);
         
         let html = '<div class="search-grid">'; 
 
         config.fields.forEach(field => {
-            // 🚫 Filtro de seguridad que ya tenías
+            // 🚫 FILTRO DE SEGURIDAD: Ocultar búsqueda por NombreCliente para roles no autorizados
             if (
                 field.key === 'NombreCliente' &&
                 selectedTable === 'consultas_servicios' &&
-                !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser.rol)
+                !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)
             ) {
-                return; 
+                return; // ← Saltar este campo, no generar input
             }
 
             const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
@@ -5036,9 +5019,9 @@ const container = document.getElementById('searchFieldsContainer');
                     <button class="btn btn-secondary" onclick="buscar('${field.key}', '${field.type}')">🔍 Buscar</button>
                 </div>
             `;
-        });
+        }); // ✅ Cierra forEach
 
-        html += '</div>';
+        html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
         console.log('✅ Campos de búsqueda generados correctamente');
         
@@ -5047,7 +5030,8 @@ const container = document.getElementById('searchFieldsContainer');
         alert('Error al generar la interfaz de búsqueda: ' + error.message);
         searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
     }
-}
+} // ✅ Cierra función generarCamposBusqueda
+
 
 
     function volverATablas() {
