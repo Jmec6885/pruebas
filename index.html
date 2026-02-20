@@ -6336,58 +6336,70 @@ async function buscar(campo, tipo) {
  	// ========================================
 // 🔄 TRANSFORMAR USUARIO A FORMATO UNIDAD
 // ========================================
+/**
+ * Transforma nombre de usuario a formato de unidad estandarizado
+ * @param {string} usuario - Nombre de usuario (ej: "CLEYBPAC01", "CL-EYB-PAC-01")
+ * @returns {string|null} - Unidad formateada CL-XXX-YYY-NNN o null si no se reconoce
+ */
 function transformarUsuarioAUnidad(usuario) {
-    if (!usuario) return usuario;
-
-    // 🆕 Lista de usuarios que NO se transforman
-    const usuariosSinTransformar = [
-        'admin',
-        'jmec6885',
-        'bodega001',
-        'bodega002',
-        'bodega',
-        'DonHector',
-        'DonRivas',
-        'Prueba1',
-        'Prueba2',
-        'Ledy.S',
-        'Hector.H',
-        'Immer.T',
-        'Moises.T',
-        'Diego.G',
-        'supervisor'
-    ];
-
-    // Verificar si es un usuario especial (sin transformar)
-    if (usuariosSinTransformar.includes(usuario.toLowerCase())) {
-        console.log(`✅ Usuario sin transformación: ${usuario}`);
-        return usuario;
-    }
-
-    // 🔄 NUEVA LÓGICA: Detectar patrón CLXXXPAC### (con 1 o más dígitos al final)
-    const regex = /^CL([A-Z]{3})PAC(\d+)$/i;
-    const match = usuario.match(regex);
-
-    if (match) {
-        const codigoUnidad = match[1];   // Ej: "EYB"
-        const numero = match[2];         // Ej: "01", "7", "102", etc.
-        const transformado = `CL-${codigoUnidad}-PAC-${numero}`;
-        console.log(`✅ Usuario transformado: ${usuario} → ${transformado}`);
-        return transformado;
-    }
-
-    // Si no cumple ninguna condición, retornar sin cambios
-    console.log(`ℹ️ Usuario sin transformación (formato no reconocido): ${usuario}`);
-    return usuario;
+    // ✅ Validación inicial
+    if (!usuario || typeof usuario !== 'string') return null;
+    
+    // Normalizar: trim + mayúsculas para comparación consistente
+    const u = usuario.trim().toUpperCase();
+    
+    // 🚫 Lista de usuarios EXCLUIDOS de transformación (casos especiales)
+    const usuariosSinTransformar = [
+        'ADMIN', 'JMEC6885', 'BODEGA001', 'BODEGA002', 'BODEGA',
+        'DONHECTOR', 'DONRIVAS', 'PRUEBA1', 'PRUEBA2',
+        'LEDY.S', 'HECTOR.H', 'IMMER.T', 'MOISES.T', 'DIEGO.G', 'SUPERVISOR'
+    ];
+    
+    // Si es usuario especial, retornar tal cual (sin transformar)
+    if (usuariosSinTransformar.includes(u)) {
+        console.log(`✅ Usuario especial sin transformación: ${usuario}`);
+        return usuario;
+    }
+    
+    // ✅ CASO 1: Ya tiene formato con guiones → Validar y retornar
+    // Patrón: CL-XXX-YYY-NNN (XXX=3 letras, YYY=3 letras, NNN=2-3 dígitos)
+    if (u.startsWith('CL-')) {
+        const patronGuiones = /^CL-[A-Z]{3}-[A-Z]{3}-\d{2,3}$/;
+        if (patronGuiones.test(u)) {
+            console.log(`✅ Formato ya válido: ${u}`);
+            return u;
+        }
+        // Si tiene guiones pero no coincide, intentar reparar
+        const partes = u.split('-').filter(p => p);
+        if (partes.length === 4 && partes[0] === 'CL' && 
+            /^[A-Z]{3}$/.test(partes[1]) && /^[A-Z]{3}$/.test(partes[2]) && /^\d{2,3}$/.test(partes[3])) {
+            const reparado = `CL-${partes[1]}-${partes[2]}-${partes[3]}`;
+            console.log(`🔧 Formato reparado: ${usuario} → ${reparado}`);
+            return reparado;
+        }
+    }
+    
+    // ✅ CASO 2: Formato compacto SIN guiones → Transformar
+    // Patrón: CL + 3 letras (zona) + 3 letras (tipo) + 2-3 dígitos (número)
+    // Ej: CLEYBPAC01 → CL-EYB-PAC-01
+    const matchCompacto = u.match(/^CL([A-Z]{3})([A-Z]{3})(\d{2,3})$/);
+    
+    if (matchCompacto) {
+        const [, zona, tipo, numero] = matchCompacto;
+        const transformado = `CL-${zona}-${tipo}-${numero}`;
+        console.log(`✅ Transformado: ${usuario} → ${transformado}`);
+        return transformado;
+    }
+    
+    // ⚠️ CASO 3: Formato no reconocido → Log y retornar null
+    console.warn(`⚠️ Formato no reconocido: "${usuario}" (normalizado: "${u}")`);
+    return null;
 }
 
 
-
-
 async function cargarInterfazKMLRuta() {
-    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta (Modo Carga Total)');
+    console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta (Modo Carga Total + Comentarios)');
     
-    // ✅ DEFINICIÓN DE CHUNKARRAY
     const chunkArray = (arr, size) => {
         const out = [];
         for (let i = 0; i < arr.length; i += size) {
@@ -6405,61 +6417,69 @@ async function cargarInterfazKMLRuta() {
     resultsContainer.innerHTML = '';
 
     try {
-        const miUnidad = transformarUsuarioAUnidad(currentUser.usuario);
+        const miUnidadRaw = transformarUsuarioAUnidad(currentUser.usuario);
         const rol = currentUser?.rol;
 
+        // ========================================
         // 1️⃣ OBTENER TODAS LAS ASIGNACIONES ACTUALES
+        // ========================================
+        console.log('📥 Cargando os_asignadas...');
         const { data: asignaciones, error: errorAsignadas } = await supabaseClient
             .from('os_asignadas')
             .select('osatomo, Unidad, Estado, Tipologia');
 
         if (errorAsignadas) throw errorAsignadas;
+        console.log(`✅ ${asignaciones?.length || 0} asignaciones cargadas`);
 
-        // 2️⃣ OBTENER EL UNIVERSO COMPLETO DE PENDIENTES (De mil en mil)
-let todasLasPendientes = [];
-let r_inicio = 0;
-let r_fin = 999;
-let hayMas = true;
-console.log("⏳ Iniciando descarga por lotes de 'OS Pendientes'...");
-while (hayMas) {
-const { data: lote, error: errorLote } = await supabaseClient
-.from('OS Pendientes')
-.select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
-.range(r_inicio, r_fin);
+        // ========================================
+        // 2️⃣ OBTENER UNIVERSO DE PENDIENTES (PAGINADO)
+        // ========================================
+        let todasLasPendientes = [];
+        let r_inicio = 0, r_fin = 999, hayMas = true;
+        console.log("⏳ Descargando OS Pendientes por lotes...");
+        
+        while (hayMas) {
+            const { data: lote, error: errorLote } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
+                .range(r_inicio, r_fin);
 
             if (errorLote) throw errorLote;
-
-            if (lote && lote.length > 0) {
-                todasLasPendientes.push(...lote);
-                console.log(`📦 Lote cargado: ${r_inicio} a ${r_fin}. Total actual: ${todasLasPendientes.length}`);
-                
-                if (lote.length < 1000) {
-                    hayMas = false; // Ya no hay más registros
-                } else {
-                    r_inicio += 1000;
-                    r_fin += 1000;
-                }
-            } else {
-                hayMas = false;
-            }
+            if (!lote || lote.length === 0) break;
+            
+            todasLasPendientes.push(...lote);
+            console.log(`📦 Lote ${r_inicio}-${r_fin}: ${lote.length} registros. Total: ${todasLasPendientes.length}`);
+            
+            hayMas = (lote.length === 1000);
+            if (hayMas) { r_inicio += 1000; r_fin += 1000; }
         }
 
-        // 🔍 LOG DE AUDITORÍA: VALIDAR SI LA OS 11195544 EXISTE EN PENDIENTES
-        const osEncontrada = todasLasPendientes.find(p => String(p.OSATMO).trim() === '11195544');
-        if (osEncontrada) {
-            console.group("🎯 AUDITORÍA CARGA: OS 11195544");
-            console.log("Estado: ¡ENCONTRADA EN UNIVERSO TOTAL!");
-            console.log("Unidad asignada en tabla:", `"${osEncontrada.Unidad}"`);
-            console.log("Tipología:", osEncontrada.Tipologia);
-            console.log("Tiene Coordenadas:", !!(osEncontrada.Coordenadas || osEncontrada.Coordendasgis));
+        // 🔍 AUDITORÍA OPCIONAL (solo para debugging)
+        const osAuditoria = todasLasPendientes.find(p => String(p.OSATMO).trim() === '11195544');
+        if (osAuditoria) {
+            console.group("🎯 AUDITORÍA: OS 11195544");
+            console.log("✅ Encontrada | Unidad:", osAuditoria.Unidad, "| Tipología:", osAuditoria.Tipologia);
             console.groupEnd();
-        } else {
-            console.error(`❌ AUDITORÍA CARGA: OS 11195544 NO encontrada en los ${todasLasPendientes.length} registros.`);
         }
 
-        // 3️⃣ CRUCE Y FILTRADO: SOLO MIS ASIGNADAS
+        // ========================================
+        // 🔥 3️⃣ FILTRADO ROBUSTO DE MIS ASIGNADAS (CON NORMALIZACIÓN)
+        // ========================================
+        console.log('🔍 Filtrando OS asignadas con normalización robusta...');
+        
+        // Normalizar unidad objetivo para comparación
+        const unidadObjetivo = miUnidadRaw || String(currentUser.usuario).trim().toUpperCase();
+        const unidadObjetivoLimpia = unidadObjetivo.replace(/[^A-Z0-9]/g, '').toUpperCase();
+        console.log(`📊 Unidad: "${unidadObjetivo}" → Limpia: "${unidadObjetivoLimpia}"`);
+
+        // Filtrar con comparación flexible (ignora guiones, espacios, etc.)
         const misAsignacionesPropias = asignaciones
-            .filter(asig => String(asig.Unidad).trim().toUpperCase() === miUnidad.trim().toUpperCase())
+            .filter(asig => {
+                const unidadOS = String(asig.Unidad || '').trim();
+                if (!unidadOS) return false;
+                const unidadOSLimpia = unidadOS.replace(/[^A-Z0-9]/g, '').toUpperCase();
+                return unidadOSLimpia === unidadObjetivoLimpia;
+            })
             .map(asig => {
                 const idAsignada = String(asig.osatomo).trim();
                 const detalle = todasLasPendientes.find(p => String(p.OSATMO).trim() === idAsignada);
@@ -6471,28 +6491,115 @@ const { data: lote, error: errorLote } = await supabaseClient
                     Coordenadas: detalle?.Coordenadas || detalle?.Coordendasgis || null,
                     Coordendasgis: detalle?.Coordendasgis || null,
                     Tipo_de_OS: detalle?.Tipo_de_OS || 'S/D',
+                    Medidor: detalle?.Medidor || null,          // ← IMPORTANTE para comentarios
+                    CuentaContrato: detalle?.CuentaContrato || null,
+                    Comentario: detalle?.Comentario || '',       // ← Comentario original de OS Pendientes
+                    ComentarioGeneral: detalle?.Comentario || '',
                     esAsignada: true
                 };
             });
 
-        // ✅ 4️⃣ ASIGNACIÓN A VARIABLES GLOBALES
+        console.log(`✅ Mis OS asignadas: ${misAsignacionesPropias.length}`);
+
+        // 🔍 DEBUG PARA OS ESPECÍFICA (remover en producción si no se necesita)
+        if (misAsignacionesPropias.length === 0) {
+            console.log('🔍 Debug: Buscando OS específicas en dataset completo...');
+            ['11223066', '11195544'].forEach(osBuscada => {
+                const encontrada = (asignaciones || []).find(os => 
+                    String(os.osatomo).trim() === osBuscada
+                );
+                if (encontrada) {
+                    const coincide = String(encontrada.Unidad).replace(/[^A-Z0-9]/g, '').toUpperCase() === unidadObjetivoLimpia;
+                    console.log(`📋 OS ${osBuscada}: Unidad="${encontrada.Unidad}" → Coincide: ${coincide ? '✅' : '❌'}`);
+                }
+            });
+        }
+
+        // ========================================
+        // 🔥 4️⃣ INYECTAR COMENTARIOS DE CONSULTA_SERVICIOS
+        // ========================================
+        console.log('📝 Inyectando comentarios desde consultas_servicios...');
+        
+        // Extraer medidores únicos (excluyendo vacíos y "N/A")
+        const medidoresUnicos = [...new Set(
+            misAsignacionesPropias
+                .map(os => os.Medidor)
+                .filter(m => m && String(m).trim() !== '' && String(m).trim().toUpperCase() !== 'N/A')
+        )];
+        
+        console.log(`🔍 Medidores únicos para consultar: ${medidoresUnicos.length}`);
+        
+        const comentariosPorMedidor = new Map();
+        
+        // Consultar en lotes para no saturar la API
+        if (medidoresUnicos.length > 0) {
+            const BATCH_SIZE = 200;
+            for (let i = 0; i < medidoresUnicos.length; i += BATCH_SIZE) {
+                const batch = medidoresUnicos.slice(i, i + BATCH_SIZE);
+                const { data: comentariosData, error: errorComentarios } = await supabaseClient
+                    .from('consultas_servicios')
+                    .select('Medidor, ComentarioGeneral')
+                    .in('Medidor', batch);
+                
+                if (!errorComentarios && comentariosData) {
+                    comentariosData.forEach(item => {
+                        if (item.Medidor && item.ComentarioGeneral) {
+                            comentariosPorMedidor.set(
+                                String(item.Medidor).trim().toUpperCase(), 
+                                item.ComentarioGeneral
+                            );
+                        }
+                    });
+                    console.log(`✅ Lote ${Math.floor(i/BATCH_SIZE)+1}: ${comentariosData.length} comentarios obtenidos`);
+                }
+                // Pequeña pausa para no saturar
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        
+        // Inyectar comentarios en cada OS asignada
+        let comentariosInyectados = 0;
+        misAsignacionesPropias.forEach(os => {
+            if (os.Medidor) {
+                const medidorKey = String(os.Medidor).trim().toUpperCase();
+                const comentarioEncontrado = comentariosPorMedidor.get(medidorKey);
+                
+                if (comentarioEncontrado && comentarioEncontrado.trim() !== '') {
+                    // ✅ PRIORIDAD: Comentario de consulta_servicios
+                    os.Comentario = comentarioEncontrado;
+                    os.ComentarioGeneral = comentarioEncontrado;
+                    comentariosInyectados++;
+                }
+                // Si no hay comentario externo, se mantiene el original de OS Pendientes
+            }
+        });
+        
+        console.log(`✅ Comentarios inyectados: ${comentariosInyectados} de ${misAsignacionesPropias.length} OS`);
+
+        // ========================================
+        // 5️⃣ ASIGNAR A VARIABLES GLOBALES
+        // ========================================
         window.osAsignadasKML = misAsignacionesPropias;
-        window.todasLasPendientesKML = todasLasPendientes; 
+        window.todasLasPendientesKML = todasLasPendientes;
 
-        console.log(`✅ Sesión: ${miUnidad}`);
-        console.log(`📋 Mis OS Propias: ${misAsignacionesPropias.length}`);
-        console.log(`🔍 Universo de Pendientes Total: ${todasLasPendientes.length}`);
+        console.log(`✅ Sesión: ${unidadObjetivo}`);
+        console.log(`📋 Mis OS (con comentarios): ${misAsignacionesPropias.length}`);
+        console.log(`🔍 Universo Pendientes: ${todasLasPendientes.length}`);
 
-        // 5️⃣ RENDERIZADO
+        // ========================================
+        // 6️⃣ RENDERIZADO SEGÚN ROL
+        // ========================================
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
             const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
             generarInterfazAdminKMLRuta(unidadesUnicas, misAsignacionesPropias);
-        } else if (rol === 'Consulta' || rol === 'Contratista') {
+        } 
+        else if (rol === 'Consulta' || rol === 'Contratista') {
             if (misAsignacionesPropias.length === 0) {
-                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para la unidad ${miUnidad}</div>`;
+                searchGrid.innerHTML = `<div class="result-card">⚠️ No se encontraron OS asignadas para la unidad ${unidadObjetivo}</div>`;
                 return;
             }
-            generarMapaKMLRuta(misAsignacionesPropias, miUnidad);
+            // ✅ Ahora generarMapaKMLRuta recibirá OS con comentarios ya inyectados
+            generarMapaKMLRuta(misAsignacionesPropias, miUnidadRaw);
         }
 
     } catch (err) {
@@ -6500,7 +6607,6 @@ const { data: lote, error: errorLote } = await supabaseClient
         searchGrid.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
 }
-
 
 // ========================================
 // 🗺️ INTERFAZ GENERACIÓN KML RUTA (OPTIMIZADA)
