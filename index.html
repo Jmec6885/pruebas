@@ -4055,19 +4055,23 @@ function mostrarTablasSegunRol() {
         return;
     }
 
-    // 🎯 ATTF / PODA - servicios + TX y Cortes + IPR
-    if (rol === 'ATTF' || rol === 'Poda') {
-        tableOptions.forEach(option => {
-            const action = option.getAttribute('onclick') || '';
-            option.style.display =
-                (action.includes('consultas_servicios') ||
-                 action.includes('TX y Cortes') ||
-                 action.includes('retiro_medidores'))
-                ? 'block'
-                : 'none';
-        });
-        return;
-    }
+    // 🎯 ATTF / PODA - servicios + TX y Cortes + IPR (SIN mapa_rutas)
+if (rol === 'ATTF' || rol === 'Poda') {
+    tableOptions.forEach(option => {
+        const action = option.getAttribute('onclick') || '';
+        // ✅ EXPLÍCITAMENTE EXCLUIR mapa_rutas
+        const esMapaRutas = action.includes('mapa_rutas');
+        option.style.display =
+            (!esMapaRutas && (
+                action.includes('consultas_servicios') ||
+                action.includes('TX y Cortes') ||
+                action.includes('retiro_medidores')
+            ))
+            ? 'block'
+            : 'none';
+    });
+    return;
+}
 
     // 🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO usuarios, detalle_os, cargar_asignaciones
     if (rol === 'Contratista' || rol === 'Consulta') {
@@ -16892,6 +16896,23 @@ const PERMISOS_MODULOS = {
  * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración + Verificación robusta de contenedores
  */
 function seleccionarTabla(tableName, retryCount = 0) {
+ // ✅ VALIDACIÓN DE PERMISOS POR ROL
+    const rolActual = currentUser?.rol || 'Invitado';
+    const permisosModulo = PERMISOS_MODULOS[tableName];
+    
+    // ✅ BLOQUEO EXPLÍCITO PARA mapa_rutas
+    if (tableName === 'mapa_rutas' && 
+        !['Administrador', 'Despacho'].includes(rolActual)) {
+        alert('⛔ ACCESO DENEGADO\n\nEl módulo "Mapa de Rutas" solo está disponible para:\n• Administrador\n• Despacho');
+        return;
+    }
+    
+    // ✅ VALIDACIÓN GENÉRICA DE PERMISOS
+    if (permisosModulo && !permisosModulo.includes(rolActual)) {
+        alert(`⛔ ACCESO DENEGADO\n\nTu rol "${rolActual}" no tiene permisos para este módulo.`);
+        return;
+    }
+    
     // ✅ BLOQUEO CRÍTICO 1: Verificar existencia del contenedor de configuración (evita fallback destructivo)
     const configContainer = document.getElementById('configuracionInicialATTF');
     if (currentUser?.rol === 'ATTF' && !configContainer) {
