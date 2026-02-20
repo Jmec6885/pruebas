@@ -4012,14 +4012,19 @@ function mostrarTablasSegunRol() {
         return;
     }
 
-    // 🎯 SUPERVISOR - TODO EXCEPTO usuarios
-    if (rol === 'Supervisor') {
-        tableOptions.forEach(option => {
-            const action = option.getAttribute('onclick') || '';
-            option.style.display = action.includes('usuarios') ? 'none' : 'block';
-        });
-        return;
-    }
+   // 🎯 SUPERVISOR - TODO EXCEPTO usuarios y mapa_rutas
+if (rol === 'Supervisor') {
+    tableOptions.forEach(option => {
+        const action = option.getAttribute('onclick') || '';
+        // ✅ EXPLÍCITAMENTE EXCLUIR usuarios y mapa_rutas
+        const prohibido = 
+            action.includes("'usuarios'") ||      // Gestión de Usuarios
+            action.includes("'mapa_rutas'");       // Mapa de Rutas
+        option.style.display = prohibido ? 'none' : 'block';
+    });
+    console.log('🔒 Módulos ocultos para rol Supervisor: usuarios, mapa_rutas');
+    return;
+}
 
     // 🎯 DESPACHO - Todo excepto usuarios e IPR
     if (rol === 'Despacho') {
@@ -16885,8 +16890,8 @@ const PERMISOS_MODULOS = {
     'kml_ruta':            ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
     'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
-    'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura'],
-    'TX y Cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta']  // ✅ Corregido
+    'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura', 'Poda'],
+    'TX y Cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda']  // ✅ Corregido
 };
 
 
