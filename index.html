@@ -4073,23 +4073,22 @@ if (rol === 'ATTF' || rol === 'Poda') {
     return;
 }
 
-    // 🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO usuarios, detalle_os, cargar_asignaciones
-    if (rol === 'Contratista' || rol === 'Consulta') {
-        tableOptions.forEach(option => {
-            const action = option.getAttribute('onclick') || '';
-
-            // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
-            const prohibido =
-                action.includes("'usuarios'") ||           // Gestión de Usuarios
-                action.includes("'detalle_os'") ||         // Detalle OS
-                action.includes("'cargar_asignaciones'");  // Cargar Asignaciones
-
-            option.style.display = prohibido ? 'none' : 'block';
-        });
-
-        console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle_os, cargar_asignaciones`);
-        return;
-    }
+    
+   // 🎯 CONTRATISTA / CONSULTA - TODO EXCEPTO usuarios, detalle_os, cargar_asignaciones, mapa_rutas
+if (rol === 'Contratista' || rol === 'Consulta') {
+    tableOptions.forEach(option => {
+        const action = option.getAttribute('onclick') || '';
+        // ✅ CORRECCIÓN: Validar EXACTAMENTE los nombres de módulos prohibidos
+        const prohibido =
+            action.includes("'usuarios'") ||           // Gestión de Usuarios
+            action.includes("'detalle_os'") ||         // Detalle OS
+            action.includes("'cargar_asignaciones'") || // Cargar Asignaciones
+            action.includes("'mapa_rutas'");           // Mapa de Rutas
+        option.style.display = prohibido ? 'none' : 'block';
+    });
+    console.log(`🔒 Módulos ocultos para rol ${rol}: usuarios, detalle_os, cargar_asignaciones, mapa_rutas`);
+    return;
+}
 
     // 🎯 DEFAULT - TODO EXCEPTO usuarios
     tableOptions.forEach(option => {
