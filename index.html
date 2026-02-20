@@ -7893,8 +7893,8 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         console.log(`📊 Total comentarios obtenidos: ${totalObtenidos}`);
     }
     
-    // ========================================
-// ✅ 🆕 INYECTAR COMENTARIO DIRECTO DE OS PENDIENTES
+   // ========================================
+// ✅ 3️⃣ INYECTAR COMENTARIO DIRECTO DE OS PENDIENTES (SIN CONSULTA EXTERNA)
 // ========================================
 console.log('📝 ==========================================');
 console.log('📝 USANDO COMENTARIO DIRECTO DE OS PENDIENTES (KML)');
@@ -7903,23 +7903,26 @@ console.log('📝 ==========================================');
 let inyeccionesExitosas = 0;
 let sinComentario = 0;
 
-// Procesar OS asignadas para usar comentario directo
 osNormalizadas.forEach(os => {
-    // ✅ PRIORIDAD: Comentario directo de OS Pendientes (ya viene en los datos)
-    if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
-        os.ComentarioGeneral = os.Comentario;
-        console.log(`💬 OS ${os.OSATMO}: Comentario directo aplicado`);
+    // ✅ PRIORIDAD ABSOLUTA: Comentario de OS Pendientes
+    const comentarioOS = os.Comentario?.trim();
+    
+    if (comentarioOS && comentarioOS !== '' && comentarioOS !== 'N/A' && comentarioOS !== 'Sin Comentario') {
+        // Guardar en campo específico para KML (no sobrescribir ComentarioGeneral genérico)
+        os.ComentarioKML = comentarioOS;
+        os.ComentarioGeneral = comentarioOS;  // Para compatibilidad
+        console.log(`💬 OS ${os.OSATMO}: Comentario OS Pendientes aplicado`);
         inyeccionesExitosas++;
     } else {
-        // ✅ FALLBACK: Valor por defecto
-        os.Comentario = 'Sin comentario disponible';
+        // Solo como último fallback, consultar consultas_servicios
+        os.ComentarioKML = 'Sin comentario disponible';
         os.ComentarioGeneral = 'Sin comentario disponible';
         sinComentario++;
-        console.log(`⚠️ OS ${os.OSATMO}: Sin comentario disponible`);
+        console.log(`⚠️ OS ${os.OSATMO}: Sin comentario en OS Pendientes`);
     }
 });
 
-console.log(`✅ Inyección completada: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
+console.log(`✅ Inyección: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
 console.groupEnd();
 
     // ========================================
@@ -13371,6 +13374,15 @@ window.seleccionarOSDeLista = seleccionarOSDeLista;
 // 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
+
+ // 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de comentario de OS Pendientes
+    if (os.ComentarioOriginal) {
+        os.Comentario = os.ComentarioOriginal;
+    }
+    if (os.ComentarioKML) {
+        os.ComentarioGeneral = os.ComentarioKML;
+    }
+
     const panelDetalle = document.getElementById('panelDetalleOS');
 
     if (!panelDetalle) {
@@ -13398,12 +13410,43 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
     console.log('📊 Todos los campos disponibles:', Object.keys(os));
     console.log('🔍 ==========================================');
 
+
+// ========================================
+// ✅ 🆕 BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA PARA KML
+// ========================================
+const comentarioTexto = (() => {
+    // ✅ PRIORIDAD 1: Comentario específico de KML (inyectado desde OS Pendientes)
+    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && os.ComentarioKML !== 'Sin comentario disponible') {
+        return os.ComentarioKML;
+    }
+    
+    // ✅ PRIORIDAD 2: Comentario original de OS Pendientes
+    if (os.Comentario && os.Comentario.trim() !== '' && os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+        return os.Comentario;
+    }
+    
+    // ✅ PRIORIDAD 3: ComentarioGeneral (solo si no viene de consultas_servicios para KML)
+    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && os.ComentarioGeneral !== 'Sin comentario disponible') {
+        // Verificar que no sea el comentario genérico de consultas_servicios
+        const esDeConsultas = os.esDeConsultasServicios; // Flag que agregaremos
+        if (!esDeConsultas) {
+            return os.ComentarioGeneral;
+        }
+    }
+    
+    // ✅ FALLBACK: Otros campos
+    return os.comentario || os.Observaciones || os.comentarioGeneral || 
+           os.observaciones || os.Comentarios || os.comentarios || 
+           os.Detalle || os.detalle || os.descripcion || os.Descripcion || 
+           os.Nota || os.nota || 'Sin comentario disponible';
+})();
+
     // ========================================
     // ✅ 🆕 BUSCAR COMENTARIO EN MÚLTIPLES CAMPOS
     // ========================================
     const comentarioTexto = 
-    os.ComentarioGeneral ||    // ← Inyectado desde consultas_servicios (PRIORIDAD 1)
-    os.Comentario ||           // ← Original de OS Pendientes (PRIORIDAD 2)
+    os.Comentario ||
+    os.ComentarioGeneral ||          // ← Original de OS Pendientes (PRIORIDAD 2)
     os.comentarioGeneral ||
     os.comentario ||
     os.Observaciones ||
