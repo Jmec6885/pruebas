@@ -7893,33 +7893,34 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
         console.log(`📊 Total comentarios obtenidos: ${totalObtenidos}`);
     }
     
-    // Inyectar comentarios en las OS
-    console.log('🔍 Inyectando comentarios en OS...');
-    let inyeccionesExitosas = 0;
-    let sinComentario = 0;
-    
-    osNormalizadas.forEach(os => {
-        const medidorKey = os.Medidor ? String(os.Medidor).trim().toUpperCase() : '';
-        const comentarioEncontrado = comentariosLocales.get(medidorKey);
-        
-        if (comentarioEncontrado) {
-            // ✅ PRIORIDAD: Comentario de consulta_servicios
-            os.Comentario = comentarioEncontrado;
-            os.ComentarioGeneral = comentarioEncontrado;
-            inyeccionesExitosas++;
-        } else if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
-            // ✅ PRESERVAR: Comentario original si existe
-            os.ComentarioGeneral = os.Comentario;
-        } else {
-            // ✅ FALLBACK: Valor por defecto
-            os.Comentario = 'Sin comentario disponible';
-            os.ComentarioGeneral = 'Sin comentario disponible';
-            sinComentario++;
-        }
-    });
-    
-    console.log(`✅ Inyección completada: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
-    console.groupEnd();
+    // ========================================
+// ✅ 🆕 INYECTAR COMENTARIO DIRECTO DE OS PENDIENTES
+// ========================================
+console.log('📝 ==========================================');
+console.log('📝 USANDO COMENTARIO DIRECTO DE OS PENDIENTES (KML)');
+console.log('📝 ==========================================');
+
+let inyeccionesExitosas = 0;
+let sinComentario = 0;
+
+// Procesar OS asignadas para usar comentario directo
+osNormalizadas.forEach(os => {
+    // ✅ PRIORIDAD: Comentario directo de OS Pendientes (ya viene en los datos)
+    if (os.Comentario && String(os.Comentario).trim() !== '' && String(os.Comentario).trim() !== 'N/A') {
+        os.ComentarioGeneral = os.Comentario;
+        console.log(`💬 OS ${os.OSATMO}: Comentario directo aplicado`);
+        inyeccionesExitosas++;
+    } else {
+        // ✅ FALLBACK: Valor por defecto
+        os.Comentario = 'Sin comentario disponible';
+        os.ComentarioGeneral = 'Sin comentario disponible';
+        sinComentario++;
+        console.log(`⚠️ OS ${os.OSATMO}: Sin comentario disponible`);
+    }
+});
+
+console.log(`✅ Inyección completada: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
+console.groupEnd();
 
     // ========================================
     // ✅ 4️⃣ DIAGNÓSTICO AUTOMÁTICO PARA OS ESPECÍFICAS
@@ -11090,77 +11091,32 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
             offset += BATCH_SIZE;
         }
         console.log(`✅ ${todasOSRegistradas.length} OS Pendientes cargadas`);
-        
-        // ========================================
-        // ✅ 6. OBTENER COMENTARIOS DE CONSULTA SUMINISTROS
-        // ========================================
-        console.log('📝 ==========================================');
-        console.log('📝 OBTENIENDO COMENTARIOS DE CONSULTA SUMINISTROS');
-        console.log('📝 ==========================================');
-        
-        // Extraer medidores únicos (FILTRO ESTRICTO: excluir vacíos y 'N/A')
-        const medidoresUnicos = [...new Set(todasOSRegistradas
-            .map(os => os.Medidor)
-            .filter(m => m && String(m).trim() !== '' && String(m).trim() !== 'N/A'))];
-        
-        const cuentasUnicas = [...new Set(todasOSRegistradas
-            .map(os => os.CuentaContrato)
-            .filter(c => c && String(c).trim() !== '' && String(c).trim() !== 'N/A'))];
-        
-        console.log(`🔍 Medidores únicos: ${medidoresUnicos.length} | Cuentas únicas: ${cuentasUnicas.length}`);
-        
-        const comentariosPorMedidor = new Map();
-        
-        // Consultar en lotes de 200 (equilibrio entre velocidad y estabilidad)
-        if (medidoresUnicos.length > 0) {
-            const BATCH_MEDIDORES = 1500;
-            for (let i = 0; i < medidoresUnicos.length; i += BATCH_MEDIDORES) {
-                const batchMedidores = medidoresUnicos.slice(i, i + BATCH_MEDIDORES);
-                console.log(`📡 Lote ${Math.floor(i/BATCH_MEDIDORES) + 1}: ${batchMedidores.length} medidores`);
-                
-                const { data: comentariosData, error: errorComentarios } = await supabaseClient
-                    .from('consultas_servicios')
-                    .select('Medidor, CuentaContrato, ComentarioGeneral')
-                    .in('Medidor', batchMedidores);
-                
-                if (!errorComentarios && comentariosData) {
-                    comentariosData.forEach(item => {
-                        if (item.Medidor) {
-                            comentariosPorMedidor.set(String(item.Medidor).trim(), {
-                                ComentarioGeneral: item.ComentarioGeneral || '',
-                                CuentaContrato: item.CuentaContrato
-                            });
-                        }
-                    });
-                    console.log(`✅ Lote: ${comentariosData.length} comentarios encontrados`);
-                }
-                await new Promise(resolve => setTimeout(resolve, 50)); // Pausa para no saturar
-            }
-        }
+
+
+// ========================================
+// ✅ 6. 🆕 USAR COMENTARIO DIRECTO DE OS PENDIENTES (SIN CONSULTA EXTRA)
+// ========================================
+console.log('📝 ==========================================');
+console.log('📝 USANDO COMENTARIO DIRECTO DE OS PENDIENTES');
+console.log('📝 ==========================================');
+
+// Procesar OS Pendientes para asegurar que Comentario esté disponible
+todasOSRegistradas.forEach(os => {
+    // ✅ PRIORIDAD: Usar Comentario de OS Pendientes directamente
+    if (os.Comentario && os.Comentario.trim() !== '' && os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+        os.ComentarioGeneral = os.Comentario;
+        console.log(`💬 OS ${os.OSATMO}: Usa comentario directo de OS Pendientes`);
+    } else {
+        // Fallback solo si está vacío
+        os.Comentario = 'Sin comentario disponible';
+        os.ComentarioGeneral = 'Sin comentario disponible';
+    }
+});
         
         
-        // ========================================
-        // ✅ 7. INYECTAR COMENTARIOS EN LAS OS (LÓGICA SEGURA)
-        // ========================================
-        todasOSRegistradas.forEach(os => {
-            const medidorKey = String(os.Medidor).trim();
-            const comentarioData = comentariosPorMedidor.get(medidorKey);
-            
-            if (comentarioData && comentarioData.ComentarioGeneral) {
-                // ✅ PRIORIDAD: Comentario de consulta_servicios si existe y es válido
-                os.Comentario = comentarioData.ComentarioGeneral;
-                os.ComentarioGeneral = comentarioData.ComentarioGeneral;
-                console.log(`💬 OS ${os.OSATMO}: Comentario inyectado desde consulta_servicios`);
-            } else if (os.Comentario && os.Comentario !== 'N/A' && os.Comentario !== '' && os.Comentario !== 'Sin comentario disponible') {
-                // ✅ PRESERVAR: Comentario original de OS Pendientes si es válido
-                os.ComentarioGeneral = os.Comentario;
-                console.log(`💬 OS ${os.OSATMO}: Usa comentario original de OS Pendientes`);
-            } else {
-                // ✅ FALLBACK: Valor por defecto
-                os.Comentario = 'Sin comentario disponible';
-                os.ComentarioGeneral = 'Sin comentario disponible';
-            }
-        });
+        
+        
+       
         
         // ========================================
         // ✅ 8. FILTRADO INICIAL: RADIO Y ESTADO
