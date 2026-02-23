@@ -529,6 +529,54 @@ const ROLES_CON_ACCESO_TOTAL_NOMBRE = ['Administrador', 'Supervisor', 'Despacho'
 
 
 // ========================================
+// 🧹 FUNCIÓN GLOBAL: LIMPIAR CACHE DE SESIÓN
+// Ejecutar SIEMPRE al iniciar sesión
+// ========================================
+function limpiarCacheSesion() {
+    console.log('🧹 Limpiando cache de sesión anterior...');
+    
+    // ✅ Limpiar variables globales de datos
+    delete window.osAsignadasKML;
+    delete window.osKMLData;
+    delete window.osKMLDataTemporal;
+    delete window.todasLasPendientesKML;
+    delete window.unidadesDisponiblesKML;
+    delete window.filtrosAplicados;
+    delete window.osPartidaSeleccionada;
+    delete window.unidadSeleccionadaKML;
+    
+    // ✅ Limpiar datos específicos de KML
+    if (window.mapaLeaflet) {
+        window.mapaLeaflet.remove();
+        delete window.mapaLeaflet;
+    }
+    
+    // ✅ Limpiar localStorage/sessionStorage de datos temporales
+    const keysToRemove = [
+        'os_asignadas_cache',
+        'os_pendientes_cache', 
+        'filtros_cache',
+        'mapa_config_cache'
+    ];
+    keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+    });
+    
+    // ✅ Forzar recarga de configuración de usuario
+    if (currentUser?.id) {
+        localStorage.setItem('cleca_user_session', JSON.stringify({
+            user: currentUser,
+            timestamp: Date.now(),  // ← Timestamp actual para forzar validación
+            forceRefresh: true      // ← Flag para forzar recarga de datos
+        }));
+    }
+    
+    console.log('✅ Cache de sesión limpiado');
+}
+
+
+// ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
 // ========================================
 
@@ -1205,6 +1253,9 @@ async function login() {
         alert('Por favor ingrese usuario y contraseña');
         return;
     }
+
+// ✅ 3. LIMPIAR CACHE ANTES DE CARGAR DATOS NUEVOS
+limpiarCacheSesion();  // ← AGREGAR ESTA LÍNEA
 
     try {
         // 1. Autenticar usuario
@@ -6427,6 +6478,23 @@ console.log('✅ normalizarUnidad definida globalmente');
 async function cargarInterfazKMLRuta() {
 
     console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta (Modo Carga Total + Comentarios)');
+
+ // ✅ VERIFICAR SI DEBE FORZAR RECARGA DE DATOS
+    const sessionData = JSON.parse(localStorage.getItem('cleca_user_session') || '{}');
+    const debeForzarRecarga = sessionData.forceRefresh === true;
+    
+    if (debeForzarRecarga) {
+        console.log('🔄 Forzando recarga de datos desde BD...');
+        // Limpiar flag para próxima vez
+        sessionData.forceRefresh = false;
+        localStorage.setItem('cleca_user_session', JSON.stringify(sessionData));
+        
+        // Limpiar datos cacheados en memoria
+        delete window.osAsignadasKML;
+        delete window.osKMLDataTemporal;
+    }
+    
+
     
     const chunkArray = (arr, size) => {
         const out = [];
