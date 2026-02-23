@@ -6663,7 +6663,6 @@ misAsignacionesPropias.forEach(os => {
 // 🗺️ GENERAR MAPA KML RUTA - FUNCIÓN GLOBAL PARA ADMIN/DESPACHO/SUPERVISOR (CORREGIDA)
 // ========================================
 async function generarMapaAdminKMLRuta() {
-const unidadNorm = normalizarUnidad(unidadSeleccionada);
     console.log('🗺️ ==========================================');
     console.log('🗺️ GENERANDO MAPA KML - MODO ADMIN/DESPACHO/SUPERVISOR');
     console.log('🗺️ ==========================================');
@@ -6674,10 +6673,11 @@ const unidadNorm = normalizarUnidad(unidadSeleccionada);
         return;
     }
     
-    // ✅ 1. Obtener unidad seleccionada
+    // ✅ 1. Obtener unidad seleccionada PRIMERO (antes de usarla)
     const selectUnidad = document.getElementById('selectUnidadKML');
     const unidadSeleccionada = selectUnidad?.value;
     
+    // ✅ 2. Validar que haya unidad seleccionada
     if (!unidadSeleccionada) {
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
@@ -6691,27 +6691,18 @@ const unidadNorm = normalizarUnidad(unidadSeleccionada);
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // ✅ 2. FUNCIÓN DE NORMALIZACIÓN CONSISTENTE (usada en todo el flujo)
-        const normalizarUnidad = (valor) => {
-            if (!valor) return '';
-            return String(valor)
-                .trim()
-                .toUpperCase()
-                .normalize('NFD')           // Separar acentos de letras
-                .replace(/[\u0300-\u036f]/g, '') // Quitar diacríticos (tildes)
-                .replace(/[^A-Z0-9]/g, '');      // Solo letras mayúsculas y números
-        };
-        
+        // ✅ 3. Normalizar unidad (USA LA FUNCIÓN GLOBAL normalizarUnidad)
+        // ⚠️ NO redefinir normalizarUnidad aquí - debe estar en scope global del archivo
         const unidadNorm = normalizarUnidad(unidadSeleccionada);
         console.log(`🔍 Unidad normalizada: "${unidadSeleccionada}" → "${unidadNorm}"`);
         
-        // ✅ 3. Obtener OS desde memoria global
+        // ✅ 4. Obtener OS desde memoria global
         let osData = window.osAsignadasKML || [];
         
-        // Si no hay datos, intentar recargar (fallback)
+        // Fallback: recargar desde Supabase si está vacío
         if (!osData || osData.length === 0) {
             console.log('📥 Recargando OS asignadas desde Supabase...');
-            const {  asignaciones, error } = await supabaseClient
+            const { data: asignaciones, error } = await supabaseClient
                 .from('os_asignadas')
                 .select('*');
             
@@ -6720,20 +6711,16 @@ const unidadNorm = normalizarUnidad(unidadSeleccionada);
             console.log(`✅ ${osData.length} OS recargadas`);
         }
         
-        // ✅ 4. Filtrar OS por unidad con normalización CONSISTENTE
-        // ✅ DENTRO DE generarMapaAdminKMLRuta, modificar el filtro:
-
-// ✅ 4. Filtrar OS por unidad con normalización CONSISTENTE (usa función global)
-const osFiltradas = osData.filter(os => {
-    const osUnidadRaw = os.Unidad || os.unidad || '';
-    const osUnidadNorm = normalizarUnidad(osUnidadRaw);  // ← FUNCIÓN GLOBAL
-    
-    return osUnidadNorm === unidadNorm;  // ← unidadNorm también usa normalizarUnidad
-});
+        // ✅ 5. Filtrar OS por unidad con normalización CONSISTENTE (usa función global)
+        const osFiltradas = osData.filter(os => {
+            const osUnidadRaw = os.Unidad || os.unidad || '';
+            const osUnidadNorm = normalizarUnidad(osUnidadRaw);  // ← Usa función global
+            return osUnidadNorm === unidadNorm;
+        });
         
         console.log(`🔍 OS filtradas para "${unidadSeleccionada}": ${osFiltradas.length} de ${osData.length} totales`);
         
-        // ✅ 5. Validar que haya OS con coordenadas
+        // ✅ 6. Validar que haya OS con coordenadas válidas
         const osConCoordenadas = osFiltradas.filter(os => {
             const coords = os.Coordenadas || os.Coordendasgis;
             return coords && String(coords).includes(',') && !String(coords).toLowerCase().includes('sin');
@@ -6742,7 +6729,6 @@ const osFiltradas = osData.filter(os => {
         console.log(`📍 OS con coordenadas válidas: ${osConCoordenadas.length}`);
         
         if (osConCoordenadas.length === 0) {
-            // Mostrar mensaje más informativo
             const tieneOS = osFiltradas.length > 0;
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: ${tieneOS ? '#fff3cd' : '#fee2e2'}; border-left: 4px solid ${tieneOS ? '#ffc107' : '#ef4444'};">
@@ -6758,9 +6744,8 @@ const osFiltradas = osData.filter(os => {
             return;
         }
         
-        // ✅ 6. Normalizar campos para compatibilidad con generarMapaKMLRuta
+        // ✅ 7. Normalizar campos para compatibilidad con generarMapaKMLRuta
         const osNormalizadas = osConCoordenadas.map(os => {
-            // Extraer coordenadas con prioridad
             const coordsRaw = os.Coordenadas || os.Coordendasgis || '';
             const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
             
@@ -6770,13 +6755,12 @@ const osFiltradas = osData.filter(os => {
                 Comentario: os.Comentario || os.ComentarioGeneral || '',
                 ComentarioGeneral: os.Comentario || os.ComentarioGeneral || '',
                 ComentarioKML: os.Comentario || os.ComentarioGeneral || '',
-                // Asegurar que lat/lng estén disponibles para el mapa
                 lat: isNaN(lat) ? null : lat,
                 lng: isNaN(lng) ? null : lng
             };
         });
         
-        // ✅ 7. Generar el mapa usando la función principal
+        // ✅ 8. Generar el mapa usando la función principal
         if (typeof generarMapaKMLRuta === 'function') {
             await generarMapaKMLRuta(osNormalizadas, unidadSeleccionada);
         } else {
@@ -6789,10 +6773,9 @@ const osFiltradas = osData.filter(os => {
     }
 }
 
-// ✅ EXPOSICIÓN GLOBAL CRÍTICA
+// ✅ EXPOSICIÓN GLOBAL CRÍTICA: Hacer la función disponible para onclick HTML
 window.generarMapaAdminKMLRuta = generarMapaAdminKMLRuta;
 console.log('✅ generarMapaAdminKMLRuta expuesta globalmente');
-
 
 
 
