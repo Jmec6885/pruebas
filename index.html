@@ -6475,28 +6475,165 @@ const normalizarUnidad = (valor) => {
 console.log('✅ normalizarUnidad definida globalmente');
 
 // ========================================
-// 🔄 DETERMINAR OS PARA UNIDAD (LÓGICA DE CASCADA)
+// 🔄 DETERMINAR OS PARA UNIDAD (LÓGICA DE CASCADA) - VERSIÓN CORREGIDA
 // ========================================
 async function determinarOSParaUnidad(unidad, fechaProgramada, datasetCompleto = null) {
+    console.log(`🔄 Determinando fuente de datos para ${unidad} en ${fechaProgramada}...`);
+    
+    // Si no se pasa el dataset, usar el global
+    const osBase = datasetCompleto || window.osAsignadasKML || [];
+    
+    // ========================================
     // 🔹 PASO 1: Verificar OS Preseleccionadas (Máxima prioridad)
+    // ========================================
+    console.log('🔍 Paso 1: Buscando OS preseleccionadas manualmente...');
     const osPreseleccionadas = await cargarOSPreseleccionadasParaUnidad(unidad, fechaProgramada);
-    if (osPreseleccionadas?.length > 0) {
-        return { os: osPreseleccionadas, fuente: 'preseleccionadas', ... };
-    }
     
+    if (osPreseleccionadas && osPreseleccionadas.length > 0) {
+        console.log(`✅ PRIORIDAD 1: ${osPreseleccionadas.length} OS preseleccionadas encontradas`);
+        return {
+            os: osPreseleccionadas,
+            fuente: 'preseleccionadas',
+            mensaje: `📋 Mostrando ${osPreseleccionadas.length} OS asignadas manualmente`,
+            filtrosAplicados: null
+        };
+    }
+    console.log('ℹ️ No hay OS preseleccionadas para esta unidad/fecha');
+    
+    // ========================================
     // 🔹 PASO 2: Verificar Filtros por Unidad (Prioridad media)
+    // ========================================
+    console.log('🔍 Paso 2: Buscando filtros configurados por unidad...');
     const filtrosUnidad = await cargarFiltrosPorUnidad(unidad, fechaProgramada);
-    if (filtrosUnidad && (filtrosUnidad.tipologias?.length > 0 || ...)) {
-        const osFiltradas = aplicarFiltrosAlDataset(datasetCompleto, filtrosUnidad, unidad);
-        return { os: osFiltradas, fuente: 'filtros_unidad', ... };
-    }
     
+    if (filtrosUnidad && (filtrosUnidad.tipologias?.length > 0 || filtrosUnidad.rangos?.length > 0 || filtrosUnidad.radio_km)) {
+        console.log(`✅ PRIORIDAD 2: Filtros encontrados - Radio: ${filtrosUnidad.radio_km || 3}km`);
+        
+        // Filtrar el dataset base aplicando los criterios
+        const osFiltradas = aplicarFiltrosAlDataset(osBase, filtrosUnidad, unidad);
+        
+        return {
+            os: osFiltradas,
+            fuente: 'filtros_unidad',
+            mensaje: `🎯 Mostrando OS dentro de ${filtrosUnidad.radio_km || 3}km con filtros aplicados`,
+            filtrosAplicados: filtrosUnidad
+        };
+    }
+    console.log('ℹ️ No hay filtros configurados para esta unidad');
+    
+    // ========================================
     // 🔹 PASO 3: Fallback - Solo OS asignadas automáticamente
-    const osAsignadasUnidad = (datasetCompleto || []).filter(os => 
-        normalizarUnidad(os.Unidad) === normalizarUnidad(unidad)
-    );
-    return { os: osAsignadasUnidad, fuente: 'asignadas_automaticas', ... };
+    // ========================================
+    console.log('🔍 Paso 3: Fallback - Solo OS asignadas automáticamente');
+    
+    const osAsignadasUnidad = osBase.filter(os => {
+        const uOS = normalizarUnidad(os.Unidad);
+        const uSel = normalizarUnidad(unidad);
+        return uOS === uSel;
+    });
+    
+    console.log(`✅ PRIORIDAD 3: ${osAsignadasUnidad.length} OS asignadas automáticamente`);
+    
+    return {
+        os: osAsignadasUnidad,
+        fuente: 'asignadas_automaticas',
+        mensaje: `📦 Mostrando ${osAsignadasUnidad.length} OS asignadas automáticamente a ${unidad}`,
+        filtrosAplicados: null
+    };
 }
+
+
+
+
+
+// ========================================
+// 📋 CARGAR OS PRESELECCIONADAS PARA UNIDAD
+// ========================================
+async function cargarOSPreseleccionadasParaUnidad(unidad, fechaProgramada) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('os_preseleccionadas')
+            .select('osatomo, comentarios, fecha_programada')
+            .eq('unidad_destino', unidad)
+            .eq('fecha_programada', fechaProgramada)
+            .eq('estado', 'pendiente');
+        
+        if (error) {
+            console.warn('⚠️ Error cargando preseleccionadas:', error.message);
+            return [];
+        }
+        
+        if (!data || data.length === 0) return [];
+        
+        // Obtener detalles completos desde "OS Pendientes"
+        const osIds = data.map(p => p.osatomo);
+        const { data: detalles, error: errorDetalles } = await supabaseClient
+            .from('OS Pendientes')
+            .select('*')
+            .in('OSATMO', osIds);
+        
+        if (errorDetalles) {
+            console.warn('⚠️ Error obteniendo detalles:', errorDetalles.message);
+            return data.map(p => ({ ...p, OSATMO: p.osatomo }));
+        }
+        
+        return (detalles || []).map(os => ({
+            ...os,
+            esPreseleccionada: true,
+            comentarioPreseleccion: data.find(p => p.osatomo === os.OSATMO)?.comentarios,
+            fechaPreseleccion: fechaProgramada
+        }));
+        
+    } catch (err) {
+        console.error('❌ Error en cargarOSPreseleccionadasParaUnidad:', err);
+        return [];
+    }
+}
+
+// ========================================
+// 🎯 CARGAR FILTROS POR UNIDAD
+// ========================================
+async function cargarFiltrosPorUnidad(unidad, fechaProgramada) {
+    try {
+        // Primero intentar con fecha específica
+        let { data: filtros, error } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidad)
+            .eq('fecha_programada', fechaProgramada)
+            .maybeSingle();
+        
+        // Si no hay para esa fecha, intentar con filtros base (null)
+        if (!filtros) {
+            const { data: base, error: errorBase } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidad)
+                .is('fecha_programada', null)
+                .maybeSingle();
+            
+            if (base) filtros = base;
+        }
+        
+        if (error || !filtros) return null;
+        
+        // Normalizar estructura
+        return {
+            tipologias: filtros.tipologias || filtros.Tipologias || [],
+            rangos: filtros.rangos || filtros.Rangos || [],
+            radio_km: filtros.radio_km || 3,
+            deuda_amarillo: filtros.deuda_amarillo || false,
+            deuda_naranja: filtros.deuda_naranja || false,
+            deuda_rosado: filtros.deuda_rosado || false,
+            fecha_programada: filtros.fecha_programada || null
+        };
+        
+    } catch (err) {
+        console.warn('⚠️ Error cargando filtros por unidad:', err.message);
+        return null;
+    }
+}
+
 
 
 async function cargarInterfazKMLRuta() {
