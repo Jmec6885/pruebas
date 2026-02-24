@@ -8047,17 +8047,22 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
             const coords = os.Coordenadas || os.Coordendasgis || null;
             const comentarioOriginal = os.Comentario || os.ComentarioGeneral || os.comentario || '';
             
-            return {
-                ...os,
-                osatomo: id,
-                OSATMO: id,
-                Tipologia: os.Tipologia || os.tipologia || 'Sin tipología',
-                Coordenadas: coords,
-                esAsignada: true,
-                Comentario: comentarioOriginal,
-                ComentarioGeneral: comentarioOriginal,
-                ComentarioKML: comentarioOriginal
-            };
+            // ✅ DESPUÉS:
+return {
+    ...os,
+    osatomo: id,
+    OSATMO: id,
+    Tipologia: os.Tipologia || os.tipologia || 'Sin tipología',
+    Coordenadas: coords,
+    esAsignada: true,
+    // ✅ Propagar flag de preselección
+    esPreseleccionada: os.esPreseleccionada || false,
+    usuario_que_asigno: os.usuario_que_asigno || null,
+    // ✅ Comentarios con prioridad
+    Comentario: comentarioOriginal,
+    ComentarioGeneral: comentarioOriginal,
+    ComentarioKML: comentarioOriginal
+};
         })
         .filter(os => {
             if (!os.OSATMO) {
@@ -8085,10 +8090,9 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
 window.osKMLDataTemporal = osNormalizadas;
 
 // ✅ Guardar también en osKMLData para compatibilidad con funciones legacy
-window.osKMLData = osNormalizadas;
-
+window.osKMLData = osNormalizadas;           // ← Compatibilidad legacy
 console.log('💾 OS normalizadas guardadas en variables temporales');
-console.log('🔒 window.osAsignadasKML se mantiene intacto con el dataset completo');
+console.log('🔒 window.osAsignadasKML se mantiene intacto');
 
     // ========================================
     // ✅ 3️⃣ OBTENER E INYECTAR COMENTARIOS (OPTIMIZADO)
@@ -8181,6 +8185,12 @@ osNormalizadas.forEach(os => {
 console.log(`✅ Inyección: ${inyeccionesExitosas} exitosas, ${sinComentario} sin comentario`);
 console.groupEnd();
 
+// ✅ AGREGAR: Log de fuente de datos para debugging de cascada
+console.log('🗺️ Fuente de datos:', window.cascadaFuenteActual || 'directa');
+if (window.cascadaFuenteActual) {
+    console.log(`📊 Cascada: ${window.cascadaFuenteActual} → ${osAsignadas.length} OS`);
+}
+
     // ========================================
     // ✅ 4️⃣ DIAGNÓSTICO AUTOMÁTICO PARA OS ESPECÍFICAS
     // ========================================
@@ -8270,9 +8280,13 @@ console.groupEnd();
     // ========================================
     const htmlSelector = `
         <div class="result-card" style="background: #ffffff; border: 1px solid #3b82f6; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid #f0f9ff; padding-bottom: 10px;">
-                📍 KML Ruta - <span style="color: #2563eb;">${unidadSeleccionada}</span>
-            </h3>
+            <!-- ✅ AGREGAR badge de fuente de datos -->
+<h3 style="color: #1e3a8a; margin-top: 0; margin-bottom: 20px; border-bottom: 2px solid #f0f9ff; padding-bottom: 10px; display:flex;align-items:center;gap:8px;">
+    📍 KML Ruta - <span style="color: #2563eb;">${unidadSeleccionada}</span>
+    ${window.cascadaFuenteActual ? 
+        `<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">📊 ${window.cascadaFuenteActual}</span>` 
+        : ''}
+</h3>
 
             <div style="margin-bottom: 20px;">
                 <label style="display: block; font-weight: 700; margin-bottom: 8px; color: #4b5563;">
@@ -8282,9 +8296,12 @@ console.groupEnd();
                     onchange="window.osPartidaSeleccionada = this.value; console.log('📍 Punto seleccionado:', this.value);" 
                     style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 15px; background: #f8fafc;">
                     <option value="">-- Seleccione una de las ${osNormalizadas.length} OS --</option>
-                    ${osNormalizadas.map(os => 
-                        `<option value="${os.OSATMO}">${os.OSATMO} - ${os.Tipologia}</option>`
-                    ).join('')}
+                    // ✅ AGREGAR indicador visual para OS preseleccionadas
+${osNormalizadas.map(os => 
+    `<option value="${os.OSATMO}" ${os.esPreseleccionada ? 'style="background:#fff7ed;font-weight:600;"' : ''}>
+        ${os.OSATMO} - ${os.Tipologia} ${os.esPreseleccionada ? '📋' : ''}
+    </option>`
+).join('')}
                 </select>
             </div>
 
@@ -13304,52 +13321,80 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         estadisticas[estadoKey] += osList.length;
 
         // Crear icono con indicador de múltiple si aplica
-        const iconoConNumero = L.divIcon({
-            className: 'custom-marker',
-            html: `
+        // ✅ AGREGAR indicador 📋 para OS preseleccionadas
+const tienePreseleccionada = osList.some(o => o.esPreseleccionada);
+
+// 🔹 LOG para debug de preselección
+if (tienePreseleccionada) {
+    console.log(`📋 Marcador con OS preseleccionada: ${osList.filter(o=>o.esPreseleccionada).length}/${osList.length}`);
+}
+
+const iconoConNumero = L.divIcon({
+    className: 'custom-marker',
+    html: `
+        <div style="
+            background-color: ${colorFondo};
+            width: ${esMultiple ? '40px' : '32px'};
+            height: ${esMultiple ? '40px' : '32px'};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            position: relative;
+            user-select: none;
+        ">
+            <span style="
+                transform: rotate(45deg);
+                color: white;
+                font-weight: bold;
+                font-size: ${esMultiple ? '16px' : '13px'};
+                line-height: 1;
+            ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
+            
+            ${esMultiple ? `
                 <div style="
-                    background-color: ${colorFondo};
-                    width: ${esMultiple ? '40px' : '32px'};
-                    height: ${esMultiple ? '40px' : '32px'};
-                    border-radius: 50% 50% 50% 0;
-                    transform: rotate(-45deg);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                    position: relative;
-                    user-select: none;
-                ">
-                    <span style="
-                        transform: rotate(45deg);
-                        color: white;
-                        font-weight: bold;
-                        font-size: ${esMultiple ? '16px' : '13px'};
-                        line-height: 1;
-                    ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
-                    ${esMultiple ? `
-                        <div style="
-                            position:absolute;
-                            top:-5px;
-                            right:-5px;
-                            background:#ff5722;
-                            color:white;
-                            border-radius:50%;
-                            width:20px;
-                            height:20px;
-                            font-size:10px;
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            border:2px solid white;
-                            font-weight:bold;
-                        ">${osList.length}</div>` : ''}
-                </div>`,
-            iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
-            iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32],
-            popupAnchor: [0, esMultiple ? -40 : -32]
-        });
+                    position:absolute;
+                    top:-5px;
+                    right:-5px;
+                    background:#ff5722;
+                    color:white;
+                    border-radius:50%;
+                    width:20px;
+                    height:20px;
+                    font-size:10px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:2px solid white;
+                    font-weight:bold;
+                ">${osList.length}</div>` : ''}
+            
+            ${tienePreseleccionada ? `
+                <span style="
+                    position:absolute;
+                    top:-8px;
+                    left:-8px;
+                    background:#f59e0b;
+                    color:white;
+                    width:24px;
+                    height:24px;
+                    border-radius:50%;
+                    font-size:13px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:2px solid white;
+                    font-weight:bold;
+                    z-index:10;
+                ">📋</span>` : ''}
+        </div>`,
+    iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
+    iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32],
+    popupAnchor: [0, esMultiple ? -40 : -32]
+});
 
         // ========================================
         // ✅ CREAR POPUP CON LISTA DE TODAS LAS OS
@@ -13416,9 +13461,17 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                             <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
                         </div>
                         <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
-                            📋 Ver Detalle Completo
-                        </button>
+    style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
+    📋 Ver Detalle Completo
+</button>
+
+<!-- ✅ AGREGAR: Botón para cancelar asignación si es preseleccionada y es el mismo usuario -->
+${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
+<button onclick="event.stopPropagation(); if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${os.OSATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}');}"
+    style="margin-top: 6px; background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px;">
+    ❌ Cancelar mi asignación
+</button>
+` : ''}
                     </div>
                 `;
             }
@@ -13448,10 +13501,18 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
                     ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
                 </div>
                 <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
-                    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-                    📋 Ver Detalle Completo
-                </button>
+    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
+    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+    📋 Ver Detalle Completo
+</button>
+
+<!-- ✅ AGREGAR: Botón para cancelar asignación si es preseleccionada y es el mismo usuario -->
+${osList[0].esPreseleccionada && osList[0].usuario_que_asigno === currentUser?.usuario ? `
+<button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osList[0].OSATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}');}"
+    style="margin-top: 8px; background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 12px;">
+    ❌ Cancelar mi asignación
+</button>
+` : ''}
             `;
         }
 
@@ -13476,6 +13537,11 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
             if (!window.markersPorTipologia[tip]) {
                 window.markersPorTipologia[tip] = [];
             }
+
+// ✅ LOG: Verificar si este marcador tiene OS preseleccionadas
+if (osList.some(o => o.esPreseleccionada)) {
+    console.log(`📋 [MAPA] Marcador en [${lat.toFixed(4)}, ${lng.toFixed(4)}] tiene ${osList.filter(o=>o.esPreseleccionada).length} OS preseleccionada(s)`);
+}
             window.markersPorTipologia[tip].push(marker);
             
         } catch (e) {
