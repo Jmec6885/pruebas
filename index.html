@@ -11761,6 +11761,424 @@ function validarFormatoCoordenadas(coordenadas) {
 }
 
 
+// ========================================
+// 📋 MODAL: ASIGNAR OS A UNIDAD (CON LOGS)
+// ========================================
+function abrirModalPreseleccion(osatomo, unidadOrigen) {
+    console.group('📋 [PRESELECCIÓN] Abrir modal');
+    console.log('🔹 OSATMO:', osatomo);
+    console.log('🔹 Unidad origen:', unidadOrigen || 'N/A');
+    
+    // 🔍 DEBUG: Verificar datos disponibles
+    console.log('🔹 window.unidadesDisponiblesKML:', window.unidadesDisponiblesKML?.length || 0, 'unidades');
+    console.log('🔹 window.fechaSeleccionadaKML:', window.fechaSeleccionadaKML || 'No definida');
+    
+    const unidades = window.unidadesDisponiblesKML || [];
+    
+    // ⚠️ Validar que hay unidades disponibles
+    if (unidades.length === 0) {
+        console.warn('⚠️ [PRESELECCIÓN] No hay unidades disponibles en window.unidadesDisponiblesKML');
+        alert('⚠️ No hay unidades disponibles para asignar. Por favor recargue la interfaz KML Ruta.');
+        console.groupEnd();
+        return;
+    }
+    
+    // 🔹 Usar fecha de la interfaz o fallback a hoy
+    const fechaProgramada = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
+    console.log('🔹 Fecha programada:', fechaProgramada);
+    
+    const modal = document.createElement('div');
+    modal.id = 'modalPreseleccion';
+    modal.style.cssText = `
+        position:fixed;top:0;left:0;width:100%;height:100%;
+        background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;
+        z-index:10000;font-family:system-ui;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background:white;padding:24px;border-radius:12px;min-width:320px;max-width:90%;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:#1e293b;font-size:18px;">📋 Asignar OS ${osatomo}</h3>
+                <button onclick="cerrarModalPreseleccion()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b;">&times;</button>
+            </div>
+            
+            <div style="margin-bottom:16px;">
+                <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:14px;">📍 Unidad Destino:</label>
+                <select id="selectUnidadDestino" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;">
+                    <option value="">-- Seleccione unidad --</option>
+                    ${unidades.sort().map(u => `<option value="${u}" ${u === unidadOrigen ? 'selected' : ''}>${u}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div style="margin-bottom:16px;">
+                <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:14px;">📅 Fecha Programada:</label>
+                <input type="date" id="inputFechaProgramada" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;" value="${fechaProgramada}">
+            </div>
+            
+            <div style="margin-bottom:20px;">
+                <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:14px;">📝 Comentarios (opcional):</label>
+                <textarea id="inputComentarios" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;min-height:70px;resize:vertical;" placeholder="Notas para la unidad..."></textarea>
+            </div>
+            
+            <div style="display:flex;gap:12px;justify-content:flex-end;">
+                <button onclick="cerrarModalPreseleccion()" style="padding:10px 20px;background:#64748b;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Cancelar</button>
+                <button onclick="guardarPreseleccion('${osatomo}')" style="padding:10px 20px;background:linear-gradient(135deg, #22c55e, #16a34a);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">✅ Confirmar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    console.log('✅ [PRESELECCIÓN] Modal agregado al DOM');
+    
+    // Focus en el select con validación
+    setTimeout(() => {
+        const select = document.getElementById('selectUnidadDestino');
+        if (select) {
+            select.focus();
+            console.log('✅ [PRESELECCIÓN] Focus en selector de unidad');
+        } else {
+            console.error('❌ [PRESELECCIÓN] No se encontró #selectUnidadDestino');
+        }
+    }, 100);
+    
+    console.groupEnd();
+}
+
+// ========================================
+// ❌ CERRAR MODAL PRESELECCIÓN (CON LOGS)
+// ========================================
+function cerrarModalPreseleccion() {
+    console.log('🔹 [PRESELECCIÓN] Cerrando modal...');
+    
+    const modal = document.getElementById('modalPreseleccion');
+    
+    if (!modal) {
+        console.warn('⚠️ [PRESELECCIÓN] Modal no encontrado en el DOM');
+        return;
+    }
+    
+    console.log('✅ [PRESELECCIÓN] Modal encontrado, aplicando animación de cierre');
+    
+    modal.style.opacity = '0';
+    modal.style.transition = 'opacity 0.2s';
+    
+    setTimeout(() => {
+        modal.remove();
+        console.log('✅ [PRESELECCIÓN] Modal eliminado del DOM');
+    }, 200);
+}
+
+
+// ========================================
+// 💾 GUARDAR PRESELECCIÓN EN SUPABASE (CON LOGS)
+// ========================================
+async function guardarPreseleccion(osatomo) {
+    console.group('💾 [PRESELECCIÓN] Guardando asignación');
+    console.log('🔹 OSATMO:', osatomo);
+    
+    // 🔍 Obtener y validar valores del formulario
+    const selectUnidad = document.getElementById('selectUnidadDestino');
+    const inputFecha = document.getElementById('inputFechaProgramada');
+    const inputComentarios = document.getElementById('inputComentarios');
+    
+    console.log('🔹 Elementos del formulario:', {
+        selectUnidad: !!selectUnidad,
+        inputFecha: !!inputFecha,
+        inputComentarios: !!inputComentarios
+    });
+    
+    const unidadDestino = selectUnidad?.value;
+    const fechaProgramada = inputFecha?.value;
+    const comentarios = inputComentarios?.value?.trim() || '';
+    
+    console.log('🔹 Valores capturados:', { unidadDestino, fechaProgramada, comentarios: comentarios.substring(0, 50) + '...' });
+    
+    // ✅ Validaciones con logs detallados
+    if (!unidadDestino) {
+        console.error('❌ [PRESELECCIÓN] Validación fallida: unidadDestino vacío');
+        alert('⚠️ Seleccione una unidad destino');
+        console.groupEnd();
+        return;
+    }
+    
+    if (!fechaProgramada) {
+        console.error('❌ [PRESELECCIÓN] Validación fallida: fechaProgramada vacía');
+        alert('⚠️ Seleccione una fecha programada');
+        console.groupEnd();
+        return;
+    }
+    
+    console.log('✅ [PRESELECCIÓN] Validaciones pasadas');
+    
+    try {
+        // 🔹 Mostrar estado de carga en botón
+        const btnConfirmar = document.querySelector('#modalPreseleccion button:last-child');
+        if (btnConfirmar) {
+            console.log('🔹 [PRESELECCIÓN] Deshabilitando botón de confirmación');
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '⏳ Guardando...';
+        }
+        
+        // 🔹 Preparar payload para Supabase
+        const payload = {
+            osatomo: osatomo,
+            unidad_origen: null,
+            unidad_destino: unidadDestino,
+            fecha_programada: fechaProgramada,
+            usuario_que_asigno: currentUser?.usuario || 'desconocido',
+            comentarios: comentarios,
+            estado: 'pendiente'
+        };
+        
+        console.log('🔹 [PRESELECCIÓN] Payload para Supabase:', JSON.stringify(payload, null, 2));
+        
+        // 🔹 Ejecutar inserción
+        console.log('🔹 [PRESELECCIÓN] Ejecutando inserción en os_preseleccionadas...');
+        const { data, error } = await supabaseClient
+            .from('os_preseleccionadas')
+            .insert(payload)
+            .select()
+            .single();
+        
+        if (error) {
+            console.error('❌ [PRESELECCIÓN] Error de Supabase:', error);
+            throw error;
+        }
+        
+        console.log('✅ [PRESELECCIÓN] Inserción exitosa:', data?.id);
+        
+        // 🔹 Feedback al usuario
+        alert(`✅ OS ${osatomo} asignada:\n📍 ${unidadDestino}\n📅 ${fechaProgramada}`);
+        
+        // 🔹 Cerrar modal
+        cerrarModalPreseleccion();
+        
+        // 🔹 Refrescar marcador si el mapa está abierto
+        if (window.mapaLeaflet) {
+            console.log('🔹 [PRESELECCIÓN] Refrescando marcador en el mapa...');
+            refrescarMarcadorPreseleccionado(osatomo, unidadDestino, fechaProgramada);
+        } else {
+            console.warn('⚠️ [PRESELECCIÓN] window.mapaLeaflet no está disponible');
+        }
+        
+        console.groupEnd();
+        
+    } catch (err) {
+        console.error('❌ [PRESELECCIÓN] Error en guardarPreseleccion:', err);
+        
+        // 🔹 Mostrar error amigable al usuario
+        const mensajeError = err.message || 'Error desconocido';
+        const esErrorRLS = mensajeError.toLowerCase().includes('row level security') || 
+                          mensajeError.toLowerCase().includes('permission');
+        
+        if (esErrorRLS) {
+            alert('❌ Error de permisos: No tienes autorización para asignar esta OS.');
+        } else {
+            alert(`❌ Error: ${mensajeError}`);
+        }
+        
+    } finally {
+        // 🔹 Restaurar botón independientemente del resultado
+        const btnConfirmar = document.querySelector('#modalPreseleccion button:last-child');
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '✅ Confirmar';
+            console.log('🔹 [PRESELECCIÓN] Botón restaurado');
+        }
+        console.groupEnd();
+    }
+}
+
+
+// ========================================
+// ❌ ELIMINAR PRESELECCIÓN (CON LOGS)
+// ========================================
+async function eliminarPreseleccion(osatomo, fechaProgramada) {
+    console.group('❌ [PRESELECCIÓN] Eliminando asignación');
+    console.log('🔹 OSATMO:', osatomo);
+    console.log('🔹 Fecha:', fechaProgramada);
+    console.log('🔹 Usuario actual:', currentUser?.usuario);
+    
+    // 🔹 Confirmación con log
+    if (!confirm(`¿Cancelar asignación de OS ${osatomo} para ${fechaProgramada}?`)) {
+        console.log('⚠️ [PRESELECCIÓN] Usuario canceló la eliminación');
+        console.groupEnd();
+        return;
+    }
+    
+    try {
+        console.log('🔹 [PRESELECCIÓN] Ejecutando eliminación en Supabase...');
+        
+        const { error } = await supabaseClient
+            .from('os_preseleccionadas')
+            .delete()
+            .eq('osatomo', osatomo)
+            .eq('fecha_programada', fechaProgramada)
+            .eq('usuario_que_asigno', currentUser?.usuario);
+        
+        if (error) {
+            console.error('❌ [PRESELECCIÓN] Error eliminando:', error);
+            throw error;
+        }
+        
+        console.log('✅ [PRESELECCIÓN] Eliminación exitosa');
+        alert('✅ Asignación cancelada');
+        
+        // 🔹 Refrescar marcador si el mapa está abierto
+        if (window.mapaLeaflet) {
+            console.log('🔹 [PRESELECCIÓN] Buscando marcador para actualizar...');
+            
+            const marker = window.mapaLeaflet.getLayers?.()?.find?.(layer => 
+                layer.options?.osatomo === osatomo || layer._osatomo === osatomo
+            );
+            
+            if (marker) {
+                console.log('✅ [PRESELECCIÓN] Marcador encontrado, actualizando popup...');
+                
+                // Buscar datos de la OS en memoria
+                const osData = window.osAsignadasKML?.find(o => 
+                    String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
+                );
+                
+                if (osData && typeof crearPopupParaOS === 'function') {
+                    marker.setPopupContent(crearPopupParaOS(osData, false));
+                    console.log('✅ [PRESELECCIÓN] Popup actualizado sin estado preseleccionado');
+                } else {
+                    console.warn('⚠️ [PRESELECCIÓN] No se encontró osData o crearPopupParaOS no está disponible');
+                }
+            } else {
+                console.warn('⚠️ [PRESELECCIÓN] No se encontró marcador para OS', osatomo);
+            }
+        } else {
+            console.warn('⚠️ [PRESELECCIÓN] window.mapaLeaflet no está disponible');
+        }
+        
+    } catch (err) {
+        console.error('❌ [PRESELECCIÓN] Error en eliminarPreseleccion:', err);
+        
+        const mensajeError = err.message || 'Error desconocido';
+        const esErrorRLS = mensajeError.toLowerCase().includes('row level security') || 
+                          mensajeError.toLowerCase().includes('permission');
+        
+        if (esErrorRLS) {
+            alert('❌ Error de permisos: Solo puedes eliminar tus propias asignaciones.');
+        } else {
+            alert(`❌ Error: ${mensajeError}`);
+        }
+        
+    } finally {
+        console.groupEnd();
+    }
+}
+
+
+
+// ========================================
+// 🎨 REFRESCAR MARCADOR PRESELECCIONADO (CON LOGS)
+// ========================================
+function refrescarMarcadorPreseleccionado(osatomo, unidadDestino, fechaProgramada) {
+    console.group('🎨 [PRESELECCIÓN] Refrescando marcador');
+    console.log('🔹 OSATMO:', osatomo);
+    console.log('🔹 Unidad:', unidadDestino);
+    console.log('🔹 Fecha:', fechaProgramada);
+    
+    // 🔹 Validar que Leaflet está disponible
+    if (typeof L === 'undefined') {
+        console.error('❌ [PRESELECCIÓN] Leaflet (L) no está definido');
+        console.groupEnd();
+        return;
+    }
+    
+    // 🔹 Buscar el marcador en el mapa
+    console.log('🔹 [PRESELECCIÓN] Buscando marcador en window.mapaLeaflet...');
+    
+    const marker = window.mapaLeaflet?.getLayers?.()?.find?.(layer => 
+        layer.options?.osatomo === osatomo || 
+        layer._osatomo === osatomo ||
+        layer.options?.OSATMO === osatomo
+    );
+    
+    if (!marker) {
+        console.warn('⚠️ [PRESELECCIÓN] No se encontró marcador para OS', osatomo);
+        console.log('🔹 Capas disponibles en el mapa:', window.mapaLeaflet?.getLayers?.()?.length || 0);
+        console.groupEnd();
+        return;
+    }
+    
+    console.log('✅ [PRESELECCIÓN] Marcador encontrado');
+    
+    try {
+        // 🔹 Cambiar icono a estilo preseleccionado
+        console.log('🔹 [PRESELECCIÓN] Actualizando icono del marcador...');
+        
+        marker.setIcon(L.divIcon({
+            className: 'marker-preseleccionado',
+            html: `<div style="
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                color: white;
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                border: 3px solid white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            ">📋</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        }));
+        
+        console.log('✅ [PRESELECCIÓN] Icono actualizado');
+        
+        // 🔹 Actualizar popup si la función existe
+        if (typeof crearPopupParaOS === 'function') {
+            console.log('🔹 [PRESELECCIÓN] Buscando datos de OS para actualizar popup...');
+            
+            const osData = window.osAsignadasKML?.find(o => 
+                String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
+            );
+            
+            if (osData) {
+                marker.setPopupContent(crearPopupParaOS(osData, true));
+                console.log('✅ [PRESELECCIÓN] Popup actualizado con estado preseleccionado');
+            } else {
+                console.warn('⚠️ [PRESELECCIÓN] No se encontraron datos para OS', osatomo, 'en window.osAsignadasKML');
+            }
+        } else {
+            console.warn('⚠️ [PRESELECCIÓN] Función crearPopupParaOS no está disponible');
+        }
+        
+        // 🔹 Agregar tooltip informativo
+        console.log('🔹 [PRESELECCIÓN] Agregando tooltip...');
+        
+        // Remover tooltip anterior si existe
+        if (marker.getTooltip()) {
+            marker.unbindTooltip();
+        }
+        
+        marker.bindTooltip(`✅ Para ${unidadDestino}\n📅 ${fechaProgramada}`, {
+            permanent: false, 
+            direction: 'top', 
+            className: 'tooltip-preseleccion'
+        });
+        
+        console.log('✅ [PRESELECCIÓN] Tooltip agregado');
+        
+    } catch (err) {
+        console.error('❌ [PRESELECCIÓN] Error actualizando marcador:', err);
+    }
+    
+    console.groupEnd();
+}
+
+
+
+
+
+
 /**
  * Extrae coordenadas con prioridad EXPLÍCITA y validación robusta
  * Prioridad: 1.Coordendasgis → 2.Coordenadas → 3.Alternativos → 4.Separados
