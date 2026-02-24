@@ -6474,6 +6474,30 @@ const normalizarUnidad = (valor) => {
 };
 console.log('✅ normalizarUnidad definida globalmente');
 
+// ========================================
+// 🔄 DETERMINAR OS PARA UNIDAD (LÓGICA DE CASCADA)
+// ========================================
+async function determinarOSParaUnidad(unidad, fechaProgramada, datasetCompleto = null) {
+    // 🔹 PASO 1: Verificar OS Preseleccionadas (Máxima prioridad)
+    const osPreseleccionadas = await cargarOSPreseleccionadasParaUnidad(unidad, fechaProgramada);
+    if (osPreseleccionadas?.length > 0) {
+        return { os: osPreseleccionadas, fuente: 'preseleccionadas', ... };
+    }
+    
+    // 🔹 PASO 2: Verificar Filtros por Unidad (Prioridad media)
+    const filtrosUnidad = await cargarFiltrosPorUnidad(unidad, fechaProgramada);
+    if (filtrosUnidad && (filtrosUnidad.tipologias?.length > 0 || ...)) {
+        const osFiltradas = aplicarFiltrosAlDataset(datasetCompleto, filtrosUnidad, unidad);
+        return { os: osFiltradas, fuente: 'filtros_unidad', ... };
+    }
+    
+    // 🔹 PASO 3: Fallback - Solo OS asignadas automáticamente
+    const osAsignadasUnidad = (datasetCompleto || []).filter(os => 
+        normalizarUnidad(os.Unidad) === normalizarUnidad(unidad)
+    );
+    return { os: osAsignadasUnidad, fuente: 'asignadas_automaticas', ... };
+}
+
 
 async function cargarInterfazKMLRuta() {
 
@@ -12174,8 +12198,93 @@ function refrescarMarcadorPreseleccionado(osatomo, unidadDestino, fechaProgramad
     console.groupEnd();
 }
 
+// ✅ EXPOSICIÓN GLOBAL
+window.abrirModalPreseleccion = abrirModalPreseleccion;
+window.cerrarModalPreseleccion = cerrarModalPreseleccion;
+window.guardarPreseleccion = guardarPreseleccion;
+window.eliminarPreseleccion = eliminarPreseleccion;
+window.refrescarMarcadorPreseleccionado = refrescarMarcadorPreseleccionado;
+console.log('✅ Funciones de preselección expuestas globalmente');
 
 
+// ... (aquí terminan las 5 funciones de preselección que pegaste antes) ...
+
+// ========================================
+// 🗺️ CREAR POPUP PARA MARCADOR (CON BOTÓN DE PRESELECCIÓN)
+// ========================================
+function crearPopupParaOS(os, esPreseleccionada = false) {
+    const rol = currentUser?.rol;
+    const puedeAsignar = ['Administrador', 'Despacho'].includes(rol);
+    const fechaProgramada = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
+    
+    // ✅ Escape seguro para evitar XSS en onclick
+    const osATMO = (os.OSATMO || os.osatomo || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const unidadOS = (os.Unidad || os.unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    
+    return `
+        <div style="min-width: 280px; font-family: system-ui; font-size: 13px;">
+            <!-- Header con OS y estado -->
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+                <strong style="font-size:15px;color:#1e40af;">OS: ${os.OSATMO || os.osatomo || 'N/A'}</strong>
+                ${esPreseleccionada ? 
+                    `<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">📋 ASIGNADA</span>` 
+                    : ''}
+            </div>
+            
+            <!-- Datos básicos -->
+            <div style="font-size:12px;color:#475569;margin-bottom:10px;line-height:1.4;">
+                <div><strong>📍 Unidad:</strong> ${os.Unidad || os.unidad || 'N/A'}</div>
+                <div><strong>📝 Tipología:</strong> ${os.Tipologia || 'N/A'}</div>
+                ${os.Medidor ? `<div><strong>⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
+                ${os['Dias'] ? `<div><strong>📅 Días:</strong> ${os['Dias']}</div>` : ''}
+            </div>
+            
+            <!-- Comentario (colapsable si es largo) -->
+            ${os.Comentario ? `
+                <div style="background:#f8fafc;padding:8px;border-radius:6px;font-size:11px;color:#64748b;margin:8px 0;max-height:100px;overflow:auto;border-left:3px solid #cbd5e1;">
+                    ${os.Comentario.length > 200 ? os.Comentario.substring(0, 200) + '...' : os.Comentario}
+                </div>
+            ` : ''}
+            
+            <!-- BOTONES DE ACCIÓN -->
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+                
+                <!-- Botón Ver Detalle (siempre visible) -->
+                <button onclick="if(typeof mostrarDetalleOSPopup==='function'){mostrarDetalleOSPopup('${osATMO}')}" 
+                        style="width:100%;padding:10px;background:linear-gradient(135deg, #3b82f6, #2563eb);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">
+                    👁️ Ver Detalle Completo
+                </button>
+                
+                <!-- Botón Asignar (solo Admin/Despacho, solo si NO está ya preseleccionada) -->
+                ${puedeAsignar && !esPreseleccionada ? `
+                <button onclick="if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
+                        style="width:100%;padding:10px;background:linear-gradient(135deg, #f59e0b, #d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    📋 Asignar a Unidad...
+                </button>
+                ` : ''}
+                
+                <!-- Botón Cancelar Asignación (solo si ya está preseleccionada y es el mismo usuario) -->
+                ${puedeAsignar && esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
+                <button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${fechaProgramada}')}" 
+                        style="width:100%;padding:8px;background:#ef4444;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;">
+                    ❌ Cancelar mi asignación
+                </button>
+                ` : ''}
+                
+            </div>
+            
+            <!-- Footer informativo -->
+            <div style="margin-top:12px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;">
+                ${esPreseleccionada ? '✅ Esta OS fue asignada manualmente' : '💡 Click en "Asignar" para agregar a una unidad'}
+            </div>
+        </div>
+    `;
+}
+
+
+// ========================================
+// 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA...
+// ========================================
 
 
 
