@@ -17511,7 +17511,9 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Proteccion que lo Alimenta :/g, '<br><strong>Protección que lo Alimenta:</strong>')
 
     // --- ENLACES ---
-    .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
+    .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="\_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
+
+}
 
 // ===================================================================
 // 🔘 FUNCIÓN AUXILIAR: GENERAR BOTONES DE ACCIÓN
