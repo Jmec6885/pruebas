@@ -13325,7 +13325,7 @@ const iconoConNumero = L.divIcon({
     popupAnchor: [0, esMultiple ? -40 : -32]
 });
 
-        // ========================================
+                // ========================================
         // ✅ CREAR POPUP CON LISTA DE TODAS LAS OS
         // ========================================
         let popupContent = `
@@ -13363,7 +13363,15 @@ const iconoConNumero = L.divIcon({
 
                 // Escape seguro para labelEstado en el onclick
                 const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                // ✅ Escape seguro para OSATMO y Unidad (usar en onclick)
                 const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                // ✅ LOG para debug de preselección
+                if (os.esPreseleccionada) {
+                    console.log(`📋 [POPUP] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
+                }
 
                 popupContent += `
                     <div style="
@@ -13390,17 +13398,25 @@ const iconoConNumero = L.divIcon({
                             <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
                         </div>
                         <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-    style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
-    📋 Ver Detalle Completo
-</button>
+                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
+                            📋 Ver Detalle Completo
+                        </button>
 
-<!-- ✅ AGREGAR: Botón para cancelar asignación si es preseleccionada y es el mismo usuario -->
-${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
-<button onclick="event.stopPropagation(); if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${os.OSATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}');}"
-    style="margin-top: 6px; background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px;">
-    ❌ Cancelar mi asignación
-</button>
-` : ''}
+                        <!-- ✅ BOTÓN ASIGNAR (solo Admin/Despacho, solo si NO está preseleccionada) -->
+                        ${['Administrador', 'Despacho'].includes(currentUser?.rol) && !os.esPreseleccionada ? `
+                        <button onclick="event.stopPropagation(); if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
+                            style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
+                            📋 Asignar a Unidad...
+                        </button>
+                        ` : ''}
+
+                        <!-- ✅ BOTÓN CANCELAR (solo si está preseleccionada y es el mismo usuario) -->
+                        ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
+                        <button onclick="event.stopPropagation(); if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
+                            style="margin-top: 6px; background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px;">
+                            ❌ Cancelar mi asignación
+                        </button>
+                        ` : ''}
                     </div>
                 `;
             }
@@ -13421,6 +13437,15 @@ ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
             
             const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             
+            // ✅ Escape seguro para OS única también
+            const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            // ✅ LOG para debug
+            if (os.esPreseleccionada) {
+                console.log(`📋 [POPUP-ÚNICA] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
+            }
+            
             popupContent += `
                 <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
                     <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
@@ -13430,18 +13455,26 @@ ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
                     ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
                 </div>
                 <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
-    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-    📋 Ver Detalle Completo
-</button>
+                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
+                    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    📋 Ver Detalle Completo
+                </button>
 
-<!-- ✅ AGREGAR: Botón para cancelar asignación si es preseleccionada y es el mismo usuario -->
-${osList[0].esPreseleccionada && osList[0].usuario_que_asigno === currentUser?.usuario ? `
-<button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osList[0].OSATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}');}"
-    style="margin-top: 8px; background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 12px;">
-    ❌ Cancelar mi asignación
-</button>
-` : ''}
+                <!-- ✅ BOTÓN ASIGNAR (solo Admin/Despacho, solo si NO está preseleccionada) -->
+                ${['Administrador', 'Despacho'].includes(currentUser?.rol) && !os.esPreseleccionada ? `
+                <button onclick="if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
+                    style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">
+                    📋 Asignar a Unidad...
+                </button>
+                ` : ''}
+
+                <!-- ✅ BOTÓN CANCELAR (solo si está preseleccionada y es el mismo usuario) -->
+                ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
+                <button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
+                    style="margin-top: 8px; background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 12px;">
+                    ❌ Cancelar mi asignación
+                </button>
+                ` : ''}
             `;
         }
 
@@ -18416,6 +18449,17 @@ window.cerrarModalPreseleccion = typeof cerrarModalPreseleccion === 'function' ?
 window.guardarPreseleccion = typeof guardarPreseleccion === 'function' ? guardarPreseleccion : null;
 window.eliminarPreseleccion = typeof eliminarPreseleccion === 'function' ? eliminarPreseleccion : null;
 window.refrescarMarcadorPreseleccionado = typeof refrescarMarcadorPreseleccionado === 'function' ? refrescarMarcadorPreseleccionado : null;
+console.log('✅ Funciones de preselección expuestas globalmente');
+
+// ========================================
+// ✅ EXPOSICIÓN GLOBAL CRÍTICA PARA ONCLICK
+// ========================================
+// Esto permite que los onclick en HTML puedan llamar a estas funciones
+if (typeof abrirModalPreseleccion === 'function') window.abrirModalPreseleccion = abrirModalPreseleccion;
+if (typeof cerrarModalPreseleccion === 'function') window.cerrarModalPreseleccion = cerrarModalPreseleccion;
+if (typeof guardarPreseleccion === 'function') window.guardarPreseleccion = guardarPreseleccion;
+if (typeof eliminarPreseleccion === 'function') window.eliminarPreseleccion = eliminarPreseleccion;
+if (typeof refrescarMarcadorPreseleccionado === 'function') window.refrescarMarcadorPreseleccionado = refrescarMarcadorPreseleccionado;
 console.log('✅ Funciones de preselección expuestas globalmente');
 
 
