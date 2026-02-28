@@ -11333,7 +11333,7 @@ function cerrarModalPreseleccion() {
 
 
 // ========================================
-// 💾 GUARDAR PRESELECCIÓN EN SUPABASE (CON LOGS)
+// 💾 GUARDAR PRESELECCIÓN EN SUPABASE (CON LOGS) - VERSIÓN FINAL
 // ========================================
 async function guardarPreseleccion(osatomo) {
     console.group('💾 [PRESELECCIÓN] Guardando asignación');
@@ -11354,7 +11354,11 @@ async function guardarPreseleccion(osatomo) {
     const fechaProgramada = inputFecha?.value;
     const comentarios = inputComentarios?.value?.trim() || '';
     
-    console.log('🔹 Valores capturados:', { unidadDestino, fechaProgramada, comentarios: comentarios.substring(0, 50) + '...' });
+    console.log('🔹 Valores capturados:', { 
+        unidadDestino, 
+        fechaProgramada, 
+        comentarios: comentarios.substring(0, 50) + '...' 
+    });
     
     // ✅ Validaciones con logs detallados
     if (!unidadDestino) {
@@ -11383,12 +11387,13 @@ async function guardarPreseleccion(osatomo) {
         }
         
         // 🔹 Preparar payload para Supabase
+        // ✅ IMPORTANTE: Usar currentUser?.usuario (auth custom), NO email
         const payload = {
             osatomo: osatomo,
             unidad_origen: null,
             unidad_destino: unidadDestino,
             fecha_programada: fechaProgramada,
-            usuario_que_asigno: currentUser?.usuario || 'desconocido',
+            usuario_que_asigno: currentUser?.usuario || 'desconocido',  // ← CORRECTO para tu sistema
             comentarios: comentarios,
             estado: 'pendiente'
         };
@@ -11451,7 +11456,6 @@ async function guardarPreseleccion(osatomo) {
         console.groupEnd();
     }
 }
-
 
 // ========================================
 // ❌ ELIMINAR PRESELECCIÓN (CON LOGS)
