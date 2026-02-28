@@ -17514,7 +17514,9 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Voltaje Secundario Nominal :/g, '<br><strong>Voltaje Secundario Nominal:</strong>')
     .replace(/Proteccion que lo Alimenta :/g, '<br><strong>Protección que lo Alimenta:</strong>')
     .replace(/Propiedad :/g, '<br><strong>Propiedad:</strong>')
-    .replace(/Distribuidora Voltaje Primario Nominal :/g, '<br><strong>Distribuidora Voltaje Primario Nominal:</strong>')
+	.replace(/SUBESTACION/g, '<br><strong>SUBESTACION:</strong>')
+	.replace(/Voltaje Primario Nominal :/g, '<br><strong>Voltaje Primario Nominal :</strong>')
+    
 
     // --- ENLACES ---
     .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="\_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
