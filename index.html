@@ -17474,14 +17474,18 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/SUBESTACION SUB/g, '<br><strong>SUBESTACION SUB:</strong>')
     .replace(/NOMBRE_CLIENTE/g, '<br><strong>NOMBRE_CLIENTE:</strong>')
     .replace(/Tarifa/g, '<br><strong>Tarifa G:</strong>')
-    .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>') // Mover arriba de Direccion genérico
+    .replace(/Dirección del cliente/g, '<br><strong>Dirección del cliente:</strong>')
     .replace(/Direccion/g, '<br><strong>Dirección:</strong>')
     .replace(/Sin Comentario/g, '<br><em>Sin Comentario</em>')
     .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
     .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
     .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
     .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
+    
+    // Prioridad para Medidor con número, luego la palabra sola
     .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
+    .replace(/Medidor/g, '<br><strong>Medidor:</strong>')
+    
     .replace(/Numero de OS/g, '<br><strong>Número de OS:</strong>')
     .replace(/Tipologia/g, '<br><strong>Tipología:</strong>')
     .replace(/Comentario de Cierre/g, '<br><strong>Comentario de Cierre:</strong>')
@@ -17498,7 +17502,7 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Forma/g, '<br><strong>Forma:</strong>')
     .replace(/Hilos/g, '<br><strong>Hilos:</strong>')
     
-    // --- NUEVOS CAMPOS SOLICITADOS ---
+    // --- NUEVOS CAMPOS ---
     .replace(/Placa =/g, '<br><strong>Placa:</strong>')
     .replace(/Capacidad Sum :/g, '<br><strong>Capacidad Suministro:</strong>')
     .replace(/Circuito :/g, '<br><strong>Circuito:</strong>')
@@ -17509,6 +17513,8 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Usos :/g, '<br><strong>Usos:</strong>')
     .replace(/Voltaje Secundario Nominal :/g, '<br><strong>Voltaje Secundario Nominal:</strong>')
     .replace(/Proteccion que lo Alimenta :/g, '<br><strong>Protección que lo Alimenta:</strong>')
+    .replace(/Propiedad :/g, '<br><strong>Propiedad:</strong>')
+    .replace(/Distribuidora Voltaje Primario Nominal :/g, '<br><strong>Distribuidora Voltaje Primario Nominal:</strong>')
 
     // --- ENLACES ---
     .replace(/(https?:\/\/[^\s]+)/g, '<br><a href="$1" target="\_blank" style="color: #3b54d3; text-decoration: underline; font-weight: 600;">🔗 Ver enlace</a>');
