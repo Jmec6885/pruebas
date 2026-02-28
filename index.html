@@ -11175,26 +11175,88 @@ function validarFormatoCoordenadas(coordenadas) {
 
 
 // ========================================
-// 📋 MODAL: ASIGNAR OS A UNIDAD (CON LOGS)
+// 📋 CARGAR UNIDADES DISPONIBLES DESDE BD
 // ========================================
-function abrirModalPreseleccion(osatomo, unidadOrigen) {
+async function cargarUnidadesDisponibles() {
+    console.log('📥 Cargando unidades disponibles desde os_asignadas...');
+    
+    try {
+        const {  unidades, error } = await supabaseClient
+            .from('os_asignadas')
+            .select('Unidad')
+            .not('Unidad', 'is', null)
+            .neq('Unidad', '');
+        
+        if (error) throw error;
+        
+        // Extraer unidades únicas y ordenadas
+        const unidadesUnicas = [...new Set(unidades.map(u => u.Unidad).filter(u => u))]
+            .sort()
+            .filter(u => u !== '--------------------------------------------------'); // Filtrar separadores
+        
+        window.unidadesDisponiblesKML = unidadesUnicas;
+        console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
+        
+        return unidadesUnicas;
+        
+    } catch (err) {
+        console.error('❌ Error cargando unidades:', err.message);
+        // Fallback a lista estática si falla
+        return obtenerUnidadesEstaticas();
+    }
+}
+
+// ========================================
+// 📋 LISTA ESTÁTICA DE UNIDADES (Fallback)
+// ========================================
+function obtenerUnidadesEstaticas() {
+    const unidades = [
+        'CL-EYB-PAC-01', 'CL-EYB-PAC-02', 'CL-EYB-PAC-03', 'CL-EYB-PAC-04',
+        'CL-EYB-PAC-05', 'CL-EYB-PAC-06', 'CL-EYB-PAC-07',
+        'CL-OPC-NTE-001', 'CL-OPC-NTE-002', 'CL-OPC-NTE-003', 'CL-OPC-NTE-004',
+        'CL-OPC-NTE-005', 'CL-OPC-NTE-006', 'CL-OPC-NTE-007', 'CL-OPC-NTE-008',
+        'CL-OPC-NTE-009', 'CL-OPC-NTE-010', 'CL-OPC-NTE-011', 'CL-OPC-NTE-012',
+        'CL-OPC-PAC-001', 'CL-OPC-PAC-002', 'CL-OPC-PAC-003', 'CL-OPC-PAC-004',
+        'CL-OPC-PAC-005', 'CL-OPC-PAC-006', 'CL-OPC-PAC-007', 'CL-OPC-PAC-008',
+        'CL-OPC-PAC-009', 'CL-OPC-PAC-010', 'CL-OPC-PAC-012',
+        'CL-PAN-NTE-001', 'CL-PAN-NTE-002', 'CL-PAN-NTE-003', 'CL-PAN-NTE-004',
+        'CL-PAN-NTE-005', 'CL-PAN-NTE-006', 'CL-PAN-NTE-008', 'CL-PAN-NTE-009',
+        'CL-PAN-NTE-010',
+        'CL-PAN-PAC-001', 'CL-PAN-PAC-002', 'CL-PAN-PAC-003', 'CL-PAN-PAC-004',
+        'CL-PAN-PAC-005', 'CL-PAN-PAC-006',
+        'CL-SCH-NTE-001', 'CL-SCH-NTE-002', 'CL-SCH-NTE-003', 'CL-SCH-NTE-004',
+        'CL-SCH-NTE-005', 'CL-SCH-NTE-006', 'CL-SCH-NTE-007',
+        'CL-SEM-NTE-001', 'CL-SEM-NTE-003',
+        'CL-SEM-PAC-001', 'CL-SEM-PAC-002', 'CL-SEM-PAC-003', 'CL-SEM-PAC-004',
+        'CL-SEM-PAC-005', 'CL-SEM-PAC-006', 'CL-SEM-PAC-007',
+        'CL-VID-LLA-001', 'CL-VID-LLA-002', 'CL-VID-LLA-003', 'CL-VID-LLA-004',
+        'CL-VID-LLA-009', 'CL-VID-LLA-010'
+    ];
+    
+    window.unidadesDisponiblesKML = unidades;
+    console.log(`✅ ${unidades.length} unidades estáticas cargadas`);
+    return unidades;
+}
+
+
+
+// ========================================
+// 📋 MODAL: ASIGNAR OS A UNIDAD (CORREGIDO)
+// ========================================
+async function abrirModalPreseleccion(osatomo, unidadOrigen) {
     console.group('📋 [PRESELECCIÓN] Abrir modal');
     console.log('🔹 OSATMO:', osatomo);
     console.log('🔹 Unidad origen:', unidadOrigen || 'N/A');
     
-    // 🔍 DEBUG: Verificar datos disponibles
-    console.log('🔹 window.unidadesDisponiblesKML:', window.unidadesDisponiblesKML?.length || 0, 'unidades');
-    console.log('🔹 window.fechaSeleccionadaKML:', window.fechaSeleccionadaKML || 'No definida');
+    // ✅ Cargar unidades disponibles si no existen
+    let unidades = window.unidadesDisponiblesKML || [];
     
-    const unidades = window.unidadesDisponiblesKML || [];
-    
-    // ⚠️ Validar que hay unidades disponibles
     if (unidades.length === 0) {
-        console.warn('⚠️ [PRESELECCIÓN] No hay unidades disponibles en window.unidadesDisponiblesKML');
-        alert('⚠️ No hay unidades disponibles para asignar. Por favor recargue la interfaz KML Ruta.');
-        console.groupEnd();
-        return;
+        console.log('⚠️ No hay unidades en memoria, cargando desde BD...');
+        unidades = await cargarUnidadesDisponibles();
     }
+    
+    console.log('🔹 window.unidadesDisponiblesKML:', unidades.length, 'unidades');
     
     // 🔹 Usar fecha de la interfaz o fallback a hoy
     const fechaProgramada = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
@@ -11202,11 +11264,7 @@ function abrirModalPreseleccion(osatomo, unidadOrigen) {
     
     const modal = document.createElement('div');
     modal.id = 'modalPreseleccion';
-    modal.style.cssText = `
-        position:fixed;top:0;left:0;width:100%;height:100%;
-        background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;
-        z-index:10000;font-family:system-ui;
-    `;
+    modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000;font-family:system-ui;`;
     
     modal.innerHTML = `
         <div style="background:white;padding:24px;border-radius:12px;min-width:320px;max-width:90%;box-shadow:0 10px 25px rgba(0,0,0,0.2);">
@@ -11217,7 +11275,7 @@ function abrirModalPreseleccion(osatomo, unidadOrigen) {
             
             <div style="margin-bottom:16px;">
                 <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:14px;">📍 Unidad Destino:</label>
-                <select id="selectUnidadDestino" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;">
+                <select id="selectUnidadDestino" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;max-height:200px;overflow-y:auto;">
                     <option value="">-- Seleccione unidad --</option>
                     ${unidades.sort().map(u => `<option value="${u}" ${u === unidadOrigen ? 'selected' : ''}>${u}</option>`).join('')}
                 </select>
@@ -11235,27 +11293,19 @@ function abrirModalPreseleccion(osatomo, unidadOrigen) {
             
             <div style="display:flex;gap:12px;justify-content:flex-end;">
                 <button onclick="cerrarModalPreseleccion()" style="padding:10px 20px;background:#64748b;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Cancelar</button>
-                <button onclick="guardarPreseleccion('${osatomo}')" style="padding:10px 20px;background:linear-gradient(135deg, #22c55e, #16a34a);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">✅ Confirmar</button>
+                <button onclick="guardarPreseleccion('${osatomo}')" style="padding:10px 20px;background:linear-gradient(135deg,#22c55e,#16a34a);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">✅ Confirmar</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
     console.log('✅ [PRESELECCIÓN] Modal agregado al DOM');
-    
-    // Focus en el select con validación
-    setTimeout(() => {
-        const select = document.getElementById('selectUnidadDestino');
-        if (select) {
-            select.focus();
-            console.log('✅ [PRESELECCIÓN] Focus en selector de unidad');
-        } else {
-            console.error('❌ [PRESELECCIÓN] No se encontró #selectUnidadDestino');
-        }
-    }, 100);
-    
     console.groupEnd();
+    
+    setTimeout(() => document.getElementById('selectUnidadDestino')?.focus(), 100);
 }
+
+
 
 // ========================================
 // ❌ CERRAR MODAL PRESELECCIÓN (CON LOGS)
@@ -14456,7 +14506,22 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
     }
 }
 
-
+// ========================================
+// 🔄 INICIALIZAR UNIDADES DISPONIBLES
+// ========================================
+async function inicializarUnidadesMapaRutas() {
+    console.log('🔄 Inicializando unidades disponibles para Mapa de Rutas...');
+    
+    if (!window.unidadesDisponiblesKML || window.unidadesDisponiblesKML.length === 0) {
+        await cargarUnidadesDisponibles();
+    }
+    
+    // También establecer fecha por defecto
+    if (!window.fechaSeleccionadaKML) {
+        window.fechaSeleccionadaKML = getFechaHoyElSalvador();
+        console.log('📅 Fecha establecida:', window.fechaSeleccionadaKML);
+    }
+}
 
 
 /**
