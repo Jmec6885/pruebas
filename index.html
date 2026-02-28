@@ -11175,33 +11175,45 @@ function validarFormatoCoordenadas(coordenadas) {
 
 
 // ========================================
-// 📋 CARGAR UNIDADES DISPONIBLES DESDE BD
+// 📋 CARGAR UNIDADES DISPONIBLES DESDE BD (CORREGIDA)
 // ========================================
 async function cargarUnidadesDisponibles() {
     console.log('📥 Cargando unidades disponibles desde os_asignadas...');
     
     try {
-        const {  unidades, error } = await supabaseClient
+        const { data: unidades, error } = await supabaseClient
             .from('os_asignadas')
             .select('Unidad')
             .not('Unidad', 'is', null)
-            .neq('Unidad', '');
+            .neq('Unidad', '')
+            .limit(1000); // Limitar para evitar timeout
         
-        if (error) throw error;
+        // ✅ Validar respuesta antes de usar .map()
+        if (error) {
+            console.warn('⚠️ Error consultando unidades:', error.message);
+            throw error;
+        }
+        
+        if (!unidades || !Array.isArray(unidades)) {
+            console.warn('⚠️ Respuesta inesperada de Supabase:', unidades);
+            return obtenerUnidadesEstaticas(); // Fallback
+        }
         
         // Extraer unidades únicas y ordenadas
-        const unidadesUnicas = [...new Set(unidades.map(u => u.Unidad).filter(u => u))]
-            .sort()
-            .filter(u => u !== '--------------------------------------------------'); // Filtrar separadores
+        const unidadesUnicas = [...new Set(
+            unidades
+                .map(u => u?.Unidad)
+                .filter(u => u && u.trim() !== '' && u !== '--------------------------------------------------')
+        )].sort();
         
         window.unidadesDisponiblesKML = unidadesUnicas;
-        console.log(`✅ ${unidadesUnicas.length} unidades cargadas`);
+        console.log(`✅ ${unidadesUnicas.length} unidades cargadas desde BD`);
         
         return unidadesUnicas;
         
     } catch (err) {
-        console.error('❌ Error cargando unidades:', err.message);
-        // Fallback a lista estática si falla
+        console.error('❌ Error cargando unidades desde BD:', err.message);
+        // Fallback a lista estática
         return obtenerUnidadesEstaticas();
     }
 }
@@ -11234,10 +11246,9 @@ function obtenerUnidadesEstaticas() {
     ];
     
     window.unidadesDisponiblesKML = unidades;
-    console.log(`✅ ${unidades.length} unidades estáticas cargadas`);
+    console.log(`✅ ${unidades.length} unidades estáticas cargadas (fallback)`);
     return unidades;
 }
-
 
 
 // ========================================
