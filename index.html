@@ -7774,7 +7774,7 @@ async function generarKMLAdminPorUnidad(tipo) {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA CON FALLBACK DE NORMALIZACIÓN)
+// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (VALIDADA)
 // ========================================
 async function generarMapaKMLSoloAsignadas(unidad) {
     console.group('🗺️ [MAPA] Generando mapa para unidad:', unidad);
@@ -7812,7 +7812,7 @@ async function generarMapaKMLSoloAsignadas(unidad) {
         console.log(`🔍 Consultando preseleccionadas para ${unidad} en ${fechaHoy}`);
         
         // Intentar con formato exacto primero
-        const {  pre, error } = await supabaseClient
+        const { data: pre, error } = await supabaseClient
             .from('os_preseleccionadas')
             .select('osatomo, comentarios')
             .eq('unidad_destino', unidad)
@@ -7824,7 +7824,7 @@ async function generarMapaKMLSoloAsignadas(unidad) {
             
             // Obtener detalles completos
             const osIds = pre.map(p => p.osatomo);
-            const {  detalles } = await supabaseClient
+            const { data: detalles } = await supabaseClient
                 .from('OS Pendientes')
                 .select('*')
                 .in('OSATMO', osIds);
@@ -7838,10 +7838,10 @@ async function generarMapaKMLSoloAsignadas(unidad) {
                 }));
             }
         } else if (!pre || pre.length === 0) {
-            // 🔹 FALLBACK: Intentar con normalización (ignora guiones, espacios, case)
+            // Fallback con normalización
             console.log(`🔄 Búsqueda exacta no encontró resultados, intentando con normalización...`);
             
-            const {  preFallback } = await supabaseClient
+            const { data: preFallback } = await supabaseClient
                 .from('os_preseleccionadas')
                 .select('osatomo, comentarios, unidad_destino')
                 .eq('fecha_programada', fechaHoy)
@@ -7855,7 +7855,7 @@ async function generarMapaKMLSoloAsignadas(unidad) {
                 if (filtradas.length > 0) {
                     console.log(`✅ ${filtradas.length} OS encontradas con búsqueda normalizada`);
                     const osIds = filtradas.map(p => p.osatomo);
-                    const {  detalles } = await supabaseClient
+                    const { data: detalles } = await supabaseClient
                         .from('OS Pendientes')
                         .select('*')
                         .in('OSATMO', osIds);
@@ -7904,11 +7904,13 @@ async function generarMapaKMLSoloAsignadas(unidad) {
     generarMapaKMLConPuntoPartida(unidad, osParaMapa);
     
     console.groupEnd();
-}
+} // ✅ Cierre correcto de la función
 
 
 
-
+// ========================================
+// 🗺️ GENERAR MAPA KML CON FILTROS GUARDADOS (VALIDADA)
+// ========================================
 async function generarMapaKMLConFiltrosGuardados(unidad) {
     const btn = document.getElementById('btnAplicarFiltro');
     const select = document.getElementById('selectPuntoPartidaKML');
@@ -7921,7 +7923,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
         return;
     }
 
-    // 🕵️ VALIDACIÓN PREVENTIVA DE COORDENADAS (Lo que faltaba)
+    // 🕵️ VALIDACIÓN PREVENTIVA DE COORDENADAS
     const fuente = window.osAsignadasKML || [];
     const osDataPartida = fuente.find(os => String(os.OSATMO || os.osatomo).trim() === String(osPartida).trim());
     
@@ -7966,7 +7968,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             console.groupEnd();
         }
 
-        // 4. Ejecución del motor (Donde corregimos el error de 'partes')
+        // 4. Ejecución del motor
         await generarMapaUnidadConFiltros(true); 
 
         console.log('--- ✅ PROCESO FINALIZADO CON ÉXITO ---');
@@ -7981,7 +7983,9 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             btn.style.opacity = '1';
         }
     }
-}
+} // ✅ Cierre correcto de la función
+
+
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
@@ -14695,7 +14699,7 @@ misAsignacionesPropias.forEach(os => {
         // ✅ EN cargarInterfazKMLRuta(), reemplazar el bloque de rol === 'Consulta' || 'Contratista':
 
 // ========================================
-// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa (VERSIÓN INLINE)
+// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa (VALIDADA)
 // ========================================
 else if (rol === 'Consulta' || rol === 'Contratista') {
     console.group('👷 [CONTRATISTA] Cargando interfaz KML Ruta');
@@ -14706,7 +14710,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
     console.log(`📍 Unidad usuario: ${unidadUsuario}`);
     console.log(`📅 Fecha: ${HOY}`);
     
-    // 🔹 1. Obtener OS asignadas automáticamente (para dropdown) - Lógica INLINE
+    // 🔹 1. Obtener OS asignadas automáticamente (para dropdown)
     console.log('🔹 Paso 1: Obteniendo OS asignadas para dropdown...');
     const osParaDropdown = (misAsignacionesPropias || []).filter(os => {
         if (!os.Unidad) return false;
@@ -14727,7 +14731,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
         return;
     }
     
-    // 🔹 2. Obtener OS para MAPA (asignadas + preseleccionadas) - Consulta DIRECTA
+    // 🔹 2. Obtener OS para MAPA (asignadas + preseleccionadas)
     console.log('🔹 Paso 2: Obteniendo OS para mapa (combinado)...');
     
     let osPreseleccionadas = [];
@@ -14735,7 +14739,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
         console.log(`🔍 Consultando os_preseleccionadas para unidad="${unidadUsuario}", fecha="${HOY}"`);
         
         // Intentar con formato exacto primero
-        const {  preExacta, error: errorPre1 } = await supabaseClient
+        const { data: preExacta, error: errorPre1 } = await supabaseClient
             .from('os_preseleccionadas')
             .select('osatomo, comentarios')
             .eq('unidad_destino', unidadUsuario)
@@ -14749,7 +14753,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
             const unidadSinGuiones = unidadUsuario.replace(/[^A-Z0-9]/g, '').toUpperCase();
             console.log(`🔄 Intentando búsqueda alternativa: ${unidadSinGuiones}`);
             
-            const {  preFallback } = await supabaseClient
+            const { data: preFallback } = await supabaseClient
                 .from('os_preseleccionadas')
                 .select('osatomo, comentarios, unidad_destino')
                 .eq('fecha_programada', HOY)
@@ -14771,7 +14775,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
             const osIds = osPreseleccionadas.map(p => p.osatomo);
             console.log(`🔍 Obteniendo detalles para OS: ${osIds.join(', ')}`);
             
-            const {  detalles, error: errorDetalles } = await supabaseClient
+            const { data: detalles, error: errorDetalles } = await supabaseClient
                 .from('OS Pendientes')
                 .select('*')
                 .in('OSATMO', osIds);
@@ -14858,7 +14862,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                 </button>
             </div>
         </div>
-    `;
+    `; // ✅ Template literal cerrado correctamente
     
     // 🔹 5. Guardar OS para mapa en variable global
     window.osParaMapaActual = osParaMapa;
@@ -14866,8 +14870,7 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
     
     console.log('✅ Interfaz KML Ruta generada correctamente');
     console.groupEnd();
-}
-
+} // ✅ Cierre correcto del bloque else if
 
 
 
