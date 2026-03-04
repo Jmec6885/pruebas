@@ -14944,16 +14944,16 @@ window.seleccionarOSDeLista = seleccionarOSDeLista;
 
 
  	// ========================================
-// 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
+// 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN VALIDADA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
-// 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de OS Pendientes
-if (os.Comentario && os.Comentario.trim() !== '' && 
-    os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
-    os.ComentarioGeneral = os.Comentario;  // Asegurar que ComentarioGeneral refleje OS Pendientes
-}
+    // 🚨 CORRECCIÓN: Forzar prioridad de OS Pendientes
+    if (os.Comentario && os.Comentario.trim() !== '' && 
+        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+        os.ComentarioGeneral = os.Comentario;
+    }
 
- // 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de comentario de OS Pendientes
+    // 🚨 CORRECCIÓN: Forzar prioridad de comentario
     if (os.ComentarioOriginal) {
         os.Comentario = os.ComentarioOriginal;
     }
@@ -14962,181 +14962,157 @@ if (os.Comentario && os.Comentario.trim() !== '' &&
     }
 
     const panelDetalle = document.getElementById('panelDetalleOS');
-
     if (!panelDetalle) {
         console.error('❌ Panel de detalle no encontrado');
         return;
     }
 
-// ✅ Escape seguro si el objeto viene de HTML
+    // ✅ Escape seguro si el objeto viene de HTML
     const osData = typeof os === 'string' 
         ? JSON.parse(os.replace(/&quot;/g, '"').replace(/&#39;/g, "'"))
         : os;
 
-    // ========================================
-    // 🕵️ LOGS DE DEBUG - VER QUÉ DATOS RECIBIMOS
-    // ========================================
-    console.log('🔍 ==========================================');
+    // 🔍 Logs de debug
     console.log('🔍 MOSTRAR DETALLE OS - DATOS RECIBIDOS');
-    console.log('🔍 ==========================================');
-    console.log('📋 OS:', os.OSATMO || os.osatomo || 'SIN ID');
+    console.log('📋 OS:', osData.OSATMO || osData.osatomo || 'SIN ID');
     console.log('📊 labelEstado:', labelEstado);
-    console.log('💬 os.Comentario:', os.Comentario);
-    console.log('💬 os.ComentarioGeneral:', os.ComentarioGeneral);
-    console.log('💬 os.comentario:', os.comentario);
-    console.log('💬 os.Observaciones:', os.Observaciones);
-    console.log('📊 Todos los campos disponibles:', Object.keys(os));
-    console.log('🔍 ==========================================');
 
-
-// ========================================
-// ✅ 🆕 BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA PARA KML
-// ========================================
-const comentarioTexto = (() => {
-    // ✅ PRIORIDAD 1: Comentario específico de KML
-    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && 
-        os.ComentarioKML !== 'Sin comentario disponible') {
-        return os.ComentarioKML;
-    }
-    
-    // ✅ PRIORIDAD 2: Comentario de OS Pendientes (SIEMPRE prioritario)
-    if (os.Comentario && os.Comentario.trim() !== '' && 
-        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible' &&
-        os.esDeConsultasServicios === false) {  // ← VERIFICAR FLAG
-        return os.Comentario;
-    }
-    
-    // ✅ PRIORIDAD 3: ComentarioGeneral SOLO si viene de OS Pendientes
-    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && 
-        os.ComentarioGeneral !== 'Sin comentario disponible' &&
-        os.esDeConsultasServicios !== true) {  // ← NO usar si es de consultas_servicios
-        return os.ComentarioGeneral;
-    }
-    
-    // ✅ FALLBACK: Otros campos
-    return os.comentario || os.Observaciones || os.comentarioGeneral || 
-           os.observaciones || os.Comentarios || os.comentarios ||
-           os.Detalle || os.detalle || os.descripcion || os.Descripcion ||
-           os.Nota || os.nota || 'Sin comentario disponible';
-})();
-
-    
+    // ========================================
+    // ✅ BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA
+    // ========================================
+    const comentarioTexto = (() => {
+        if (osData.ComentarioKML && osData.ComentarioKML.trim() !== '' && 
+            osData.ComentarioKML !== 'Sin comentario disponible') {
+            return osData.ComentarioKML;
+        }
+        if (osData.Comentario && osData.Comentario.trim() !== '' && 
+            osData.Comentario !== 'N/A' && osData.Comentario !== 'Sin comentario disponible' &&
+            osData.esDeConsultasServicios === false) {
+            return osData.Comentario;
+        }
+        if (osData.ComentarioGeneral && osData.ComentarioGeneral.trim() !== '' && 
+            osData.ComentarioGeneral !== 'Sin comentario disponible' &&
+            osData.esDeConsultasServicios !== true) {
+            return osData.ComentarioGeneral;
+        }
+        return osData.comentario || osData.Observaciones || osData.comentarioGeneral || 
+               osData.observaciones || osData.Comentarios || osData.comentarios ||
+               osData.Detalle || osData.detalle || osData.descripcion || osData.Descripcion ||
+               osData.Nota || osData.nota || 'Sin comentario disponible';
+    })();
 
     console.log('🔍 DEBUG COMENTARIO:', {
-        OS: os.OSATMO || os.osatomo,
-        TieneComentario: !!os.Comentario,
-        TieneComentarioGeneral: !!os.ComentarioGeneral,
-        TieneObservaciones: !!os.Observaciones,
-        ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO',
-        LongitudComentario: comentarioTexto.length
+        OS: osData.OSATMO || osData.osatomo,
+        ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO'
     });
 
-    // ✅ DECLARACIÓN ÚNICA CORREGIDA
-const comentarioFormateado = (() => {
-    if (!comentarioTexto || comentarioTexto.trim() === '' || 
-        comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
-        return `
-        <div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
-            <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
-            <small style="color: #666;">
-                Medidor: ${os.Medidor || 'N/A'}<br>
-                Tipología: ${os.Tipologia || 'N/A'}
-            </small>
-        </div>`;
-    }
-    // ✅ Validar que la función existe antes de llamarla
-    return typeof formatearComentario === 'function' 
-        ? formatearComentario(comentarioTexto) 
-        : `<div style="white-space: pre-wrap;">${comentarioTexto}</div>`;
-})();
+    // ========================================
+    // ✅ FORMATO DE COMENTARIO (VALIDADO)
+    // ========================================
+    const comentarioFormateado = (() => {
+        if (!comentarioTexto || comentarioTexto.trim() === '' || 
+            comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
+            return `<div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
+                <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
+                <small style="color: #666;">
+                    Medidor: ${osData.Medidor || 'N/A'}<br>
+                    Tipología: ${osData.Tipologia || 'N/A'}
+                </small>
+            </div>`;
+        }
+        return typeof formatearComentario === 'function' 
+            ? formatearComentario(comentarioTexto) 
+            : `<div style="white-space: pre-wrap;">${comentarioTexto}</div>`;
+    })();
 
     // ========================================
-    // DETERMINAR COLOR SEGÚN ESTADO
+    // ✅ DETERMINAR COLOR SEGÚN ESTADO
     // ========================================
     let colorFondo, colorBorde;
-    const deuda = parseFloat(os.Deuda) || 0;
+    const deuda = parseFloat(osData.Deuda) || 0;
 
     if (deuda > 500) {
-        colorFondo = '#fffde7';
-        colorBorde = '#fdd835';
+        colorFondo = '#fffde7'; colorBorde = '#fdd835';
     } else if (deuda >= 100 && deuda <= 500) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
+        colorFondo = '#fff3e0'; colorBorde = '#ff9800';
     } else if (deuda >= 50 && deuda < 100) {
-        colorFondo = '#fce4ec';
-        colorBorde = '#f48fb1';
+        colorFondo = '#fce4ec'; colorBorde = '#f48fb1';
     } else if (labelEstado && labelEstado.includes('ASIGNADA')) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
+        colorFondo = '#fff3e0'; colorBorde = '#ff9800';
     } else if (labelEstado && labelEstado.includes('REGULADA')) {
-        colorFondo = '#ffebee';
-        colorBorde = '#f44336';
+        colorFondo = '#ffebee'; colorBorde = '#f44336';
     } else if (labelEstado && labelEstado.includes('TU OS')) {
-        colorFondo = '#e8f5e9';
-        colorBorde = '#4caf50';
+        colorFondo = '#e8f5e9'; colorBorde = '#4caf50';
     } else {
-        colorFondo = '#e3f2fd';
-        colorBorde = '#2196f3';
+        colorFondo = '#e3f2fd'; colorBorde = '#2196f3';
     }
 
     // ========================================
-    // GENERAR HTML DEL PANEL
+    // ✅ GENERAR HTML DEL PANEL (VALIDADO)
     // ========================================
-    panelDetalle.innerHTML = `
-        <div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
+    const osATMO = osData.OSATMO || osData.osatomo || osData.OSATOMO || 'N/A';
+    const tipologia = osData.Tipologia || osData.tipologia || 'N/A';
+    const unidad = osData.Unidad || osData.unidad || 'N/A';
+    const medidor = osData.Medidor || 'N/A';
+    const tipoOS = osData.Tipo_de_OS || '';
+    const estadoATOMO = osData.Estado_ATOMO || '';
+    const estadoSAP = osData.Estado_SAP || '';
+    const cuentaContrato = osData.CuentaContrato || '';
+    const distancia = osData.distancia ? `${osData.distancia} km` : '';
+    const deudaTexto = deuda > 0 ? `$${deuda.toFixed(2)}` : '';
+    
+    // Coordenadas para Google Maps (sin espacios extra)
+    const lat = osData.lat || osData.Latitud;
+    const lng = osData.lng || osData.Longitud;
+    const mapsLink = lat && lng 
+        ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` 
+        : '#';
 
-            <!-- Encabezado con botón cerrar -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
-                <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
-                    ${labelEstado || 'DETALLE DE OS'}
-                </strong>
-                <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
-                    ✕ Cerrar
-                </button>
-            </div>
+    // Construir HTML en partes para evitar errores de template literal
+    let html = '';
+    html += `<div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">`;
+    
+    // Encabezado
+    html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">`;
+    html += `<strong style="color: ${colorBorde}; font-size: 18px;">${labelEstado || 'DETALLE DE OS'}</strong>`;
+    html += `<button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">✕ Cerrar</button>`;
+    html += `</div>`;
+    
+    // Información principal
+    html += `<div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">`;
+    html += `<div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">`;
+    html += `<div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${osATMO}</span></div>`;
+    html += `<div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${tipologia}</div>`;
+    if (deudaTexto) html += `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">${deudaTexto}</span></div>`;
+    if (distancia) html += `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${distancia}</span></div>`;
+    html += `<div><strong style="color: #2d3748;">📍 Unidad:</strong> ${unidad}</div>`;
+    if (medidor !== 'N/A') html += `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${medidor}</div>`;
+    if (tipoOS) html += `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${tipoOS}</div>`;
+    if (estadoATOMO) html += `<div><strong style="color: #2d3748;">🔄 Estado ATOMO:</strong> ${estadoATOMO}</div>`;
+    if (estadoSAP) html += `<div><strong style="color: #2d3748;">🔄 Estado SAP:</strong> ${estadoSAP}</div>`;
+    if (cuentaContrato) html += `<div><strong style="color: #2d3748;">📄 Cuenta Contrato:</strong> ${cuentaContrato}</div>`;
+    html += `</div></div>`;
+    
+    // Comentario
+    html += `<div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">`;
+    html += `<strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>`;
+    html += `<div style="max-height: 200px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 6px;">${comentarioFormateado}</div>`;
+    html += `</div>`;
+    
+    // Botón Google Maps
+    html += `<div style="text-align: center;">`;
+    html += `<a href="${mapsLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">🗺️ Navegar en Google Maps</a>`;
+    html += `</div>`;
+    
+    html += `</div>`; // Cierre del div principal
 
-            <!-- Información principal -->
-            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                <div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">
-                    <div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${os.OSATMO || os.osatomo || os.OSATOMO || 'N/A'}</span></div>
-                    <div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${os.Tipologia || os.tipologia || 'N/A'}</div>
-                    ${os.Deuda && parseFloat(os.Deuda) > 0 ? `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">$${parseFloat(os.Deuda).toFixed(2)}</span></div>` : ''}
-                    ${os.distancia ? `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${os.distancia} km</span></div>` : ''}
-                    <div><strong style="color: #2d3748;">📍 Unidad:</strong> ${os.Unidad || os.unidad || 'N/A'}</div>
-                    ${os.Medidor ? `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
-                    ${os.Tipo_de_OS ? `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${os.Tipo_de_OS}</div>` : ''}
-                    ${os.Estado_ATOMO ? `<div><strong style="color: #2d3748;">🔄 Estado ATOMO:</strong> ${os.Estado_ATOMO}</div>` : ''}
-                    ${os.Estado_SAP ? `<div><strong style="color: #2d3748;">🔄 Estado SAP:</strong> ${os.Estado_SAP}</div>` : ''}
-                    ${os.CuentaContrato ? `<div><strong style="color: #2d3748;">📄 Cuenta Contrato:</strong> ${os.CuentaContrato}</div>` : ''}
-                </div>
-            </div>
-
-            <!-- Comentario (colapsable en móviles) -->
-            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">
-                <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
-                <div style="max-height: 200px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 6px;">
-                    ${comentarioFormateado}
-                </div>
-            </div>
-
-            <!-- Botón Google Maps -->
-            <div style="text-align: center;">
-                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat || os.Latitud},${os.lng || os.Longitud}"
-                   target="_blank"
-                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-                          color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none;
-                          font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">
-                    🗺️ Navegar en Google Maps
-                </a>
-            </div>
-
-        </div>
-    `;
+    // Aplicar HTML al panel
+    panelDetalle.innerHTML = html;
 
     // Hacer scroll suave hacia el panel
     panelDetalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-    console.log('✅ Detalle de OS mostrado:', os.OSATMO || os.osatomo);
+    console.log('✅ Detalle de OS mostrado:', osATMO);
 }
 
 
