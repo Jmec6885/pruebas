@@ -7774,7 +7774,7 @@ async function generarKMLAdminPorUnidad(tipo) {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (VALIDADA)
+// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA - CON PRESELECCIONADAS)
 // ========================================
 async function generarMapaKMLSoloAsignadas(unidad) {
     console.group('🗺️ [MAPA] Generando mapa para unidad:', unidad);
@@ -7804,27 +7804,24 @@ async function generarMapaKMLSoloAsignadas(unidad) {
     });
     console.log(`✅ OS asignadas para ${unidad}: ${osAsignadasUnidad.length}`);
     
-    // 4️⃣ Obtener OS preseleccionadas para esta unidad/fecha
+    // 4️⃣ Obtener OS preseleccionadas para esta unidad/fecha (se AGREGAN al mapa)
     const fechaHoy = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
     let osPreseleccionadas = [];
     
     try {
-        console.log(`🔍 Consultando preseleccionadas para ${unidad} en ${fechaHoy}`);
-        
-        // Intentar con formato exacto primero
-        const { data: pre, error } = await supabaseClient
+        const {  pre, error } = await supabaseClient
             .from('os_preseleccionadas')
-            .select('osatomo, comentarios')
+            .select('osatomo')
             .eq('unidad_destino', unidad)
             .eq('fecha_programada', fechaHoy)
             .eq('estado', 'pendiente');
         
         if (!error && pre?.length > 0) {
-            console.log(`✅ ${pre.length} OS preseleccionadas encontradas`);
+            console.log(`📋 OS preseleccionadas encontradas: ${pre.length}`);
             
-            // Obtener detalles completos
+            // Obtener detalles completos desde OS Pendientes
             const osIds = pre.map(p => p.osatomo);
-            const { data: detalles } = await supabaseClient
+            const {  detalles } = await supabaseClient
                 .from('OS Pendientes')
                 .select('*')
                 .in('OSATMO', osIds);
@@ -7833,49 +7830,15 @@ async function generarMapaKMLSoloAsignadas(unidad) {
                 osPreseleccionadas = detalles.map(os => ({
                     ...os,
                     esPreseleccionada: true,
-                    comentarioPreseleccion: pre.find(p => p.osatomo === os.OSATMO)?.comentarios,
                     fechaPreseleccion: fechaHoy
                 }));
-            }
-        } else if (!pre || pre.length === 0) {
-            // Fallback con normalización
-            console.log(`🔄 Búsqueda exacta no encontró resultados, intentando con normalización...`);
-            
-            const { data: preFallback } = await supabaseClient
-                .from('os_preseleccionadas')
-                .select('osatomo, comentarios, unidad_destino')
-                .eq('fecha_programada', fechaHoy)
-                .eq('estado', 'pendiente');
-            
-            if (preFallback) {
-                const filtradas = preFallback.filter(p => 
-                    normalizarUnidad(p.unidad_destino) === normalizarUnidad(unidad)
-                );
-                
-                if (filtradas.length > 0) {
-                    console.log(`✅ ${filtradas.length} OS encontradas con búsqueda normalizada`);
-                    const osIds = filtradas.map(p => p.osatomo);
-                    const { data: detalles } = await supabaseClient
-                        .from('OS Pendientes')
-                        .select('*')
-                        .in('OSATMO', osIds);
-                    
-                    if (detalles) {
-                        osPreseleccionadas = detalles.map(os => ({
-                            ...os,
-                            esPreseleccionada: true,
-                            comentarioPreseleccion: filtradas.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                            fechaPreseleccion: fechaHoy
-                        }));
-                    }
-                }
             }
         }
     } catch (err) {
         console.warn('⚠️ Error cargando preseleccionadas:', err.message);
     }
     
-    // 5️⃣ COMBINAR datasets (sin duplicados)
+    // 5️⃣ COMBINAR datasets (asignadas + preseleccionadas) SIN duplicados
     const osParaMapa = [
         ...osAsignadasUnidad,
         ...osPreseleccionadas.filter(osPre => 
@@ -7896,21 +7859,16 @@ async function generarMapaKMLSoloAsignadas(unidad) {
         return;
     }
     
-    // 7️⃣ Guardar temporalmente
+    // 7️⃣ Guardar temporalmente para que generarMapaKMLConPuntoPartida lo use
     window.osParaMapaActual = osParaMapa;
     
-    // 8️⃣ Llamar a generar mapa
+    // 8️⃣ Llamar a la función que genera el mapa
     console.log('🚀 Llamando a generarMapaKMLConPuntoPartida...');
     generarMapaKMLConPuntoPartida(unidad, osParaMapa);
     
     console.groupEnd();
-} // ✅ Cierre correcto de la función
+}
 
-
-
-// ========================================
-// 🗺️ GENERAR MAPA KML CON FILTROS GUARDADOS (VALIDADA)
-// ========================================
 async function generarMapaKMLConFiltrosGuardados(unidad) {
     const btn = document.getElementById('btnAplicarFiltro');
     const select = document.getElementById('selectPuntoPartidaKML');
@@ -7923,7 +7881,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
         return;
     }
 
-    // 🕵️ VALIDACIÓN PREVENTIVA DE COORDENADAS
+    // 🕵️ VALIDACIÓN PREVENTIVA DE COORDENADAS (Lo que faltaba)
     const fuente = window.osAsignadasKML || [];
     const osDataPartida = fuente.find(os => String(os.OSATMO || os.osatomo).trim() === String(osPartida).trim());
     
@@ -7968,7 +7926,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             console.groupEnd();
         }
 
-        // 4. Ejecución del motor
+        // 4. Ejecución del motor (Donde corregimos el error de 'partes')
         await generarMapaUnidadConFiltros(true); 
 
         console.log('--- ✅ PROCESO FINALIZADO CON ÉXITO ---');
@@ -7983,9 +7941,7 @@ async function generarMapaKMLConFiltrosGuardados(unidad) {
             btn.style.opacity = '1';
         }
     }
-} // ✅ Cierre correcto de la función
-
-
+}
 
 /**
  * Optimiza la secuencia de la ruta usando Vecino Más Cercano y refinamiento 2-OPT.
@@ -14699,25 +14655,14 @@ misAsignacionesPropias.forEach(os => {
         // ✅ EN cargarInterfazKMLRuta(), reemplazar el bloque de rol === 'Consulta' || 'Contratista':
 
 // ========================================
-// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa (VALIDADA)
+// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa
 // ========================================
 else if (rol === 'Consulta' || rol === 'Contratista') {
-    console.group('👷 [CONTRATISTA] Cargando interfaz KML Ruta');
-    
     const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
     const HOY = getFechaHoyElSalvador();
     
-    console.log(`📍 Unidad usuario: ${unidadUsuario}`);
-    console.log(`📅 Fecha: ${HOY}`);
-    
-    // 🔹 1. Obtener OS asignadas automáticamente (para dropdown)
-    console.log('🔹 Paso 1: Obteniendo OS asignadas para dropdown...');
-    const osParaDropdown = (misAsignacionesPropias || []).filter(os => {
-        if (!os.Unidad) return false;
-        return normalizarUnidad(os.Unidad) === normalizarUnidad(unidadUsuario);
-    });
-    
-    console.log(`✅ OS para dropdown: ${osParaDropdown.length}`);
+    // 🔹 1. Obtener OS para DROPDOWN (solo asignadas automáticamente)
+    const osParaDropdown = obtenerOSParaDropdown(unidadUsuario, misAsignacionesPropias);
     
     if (osParaDropdown.length === 0) {
         searchGrid.innerHTML = `
@@ -14727,92 +14672,17 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                     No tienes OS asignadas automáticamente para la unidad <b>${unidadUsuario}</b>.
                 </p>
             </div>`;
-        console.groupEnd();
         return;
     }
     
     // 🔹 2. Obtener OS para MAPA (asignadas + preseleccionadas)
-    console.log('🔹 Paso 2: Obteniendo OS para mapa (combinado)...');
+    const osParaMapa = await obtenerOSParaMapa(unidadUsuario, HOY, misAsignacionesPropias);
     
-    let osPreseleccionadas = [];
-    try {
-        console.log(`🔍 Consultando os_preseleccionadas para unidad="${unidadUsuario}", fecha="${HOY}"`);
-        
-        // Intentar con formato exacto primero
-        const { data: preExacta, error: errorPre1 } = await supabaseClient
-            .from('os_preseleccionadas')
-            .select('osatomo, comentarios')
-            .eq('unidad_destino', unidadUsuario)
-            .eq('fecha_programada', HOY)
-            .eq('estado', 'pendiente');
-        
-        if (errorPre1) throw errorPre1;
-        
-        // Fallback con normalización si no encuentra
-        if (!preExacta || preExacta.length === 0) {
-            const unidadSinGuiones = unidadUsuario.replace(/[^A-Z0-9]/g, '').toUpperCase();
-            console.log(`🔄 Intentando búsqueda alternativa: ${unidadSinGuiones}`);
-            
-            const { data: preFallback } = await supabaseClient
-                .from('os_preseleccionadas')
-                .select('osatomo, comentarios, unidad_destino')
-                .eq('fecha_programada', HOY)
-                .eq('estado', 'pendiente');
-            
-            if (preFallback) {
-                osPreseleccionadas = preFallback.filter(p => 
-                    normalizarUnidad(p.unidad_destino) === normalizarUnidad(unidadUsuario)
-                );
-                console.log(`✅ Encontradas ${osPreseleccionadas.length} OS con búsqueda normalizada`);
-            }
-        } else {
-            osPreseleccionadas = preExacta;
-            console.log(`✅ Encontradas ${osPreseleccionadas.length} OS con búsqueda exacta`);
-        }
-        
-        // Obtener detalles completos desde OS Pendientes
-        if (osPreseleccionadas.length > 0) {
-            const osIds = osPreseleccionadas.map(p => p.osatomo);
-            console.log(`🔍 Obteniendo detalles para OS: ${osIds.join(', ')}`);
-            
-            const { data: detalles, error: errorDetalles } = await supabaseClient
-                .from('OS Pendientes')
-                .select('*')
-                .in('OSATMO', osIds);
-            
-            if (errorDetalles) {
-                console.warn('⚠️ Error obteniendo detalles:', errorDetalles.message);
-            } else if (detalles) {
-                osPreseleccionadas = detalles.map(os => ({
-                    ...os,
-                    esPreseleccionada: true,
-                    comentarioPreseleccion: osPreseleccionadas.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                    fechaPreseleccion: HOY
-                }));
-                console.log(`✅ Detalles obtenidos para ${osPreseleccionadas.length} OS preseleccionadas`);
-            }
-        }
-        
-    } catch (err) {
-        console.warn('⚠️ Error cargando preseleccionadas:', err.message);
-    }
+    console.log(`📊 Resumen:`);
+    console.log(`   • Dropdown (punto de partida): ${osParaDropdown.length} OS`);
+    console.log(`   • Mapa (todas las OS): ${osParaMapa.length} OS`);
     
-    // 🔹 3. COMBINAR datasets (asignadas + preseleccionadas) SIN duplicados
-    console.log('🔹 Paso 3: Combinando datasets...');
-    
-    const osParaMapa = [
-        ...osParaDropdown,
-        ...osPreseleccionadas.filter(osPre => 
-            !osParaDropdown.some(osAsig => 
-                String(osAsig.OSATMO || osAsig.osatomo).trim() === 
-                String(osPre.OSATMO || osPre.osatomo).trim()
-            )
-        )
-    ];
-    
-    console.log(`📊 Dataset combinado: ${osParaDropdown.length} asignadas + ${osPreseleccionadas.length} preseleccionadas = ${osParaMapa.length} totales`);
-    
-    // 🔹 4. Generar interfaz con dropdown de solo asignadas
+    // 🔹 3. Generar interfaz con dropdown de solo asignadas
     const opcionesDropdown = osParaDropdown.map(os => 
         `<option value="${os.OSATMO || os.osatomo}">${os.OSATMO || os.osatomo} - ${os.Tipologia || 'N/A'}</option>`
     ).join('');
@@ -14848,8 +14718,8 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                 <strong style="color: #166534; display: block; margin-bottom: 5px;">📊 Resumen de OS:</strong>
                 <div style="font-size: 14px; color: #374151; line-height: 1.5;">
                     <div>• <strong>Asignadas automáticamente:</strong> ${osParaDropdown.length} OS</div>
-                    ${osPreseleccionadas.length > 0 ? 
-                        `<div>• <strong>Preseleccionadas por Admin:</strong> ${osPreseleccionadas.length} OS</div>` 
+                    ${osParaMapa.length > osParaDropdown.length ? 
+                        `<div>• <strong>Preseleccionadas por Admin:</strong> ${osParaMapa.length - osParaDropdown.length} OS</div>` 
                         : ''}
                     <div>• <strong>Total en mapa:</strong> ${osParaMapa.length} OS</div>
                 </div>
@@ -14862,15 +14732,20 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                 </button>
             </div>
         </div>
-    `; // ✅ Template literal cerrado correctamente
+    `;
     
-    // 🔹 5. Guardar OS para mapa en variable global
+    // 🔹 4. Guardar OS para mapa en variable global para usar al generar mapa
     window.osParaMapaActual = osParaMapa;
-    window.unidadSeleccionadaKML = unidadUsuario;
     
     console.log('✅ Interfaz KML Ruta generada correctamente');
-    console.groupEnd();
-} // ✅ Cierre correcto del bloque else if
+}
+
+    } catch (err) {
+        console.error('❌ Error en KML Ruta:', err);
+        searchGrid.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
+    }
+}
+
 
 
 
@@ -14913,13 +14788,9 @@ function seleccionarOSDeLista(osatomo, lat, lng) {
     // Buscar el marcador específico y abrir su popup
     const markers = Object.values(window.markersPorEstado).flat();
     const markerEncontrado = markers.find(m => {
-    // Intentar match por datos del marcador primero
-    if (m.options?.osatomo === osatomo || m._osatomo === osatomo) return true;
-    
-    // Fallback: buscar en contenido del popup
-    const popupContent = m.getPopup()?.getContent();
-    return popupContent && popupContent.includes(`OS: ${osatomo}`);
-});
+        const popupContent = m.getPopup()?.getContent();
+        return popupContent && popupContent.includes(osatomo);
+    });
     
     if (markerEncontrado) {
         markerEncontrado.openPopup();
@@ -14947,16 +14818,16 @@ window.seleccionarOSDeLista = seleccionarOSDeLista;
 
 
  	// ========================================
-// 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN VALIDADA - SIN ERRORES)
+// 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
 // ========================================
 function mostrarDetalleOSEnPanel(os, labelEstado) {
-    // 🚨 CORRECCIÓN: Forzar prioridad de OS Pendientes
-    if (os.Comentario && os.Comentario.trim() !== '' && 
-        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
-        os.ComentarioGeneral = os.Comentario;
-    }
+// 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de OS Pendientes
+if (os.Comentario && os.Comentario.trim() !== '' && 
+    os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
+    os.ComentarioGeneral = os.Comentario;  // Asegurar que ComentarioGeneral refleje OS Pendientes
+}
 
-    // 🚨 CORRECCIÓN: Forzar prioridad de comentario
+ // 🚨 CORRECCIÓN INMEDIATA: Forzar prioridad de comentario de OS Pendientes
     if (os.ComentarioOriginal) {
         os.Comentario = os.ComentarioOriginal;
     }
@@ -14965,136 +14836,181 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
     }
 
     const panelDetalle = document.getElementById('panelDetalleOS');
+
     if (!panelDetalle) {
         console.error('❌ Panel de detalle no encontrado');
         return;
     }
 
-    // ✅ Escape seguro si el objeto viene de HTML
+// ✅ Escape seguro si el objeto viene de HTML
     const osData = typeof os === 'string' 
         ? JSON.parse(os.replace(/&quot;/g, '"').replace(/&#39;/g, "'"))
         : os;
 
-    // 🔍 Logs de debug
+    // ========================================
+    // 🕵️ LOGS DE DEBUG - VER QUÉ DATOS RECIBIMOS
+    // ========================================
+    console.log('🔍 ==========================================');
     console.log('🔍 MOSTRAR DETALLE OS - DATOS RECIBIDOS');
-    console.log('📋 OS:', osData.OSATMO || osData.osatomo || 'SIN ID');
+    console.log('🔍 ==========================================');
+    console.log('📋 OS:', os.OSATMO || os.osatomo || 'SIN ID');
     console.log('📊 labelEstado:', labelEstado);
+    console.log('💬 os.Comentario:', os.Comentario);
+    console.log('💬 os.ComentarioGeneral:', os.ComentarioGeneral);
+    console.log('💬 os.comentario:', os.comentario);
+    console.log('💬 os.Observaciones:', os.Observaciones);
+    console.log('📊 Todos los campos disponibles:', Object.keys(os));
+    console.log('🔍 ==========================================');
 
-    // ========================================
-    // ✅ BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA
-    // ========================================
-    const comentarioTexto = (() => {
-        if (osData.ComentarioKML && osData.ComentarioKML.trim() !== '' && 
-            osData.ComentarioKML !== 'Sin comentario disponible') {
-            return osData.ComentarioKML;
-        }
-        if (osData.Comentario && osData.Comentario.trim() !== '' && 
-            osData.Comentario !== 'N/A' && osData.Comentario !== 'Sin comentario disponible' &&
-            osData.esDeConsultasServicios === false) {
-            return osData.Comentario;
-        }
-        if (osData.ComentarioGeneral && osData.ComentarioGeneral.trim() !== '' && 
-            osData.ComentarioGeneral !== 'Sin comentario disponible' &&
-            osData.esDeConsultasServicios !== true) {
-            return osData.ComentarioGeneral;
-        }
-        return osData.comentario || osData.Observaciones || osData.comentarioGeneral || 
-               osData.observaciones || osData.Comentarios || osData.comentarios ||
-               osData.Detalle || osData.detalle || osData.descripcion || osData.Descripcion ||
-               osData.Nota || osData.nota || 'Sin comentario disponible';
-    })();
 
-    // ✅ CORREGIDO: Sin doble dos puntos
+// ========================================
+// ✅ 🆕 BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA PARA KML
+// ========================================
+const comentarioTexto = (() => {
+    // ✅ PRIORIDAD 1: Comentario específico de KML
+    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && 
+        os.ComentarioKML !== 'Sin comentario disponible') {
+        return os.ComentarioKML;
+    }
+    
+    // ✅ PRIORIDAD 2: Comentario de OS Pendientes (SIEMPRE prioritario)
+    if (os.Comentario && os.Comentario.trim() !== '' && 
+        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible' &&
+        os.esDeConsultasServicios === false) {  // ← VERIFICAR FLAG
+        return os.Comentario;
+    }
+    
+    // ✅ PRIORIDAD 3: ComentarioGeneral SOLO si viene de OS Pendientes
+    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && 
+        os.ComentarioGeneral !== 'Sin comentario disponible' &&
+        os.esDeConsultasServicios !== true) {  // ← NO usar si es de consultas_servicios
+        return os.ComentarioGeneral;
+    }
+    
+    // ✅ FALLBACK: Otros campos
+    return os.comentario || os.Observaciones || os.comentarioGeneral || 
+           os.observaciones || os.Comentarios || os.comentarios ||
+           os.Detalle || os.detalle || os.descripcion || os.Descripcion ||
+           os.Nota || os.nota || 'Sin comentario disponible';
+})();
+
+    
+
     console.log('🔍 DEBUG COMENTARIO:', {
-        OS: osData.OSATMO || osData.osatomo,
-        TieneComentario: !!osData.Comentario,
-        TieneComentarioGeneral: !!osData.ComentarioGeneral,
-        TieneObservaciones: !!osData.Observaciones,  // ✅ CORREGIDO: UN SOLO ':'
+        OS: os.OSATMO || os.osatomo,
+        TieneComentario: !!os.Comentario,
+        TieneComentarioGeneral: !!os.ComentarioGeneral,
+        TieneObservaciones: !!os.Observaciones,
         ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO',
         LongitudComentario: comentarioTexto.length
     });
 
-    // ========================================
-    // ✅ FORMATO DE COMENTARIO (VALIDADO)
-    // ========================================
-    const comentarioFormateado = (() => {
-        if (!comentarioTexto || comentarioTexto.trim() === '' || 
-            comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
-            return `<div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
-                <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
-                <small style="color: #666;">
-                    Medidor: ${osData.Medidor || 'N/A'}<br>
-                    Tipología: ${osData.Tipologia || 'N/A'}
-                </small>
-            </div>`;
-        }
-        return typeof formatearComentario === 'function' 
-            ? formatearComentario(comentarioTexto) 
-            : `<div style="white-space: pre-wrap;">${comentarioTexto}</div>`;
-    })();
+    // ✅ DECLARACIÓN ÚNICA CORREGIDA
+const comentarioFormateado = (() => {
+    if (!comentarioTexto || comentarioTexto.trim() === '' || 
+        comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
+        // Fallback con información alternativa
+        return `
+        <div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
+            <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
+            <small style="color: #666;">
+                Medidor: ${os.Medidor || 'N/A'}<br>
+                Tipología: ${os.Tipologia || 'N/A'}
+            </small>
+        </div>`;
+    }
+    return formatearComentario(comentarioTexto);
+})();
+
 
     // ========================================
-    // ✅ DETERMINAR COLOR SEGÚN ESTADO
+    // DETERMINAR COLOR SEGÚN ESTADO
     // ========================================
     let colorFondo, colorBorde;
-    const deuda = parseFloat(osData.Deuda) || 0;
+    const deuda = parseFloat(os.Deuda) || 0;
 
-    if (deuda > 500) { colorFondo = '#fffde7'; colorBorde = '#fdd835'; }
-    else if (deuda >= 100 && deuda <= 500) { colorFondo = '#fff3e0'; colorBorde = '#ff9800'; }
-    else if (deuda >= 50 && deuda < 100) { colorFondo = '#fce4ec'; colorBorde = '#f48fb1'; }
-    else if (labelEstado && labelEstado.includes('ASIGNADA')) { colorFondo = '#fff3e0'; colorBorde = '#ff9800'; }
-    else if (labelEstado && labelEstado.includes('REGULADA')) { colorFondo = '#ffebee'; colorBorde = '#f44336'; }
-    else if (labelEstado && labelEstado.includes('TU OS')) { colorFondo = '#e8f5e9'; colorBorde = '#4caf50'; }
-    else { colorFondo = '#e3f2fd'; colorBorde = '#2196f3'; }
+    if (deuda > 500) {
+        colorFondo = '#fffde7';
+        colorBorde = '#fdd835';
+    } else if (deuda >= 100 && deuda <= 500) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (deuda >= 50 && deuda < 100) {
+        colorFondo = '#fce4ec';
+        colorBorde = '#f48fb1';
+    } else if (labelEstado && labelEstado.includes('ASIGNADA')) {
+        colorFondo = '#fff3e0';
+        colorBorde = '#ff9800';
+    } else if (labelEstado && labelEstado.includes('REGULADA')) {
+        colorFondo = '#ffebee';
+        colorBorde = '#f44336';
+    } else if (labelEstado && labelEstado.includes('TU OS')) {
+        colorFondo = '#e8f5e9';
+        colorBorde = '#4caf50';
+    } else {
+        colorFondo = '#e3f2fd';
+        colorBorde = '#2196f3';
+    }
 
     // ========================================
-    // ✅ GENERAR HTML DEL PANEL (CONCATENACIÓN SEGURA)
+    // GENERAR HTML DEL PANEL
     // ========================================
-    const osATMO = osData.OSATMO || osData.osatomo || osData.OSATOMO || 'N/A';
-    const lat = osData.lat || osData.Latitud;
-    const lng = osData.lng || osData.Longitud;
-    const mapsLink = lat && lng ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` : '#';
+    panelDetalle.innerHTML = `
+        <div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
 
-    // Construir HTML en partes para evitar errores de template literal
-    let html = '';
-    html += `<div style="background: ${colorFondo}; border: 3px solid ${colorBorde}; border-radius: 12px; padding: 20px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">`;
-    
-    // Encabezado
-    html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">`;
-    html += `<strong style="color: ${colorBorde}; font-size: 18px;">${labelEstado || 'DETALLE DE OS'}</strong>`;
-    html += `<button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">✕ Cerrar</button>`;
-    html += `</div>`;
-    
-    // Información principal
-    html += `<div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">`;
-    html += `<div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">`;
-    html += `<div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${osATMO}</span></div>`;
-    html += `<div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${osData.Tipologia || osData.tipologia || 'N/A'}</div>`;
-    if (deuda > 0) html += `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700;">$${deuda.toFixed(2)}</span></div>`;
-    if (osData.distancia) html += `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${osData.distancia} km</span></div>`;
-    html += `<div><strong style="color: #2d3748;">📍 Unidad:</strong> ${osData.Unidad || osData.unidad || 'N/A'}</div>`;
-    if (osData.Medidor) html += `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${osData.Medidor}</div>`;
-    if (osData.Tipo_de_OS) html += `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${osData.Tipo_de_OS}</div>`;
-    html += `</div></div>`;
-    
-    // Comentario
-    html += `<div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">`;
-    html += `<strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>`;
-    html += `<div style="max-height: 200px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 6px;">${comentarioFormateado}</div>`;
-    html += `</div>`;
-    
-    // Botón Google Maps
-    html += `<div style="text-align: center;">`;
-    html += `<a href="${mapsLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%); color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">🗺️ Navegar en Google Maps</a>`;
-    html += `</div>`;
-    
-    html += `</div>`; // Cierre del div principal
+            <!-- Encabezado con botón cerrar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
+                <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
+                    ${labelEstado || 'DETALLE DE OS'}
+                </strong>
+                <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
+                    ✕ Cerrar
+                </button>
+            </div>
 
-    // Aplicar HTML al panel
-    panelDetalle.innerHTML = html;
+            <!-- Información principal -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="display: grid; gap: 10px; font-size: 15px; line-height: 1.8;">
+                    <div><strong style="color: #2d3748;">📋 OS:</strong> <span style="color: #1976d2; font-weight: 600;">${os.OSATMO || os.osatomo || os.OSATOMO || 'N/A'}</span></div>
+                    <div><strong style="color: #2d3748;">🏷️ Tipología:</strong> ${os.Tipologia || os.tipologia || 'N/A'}</div>
+                    ${os.Deuda && parseFloat(os.Deuda) > 0 ? `<div><strong style="color: #2d3748;">💰 Deuda:</strong> <span style="color: ${deuda > 500 ? '#f57f17' : (deuda >= 100 ? '#e65100' : '#c2185b')}; font-weight: 700; font-size: 16px;">$${parseFloat(os.Deuda).toFixed(2)}</span></div>` : ''}
+                    ${os.distancia ? `<div><strong style="color: #2d3748;">📏 Distancia:</strong> <span style="color: #1976d2; font-weight: 600;">${os.distancia} km</span></div>` : ''}
+                    <div><strong style="color: #2d3748;">📍 Unidad:</strong> ${os.Unidad || os.unidad || 'N/A'}</div>
+                    ${os.Medidor ? `<div><strong style="color: #2d3748;">⚡ Medidor:</strong> ${os.Medidor}</div>` : ''}
+                    ${os.Tipo_de_OS ? `<div><strong style="color: #2d3748;">📝 Tipo OS:</strong> ${os.Tipo_de_OS}</div>` : ''}
+                    ${os.Estado_ATOMO ? `<div><strong style="color: #2d3748;">🔄 Estado ATOMO:</strong> ${os.Estado_ATOMO}</div>` : ''}
+                    ${os.Estado_SAP ? `<div><strong style="color: #2d3748;">🔄 Estado SAP:</strong> ${os.Estado_SAP}</div>` : ''}
+                    ${os.CuentaContrato ? `<div><strong style="color: #2d3748;">📄 Cuenta Contrato:</strong> ${os.CuentaContrato}</div>` : ''}
+                </div>
+            </div>
+
+            <!-- Comentario (colapsable en móviles) -->
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${colorBorde};">
+                <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
+                <div style="max-height: 200px; overflow-y: auto; font-size: 14px; color: #555; line-height: 1.6; background: #f8f9fa; padding: 12px; border-radius: 6px;">
+                    ${comentarioFormateado}
+                </div>
+            </div>
+
+            <!-- Botón Google Maps -->
+            <div style="text-align: center;">
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${os.lat || os.Latitud},${os.lng || os.Longitud}"
+                   target="_blank"
+                   style="display: inline-block; background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+                          color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none;
+                          font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(66,133,244,0.3);">
+                    🗺️ Navegar en Google Maps
+                </a>
+            </div>
+
+        </div>
+    `;
+
+    // Hacer scroll suave hacia el panel
     panelDetalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    console.log('✅ Detalle de OS mostrado:', osATMO);
-} // ✅ Cierre correcto de la función
+
+    console.log('✅ Detalle de OS mostrado:', os.OSATMO || os.osatomo);
+}
 
 
 
