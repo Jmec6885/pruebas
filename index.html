@@ -14981,36 +14981,37 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
     console.log('📊 labelEstado:', labelEstado);
 
     // ========================================
-    // ✅ BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA (VALIDADA)
+    // ✅ BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA
     // ========================================
     const comentarioTexto = (() => {
-        // PRIORIDAD 1: Comentario específico de KML
         if (osData.ComentarioKML && osData.ComentarioKML.trim() !== '' && 
             osData.ComentarioKML !== 'Sin comentario disponible') {
             return osData.ComentarioKML;
         }
-        // PRIORIDAD 2: Comentario de OS Pendientes
         if (osData.Comentario && osData.Comentario.trim() !== '' && 
             osData.Comentario !== 'N/A' && osData.Comentario !== 'Sin comentario disponible' &&
             osData.esDeConsultasServicios === false) {
             return osData.Comentario;
         }
-        // PRIORIDAD 3: ComentarioGeneral
         if (osData.ComentarioGeneral && osData.ComentarioGeneral.trim() !== '' && 
             osData.ComentarioGeneral !== 'Sin comentario disponible' &&
             osData.esDeConsultasServicios !== true) {
             return osData.ComentarioGeneral;
         }
-        // FALLBACK
         return osData.comentario || osData.Observaciones || osData.comentarioGeneral || 
                osData.observaciones || osData.Comentarios || osData.comentarios ||
                osData.Detalle || osData.detalle || osData.descripcion || osData.Descripcion ||
                osData.Nota || osData.nota || 'Sin comentario disponible';
-    })(); // ✅ Cierre correcto de IIFE
+    })();
 
+    // ✅ CORREGIDO: Sin doble dos puntos
     console.log('🔍 DEBUG COMENTARIO:', {
         OS: osData.OSATMO || osData.osatomo,
-        ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO'
+        TieneComentario: !!osData.Comentario,
+        TieneComentarioGeneral: !!osData.ComentarioGeneral,
+        TieneObservaciones: !!osData.Observaciones,  // ✅ CORREGIDO: UN SOLO ':'
+        ComentarioEncontrado: comentarioTexto ? '✅ SÍ' : '❌ NO',
+        LongitudComentario: comentarioTexto.length
     });
 
     // ========================================
@@ -15030,7 +15031,7 @@ function mostrarDetalleOSEnPanel(os, labelEstado) {
         return typeof formatearComentario === 'function' 
             ? formatearComentario(comentarioTexto) 
             : `<div style="white-space: pre-wrap;">${comentarioTexto}</div>`;
-    })(); // ✅ Cierre correcto de IIFE
+    })();
 
     // ========================================
     // ✅ DETERMINAR COLOR SEGÚN ESTADO
