@@ -13458,159 +13458,180 @@ const iconoConNumero = L.divIcon({
 });
 
                 // ========================================
-        // ✅ CREAR POPUP CON LISTA DE TODAS LAS OS
-        // ========================================
-        let popupContent = `
-            <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
-                <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-                    📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
-                </strong>
-        `;
+// ✅ CREAR POPUP CON LISTA DE TODAS LAS OS (CON COMENTARIO PRESELECCIÓN)
+// ========================================
+let popupContent = `
+    <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
+        <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+            📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
+        </strong>
+`;
 
-        if (esMultiple) {
-            // Mostrar lista de todas las OS en este punto
-            for (const [idx, os] of osList.entries()) {
-                const osDeuda = parseFloat(os.Deuda) || 0;
-                const osTipo = (os.Tipo_de_OS || '').toLowerCase();
-                let osColor = '#2196f3';
+if (esMultiple) {
+    // Mostrar lista de todas las OS en este punto
+    for (const [idx, os] of osList.entries()) {
+        const osDeuda = parseFloat(os.Deuda) || 0;
+        const osTipo = (os.Tipo_de_OS || '').toLowerCase();
+        let osColor = '#2196f3';
 
-                if (osDeuda > 500) osColor = '#fdd835';
-                else if (osDeuda >= 100) osColor = '#ff9800';
-                else if (osDeuda >= 50) osColor = '#f48fb1';
-                else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
-                else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
+        if (osDeuda > 500) osColor = '#fdd835';
+        else if (osDeuda >= 100) osColor = '#ff9800';
+        else if (osDeuda >= 50) osColor = '#f48fb1';
+        else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
+        else if (os.Estado_ATOMO === 'Asignada') osColor = '#ff9800';
 
-                // ✅ ESCAPE SEGURO PARA DATOS EN POPUP
-                const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
-                    ? escapeJSONForHTMLAttribute(os) 
-                    : JSON.stringify(os)
-                        .replace(/\\/g, '\\\\')
-                        .replace(/"/g, '&quot;')
-                        .replace(/'/g, '&#39;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;')
-                        .replace(/\n/g, '\\n')
-                        .replace(/\r/g, '\\r')
-                        .replace(/\t/g, '\\t');
+        // ✅ ESCAPE SEGURO PARA DATOS EN POPUP
+        const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+            ? escapeJSONForHTMLAttribute(os) 
+            : JSON.stringify(os)
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
 
-                // Escape seguro para labelEstado en el onclick
-                const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        // Escape seguro para labelEstado en el onclick
+        const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        // ✅ Escape seguro para OSATMO y Unidad (usar en onclick)
+        const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        // ✅ LOG para debug de preselección
+        if (os.esPreseleccionada) {
+            console.log(`📋 [POPUP] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
+        }
+
+        popupContent += `
+            <div style="
+                background: #f8f9fa;
+                padding: 10px;
+                margin-bottom: 8px;
+                border-radius: 6px;
+                border-left: 4px solid ${osColor};
+                cursor: pointer;
+                transition: all 0.2s ease;
+            " onclick="seleccionarOSDeLista('${osATMO}', ${os.lat}, ${os.lng}); return false;"
+               onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(3px)';"
+               onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
                 
-                // ✅ Escape seguro para OSATMO y Unidad (usar en onclick)
-                const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                
-                // ✅ LOG para debug de preselección
-                if (os.esPreseleccionada) {
-                    console.log(`📋 [POPUP] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
-                }
-
-                popupContent += `
-                    <div style="
-                        background: #f8f9fa;
-                        padding: 10px;
-                        margin-bottom: 8px;
-                        border-radius: 6px;
-                        border-left: 4px solid ${osColor};
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                    " onclick="seleccionarOSDeLista('${osATMO}', ${os.lat}, ${os.lng}); return false;"
-                       onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(3px)';"
-                       onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 5px;">
-                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO || 'N/A'}</strong>
-                            <span style="background: ${osColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap;">
-                                ${os.Tipo_de_OS || 'Normal'}
-                            </span>
-                        </div>
-                        <div style="font-size: 12px; color: #666; line-height: 1.4;">
-                            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                            ${osDeuda > 0 ? `<strong>Deuda:</strong> $${osDeuda.toFixed(2)}<br>` : ''}
-                            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                            <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
-                        </div>
-                        <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
-                            📋 Ver Detalle Completo
-                        </button>
-
-                        <!-- ✅ BOTÓN ASIGNAR (solo Admin/Despacho, solo si NO está preseleccionada) -->
-                        ${['Administrador', 'Despacho'].includes(currentUser?.rol) && !os.esPreseleccionada ? `
-                        <button onclick="event.stopPropagation(); if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
-                            style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
-                            📋 Asignar a Unidad...
-                        </button>
-                        ` : ''}
-
-                        <!-- ✅ BOTÓN CANCELAR (solo si está preseleccionada y es el mismo usuario) -->
-                        ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
-                        <button onclick="event.stopPropagation(); if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
-                            style="margin-top: 6px; background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px;">
-                            ❌ Cancelar mi asignación
-                        </button>
-                        ` : ''}
-                    </div>
-                `;
-            }
-        } else {
-            // Popup normal para OS única
-            const os = osList[0];
-            const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
-                ? escapeJSONForHTMLAttribute(os) 
-                : JSON.stringify(os)
-                    .replace(/\\/g, '\\\\')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/\n/g, '\\n')
-                    .replace(/\r/g, '\\r')
-                    .replace(/\t/g, '\\t');
-            
-            const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            
-            // ✅ Escape seguro para OS única también
-            const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            
-            // ✅ LOG para debug
-            if (os.esPreseleccionada) {
-                console.log(`📋 [POPUP-ÚNICA] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
-            }
-            
-            popupContent += `
-                <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
-                    <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
-                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
-                    ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
-                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
-                    ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
+                <!-- Header con OS y badge de preselección -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 5px;">
+                    <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO || 'N/A'}</strong>
+                    ${os.esPreseleccionada ? '<span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">📋 ASIGNADA</span>' : ''}
                 </div>
-                <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
-                    style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
-                    onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                
+                <!-- ✅ MOSTRAR COMENTARIO DE PRESELECCIÓN SI EXISTE -->
+                ${os.comentarioPreseleccion ? `
+                    <div style="background:#fff7ed;padding:8px;border-radius:4px;margin:8px 0;border-left:3px solid #f59e0b;">
+                        <strong style="color:#c2410c;font-size:11px;">📋 Comentario de Asignación:</strong>
+                        <p style="margin:4px 0 0 0;font-size:12px;color:#666;white-space:pre-wrap;">${os.comentarioPreseleccion}</p>
+                    </div>
+                ` : ''}
+                
+                <!-- Datos básicos -->
+                <div style="font-size: 12px; color: #666; line-height: 1.4;">
+                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                    ${osDeuda > 0 ? `<strong>Deuda:</strong> $${osDeuda.toFixed(2)}<br>` : ''}
+                    ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+                    <strong>Unidad:</strong> ${os.Unidad || 'N/A'}
+                </div>
+                
+                <!-- Botón Ver Detalle -->
+                <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
+                    style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px; font-weight: 500;">
                     📋 Ver Detalle Completo
                 </button>
 
                 <!-- ✅ BOTÓN ASIGNAR (solo Admin/Despacho, solo si NO está preseleccionada) -->
                 ${['Administrador', 'Despacho'].includes(currentUser?.rol) && !os.esPreseleccionada ? `
-                <button onclick="if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
-                    style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">
+                <button onclick="event.stopPropagation(); if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
+                    style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;">
                     📋 Asignar a Unidad...
                 </button>
                 ` : ''}
 
                 <!-- ✅ BOTÓN CANCELAR (solo si está preseleccionada y es el mismo usuario) -->
                 ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
-                <button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
-                    style="margin-top: 8px; background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 12px;">
+                <button onclick="event.stopPropagation(); if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
+                    style="margin-top: 6px; background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px;">
                     ❌ Cancelar mi asignación
                 </button>
                 ` : ''}
-            `;
-        }
+            </div>
+        `;
+    }
+} else {
+    // Popup normal para OS única
+    const os = osList[0];
+    const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+        ? escapeJSONForHTMLAttribute(os) 
+        : JSON.stringify(os)
+            .replace(/\\/g, '\\\\')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+    
+    const labelEstadoEscaped = labelEstado.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    
+    // ✅ Escape seguro para OS única también
+    const osATMO = (os.OSATMO || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const unidadOS = (os.Unidad || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    
+    // ✅ LOG para debug
+    if (os.esPreseleccionada) {
+        console.log(`📋 [POPUP-ÚNICA] OS ${os.OSATMO} está preseleccionada para ${os.usuario_que_asigno}`);
+    }
+    
+    popupContent += `
+        <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
+            <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
+            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+            ${deuda > 0 ? `<strong>Deuda:</strong> $${deuda.toFixed(2)}<br>` : ''}
+            ${os.distancia ? `<strong>Distancia:</strong> ${os.distancia.toFixed(2)} km<br>` : ''}
+            ${os.Unidad ? `<strong>Unidad:</strong> ${os.Unidad}<br>` : ''}
+        </div>
+        
+        <!-- ✅ MOSTRAR COMENTARIO DE PRESELECCIÓN SI EXISTE (OS ÚNICA) -->
+        ${os.comentarioPreseleccion ? `
+            <div style="background:#fff7ed;padding:10px;border-radius:6px;margin:10px 0;border-left:3px solid #f59e0b;">
+                <strong style="color:#c2410c;font-size:12px;">📋 Comentario de Asignación:</strong>
+                <p style="margin:6px 0 0 0;font-size:13px;color:#666;white-space:pre-wrap;">${os.comentarioPreseleccion}</p>
+            </div>
+        ` : ''}
+        
+        <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${labelEstadoEscaped}');}"
+            style="background: ${colorFondo}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; transition: opacity 0.2s;"
+            onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+            📋 Ver Detalle Completo
+        </button>
 
-        popupContent += `</div>`;
+        <!-- ✅ BOTÓN ASIGNAR (solo Admin/Despacho, solo si NO está preseleccionada) -->
+        ${['Administrador', 'Despacho'].includes(currentUser?.rol) && !os.esPreseleccionada ? `
+        <button onclick="if(typeof abrirModalPreseleccion==='function'){abrirModalPreseleccion('${osATMO}', '${unidadOS}')}" 
+            style="margin-top:8px;width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;">
+            📋 Asignar a Unidad...
+        </button>
+        ` : ''}
+
+        <!-- ✅ BOTÓN CANCELAR (solo si está preseleccionada y es el mismo usuario) -->
+        ${os.esPreseleccionada && os.usuario_que_asigno === currentUser?.usuario ? `
+        <button onclick="if(typeof eliminarPreseleccion==='function'){eliminarPreseleccion('${osATMO}', '${window.fechaSeleccionadaKML || getFechaHoyElSalvador()}')}"
+            style="margin-top: 8px; background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 12px;">
+            ❌ Cancelar mi asignación
+        </button>
+        ` : ''}
+    `;
+}
+
+popupContent += `</div>`;
 
         // ========================================
         // ✅ CREAR MARCADOR CON POPUP
@@ -14881,32 +14902,38 @@ if (os.Comentario && os.Comentario.trim() !== '' &&
 // ✅ 🆕 BUSCAR COMENTARIO CON PRIORIDAD CORREGIDA PARA KML
 // ========================================
 const comentarioTexto = (() => {
-    // ✅ PRIORIDAD 1: Comentario específico de KML
-    if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && 
-        os.ComentarioKML !== 'Sin comentario disponible') {
-        return os.ComentarioKML;
-    }
-    
-    // ✅ PRIORIDAD 2: Comentario de OS Pendientes (SIEMPRE prioritario)
-    if (os.Comentario && os.Comentario.trim() !== '' && 
-        os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible' &&
-        os.esDeConsultasServicios === false) {  // ← VERIFICAR FLAG
-        return os.Comentario;
-    }
-    
-    // ✅ PRIORIDAD 3: ComentarioGeneral SOLO si viene de OS Pendientes
-    if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && 
-        os.ComentarioGeneral !== 'Sin comentario disponible' &&
-        os.esDeConsultasServicios !== true) {  // ← NO usar si es de consultas_servicios
-        return os.ComentarioGeneral;
-    }
-    
-    // ✅ FALLBACK: Otros campos
-    return os.comentario || os.Observaciones || os.comentarioGeneral || 
-           os.observaciones || os.Comentarios || os.comentarios ||
-           os.Detalle || os.detalle || os.descripcion || os.Descripcion ||
-           os.Nota || os.nota || 'Sin comentario disponible';
-})();
+        // ✅ PRIORIDAD 1: Comentario de PRESELECCIÓN (Admin/Despacho)
+        if (os.comentarioPreseleccion && os.comentarioPreseleccion.trim() !== '' && 
+            os.comentarioPreseleccion !== 'Sin comentario disponible') {
+            return `📋 ASIGNACIÓN MANUAL:\n${os.comentarioPreseleccion}`;
+        }
+        
+        // ✅ PRIORIDAD 2: Comentario específico de KML
+        if (os.ComentarioKML && os.ComentarioKML.trim() !== '' && 
+            os.ComentarioKML !== 'Sin comentario disponible') {
+            return os.ComentarioKML;
+        }
+        
+        // ✅ PRIORIDAD 3: Comentario de OS Pendientes
+        if (os.Comentario && os.Comentario.trim() !== '' && 
+            os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible' &&
+            os.esDeConsultasServicios === false) {
+            return os.Comentario;
+        }
+        
+        // ✅ PRIORIDAD 4: ComentarioGeneral
+        if (os.ComentarioGeneral && os.ComentarioGeneral.trim() !== '' && 
+            os.ComentarioGeneral !== 'Sin comentario disponible' &&
+            os.esDeConsultasServicios !== true) {
+            return os.ComentarioGeneral;
+        }
+        
+        // ✅ FALLBACK
+        return os.comentario || os.Observaciones || os.comentarioGeneral || 
+               os.observaciones || os.Comentarios || os.comentarios ||
+               os.Detalle || os.detalle || os.descripcion || os.Descripcion ||
+               os.Nota || os.nota || 'Sin comentario disponible';
+    })();
 
     
 
