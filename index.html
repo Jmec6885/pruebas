@@ -19364,7 +19364,7 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
     // Probar con nombre entre comillas
     console.log('📥 Intentando con "TX y Cortes"...');
     const {  data2, error2 } = await supabaseClient
-        .from('"TX y Cortes"')
+        .from('TX y Cortes')
         .select('*')
         .limit(3);
     
