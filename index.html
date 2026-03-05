@@ -19195,35 +19195,6 @@ async function diagnosticarTablaTX() {
 
 
 
-// 1. Probar consulta simple
-const {  test1, error1 } = await supabaseClient
-    .from('TX y Cortes')
-    .select('TXCortes, Coordenadas')
-    .limit(3);
-
-console.log('✅ Consulta básica:', test1?.length || 0, 'registros');
-if (test1?.length > 0) {
-    test1.forEach(tx => {
-        console.log(`   • ${tx.TXCortes}: "${tx.Coordenadas}"`);
-    });
-}
-if (error1) console.error('❌ Error:', error1);
-
-// 2. Probar con coordenadas específicas
-const coordsBusqueda = '13.94033276,-89.56567566';
-const [latB, lngB] = coordsBusqueda.split(',').map(Number);
-
-if (test1?.length > 0) {
-    // Probar cálculo de distancia con un registro real
-    const txEjemplo = test1[0];
-    if (txEjemplo.Coordenadas?.includes(',')) {
-        const [latTX, lngTX] = txEjemplo.Coordenadas.split(',').map(Number);
-        const dist = calcularDistanciaMetros(latB, lngB, latTX, lngTX);
-        console.log(`🧪 Distancia de prueba: ${dist} metros`);
-    }
-}
-
-
 
 
 // 🔍 TEST: Verificar que la tabla renombrada funciona
@@ -19252,6 +19223,65 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
     
     console.groupEnd();
 }
+
+
+	/**
+ * 🧪 Función de diagnóstico para validar la tabla 'TX y Cortes'
+ * Ejecútala manualmente en la consola o llámala al final del script.
+ */
+async function ejecutarDiagnosticoTX() {
+    console.group('🧪 DIAGNÓSTICO TX Y CORTES');
+
+    try {
+        // 1. Probar consulta simple (Seleccionamos las columnas exactas)
+        const { data: test1, error: error1 } = await supabaseClient
+            .from('TX y Cortes')
+            .select('TXCortes, Coordenadas')
+            .limit(3);
+
+        if (error1) {
+            console.error('❌ Error en la consulta básica:', error1.message);
+            console.dir(error1);
+        } else {
+            console.log('✅ Consulta básica:', test1?.length || 0, 'registros encontrados.');
+            
+            if (test1 && test1.length > 0) {
+                test1.forEach((tx, index) => {
+                    console.log(`   ${index + 1}. ID: ${tx.TXCortes} | Coords: "${tx.Coordenadas}"`);
+                });
+
+                // 2. Probar con coordenadas específicas (Simulación de búsqueda)
+                const coordsBusqueda = '13.94033276,-89.56567566';
+                const [latB, lngB] = coordsBusqueda.split(',').map(Number);
+
+                // Probar cálculo de distancia con el primer registro real obtenido
+                const txEjemplo = test1[0];
+                if (txEjemplo.Coordenadas && txEjemplo.Coordenadas.includes(',')) {
+                    const [latTX, lngTX] = txEjemplo.Coordenadas.split(',').map(Number);
+                    
+                    // Verificamos si la función calcularDistanciaMetros existe en el scope
+                    if (typeof calcularDistanciaMetros === 'function') {
+                        const dist = calcularDistanciaMetros(latB, lngB, latTX, lngTX);
+                        console.log(`🧪 Distancia calculada entre búsqueda y registro [${txEjemplo.TXCortes}]: ${dist.toFixed(2)} metros`);
+                    } else {
+                        console.warn('⚠️ La función "calcularDistanciaMetros" no está definida o no es accesible aquí.');
+                    }
+                } else {
+                    console.warn('⚠️ El registro de prueba no tiene coordenadas válidas (formato "lat,lng").');
+                }
+            } else {
+                console.warn('⚠️ La tabla "TX y Cortes" parece estar vacía.');
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error inesperado durante el diagnóstico:', err);
+    }
+
+    console.groupEnd();
+}
+
+// Para ejecutarlo automáticamente al cargar, descomenta la siguiente línea:
+// ejecutarDiagnosticoTX();
 
 
 </script>
