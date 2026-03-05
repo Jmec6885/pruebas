@@ -19422,37 +19422,72 @@ async function diagnosticarConsultaTX_A() {
 }
 
 
-// 🔍 TEST 1: Consulta simple sin paginación
-console.group('🧪 TEST 1: Consulta simple');
-const {  test1, error1 } = await supabaseClient
-    .from('TX y Cortes')
-    .select('TXCortes, Coordenadas')
-    .limit(5);
-console.log('Resultados:', test1?.length || 0, 'registros');
-if (test1?.length > 0) {
-    test1.forEach((tx, i) => console.log(`  ${i+1}. "${tx.TXCortes}" | "${tx.Coordenadas}"`));
+/**
+ * 🧪 SISTEMA DE PRUEBAS INTEGRAL: TX y Cortes
+ * Ejecuta este comando en la consola: await testConexionTX();
+ */
+async function testConexionTX() {
+    console.log("%c STARTING SUPABASE TEST: TX y Cortes ", "background: #222; color: #bada55; font-size: 14px;");
+
+    // 🔍 TEST 1: Consulta simple (Verificar nombres de columnas)
+    console.group('🧪 TEST 1: Consulta simple');
+    try {
+        const { data: test1, error: error1 } = await supabaseClient
+            .from('TX y Cortes')
+            .select('TXCortes, Coordenadas')
+            .limit(5);
+
+        if (error1) {
+            console.error('❌ Error en Test 1:', error1.message);
+            console.dir(error1);
+        } else {
+            console.log('✅ Resultados:', test1?.length || 0, 'registros');
+            test1?.forEach((tx, i) => {
+                console.log(`   ${i + 1}. TXCortes: "${tx.TXCortes}" | Coords: "${tx.Coordenadas}"`);
+            });
+        }
+    } catch (err) {
+        console.error('💥 Fallo catastrófico Test 1:', err);
+    }
+    console.groupEnd();
+
+    // 🔍 TEST 2: Consulta con .range() (Verificar límites y paginación)
+    console.group('🧪 TEST 2: Consulta con .range()');
+    try {
+        const { data: test2, error: error2 } = await supabaseClient
+            .from('TX y Cortes')
+            .select('*')
+            .range(0, 999);
+
+        if (error2) {
+            console.error('❌ Error en Test 2:', error2.message);
+        } else {
+            console.log('✅ Resultados con range(0,999):', test2?.length || 0, 'registros');
+        }
+    } catch (err) {
+        console.error('💥 Fallo catastrófico Test 2:', err);
+    }
+    console.groupEnd();
+
+    // 🔍 TEST 3: Conteo total (Verificar volumen de datos)
+    console.group('🧪 TEST 3: Conteo total');
+    try {
+        const { count, error: error3 } = await supabaseClient
+            .from('TX y Cortes')
+            .select('*', { count: 'exact', head: true });
+
+        if (error3) {
+            console.error('❌ Error en Test 3:', error3.message);
+        } else {
+            console.log('✅ Total registros reales en tabla:', count);
+        }
+    } catch (err) {
+        console.error('💥 Fallo catastrófico Test 3:', err);
+    }
+    console.groupEnd();
+
+    console.log("%c TEST COMPLETED ", "background: #222; color: #55badb; font-size: 12px;");
 }
-if (error1) console.error('Error:', error1);
-console.groupEnd();
-
-// 🔍 TEST 2: Consulta con .range()
-console.group('🧪 TEST 2: Consulta con .range()');
-const {  test2, error2 } = await supabaseClient
-    .from('TX y Cortes')
-    .select('*')
-    .range(0, 999);
-console.log('Resultados con range(0,999):', test2?.length || 0, 'registros');
-if (error2) console.error('Error:', error2);
-console.groupEnd();
-
-// 🔍 TEST 3: Conteo total
-console.group('🧪 TEST 3: Conteo total');
-const {  count, error3 } = await supabaseClient
-    .from('TX y Cortes')
-    .select('*', { count: 'exact', head: true });
-console.log('Total registros en tabla:', count);
-if (error3) console.error('Error:', error3);
-console.groupEnd();
 
 
 </script>
