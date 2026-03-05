@@ -5243,6 +5243,15 @@ async function logout() {
             ) {
                 return; // ← Saltar este campo, no generar input
             }
+            
+            // 🚫 FILTRO ADICIONAL: NO generar input para 'coordenadas_busqueda' en tx_y_cortes
+            // (porque ya tenemos el campo especial con radio más abajo)
+            if (
+                field.key === 'coordenadas_busqueda' &&
+                selectedTable === 'tx_y_cortes'
+            ) {
+                return; // ← Saltar este campo para evitar duplicado
+            }
 
             const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
 
@@ -5256,7 +5265,7 @@ async function logout() {
         }); // ✅ Cierra forEach
 
         // ========================================
-        // ✅ NUEVO: CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO)
+        // ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO) - ÚNICO
         // ========================================
         if (selectedTable === 'tx_y_cortes') {
             html += `
@@ -5288,7 +5297,7 @@ async function logout() {
                 </button>
             </div>
             `;
-        } // ✅ Cierra if TX y Cortes
+        } // ✅ Cierra if tx_y_cortes
 
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
@@ -5300,6 +5309,7 @@ async function logout() {
         searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
     }
 } // ✅ Cierra función generarCamposBusqueda
+
 
 
 
@@ -19283,7 +19293,7 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
 
 
 // ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON COMENTARIOS FORMATEADOS)
 // ===================================================================
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
     const resultsContainer = document.getElementById('searchResults');
@@ -19304,20 +19314,29 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
     resultados.forEach((tx, index) => {
         const distancia = tx.distancia || 0;
         const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-        html += `<div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
-            <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</div>
-            <div style="font-size: 13px; color: #64748b;">
-                <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
-                <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
-            </div>
-            ${tx.Comentario ? `<div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;"><strong>💬 Comentario:</strong><br>${tx.Comentario}</div>` : ''}
-        </div>`;
+        
+        // ✅ APLICAR formatearComentario() al comentario
+        const comentarioFormateado = tx.Comentario ? formatearComentario(tx.Comentario) : '';
+        
+        html += `
+            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+                <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">
+                    #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
+                </div>
+                <div style="font-size: 13px; color: #64748b;">
+                    <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
+                    <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
+                </div>
+                ${comentarioFormateado ? `
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+                        <strong>💬 Comentario:</strong><br>${comentarioFormateado}
+                    </div>` : ''}
+            </div>`;
     });
     
     html += `</div></div>`;
     resultsContainer.innerHTML = html;
 }
-
 
 
 
