@@ -19291,9 +19291,8 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
 
 
 
-
 // ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET)
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET) ✅
 // ===================================================================
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
     const resultsContainer = document.getElementById('searchResults');
@@ -19324,7 +19323,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
                 • TX/Cortes encontrados: <strong>${resultados.length}</strong>
             </div>
             <!-- MAPA LEAFLET -->
-            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1; margin: 15px 0;"></div>
+            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1; margin: 15px 0; position: relative;"></div>
             <!-- PANEL DE DETALLES -->
             <div id="panelDetalleTX" style="margin-top: 20px;">
                 <div style="text-align: center; padding: 40px; color: #999;">
@@ -19337,81 +19336,101 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
     
     resultsContainer.innerHTML = html;
     
-    // 2️⃣ INICIALIZAR MAPA LEAFLET
-    const mapa = L.map('mapaTXCoordenadas').setView([latCentro, lngCentro], 15);
-    
-    // Agregar capa de OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(mapa);
-    
-    // 3️⃣ AGREGAR MARCADOR DEL CENTRO DE BÚSQUEDA
-    L.circle([latCentro, lngCentro], {
-        radius: radioMetros,
-        color: '#3b82f6',
-        fillColor: '#3b82f6',
-        fillOpacity: 0.1,
-        weight: 2
-    }).addTo(mapa).bindPopup(`📍 Centro de búsqueda<br>Radio: ${radioMetros} metros`);
-    
-    L.marker([latCentro, lngCentro], {
-        icon: L.divIcon({
-            className: 'custom-div-icon',
-            html: "<div style='background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
-        })
-    }).addTo(mapa).bindPopup('📍 Centro de búsqueda');
-    
-    // 4️⃣ AGREGAR MARCADORES DE TX/CORTES
-    const bounds = [];
-    bounds.push([latCentro, lngCentro]);
-    
-    resultados.forEach((tx, index) => {
-        const distancia = tx.distancia || 0;
-        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-        const iconoColor = distancia <= 50 ? 'green' : (distancia <= 100 ? 'orange' : 'red');
-        
-        // Parsear coordenadas del TX
-        const coordsStr = tx.Coordenadas;
-        if (!coordsStr || !coordsStr.includes(',')) return;
-        
-        const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-        if (isNaN(latTX) || isNaN(lngTX)) return;
-        
-        bounds.push([latTX, lngTX]);
-        
-        // Crear marcador
-        const marker = L.marker([latTX, lngTX], {
-            icon: L.divIcon({
-                className: 'custom-div-icon',
-                html: `<div style='background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;'>${index + 1}</div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            })
-        }).addTo(mapa);
-        
-        // Popup simple
-        marker.bindPopup(`
-            <div style="min-width: 200px;">
-                <strong>#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</strong><br>
-                <span style="color: #666;">Circuito: ${tx.Circuitos || 'N/A'}</span><br>
-                <span style="color: ${color}; font-weight: bold;">📏 ${distancia} metros</span>
-            </div>
-        `);
-        
-        // Click en marcador → Mostrar detalles en panel
-        marker.on('click', () => {
-            mostrarDetalleTXEnPanel(tx, index, color, distancia);
-        });
-    });
-    
-    // 5️⃣ AJUSTAR VISTA DEL MAPA
-    if (bounds.length > 0) {
-        const group = new L.featureGroup(bounds.map(b => L.marker(b)));
-        mapa.fitBounds(group.getBounds().pad(0.1));
-    }
+    // 🔹 IMPORTANTE: Esperar un tick para que el DOM se renderice antes de crear el mapa
+    setTimeout(() => {
+        try {
+            // 2️⃣ INICIALIZAR MAPA LEAFLET
+            const mapa = L.map('mapaTXCoordenadas', {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([latCentro, lngCentro], 15);
+            
+            // 🔹 CRÍTICO: Forzar recálculo de tamaño del mapa
+            setTimeout(() => mapa.invalidateSize(), 100);
+            
+            // Agregar capa de OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapa);
+            
+            // 3️⃣ AGREGAR MARCADOR DEL CENTRO DE BÚSQUEDA
+            L.circle([latCentro, lngCentro], {
+                radius: radioMetros,
+                color: '#3b82f6',
+                fillColor: '#3b82f6',
+                fillOpacity: 0.1,
+                weight: 2
+            }).addTo(mapa).bindPopup(`📍 Centro de búsqueda<br>Radio: ${radioMetros} metros`);
+            
+            L.marker([latCentro, lngCentro], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: "<div style='background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                })
+            }).addTo(mapa).bindPopup('📍 Centro de búsqueda');
+            
+            // 4️⃣ AGREGAR MARCADORES DE TX/CORTES
+            const bounds = [];
+            bounds.push([latCentro, lngCentro]);
+            
+            resultados.forEach((tx, index) => {
+                const distancia = tx.distancia || 0;
+                const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+                
+                // Parsear coordenadas del TX
+                const coordsStr = tx.Coordenadas;
+                if (!coordsStr || !coordsStr.includes(',')) return;
+                
+                const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+                if (isNaN(latTX) || isNaN(lngTX)) return;
+                
+                bounds.push([latTX, lngTX]);
+                
+                // Crear marcador
+                const marker = L.marker([latTX, lngTX], {
+                    icon: L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style='background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;'>${index + 1}</div>`,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(mapa);
+                
+                // Popup simple
+                marker.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <strong>#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</strong><br>
+                        <span style="color: #666;">Circuito: ${tx.Circuitos || 'N/A'}</span><br>
+                        <span style="color: ${color}; font-weight: bold;">📏 ${distancia} metros</span>
+                    </div>
+                `);
+                
+                // Click en marcador → Mostrar detalles en panel
+                marker.on('click', () => {
+                    mostrarDetalleTXEnPanel(tx, index, color, distancia);
+                });
+            });
+            
+            // 5️⃣ AJUSTAR VISTA DEL MAPA
+            if (bounds.length > 1) {
+                const group = new L.featureGroup(bounds.map(b => L.marker(b)));
+                mapa.fitBounds(group.getBounds().pad(0.15));
+            }
+            
+            console.log('✅ Mapa Leaflet inicializado correctamente');
+            
+        } catch (err) {
+            console.error('❌ Error inicializando mapa:', err);
+            document.getElementById('mapaTXCoordenadas').innerHTML = 
+                `<div style="padding: 20px; color: #ef4444; text-align: center;">
+                    ❌ Error al cargar el mapa<br>
+                    <small>${err.message}</small>
+                </div>`;
+        }
+    }, 50); // Esperar 50ms para que el DOM esté listo
     
     // 6️⃣ FUNCIÓN PARA MOSTRAR DETALLES EN PANEL
     function mostrarDetalleTXEnPanel(tx, index, color, distancia) {
@@ -19467,7 +19486,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
                     ${enlaceMapsHTML}
                 </div>
                 
-                <button onclick="document.getElementById('panelDetalleTX').innerHTML = '<div style=\"text-align: center; padding: 40px; color: #999;\"><div style=\"font-size: 48px; margin-bottom: 10px;\">📍</div><p style=\"font-size: 16px; font-weight: 600;\">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p></div>'" 
+                <button onclick="document.getElementById('panelDetalleTX').innerHTML = '<div style=\\\"text-align: center; padding: 40px; color: #999;\\\"><div style=\\\"font-size: 48px; margin-bottom: 10px;\\\">📍</div><p style=\\\"font-size: 16px; font-weight: 600;\\\">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p></div>'" 
                         style="margin-top: 20px; background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     ✕ Cerrar detalles
                 </button>
@@ -19478,49 +19497,6 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
-
-
-// ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
-// ===================================================================
-function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
-    const resultsContainer = document.getElementById('searchResults');
-    
-    let html = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header">🔍 TX/Cortes Encontrados</div>
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>📊 Resumen:</strong><br>
-                • Coordenadas: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}<br>
-                • Radio: ${radioMetros} metros<br>
-                • Encontrados: ${resultados.length}
-            </div>
-            <div style="display: grid; gap: 15px;">`;
-    
-    resultados.forEach((tx, index) => {
-        const distancia = tx.distancia || 0;
-        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-        
-        html += `
-            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
-                <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">
-                    #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
-                </div>
-                <div style="font-size: 13px; color: #64748b;">
-                    <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
-                    <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
-                </div>
-                ${tx.Comentario ? `
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
-                        <strong>💬 Comentario:</strong><br>${tx.Comentario}
-                    </div>` : ''}
-            </div>`;
-    });
-    
-    html += `</div></div>`;
-    resultsContainer.innerHTML = html;
-}
-
 
 
 
@@ -19686,11 +19662,25 @@ async function testConexionTX() {
 
 
 // ===================================================================
-// 🧪 DIAGNÓSTICO RÁPIDO: Comparar .range() vs sin .range()
+// 🧪 DIAGNÓSTICO RÁPIDO: Comparar .range() vs sin .range() + Mapa
 // ===================================================================
 async function diagnosticarRangeVsNoRange() {
-    console.group('🔍 DIAGNÓSTICO: .range() vs sin .range()');
+    console.group('🔍 DIAGNÓSTICO INTEGRAL: Mapa y Supabase');
     
+    // 🗺️ VALIDACIÓN DE LIBRERÍA Y DOM (Lo que me pediste agregar)
+    console.log('--- 🗺️ ESTADO DEL MAPA ---');
+    console.log('✅ Leaflet cargado:', typeof L !== 'undefined');
+    console.log('✅ Div mapa existe:', !!document.getElementById('mapaTXCoordenadas'));
+    
+    if (typeof L === 'undefined') {
+        console.error('❌ ERROR: La librería Leaflet no está cargada. Los mapas no funcionarán.');
+    }
+    if (!document.getElementById('mapaTXCoordenadas')) {
+        console.warn('⚠️ ADVERTENCIA: No se encontró el ID "mapaTXCoordenadas" en el HTML.');
+    }
+
+    console.log('\n--- 🗄️ PRUEBAS DE SUPABASE ---');
+
     // TEST A: Sin .range()
     console.log('📥 TEST A: Consulta SIN .range()');
     const testA = await supabaseClient
@@ -19717,19 +19707,22 @@ async function diagnosticarRangeVsNoRange() {
         dataIsArray: Array.isArray(testB?.data)
     });
     
-    // COMPARACIÓN
-    console.log('\n📊 COMPARACIÓN:');
+    // COMPARACIÓN FINAL
+    console.log('\n📊 COMPARACIÓN Y CONCLUSIÓN:');
     console.log(`   • Sin .range(): ${testA?.data?.length || 0} registros`);
     console.log(`   • Con .range(): ${testB?.data?.length || 0} registros`);
     
     if (testA?.data?.length > 0 && (!testB?.data || testB.data.length === 0)) {
         console.warn('⚠️ CONFIRMADO: .range() está fallando mientras que sin .range() funciona');
-        console.log('💡 Solución: Usar .limit() en lugar de .range() temporalmente');
+        console.log('💡 Solución: Usar .limit() en lugar de .range() temporalmente en tu código.');
+    } else if (testA?.data?.length === 0) {
+        console.error('❌ ERROR CRÍTICO: Ambas consultas fallaron o la tabla está vacía.');
+    } else {
+        console.log('✨ Todo parece estar en orden con las consultas.');
     }
     
     console.groupEnd();
 }
-
 
 </script>
 </body>
