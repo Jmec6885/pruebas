@@ -19067,10 +19067,10 @@ async function buscarTXPorCoordenadas() {
         console.log(`📏 Radio: ${radioMetros} metros`);
         
         // 🔹 CONSULTAR TABLA - NOMBRE SIN ESPACIOS (MEJOR COMPATIBILIDAD)
-        console.log('📥 Consultando tabla "tx_y_cortes"...');
+        console.log('📥 Consultando tabla "TX y Cortes"...');
         
         const {  txData, error } = await supabaseClient
-            .from('tx_y_cortes')  // ← ✅ NOMBRE SIN ESPACIOS, SIN COMILLAS
+            .from("TX y Cortes")  // ← ✅ NOMBRE SIN ESPACIOS, SIN COMILLAS
             .select('*')
             .order('created_at', { ascending: false });
         
@@ -19084,13 +19084,13 @@ async function buscarTXPorCoordenadas() {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                     <div class="result-header">❌ Sin datos en la tabla</div>
-                    <p>No se encontraron registros en <strong>tx_y_cortes</strong>.</p>
+                    <p>No se encontraron registros en <strong>TX y Cortes</strong>.</p>
                     <details style="margin-top: 10px; font-size: 13px;">
                         <summary style="cursor: pointer; color: #666;">🔍 Ver diagnóstico técnico</summary>
                         <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
                             Error: ${error?.message || 'Ninguno'}<br>
                             Registros encontrados: ${txData?.length || 0}<br>
-                            Tabla consultada: 'tx_y_cortes'<br><br>
+                            Tabla consultada: 'TX y Cortes'<br><br>
                             <strong>Posibles soluciones:</strong><br>
                             1. Verificar que la tabla fue renombrada correctamente<br>
                             2. Verificar políticas RLS para lectura<br>
@@ -19258,14 +19258,14 @@ async function diagnosticarTablaTX() {
     console.group('🔍 DIAGNÓSTICO TABLA TX Y CORTES');
     
     // Probar con nombre en minúsculas
-    console.log('📥 Consultando "tx_y_cortes"...');
+    console.log('📥 Consultando "TX y Cortes"...');
     const {  data1, error1 } = await supabaseClient
-        .from('tx_y_cortes')
+        .from('TX y Cortes')
         .select('*')
         .limit(3);
     
     if (!error1 && data1) {
-        console.log(`✅ ¡Funciona con "tx_y_cortes"! ${data1.length} registros`);
+        console.log(`✅ ¡Funciona con "TX y Cortes"! ${data1.length} registros`);
         data1.forEach((tx, i) => {
             console.log(`   ${i+1}. TXCortes: "${tx.TXCortes}" | Coordenadas: "${tx.Coordenadas}"`);
         });
@@ -19276,10 +19276,10 @@ async function diagnosticarTablaTX() {
 
 // 🔍 TEST: Verificar que la tabla renombrada funciona
 const {  test, error } = await supabaseClient
-    .from('tx_y_cortes')
+    .from('TX y Cortes')
     .select('*')
     .limit(1);
-console.log('✅ Tabla tx_y_cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', error);
+console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', error);
     
     // Probar con nombre entre comillas
     console.log('📥 Intentando con "TX y Cortes"...');
