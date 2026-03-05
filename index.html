@@ -19032,7 +19032,7 @@ console.log('✅ Funciones de preselección expuestas globalmente');
 
 
 // ===================================================================
-// 🔍 BUSCAR TX/CORTES POR COORDENADAS (VERSIÓN CON DIAGNÓSTICO MEJORADO)
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS (CON LOGS ULTRA-DETALLADOS)
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
@@ -19055,19 +19055,43 @@ async function buscarTXPorCoordenadas() {
     }
     
     const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading"></div><p>Verificando tabla "TX y Cortes"...</p>';
+    resultsContainer.innerHTML = '<div class="loading"></div><p>Diagnostico avanzado...</p>';
     
     try {
-        console.group('🔍 DIAGNÓSTICO BÚSQUEDA POR COORDENADAS');
+        console.group('🔍 DIAGNÓSTICO AVANZADO - TX y Cortes');
         console.log(`📍 Coordenadas: [${latBusqueda}, ${lngBusqueda}]`);
         console.log(`📏 Radio: ${radioMetros} metros`);
         
-        // 🔹 PASO 1: VERIFICAR QUE LA TABLA TIENE DATOS (consulta simple sin paginación)
-        console.log('📥 Paso 1: Verificando acceso a tabla "TX y Cortes"...');
+        // 🔹 PASO 0: LOG ULTRA-DETALLADO DE LA RESPUESTA DE SUPABASE
+        console.log('🧪 TEST 0: Consulta simple SIN .range() para comparar...');
+        const testSimple = await supabaseClient
+            .from('tx_y_cortes')
+            .select('TXCortes, Coordenadas')
+            .limit(3);
+        
+        console.log('📊 Respuesta de consulta simple:', {
+            type: typeof testSimple,
+            hasData: testSimple?.data !== undefined,
+            dataIsArray: Array.isArray(testSimple?.data),
+            dataLength: testSimple?.data?.length,
+            hasError: !!testSimple?.error,
+            error: testSimple?.error,
+            fullResponse: JSON.stringify(testSimple, null, 2).slice(0, 500) + '...'
+        });
+        
+        if (testSimple?.data?.length > 0) {
+            console.log('✅ Consulta simple FUNCIONA - muestra de datos:');
+            testSimple.data.slice(0, 2).forEach((tx, i) => {
+                console.log(`   ${i+1}. TXCortes: "${tx.TXCortes}" | Coordenadas: "${tx.Coordenadas}"`);
+            });
+        }
+        
+        // 🔹 PASO 1: Verificar acceso básico
+        console.log('📥 Paso 1: Verificando acceso a tabla "tx_y_cortes"...');
         
         const {  verificacion, error: errorVerif } = await supabaseClient
             .from('tx_y_cortes')
-            .select('TXCortes', { count: 'exact', head: true });  // ← Solo cuenta, sin traer datos
+            .select('TXCortes', { count: 'exact', head: true });
         
         console.log('📊 Verificación:', {
             tieneDatos: verificacion !== null,
@@ -19076,24 +19100,13 @@ async function buscarTXPorCoordenadas() {
         
         if (errorVerif) {
             console.error('❌ Error de acceso:', errorVerif);
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-                    <div class="result-header">❌ Error de acceso</div>
-                    <p>No se pudo acceder a la tabla "TX y Cortes".</p>
-                    <details style="margin-top: 10px; font-size: 13px;">
-                        <summary>🔍 Ver error técnico</summary>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
-                            ${errorVerif.message}<br>
-                            Code: ${errorVerif.code}
-                        </div>
-                    </details>
-                </div>`;
+            resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header">❌ Error de acceso</div><p>${errorVerif.message}</p></div>`;
             console.groupEnd();
             return;
         }
         
-        // 🔹 PASO 2: CARGAR DATOS CON PAGINACIÓN (solo si hay acceso)
-        console.log('📥 Paso 2: Cargando datos por lotes...');
+        // 🔹 PASO 2: CARGAR DATOS CON LOGS DETALLADOS
+        console.log('📥 Paso 2: Cargando datos por lotes con diagnóstico...');
         
         const txData = [];
         let r_inicio = 0;
@@ -19101,74 +19114,104 @@ async function buscarTXPorCoordenadas() {
         let hayMas = true;
         let totalCargados = 0;
         let intentos = 0;
-        const MAX_INTENTOS = 35; // Para evitar bucle infinito (35k registros máximo)
+        const MAX_INTENTOS = 5; // Solo 5 intentos para diagnóstico
         
         while (hayMas && intentos < MAX_INTENTOS) {
             intentos++;
             
-            console.log(`🔄 Lote #${intentos}: rango ${r_inicio}-${r_inicio + BATCH_SIZE - 1}`);
+            console.log(`\n🔄 === LOTE #${intentos} ===`);
+            console.log(`📍 Rango: ${r_inicio} a ${r_inicio + BATCH_SIZE - 1}`);
             
-            const {  lote, error: errorLote, status } = await supabaseClient
+            // Ejecutar consulta
+            const response = await supabaseClient
                 .from('tx_y_cortes')
                 .select('*')
                 .range(r_inicio, r_inicio + BATCH_SIZE - 1);
-                // ← REMOVER .order() temporalmente para diagnosticar
             
-            console.log(`📊 Respuesta lote #${intentos}:`, {
-                status: status,
-                loteLength: lote?.length,
-                error: errorLote?.message || 'Ninguno'
-            });
+            // 🔍 LOG ULTRA-DETALLADO DE LA RESPUESTA
+            console.log('📦 Respuesta completa de Supabase:');
+            console.log('   • typeof response:', typeof response);
+            console.log('   • response instanceof Object:', response instanceof Object);
+            console.log('   • response.data:', response.data);
+            console.log('   • typeof response.data:', typeof response.data);
+            console.log('   • Array.isArray(response.data):', Array.isArray(response.data));
+            console.log('   • response.data?.length:', response.data?.length);
+            console.log('   • response.error:', response.error);
+            console.log('   • response.status:', response.status);
+            console.log('   • response.count:', response.count);
+            console.log('   • response.keys:', Object.keys(response || {}));
             
+            // Intentar desestructurar como en tu código original
+            const {  lote, error: errorLote, status } = response;
+            
+            console.log('📦 Después de desestructurar:');
+            console.log('   • lote:', lote);
+            console.log('   • typeof lote:', typeof lote);
+            console.log('   • lote === null:', lote === null);
+            console.log('   • lote === undefined:', lote === undefined);
+            console.log('   • errorLote:', errorLote);
+            console.log('   • status:', status);
+            
+            // 🧪 PRUEBA ALTERNATIVA: ¿Y si usamos response.data directamente?
+            if (!lote && response?.data && Array.isArray(response.data)) {
+                console.log('⚠️ ALERTA: lote es null pero response.data ES un array válido!');
+                console.log('💡 Posible causa: problema con desestructuración o versión de supabase-js');
+                console.log('🔄 Usando response.data directamente como workaround...');
+            }
+            
+            // Manejar error si existe
             if (errorLote) {
                 console.error('❌ Error en lote:', errorLote);
                 throw errorLote;
             }
             
-            // Si el lote es null o undefined, algo está mal
-            if (!lote) {
-                console.warn('⚠️ Lote es null/undefined, deteniendo');
+            // Determinar qué datos usar: lote (original) o response.data (workaround)
+            const datosDelLote = lote || (response?.data && Array.isArray(response.data) ? response.data : null);
+            
+            if (!datosDelLote) {
+                console.warn('⚠️ No hay datos válidos en la respuesta, deteniendo');
+                console.log('💡 Esto podría ser un bug de supabase-js con .range() en tu entorno');
                 break;
             }
             
             // Si el lote está vacío, no hay más datos
-            if (lote.length === 0) {
+            if (datosDelLote.length === 0) {
                 console.log('✅ No hay más datos, terminando paginación');
                 hayMas = false;
                 break;
             }
             
             // Agregar datos y continuar
-            txData.push(...lote);
-            totalCargados += lote.length;
-            console.log(`📦 Lote #${intentos}: ${lote.length} registros. Total acumulado: ${totalCargados}`);
+            txData.push(...datosDelLote);
+            totalCargados += datosDelLote.length;
+            console.log(`📦 Lote #${intentos}: ${datosDelLote.length} registros. Total: ${totalCargados}`);
             
-            // Actualizar UI con progreso
+            // Actualizar UI
             resultsContainer.innerHTML = `<div class="loading"></div><p>Cargando... ${totalCargados} registros</p>`;
             
-            // Si el lote tiene menos de BATCH_SIZE, no hay más datos
-            hayMas = (lote.length === BATCH_SIZE);
+            // Continuar si el lote estaba lleno
+            hayMas = (datosDelLote.length === BATCH_SIZE);
             if (hayMas) {
                 r_inicio += BATCH_SIZE;
             }
         }
         
-        console.log(`✅ Total cargado: ${txData.length} registros en ${intentos} intentos`);
+        console.log(`\n✅ Total cargado: ${txData.length} registros en ${intentos} intentos`);
         
-        // 🔹 DIAGNÓSTICO: Si no hay datos después de todo
+        // Si no hay datos, mostrar mensaje útil
         if (txData.length === 0) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
                     <div class="result-header">⚠️ Sin datos cargados</div>
-                    <p>La tabla "TX y Cortes" existe pero no se pudieron cargar registros.</p>
+                    <p>La tabla existe pero no se pudieron cargar registros con .range().</p>
                     <details style="margin-top: 10px; font-size: 13px;">
-                        <summary>🔍 Posibles causas</summary>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">
-                        1. La tabla está vacía<br>
-                        2. Políticas RLS filtran todos los registros para tu usuario<br>
-                        3. Problema con .range() en tablas con espacios en el nombre<br><br>
-                        <strong>💡 Prueba:</strong> Ejecuta en consola:<br>
-                        <code>await diagnosticarConsultaTX_A()</code>
+                        <summary>🔍 Ver diagnóstico técnico</summary>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
+                        Posible causa: Bug de supabase-js con .range()<br><br>
+                        <strong>💡 Workaround:</strong><br>
+                        1. Usar .limit() en lugar de .range() para pruebas<br>
+                        2. Actualizar supabase-js a la última versión<br>
+                        3. Contactar soporte de Supabase si persiste
                         </div>
                     </details>
                 </div>`;
@@ -19199,7 +19242,7 @@ async function buscarTXPorCoordenadas() {
         
         resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
         
-        console.log(`📊 Resumen:`);
+        console.log(`📊 Resumen de filtrado:`);
         console.log(`   • Total cargados: ${txData.length}`);
         console.log(`   • Sin coordenadas: ${sinCoordenadas}`);
         console.log(`   • Coordenadas inválidas: ${coordenadasInvalidas}`);
@@ -19209,24 +19252,17 @@ async function buscarTXPorCoordenadas() {
         
         // Mostrar resultados
         if (resultadosCercanos.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
-                    <div class="result-header">⚠️ Sin resultados en el radio</div>
-                    <p>No hay TX/Cortes en ${radioMetros}m de radio.</p>
-                </div>`;
+            resultsContainer.innerHTML = `<div class="result-card"><div class="result-header">⚠️ Sin resultados</div><p>No hay TX/Cortes en ${radioMetros}m de radio.</p></div>`;
         } else {
             mostrarResultadosTXCoordenadas(resultadosCercanos, latBusqueda, lngBusqueda, radioMetros);
         }
         
     } catch (err) {
         console.error('❌ Error:', err);
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-                <div class="result-header">❌ Error</div>
-                <p>${err.message || 'No se pudo completar la búsqueda'}</p>
-            </div>`;
+        resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header">❌ Error</div><p>${err.message || 'No se pudo completar'}</p></div>`;
     }
 }
+
 
 // ===================================================================
 // 📏 CALCULAR DISTANCIA EN METROS (Sin cambios)
@@ -19487,6 +19523,52 @@ async function testConexionTX() {
     console.groupEnd();
 
     console.log("%c TEST COMPLETED ", "background: #222; color: #55badb; font-size: 12px;");
+}
+
+
+// ===================================================================
+// 🧪 DIAGNÓSTICO RÁPIDO: Comparar .range() vs sin .range()
+// ===================================================================
+async function diagnosticarRangeVsNoRange() {
+    console.group('🔍 DIAGNÓSTICO: .range() vs sin .range()');
+    
+    // TEST A: Sin .range()
+    console.log('📥 TEST A: Consulta SIN .range()');
+    const testA = await supabaseClient
+        .from('tx_y_cortes')
+        .select('TXCortes, Coordenadas')
+        .limit(5);
+    
+    console.log('✅ Resultado TEST A:', {
+        data: testA?.data?.length || 0,
+        error: testA?.error?.message || 'Ninguno',
+        dataIsArray: Array.isArray(testA?.data)
+    });
+    
+    // TEST B: Con .range()
+    console.log('\n📥 TEST B: Consulta CON .range(0, 999)');
+    const testB = await supabaseClient
+        .from('tx_y_cortes')
+        .select('TXCortes, Coordenadas')
+        .range(0, 999);
+    
+    console.log('✅ Resultado TEST B:', {
+        data: testB?.data?.length || 0,
+        error: testB?.error?.message || 'Ninguno',
+        dataIsArray: Array.isArray(testB?.data)
+    });
+    
+    // COMPARACIÓN
+    console.log('\n📊 COMPARACIÓN:');
+    console.log(`   • Sin .range(): ${testA?.data?.length || 0} registros`);
+    console.log(`   • Con .range(): ${testB?.data?.length || 0} registros`);
+    
+    if (testA?.data?.length > 0 && (!testB?.data || testB.data.length === 0)) {
+        console.warn('⚠️ CONFIRMADO: .range() está fallando mientras que sin .range() funciona');
+        console.log('💡 Solución: Usar .limit() en lugar de .range() temporalmente');
+    }
+    
+    console.groupEnd();
 }
 
 
