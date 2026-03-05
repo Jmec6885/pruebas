@@ -19032,7 +19032,7 @@ console.log('✅ Funciones de preselección expuestas globalmente');
 
 
 // ===================================================================
-// 🔍 BUSCAR TX/CORTES POR COORDENADAS (VERSIÓN SIMPLIFICADA CON LÓGICA REUTILIZADA)
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS (VERSIÓN FINAL CORREGIDA)
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
@@ -19058,77 +19058,168 @@ async function buscarTXPorCoordenadas() {
     resultsContainer.innerHTML = '<div class="loading"></div><p>Buscando en ' + radioMetros + 'm de radio...</p>';
     
     try {
-        // 🔹 CONSULTAR TABLA (nombre exacto sin comillas adicionales)
-        const {  txData, error } = await supabaseClient
-            .from('TX y Cortes')  // ← Nombre exacto como aparece en information_schema
+        console.group('🔍 DIAGNÓSTICO BÚSQUEDA POR COORDENADAS');
+        console.log(`📍 Coordenadas de búsqueda: [${latBusqueda}, ${lngBusqueda}]`);
+        console.log(`📏 Radio: ${radioMetros} metros`);
+        
+        // 🔹 CONSULTAR TABLA - CON MANEJO ROBUSTO DE RESPUESTA
+        console.log('📥 Consultando tabla "TX y Cortes"...');
+        
+        const response = await supabaseClient
+            .from('TX y Cortes')
             .select('*')
             .order('created_at', { ascending: false });
         
-        if (error || !txData) {
-            console.error('❌ Error Supabase:', error);
-            throw new Error('No se pudo consultar la tabla');
+        // 🔍 DIAGNÓSTICO DETALLADO DE LA RESPUESTA
+        console.log('📊 Respuesta completa de Supabase:', {
+            status: response.status,
+            statusText: response.statusText,
+            hasData: !!response.data,
+            dataLength: response.data?.length,
+            hasError: !!response.error,
+            error: response.error
+        });
+        
+        // ✅ EXTRAER DATOS CON VALIDACIÓN
+        const txData = response.data;
+        const error = response.error;
+        
+        if (error) {
+            console.error('❌ Error de Supabase:', error);
+            throw new Error(`Supabase error: ${error.message}`);
         }
         
+        // ✅ VALIDAR QUE txData SEA UN ARRAY
+        if (!txData || !Array.isArray(txData)) {
+            console.error('❌ txData no es un array válido:', typeof txData, txData);
+            throw new Error('La consulta no devolvió datos válidos');
+        }
+        
+        console.log(`📊 Resultado de consulta: ${txData.length} registros`);
+        
+        // 🔹 DIAGNÓSTICO: Si no hay datos
         if (txData.length === 0) {
-            resultsContainer.innerHTML = `<div class="result-card">⚠️ La tabla está vacía</div>`;
+            resultsContainer.innerHTML = `
+                <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+                    <div class="result-header">❌ Sin datos en la tabla</div>
+                    <p>La tabla <strong>TX y Cortes</strong> está vacía o no tienes permisos para leerla.</p>
+                    <details style="margin-top: 10px; font-size: 13px;">
+                        <summary style="cursor: pointer; color: #666;">🔍 Ver diagnóstico técnico</summary>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
+                            Registros encontrados: ${txData.length}<br>
+                            Tabla consultada: 'TX y Cortes'<br>
+                            Usuario: ${currentUser?.usuario}<br>
+                            Rol: ${currentUser?.rol}<br><br>
+                            <strong>Posibles soluciones:</strong><br>
+                            1. Verificar que hay datos en la tabla en Supabase Dashboard<br>
+                            2. Verificar políticas RLS para lectura<br>
+                            3. Verificar que el usuario tiene rol autorizado
+                        </div>
+                    </details>
+                </div>`;
+            console.groupEnd();
             return;
         }
         
-        // 🔹 FILTRAR POR COORDENADAS Y RADIO (lógica reutilizada)
+        // 🔹 DIAGNÓSTICO: Mostrar formato de coordenadas de los primeros registros
+        console.log('🔍 Muestra de coordenadas en la BD:');
+        txData.slice(0, 5).forEach((tx, i) => {
+            console.log(`   ${i+1}. TXCortes: ${tx.TXCortes || 'N/A'} | Coordenadas: "${tx.Coordenadas}"`);
+        });
+        
+        // 🔹 FILTRAR POR COORDENADAS Y RADIO
         const resultadosCercanos = [];
+        let sinCoordenadas = 0;
+        let coordenadasInvalidas = 0;
+        let fueraDeRadio = 0;
         
         txData.forEach(tx => {
-            const coordsStr = tx.Coordenadas;  // Solo este campo según tu tabla
-            if (!coordsStr?.includes(',')) return;
+            const coordsStr = tx.Coordenadas;
             
-            const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-            if (isNaN(latTX) || isNaN(lngTX)) return;
+            if (!coordsStr || !coordsStr.includes(',')) {
+                sinCoordenadas++;
+                return;
+            }
             
-            // ✅ REUTILIZAR: Calcular distancia (adaptando a metros)
+            const partes = coordsStr.split(',').map(c => c.trim());
+            const latTX = parseFloat(partes[0]);
+            const lngTX = parseFloat(partes[1]);
+            
+            if (isNaN(latTX) || isNaN(lngTX)) {
+                coordenadasInvalidas++;
+                console.warn(`⚠️ Coordenadas inválidas para TX ${tx.TXCortes}: "${coordsStr}"`);
+                return;
+            }
+            
             const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, latTX, lngTX);
+            
+            if (resultadosCercanos.length < 10) {
+                console.log(`   📏 TX ${tx.TXCortes}: [${latTX}, ${lngTX}] → ${distanciaMetros}m`);
+            }
             
             if (distanciaMetros <= radioMetros) {
                 resultadosCercanos.push({ ...tx, distancia: distanciaMetros });
+            } else {
+                fueraDeRadio++;
             }
         });
         
-        // ✅ REUTILIZAR: Ordenar por distancia (más cercano primero)
         resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
+        
+        console.log(`📊 Resumen de filtrado:`);
+        console.log(`   • Total registros en BD: ${txData.length}`);
+        console.log(`   • Sin coordenadas: ${sinCoordenadas}`);
+        console.log(`   • Coordenadas inválidas: ${coordenadasInvalidas}`);
+        console.log(`   • Fuera de radio (${radioMetros}m): ${fueraDeRadio}`);
+        console.log(`   • ✅ Dentro de radio: ${resultadosCercanos.length}`);
+        console.groupEnd();
         
         // Mostrar resultados
         if (resultadosCercanos.length === 0) {
             resultsContainer.innerHTML = `
-                <div class="result-card">
-                    <div class="result-header">⚠️ Sin resultados</div>
-                    <p>No hay TX/Cortes en ${radioMetros}m de radio.</p>
-                    <p style="font-size:13px;color:#666;">
-                        Buscaste: ${latBusqueda.toFixed(6)}, ${lngBusqueda.toFixed(6)}<br>
-                        Total en BD: ${txData.length} registros
-                    </p>
+                <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                    <div class="result-header">⚠️ Sin resultados en el radio</div>
+                    <p>No se encontraron TX/Cortes dentro de <strong>${radioMetros} metros</strong>.</p>
+                    <details style="margin-top: 10px; font-size: 13px;">
+                        <summary style="cursor: pointer; color: #666;">🔍 Ver detalles</summary>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">
+                            • Coordenadas buscadas: ${latBusqueda.toFixed(6)}, ${lngBusqueda.toFixed(6)}<br>
+                            • Radio: ${radioMetros} metros<br>
+                            • Total en BD: ${txData.length}<br>
+                            • Con coordenadas válidas: ${txData.length - sinCoordenadas - coordenadasInvalidas}<br><br>
+                            <strong>💡 Sugerencias:</strong><br>
+                            1. Aumenta el radio (ej: 500m o 1000m)<br>
+                            2. Verifica que las coordenadas en BD estén en formato "lat,lng"
+                        </div>
+                    </details>
                 </div>`;
         } else {
             mostrarResultadosTXCoordenadas(resultadosCercanos, latBusqueda, lngBusqueda, radioMetros);
         }
         
     } catch (err) {
-        console.error('❌ Error:', err);
-        resultsContainer.innerHTML = `<div class="result-card" style="background:#fee2e2">❌ ${err.message}</div>`;
+        console.error('❌ Error buscando TX por coordenadas:', err);
+        resultsContainer.innerHTML = `
+            <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+                <div class="result-header" style="color: #b91c1c;">❌ Error</div>
+                <p>${err.message || 'No se pudo completar la búsqueda'}</p>
+            </div>`;
     }
 }
 
 // ===================================================================
-// 📏 CALCULAR DISTANCIA EN METROS (Reutiliza tu lógica existente)
+// 📏 CALCULAR DISTANCIA EN METROS (Fórmula Haversine)
 // ===================================================================
 function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
-    // Fórmula Haversine - misma lógica que tu calcularDistanciaKm pero en metros
-    const R = 6371000; // Radio Tierra en metros (no km)
+    const R = 6371000; // Radio de la Tierra en metros
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng/2) * Math.sin(dLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return Math.round(R * c); // Retornar metros redondeados
+    return Math.round(R * c);
 }
 
 
@@ -19193,6 +19284,36 @@ async function diagnosticarTablaTX() {
         return;
     }
 
+// 🔍 TEST: Verificar consulta directa a TX y Cortes
+console.group('🧪 DIAGNÓSTICO TX Y CORTES');
+
+// 1. Probar consulta simple
+const {  test1, error1 } = await supabaseClient
+    .from('TX y Cortes')
+    .select('TXCortes, Coordenadas')
+    .limit(3);
+
+console.log('✅ Consulta básica:', test1?.length || 0, 'registros');
+if (test1?.length > 0) {
+    test1.forEach(tx => {
+        console.log(`   • ${tx.TXCortes}: "${tx.Coordenadas}"`);
+    });
+}
+if (error1) console.error('❌ Error:', error1);
+
+// 2. Probar con coordenadas específicas
+const coordsBusqueda = '13.94033276,-89.56567566';
+const [latB, lngB] = coordsBusqueda.split(',').map(Number);
+
+if (test1?.length > 0) {
+    // Probar cálculo de distancia con un registro real
+    const txEjemplo = test1[0];
+    if (txEjemplo.Coordenadas?.includes(',')) {
+        const [latTX, lngTX] = txEjemplo.Coordenadas.split(',').map(Number);
+        const dist = calcularDistanciaMetros(latB, lngB, latTX, lngTX);
+        console.log(`🧪 Distancia de prueba: ${dist} metros`);
+    }
+}
 
 
 
@@ -19225,63 +19346,41 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
 }
 
 
-	/**
- * 🧪 Función de diagnóstico para validar la tabla 'TX y Cortes'
- * Ejecútala manualmente en la consola o llámala al final del script.
- */
-async function ejecutarDiagnosticoTX() {
-    console.group('🧪 DIAGNÓSTICO TX Y CORTES');
-
+// ===================================================================
+// 🧪 DIAGNÓSTICO RÁPIDO: Verificar consulta directa
+// ===================================================================
+async function diagnosticarConsultaTX_A() {
+    console.group('🔍 DIAGNÓSTICO CONSULTA TX Y CORTES');
+    
     try {
-        // 1. Probar consulta simple (Seleccionamos las columnas exactas)
-        const { data: test1, error: error1 } = await supabaseClient
+        const response = await supabaseClient
             .from('TX y Cortes')
             .select('TXCortes, Coordenadas')
             .limit(3);
-
-        if (error1) {
-            console.error('❌ Error en la consulta básica:', error1.message);
-            console.dir(error1);
+        
+        console.log('📊 Respuesta:', {
+            status: response.status,
+            data: response.data,
+            error: response.error,
+            isArray: Array.isArray(response.data),
+            length: response.data?.length
+        });
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            console.log('✅ ¡Funciona! Muestra de datos:');
+            response.data.forEach((tx, i) => {
+                console.log(`   ${i+1}. "${tx.TXCortes}" | "${tx.Coordenadas}"`);
+            });
         } else {
-            console.log('✅ Consulta básica:', test1?.length || 0, 'registros encontrados.');
-            
-            if (test1 && test1.length > 0) {
-                test1.forEach((tx, index) => {
-                    console.log(`   ${index + 1}. ID: ${tx.TXCortes} | Coords: "${tx.Coordenadas}"`);
-                });
-
-                // 2. Probar con coordenadas específicas (Simulación de búsqueda)
-                const coordsBusqueda = '13.94033276,-89.56567566';
-                const [latB, lngB] = coordsBusqueda.split(',').map(Number);
-
-                // Probar cálculo de distancia con el primer registro real obtenido
-                const txEjemplo = test1[0];
-                if (txEjemplo.Coordenadas && txEjemplo.Coordenadas.includes(',')) {
-                    const [latTX, lngTX] = txEjemplo.Coordenadas.split(',').map(Number);
-                    
-                    // Verificamos si la función calcularDistanciaMetros existe en el scope
-                    if (typeof calcularDistanciaMetros === 'function') {
-                        const dist = calcularDistanciaMetros(latB, lngB, latTX, lngTX);
-                        console.log(`🧪 Distancia calculada entre búsqueda y registro [${txEjemplo.TXCortes}]: ${dist.toFixed(2)} metros`);
-                    } else {
-                        console.warn('⚠️ La función "calcularDistanciaMetros" no está definida o no es accesible aquí.');
-                    }
-                } else {
-                    console.warn('⚠️ El registro de prueba no tiene coordenadas válidas (formato "lat,lng").');
-                }
-            } else {
-                console.warn('⚠️ La tabla "TX y Cortes" parece estar vacía.');
-            }
+            console.warn('⚠️ No hay datos o la respuesta no es válida');
         }
+        
     } catch (err) {
-        console.error('❌ Error inesperado durante el diagnóstico:', err);
+        console.error('❌ Error:', err);
     }
-
+    
     console.groupEnd();
 }
-
-// Para ejecutarlo automáticamente al cargar, descomenta la siguiente línea:
-// ejecutarDiagnosticoTX();
 
 
 </script>
