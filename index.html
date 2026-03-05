@@ -19032,7 +19032,7 @@ console.log('✅ Funciones de preselección expuestas globalmente');
 
 
 // ===================================================================
-// 🔍 BUSCAR TX/CORTES POR COORDENADAS (VERSIÓN FINAL CORREGIDA)
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS (CON PAGINACIÓN POR LOTES)
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
@@ -19055,47 +19055,55 @@ async function buscarTXPorCoordenadas() {
     }
     
     const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading"></div><p>Buscando en ' + radioMetros + 'm de radio...</p>';
+    resultsContainer.innerHTML = '<div class="loading"></div><p>Buscando en ' + radioMetros + 'm de radio (cargando datos por lotes)...</p>';
     
     try {
         console.group('🔍 DIAGNÓSTICO BÚSQUEDA POR COORDENADAS');
         console.log(`📍 Coordenadas de búsqueda: [${latBusqueda}, ${lngBusqueda}]`);
         console.log(`📏 Radio: ${radioMetros} metros`);
         
-        // 🔹 CONSULTAR TABLA - CON MANEJO ROBUSTO DE RESPUESTA
-        console.log('📥 Consultando tabla "TX y Cortes"...');
+        // 🔹 CONSULTAR TABLA CON PAGINACIÓN POR LOTES (como en KML Ruta)
+        console.log('📥 Consultando tabla "TX y Cortes" por lotes de 1000...');
         
-        const response = await supabaseClient
-            .from('TX y Cortes')
-            .select('*')
-            .order('created_at', { ascending: false });
+        const txData = [];
+        let r_inicio = 0;
+        const r_fin_inicial = 999;
+        const BATCH_SIZE = 1000;
+        let hayMas = true;
+        let totalCargados = 0;
         
-        // 🔍 DIAGNÓSTICO DETALLADO DE LA RESPUESTA
-        console.log('📊 Respuesta completa de Supabase:', {
-            status: response.status,
-            statusText: response.statusText,
-            hasData: !!response.data,
-            dataLength: response.data?.length,
-            hasError: !!response.error,
-            error: response.error
-        });
-        
-        // ✅ EXTRAER DATOS CON VALIDACIÓN
-        const txData = response.data;
-        const error = response.error;
-        
-        if (error) {
-            console.error('❌ Error de Supabase:', error);
-            throw new Error(`Supabase error: ${error.message}`);
+        while (hayMas) {
+            const {  lote, error: errorLote } = await supabaseClient
+                .from('TX y Cortes')
+                .select('*')
+                .range(r_inicio, r_inicio + BATCH_SIZE - 1)
+                .order('created_at', { ascending: false });
+            
+            if (errorLote) {
+                console.error('❌ Error en lote:', errorLote);
+                throw errorLote;
+            }
+            
+            if (!lote || lote.length === 0) {
+                hayMas = false;
+                break;
+            }
+            
+            txData.push(...lote);
+            totalCargados += lote.length;
+            console.log(`📦 Lote ${r_inicio}-${r_inicio + BATCH_SIZE - 1}: ${lote.length} registros. Total: ${totalCargados}`);
+            
+            // Si el lote tiene menos de BATCH_SIZE, no hay más datos
+            hayMas = (lote.length === BATCH_SIZE);
+            if (hayMas) {
+                r_inicio += BATCH_SIZE;
+            }
+            
+            // Actualizar mensaje de progreso
+            resultsContainer.innerHTML = `<div class="loading"></div><p>Cargando TX/Cortes... ${totalCargados} registros procesados</p>`;
         }
         
-        // ✅ VALIDAR QUE txData SEA UN ARRAY
-        if (!txData || !Array.isArray(txData)) {
-            console.error('❌ txData no es un array válido:', typeof txData, txData);
-            throw new Error('La consulta no devolvió datos válidos');
-        }
-        
-        console.log(`📊 Resultado de consulta: ${txData.length} registros`);
+        console.log(`✅ Total cargado: ${txData.length} registros`);
         
         // 🔹 DIAGNÓSTICO: Si no hay datos
         if (txData.length === 0) {
@@ -19103,19 +19111,6 @@ async function buscarTXPorCoordenadas() {
                 <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                     <div class="result-header">❌ Sin datos en la tabla</div>
                     <p>La tabla <strong>TX y Cortes</strong> está vacía o no tienes permisos para leerla.</p>
-                    <details style="margin-top: 10px; font-size: 13px;">
-                        <summary style="cursor: pointer; color: #666;">🔍 Ver diagnóstico técnico</summary>
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
-                            Registros encontrados: ${txData.length}<br>
-                            Tabla consultada: 'TX y Cortes'<br>
-                            Usuario: ${currentUser?.usuario}<br>
-                            Rol: ${currentUser?.rol}<br><br>
-                            <strong>Posibles soluciones:</strong><br>
-                            1. Verificar que hay datos en la tabla en Supabase Dashboard<br>
-                            2. Verificar políticas RLS para lectura<br>
-                            3. Verificar que el usuario tiene rol autorizado
-                        </div>
-                    </details>
                 </div>`;
             console.groupEnd();
             return;
@@ -19147,15 +19142,10 @@ async function buscarTXPorCoordenadas() {
             
             if (isNaN(latTX) || isNaN(lngTX)) {
                 coordenadasInvalidas++;
-                console.warn(`⚠️ Coordenadas inválidas para TX ${tx.TXCortes}: "${coordsStr}"`);
                 return;
             }
             
             const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, latTX, lngTX);
-            
-            if (resultadosCercanos.length < 10) {
-                console.log(`   📏 TX ${tx.TXCortes}: [${latTX}, ${lngTX}] → ${distanciaMetros}m`);
-            }
             
             if (distanciaMetros <= radioMetros) {
                 resultadosCercanos.push({ ...tx, distancia: distanciaMetros });
@@ -19164,10 +19154,11 @@ async function buscarTXPorCoordenadas() {
             }
         });
         
+        // Ordenar por distancia (más cercano primero)
         resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
         
         console.log(`📊 Resumen de filtrado:`);
-        console.log(`   • Total registros en BD: ${txData.length}`);
+        console.log(`   • Total registros cargados: ${txData.length}`);
         console.log(`   • Sin coordenadas: ${sinCoordenadas}`);
         console.log(`   • Coordenadas inválidas: ${coordenadasInvalidas}`);
         console.log(`   • Fuera de radio (${radioMetros}m): ${fueraDeRadio}`);
@@ -19188,7 +19179,7 @@ async function buscarTXPorCoordenadas() {
                             • Total en BD: ${txData.length}<br>
                             • Con coordenadas válidas: ${txData.length - sinCoordenadas - coordenadasInvalidas}<br><br>
                             <strong>💡 Sugerencias:</strong><br>
-                            1. Aumenta el radio (ej: 500m o 1000m)<br>
+                            1. Aumenta el radio de búsqueda (ej: 500m o 1000m)<br>
                             2. Verifica que las coordenadas en BD estén en formato "lat,lng"
                         </div>
                     </details>
@@ -19221,6 +19212,7 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return Math.round(R * c);
 }
+
 
 
 
@@ -19262,6 +19254,54 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
     resultsContainer.innerHTML = html;
 }
 
+
+
+
+// ===================================================================
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
+// ===================================================================
+function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    let html = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header">🔍 TX/Cortes Encontrados</div>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resumen:</strong><br>
+                • Coordenadas: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}<br>
+                • Radio: ${radioMetros} metros<br>
+                • Encontrados: ${resultados.length}
+            </div>
+            <div style="display: grid; gap: 15px;">`;
+    
+    resultados.forEach((tx, index) => {
+        const distancia = tx.distancia || 0;
+        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+        
+        html += `
+            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+                <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">
+                    #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
+                </div>
+                <div style="font-size: 13px; color: #64748b;">
+                    <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
+                    <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
+                </div>
+                ${tx.Comentario ? `
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+                        <strong>💬 Comentario:</strong><br>${tx.Comentario}
+                    </div>` : ''}
+            </div>`;
+    });
+    
+    html += `</div></div>`;
+    resultsContainer.innerHTML = html;
+}
+
+
+
+
+
 // ===================================================================
 // 🧪 DIAGNÓSTICO RÁPIDO: Verificar tabla tx_y_cortes
 // ===================================================================
@@ -19283,6 +19323,7 @@ async function diagnosticarTablaTX() {
         console.groupEnd();
         return;
     }
+
 
 
 // 🔍 TEST: Verificar que la tabla renombrada funciona
@@ -19313,43 +19354,7 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
 }
 
 
-	async function buscarTXPorCoordenadas(lat, lng) {
-    try {
-        console.log(`🔍 Buscando TX cerca de: ${lat}, ${lng}`);
-        
-        // La consulta a Supabase
-        const { data, error } = await supabaseClient
-            .from('TX y Cortes') // <-- Verifica que este nombre sea EXACTO al de la base de datos
-            .select('TXCortes, Coordenadas');
 
-        if (error) {
-            console.error('❌ Error de Supabase:', error);
-            throw error;
-        }
-
-        if (!data || data.length === 0) {
-            console.warn('⚠️ No se encontraron registros en TX y Cortes');
-            return null;
-        }
-
-        // Aquí es donde calculas la distancia con los datos obtenidos
-        // Supabase leyó todas las filas, ahora filtramos por cercanía en JS
-        const radioBusqueda = 500; // metros
-        const cercanos = data.filter(tx => {
-            if (!tx.Coordenadas) return false;
-            const [txLat, txLng] = tx.Coordenadas.split(',').map(Number);
-            const distancia = calcularDistanciaMetros(lat, lng, txLat, txLng);
-            return distancia <= radioBusqueda;
-        });
-
-        console.log(`✅ Hallados ${cercanos.length} TX cercanos.`);
-        return cercanos;
-
-    } catch (err) {
-        console.error('❌ Error en buscarTXPorCoordenadas:', err.message);
-        throw new Error("No se pudo consultar la tabla");
-    }
-}
 
 
 // ===================================================================
