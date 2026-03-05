@@ -414,7 +414,7 @@
                         <div class="table-description">Órdenes de servicio finalizadas</div>
                     </div>
 
-                    <div class="table-option" onclick="seleccionarTabla('TX y Cortes')">
+                    <div class="table-option" onclick="seleccionarTabla('tx_y_cortes')">
                         <span class="table-icon">⚡</span>
                         <div class="table-title">TX y Cortes</div>
                         <div class="table-description">Transformadores y cortes de energía</div>
@@ -4120,7 +4120,7 @@ if (rol === 'ATTF' || rol === 'Poda') {
         option.style.display =
             (!esMapaRutas && (
                 action.includes('consultas_servicios') ||
-                action.includes('TX y Cortes') ||
+                action.includes('tx_y_cortes') ||
                 action.includes('retiro_medidores')
             ))
             ? 'block'
@@ -4338,8 +4338,8 @@ const tableConfigs = {
         resultFields: ['OSATOMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
         actions: ['Coordenadas', 'FotoLink']
     },
-    'TX y Cortes': {
-    title: 'TX y Cortes',
+    'tx_y_cortes': {
+    title: 'tx_y_cortes',
     icon: '⚡',
     fields: [
         { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
@@ -4708,7 +4708,7 @@ function descargarKML() {
             let etiquetaPrincipal = '';
             let tipoTabla = selectedTable || 'desconocida';
             
-            if (tipoTabla === 'TX y Cortes') {
+            if (tipoTabla === 'tx_y_cortes') {
                 etiquetaPrincipal = item.TXCortes || item.tx_cortes || `TX-${index + 1}`;
             } else if (tipoTabla === 'consultas_servicios') {
                 etiquetaPrincipal = item.Medidor || item.medidor || item.CuentaContrato || `MED-${index + 1}`;
@@ -4756,11 +4756,11 @@ function prepararDescripcionKML(item, tipoTabla, orden) {
     
     // Header simple
     html += '<b>' + escapeXml('#' + orden + ' - ' + 
-        (tipoTabla === 'TX y Cortes' ? 'TX/Corte' : 
+        (tipoTabla === 'tx_y_cortes' ? 'TX/Corte' : 
         (tipoTabla === 'consultas_servicios' ? 'Medidor' : 'OS'))) + '</b><br/><br/>';
     
     // Datos principales
-    if (tipoTabla === 'TX y Cortes') {
+    if (tipoTabla === 'tx_y_cortes') {
         if (item.TXCortes) html += '<b>TX/Corte:</b> ' + escapeXml(item.TXCortes) + '<br/>';
         if (item.Circuitos) html += '<b>Circuito:</b> ' + escapeXml(item.Circuitos) + '<br/>';
         if (item.NombreCliente) html += '<b>Cliente:</b> ' + escapeXml(item.NombreCliente) + '<br/>';
@@ -5258,7 +5258,7 @@ async function logout() {
         // ========================================
         // ✅ NUEVO: CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO)
         // ========================================
-        if (selectedTable === 'TX y Cortes') {
+        if (selectedTable === 'tx_y_cortes') {
             html += `
             <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
                 <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
@@ -18594,7 +18594,7 @@ const PERMISOS_MODULOS = {
     'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura', 'Poda'],
-    'TX y Cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda']  // ✅ Corregido
+    'tx_y_cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda']  // ✅ Corregido
 };
 
 
@@ -19066,7 +19066,7 @@ async function buscarTXPorCoordenadas() {
         console.log('📥 Paso 1: Verificando acceso a tabla "TX y Cortes"...');
         
         const {  verificacion, error: errorVerif } = await supabaseClient
-            .from('TX y Cortes')
+            .from('tx_y_cortes')
             .select('TXCortes', { count: 'exact', head: true });  // ← Solo cuenta, sin traer datos
         
         console.log('📊 Verificación:', {
@@ -19109,7 +19109,7 @@ async function buscarTXPorCoordenadas() {
             console.log(`🔄 Lote #${intentos}: rango ${r_inicio}-${r_inicio + BATCH_SIZE - 1}`);
             
             const {  lote, error: errorLote, status } = await supabaseClient
-                .from('TX y Cortes')
+                .from('tx_y_cortes')
                 .select('*')
                 .range(r_inicio, r_inicio + BATCH_SIZE - 1);
                 // ← REMOVER .order() temporalmente para diagnosticar
@@ -19339,7 +19339,7 @@ async function diagnosticarTablaTX() {
     // Probar con nombre en minúsculas
     console.log('📥 Consultando "TX y Cortes"...');
     const {  data1, error1 } = await supabaseClient
-        .from('TX y Cortes')
+        .from('tx_y_cortes')
         .select('*')
         .limit(3);
     
@@ -19356,7 +19356,7 @@ async function diagnosticarTablaTX() {
 
 // 🔍 TEST: Verificar que la tabla renombrada funciona
 const {  test, error } = await supabaseClient
-    .from('TX y Cortes')
+    .from('tx_y_cortes')
     .select('*')
     .limit(1);
 console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', error);
@@ -19364,7 +19364,7 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
     // Probar con nombre entre comillas
     console.log('📥 Intentando con "TX y Cortes"...');
     const {  data2, error2 } = await supabaseClient
-        .from('TX y Cortes')
+        .from('tx_y_cortes')
         .select('*')
         .limit(3);
     
@@ -19393,7 +19393,7 @@ async function diagnosticarConsultaTX_A() {
     
     try {
         const response = await supabaseClient
-            .from('TX y Cortes')
+            .from('tx_y_cortes')
             .select('TXCortes, Coordenadas')
             .limit(3);
         
@@ -19433,7 +19433,7 @@ async function testConexionTX() {
     console.group('🧪 TEST 1: Consulta simple');
     try {
         const { data: test1, error: error1 } = await supabaseClient
-            .from('TX y Cortes')
+            .from('tx_y_cortes')
             .select('TXCortes, Coordenadas')
             .limit(5);
 
@@ -19455,7 +19455,7 @@ async function testConexionTX() {
     console.group('🧪 TEST 2: Consulta con .range()');
     try {
         const { data: test2, error: error2 } = await supabaseClient
-            .from('TX y Cortes')
+            .from('tx_y_cortes')
             .select('*')
             .range(0, 999);
 
@@ -19473,7 +19473,7 @@ async function testConexionTX() {
     console.group('🧪 TEST 3: Conteo total');
     try {
         const { count, error: error3 } = await supabaseClient
-            .from('TX y Cortes')
+            .from('tx_y_cortes')
             .select('*', { count: 'exact', head: true });
 
         if (error3) {
