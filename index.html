@@ -19032,7 +19032,7 @@ console.log('✅ Funciones de preselección expuestas globalmente');
 
 
 // ===================================================================
-// 🔍 BUSCAR TX/CORTES POR COORDENADAS Y RADIO (CORREGIDA)
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS Y RADIO (CORREGIDA - NOMBRE DE TABLA)
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
@@ -19050,7 +19050,7 @@ async function buscarTXPorCoordenadas() {
         return;
     }
     
-    // Parsear coordenadas de búsqueda (limpiar espacios)
+    // Parsear coordenadas de búsqueda
     const [latBusqueda, lngBusqueda] = coordenadasInput.split(',').map(c => parseFloat(c.trim()));
     
     if (isNaN(latBusqueda) || isNaN(lngBusqueda)) {
@@ -19066,27 +19066,14 @@ async function buscarTXPorCoordenadas() {
         console.log(`📍 Coordenadas de búsqueda: [${latBusqueda}, ${lngBusqueda}]`);
         console.log(`📏 Radio: ${radioMetros} metros`);
         
-        // 🔹 CONSULTAR TABLA - PROBAMOS CON AMBOS NOMBRES
-        console.log('📥 Consultando tabla "tx_y_cortes"...');
+        // 🔹 CONSULTAR TABLA - NOMBRE EXACTO CON COMILLAS
+        console.log('📥 Consultando tabla "TX y Cortes" (nombre exacto)...');
         
-        // Primero intentar con nombre en minúsculas (como Supabase lo guarda internamente)
-        let {  txData, error } = await supabaseClient
-            .from('tx_y_cortes')  // ← NOMBRE CORREGIDO: minúsculas y guiones bajos
+        // ✅ NOMBRE CORRECTO: Usar el nombre exacto con comillas para preservar mayúsculas y espacios
+        const { data: txData, error } = await supabaseClient
+            .from('"TX y Cortes"')  // ← NOMBRE EXACTO CON COMILLAS
             .select('*')
             .order('created_at', { ascending: false });
-        
-        // Si falla, intentar con el nombre original entre comillas
-        if (error || !txData) {
-            console.log('⚠️ Intentando con nombre alternativo "TX y Cortes"...');
-            const resultado2 = await supabaseClient
-                .from('"TX y Cortes"')  // ← Con comillas para preservar mayúsculas y espacios
-                .select('*')
-                .order('created_at', { ascending: false });
-            if (!resultado2.error) {
-                txData = resultado2.data;
-                error = null;
-            }
-        }
         
         console.log(`📊 Resultado de consulta: ${txData?.length || 0} registros`);
         if (error) {
@@ -19098,16 +19085,16 @@ async function buscarTXPorCoordenadas() {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                     <div class="result-header">❌ Sin datos en la tabla</div>
-                    <p>No se encontraron registros en <strong>tx_y_cortes</strong>.</p>
+                    <p>No se encontraron registros en <strong>"TX y Cortes"</strong>.</p>
                     <details style="margin-top: 10px; font-size: 13px;">
                         <summary style="cursor: pointer; color: #666;">🔍 Ver diagnóstico técnico</summary>
                         <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
                             Error: ${error?.message || 'Ninguno'}<br>
                             Registros encontrados: ${txData?.length || 0}<br>
-                            Tabla consultada: "tx_y_cortes"<br><br>
+                            Tabla consultada: '"TX y Cortes"'<br><br>
                             <strong>Posibles soluciones:</strong><br>
-                            1. Verificar que la tabla existe en Supabase<br>
-                            2. Verificar permisos RLS para leer la tabla<br>
+                            1. Verificar en Supabase Dashboard → Table Editor que la tabla existe<br>
+                            2. Verificar que la tabla tiene políticas RLS habilitadas para lectura<br>
                             3. Verificar que hay datos insertados en la tabla<br>
                             4. Verificar que el schema es "public"
                         </div>
@@ -19138,7 +19125,7 @@ async function buscarTXPorCoordenadas() {
                 return;
             }
             
-            // Parsear coordenadas del TX (limpiar espacios - IMPORTANTE)
+            // Parsear coordenadas del TX (limpiar espacios)
             const partes = coordsStr.split(',').map(c => c.trim());
             const latTX = parseFloat(partes[0]);
             const lngTX = parseFloat(partes[1]);
@@ -19218,7 +19205,6 @@ async function buscarTXPorCoordenadas() {
 
 
 
-
 // ===================================================================
 // 📏 CALCULAR DISTANCIA EN METROS (Fórmula Haversine)
 // ===================================================================
@@ -19234,7 +19220,6 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
     const distancia = R * c;
     return Math.round(distancia);
 }
-
 
 
 // ===================================================================
