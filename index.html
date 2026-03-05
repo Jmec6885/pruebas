@@ -4747,7 +4747,7 @@ function descargarKML() {
 }
 
 // ========================================
-// 📝 PREPARAR DESCRIPCIÓN DETALLADA PARA KML
+// 📝 PREPARAR DESCRIPCIÓN DETALLADA PARA KML (CDATA SEGURO)
 // ========================================
 function prepararDescripcionKML(item, tipoTabla, orden) {
     let html = '<![CDATA[';
@@ -4759,23 +4759,23 @@ function prepararDescripcionKML(item, tipoTabla, orden) {
     
     // Datos principales según tabla
     if (tipoTabla === 'TX y Cortes') {
-        if (item.TXCortes) html += `<p style="margin:4px 0;"><strong>TX/Corte:</strong> ${item.TXCortes}</p>`;
-        if (item.Circuitos) html += `<p style="margin:4px 0;"><strong>Circuito:</strong> ${item.Circuitos}</p>`;
-        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${item.NombreCliente}</p>`;
-        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${item.Direccion}</p>`;
+        if (item.TXCortes) html += `<p style="margin:4px 0;"><strong>TX/Corte:</strong> ${escapeHtml(item.TXCortes)}</p>`;
+        if (item.Circuitos) html += `<p style="margin:4px 0;"><strong>Circuito:</strong> ${escapeHtml(item.Circuitos)}</p>`;
+        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${escapeHtml(item.NombreCliente)}</p>`;
+        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${escapeHtml(item.Direccion)}</p>`;
         
     } else if (tipoTabla === 'consultas_servicios') {
-        if (item.Medidor) html += `<p style="margin:4px 0;"><strong>Medidor:</strong> ${item.Medidor}</p>`;
-        if (item.CuentaContrato) html += `<p style="margin:4px 0;"><strong>NIC:</strong> ${item.CuentaContrato}</p>`;
-        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${item.NombreCliente}</p>`;
-        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${item.Direccion}</p>`;
+        if (item.Medidor) html += `<p style="margin:4px 0;"><strong>Medidor:</strong> ${escapeHtml(item.Medidor)}</p>`;
+        if (item.CuentaContrato) html += `<p style="margin:4px 0;"><strong>NIC:</strong> ${escapeHtml(item.CuentaContrato)}</p>`;
+        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${escapeHtml(item.NombreCliente)}</p>`;
+        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${escapeHtml(item.Direccion)}</p>`;
         
     } else {  // kml_ruta / OS Pendientes
         if (item.OSATMO || item.osatomo || item.OSATOMO) {
-            html += `<p style="margin:4px 0;"><strong>OS:</strong> ${item.OSATMO || item.osatomo || item.OSATOMO}</p>`;
+            html += `<p style="margin:4px 0;"><strong>OS:</strong> ${escapeHtml(item.OSATMO || item.osatomo || item.OSATOMO)}</p>`;
         }
-        if (item.Tipologia) html += `<p style="margin:4px 0;"><strong>Tipología:</strong> ${item.Tipologia}</p>`;
-        if (item.Unidad) html += `<p style="margin:4px 0;"><strong>Unidad:</strong> ${item.Unidad}</p>`;
+        if (item.Tipologia) html += `<p style="margin:4px 0;"><strong>Tipología:</strong> ${escapeHtml(item.Tipologia)}</p>`;
+        if (item.Unidad) html += `<p style="margin:4px 0;"><strong>Unidad:</strong> ${escapeHtml(item.Unidad)}</p>`;
         if (item.Deuda && parseFloat(item.Deuda) > 0) {
             html += `<p style="margin:4px 0;"><strong>Deuda:</strong> $${parseFloat(item.Deuda).toFixed(2)}</p>`;
         }
@@ -4786,8 +4786,7 @@ function prepararDescripcionKML(item, tipoTabla, orden) {
     if (comentario && comentario.trim() !== '' && comentario !== 'Sin comentario disponible') {
         html += `<hr style="margin:12px 0;border:0;border-top:1px solid #e2e8f0;">`;
         html += `<p style="margin:8px 0 4px 0;"><strong style="color:#059669;">💬 Comentario:</strong></p>`;
-        // Preservar saltos de línea y formato
-        const comentarioFormateado = comentario
+        const comentarioFormateado = escapeHtml(comentario)
             .replace(/\n/g, '<br>')
             .replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
         html += `<p style="margin:0;padding:8px;background:#f8fafc;border-radius:4px;font-size:13px;color:#334155;white-space:normal;">${comentarioFormateado}</p>`;
@@ -4800,6 +4799,9 @@ function prepararDescripcionKML(item, tipoTabla, orden) {
     html += ']]>';
     return html;
 }
+
+
+
 
 // ========================================
 // 💬 OBTENER COMENTARIO PARA KML (PRIORIDADES)
@@ -4827,9 +4829,20 @@ function obtenerComentarioParaKML(item, tipoTabla) {
 }
 
 
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+
 
 // ========================================
-// 🗺️ GENERAR KML STRING (ETIQUETAS LIMPIAS + DESCRIPCIONES)
+// 🗺️ GENERAR KML STRING (CORREGIDO - ICONOS + CDATA SEGURO)
 // ========================================
 function generarKMLString(ubicaciones) {
     if (!ubicaciones || ubicaciones.length === 0) {
@@ -4837,12 +4850,24 @@ function generarKMLString(ubicaciones) {
     }
     
     let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
+    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+    kml += '<Document>\n';
     kml += '<name>Rutas CLESA - Ordenadas por Cercanía</name>\n';
     kml += '<description>Generado por Sistema CLESA - ' + new Date().toLocaleString('es-SV') + '</description>\n';
     
-    // 🎨 ESTILOS NUMERADOS POR COLOR (mantener visualización en mapa)
-    const colores = ['ff0000ff', 'ff00ff00', 'ff00ffff', 'ffffff00', 'ffff00ff', 'ff0080ff'];
+    // 🎨 ESTILOS DEFINIDOS (colores por tipo de marcador)
+    const estilos = {
+        'rojo': 'ff0000ff',
+        'verde': 'ff00ff00',
+        'azul': 'ffff0000',
+        'amarillo': 'ff00ffff',
+        'naranja': 'ff0080ff',
+        'rosa': 'ffff00ff',
+        'cyan': 'ffffff00',
+        'morado': 'ffff0080'
+    };
+    
+    const coloresArray = Object.values(estilos);
     
     ubicaciones.forEach(({ etiqueta, coordenadas, descripcion, numeroOrden }, index) => {
         // Parsear coordenadas para KML (lng,lat,alt)
@@ -4851,36 +4876,58 @@ function generarKMLString(ubicaciones) {
             ? `${partes[1]},${partes[0]}${partes[2] ? ',' + partes[2] : ''}` 
             : coordenadas;
         
-        const color = colores[index % colores.length];
+        const colorIndex = index % coloresArray.length;
+        const color = coloresArray[colorIndex];
+        
+        // ✅ ICONO ESTÁNDAR DE KML (más confiable que URLs externas)
+        const iconos = [
+            'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png',
+            'http://maps.google.com/mapfiles/kml/shapes/placemark_square.png',
+            'http://maps.google.com/mapfiles/kml/shapes/placemark_triangle.png'
+        ];
+        const iconoUrl = iconos[index % iconos.length];
         
         kml += '<Placemark>\n';
         
-        // ✅ NAME: Solo el identificador principal (SIN número al inicio)
-        kml += `<name>${etiqueta}</name>\n`;
+        // ✅ NAME: Solo el identificador principal (SIN número)
+        kml += `<name><![CDATA[${etiqueta}]]></name>\n`;
         
-        // ✅ DESCRIPTION: HTML detallado con comentarios (CDATA para preservar formato)
-        kml += `<description>${descripcion || 'Sin información adicional'}</description>\n`;
+        // ✅ DESCRIPTION: CDATA seguro (escapear caracteres problemáticos)
+        const descripcionSegura = descripcion 
+            ? descripcion.replace(/]]>/g, ']]]]><![CDATA[>')  // Escape CDATA
+            : 'Sin información disponible';
+        kml += `<description>${descripcionSegura}</description>\n`;
         
-        // Estilo con color por índice
-        kml += `<Style>\n`;
-        kml += `  <IconStyle>\n`;
+        // ✅ ESTILO CON COLOR E ICONO
+        kml += '<Style>\n';
+        kml += '  <IconStyle>\n';
         kml += `    <color>${color}</color>\n`;
-        kml += `    <scale>1.3</scale>\n`;
-        kml += `    <Icon><href>http://maps.google.com/mapfiles/kml/paddle/${(index % 8) + 1}-blank.png</href></Icon>\n`;
-        kml += `  </IconStyle>\n`;
-        kml += `  <LabelStyle><scale>1.1</scale></LabelStyle>\n`;
-        kml += `</Style>\n`;
+        kml += '    <scale>1.2</scale>\n';
+        kml += '    <Icon>\n';
+        kml += `      <href>${iconoUrl}</href>\n`;
+        kml += '    </Icon>\n';
+        kml += '    <hotSpot x="0.5" y="0.5" xunits="fraction" yunits="fraction"/>\n';
+        kml += '  </IconStyle>\n';
+        kml += '  <LabelStyle>\n';
+        kml += '    <scale>1.1</scale>\n';
+        kml += '    <color>ffffffff</color>\n';  // Blanco
+        kml += '  </LabelStyle>\n';
+        kml += '  <BalloonStyle>\n';
+        kml += '    <text>$[description]</text>\n';
+        kml += '    <bgColor>ffffffff</bgColor>\n';
+        kml += '  </BalloonStyle>\n';
+        kml += '</Style>\n';
         
         // Coordenadas del punto
-        kml += `<Point><coordinates>${coordsKML}</coordinates></Point>\n`;
+        kml += '<Point>\n';
+        kml += `  <coordinates>${coordsKML}</coordinates>\n`;
+        kml += '</Point>\n';
         kml += '</Placemark>\n';
     });
     
     kml += '</Document>\n</kml>';
     return kml;
 }
-
-
 
 
 function iniciarVerificacionSesion() {
@@ -8461,7 +8508,7 @@ generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
 
 
 // ========================================
-// 📥 DESCARGAR KML RUTA NUMERADA (MEJORADO)
+// 📥 DESCARGAR KML RUTA NUMERADA (CORREGIDA - ETIQUETAS LIMPIAS + DESCRIPCIONES)
 // ========================================
 function descargarKMLRutaNumerada() {
     // 1️⃣ Validar existencia de datos
@@ -8473,16 +8520,21 @@ function descargarKMLRutaNumerada() {
     console.log(`📦 Preparando KML para ${window.datosRutaKML.length} ubicaciones...`);
 
     try {
-        // 2️⃣ Preparar las ubicaciones con el nombre formateado para Google Earth/Maps
+        // 2️⃣ Preparar las ubicaciones con etiqueta limpia y descripción completa
         const ubicaciones = window.datosRutaKML.map((os, index) => {
             const numero = os.numeroOrden || (index + 1);
             const idOS = os.OSATMO || os.osatomo || os.OSATOMO || 'Sin ID';
             
+            // ✅ Preparar descripción detallada
+            const descripcion = prepararDescripcionKML(os, 'kml_ruta', numero);
+            
             return {
-                // Esto hará que en el mapa aparezca "1 - 20240510"
-                etiqueta: `${numero} - ${idOS}`, 
+                // ✅ ETIQUETA: Solo el número de OS (sin "14 - ")
+                etiqueta: idOS,
                 coordenadas: os.Coordenadas || os.Coordendasgis,
-                numeroOrden: numero
+                descripcion: descripcion,  // ✅ Descripción HTML completa
+                numeroOrden: numero,
+                datosOriginales: os
             };
         });
 
@@ -8497,7 +8549,6 @@ function descargarKMLRutaNumerada() {
         const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
         const url = URL.createObjectURL(blob);
         
-        // Formatear nombre del archivo con fecha y hora para evitar confusiones
         const fecha = new Date().toISOString().slice(0,10);
         const hora = new Date().getHours() + '-' + new Date().getMinutes();
         
@@ -8505,12 +8556,10 @@ function descargarKMLRutaNumerada() {
         a.href = url;
         a.download = `Ruta_Optimizada_${fecha}_${hora}.kml`;
         
-        // Ejecutar descarga
-        document.body.appendChild(a); // Necesario en algunos navegadores
+        document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         
-        // Limpieza de memoria
         URL.revokeObjectURL(url);
         console.log('✅ Archivo KML generado y descargado con éxito.');
 
@@ -8519,6 +8568,7 @@ function descargarKMLRutaNumerada() {
         alert('Hubo un problema al generar el archivo KML: ' + error.message);
     }
 }
+
 
 
  	// ========================================
@@ -8647,52 +8697,70 @@ console.log(`📊 Filtro completado: Se mantienen ${osFiltradasNegocio.length} O
 }
 
  	// ========================================
-// 📥 DESCARGAR KML COORDENADAS LECTOR
+// 📥 DESCARGAR KML COORDENADAS LECTOR (CON DESCRIPCIONES)
 // ========================================
 function descargarKMLLector() {
-    if (!window.kmlDataLector || window.kmlDataLector.length === 0) {
-        alert('No hay coordenadas de lector para descargar');
-        return;
-    }
- 
-    const ubicaciones = window.kmlDataLector.map(os => ({
-        etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: os.Coordenadas
-    }));
- 
-    const kmlString = generarKMLString(ubicaciones);
-    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `KML\_Lector\_${new Date().getTime()}.kml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!window.kmlDataLector || window.kmlDataLector.length === 0) {
+        alert('No hay coordenadas de lector para descargar');
+        return;
+    }
+
+    const ubicaciones = window.kmlDataLector.map((os, index) => {
+        const numero = os.numeroOrden || (index + 1);
+        
+        return {
+            etiqueta: os.OSATMO || 'Sin OS',  // ✅ Solo el número de OS
+            coordenadas: os.Coordenadas,
+            descripcion: prepararDescripcionKML(os, 'kml_ruta', numero),  // ✅ Descripción completa
+            numeroOrden: numero,
+            datosOriginales: os
+        };
+    });
+
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KML_Lector_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
+
+
  	// ========================================
-// 📥 DESCARGAR KML COORDENADAS GIS
+// 📥 DESCARGAR KML COORDENADAS GIS (CON DESCRIPCIONES)
 // ========================================
 function descargarKMLGIS() {
-    if (!window.kmlDataGIS || window.kmlDataGIS.length === 0) {
-        alert('No hay coordenadas GIS para descargar');
-        return;
-    }
- 
-    const ubicaciones = window.kmlDataGIS.map(os => ({
-        etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: os.Coordendasgis
-    }));
- 
-    const kmlString = generarKMLString(ubicaciones);
-    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `KML\_GIS\_${new Date().getTime()}.kml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!window.kmlDataGIS || window.kmlDataGIS.length === 0) {
+        alert('No hay coordenadas GIS para descargar');
+        return;
+    }
+
+    const ubicaciones = window.kmlDataGIS.map((os, index) => {
+        const numero = os.numeroOrden || (index + 1);
+        
+        return {
+            etiqueta: os.OSATMO || 'Sin OS',  // ✅ Solo el número de OS
+            coordenadas: os.Coordendasgis,
+            descripcion: prepararDescripcionKML(os, 'kml_ruta', numero),  // ✅ Descripción completa
+            numeroOrden: numero,
+            datosOriginales: os
+        };
+    });
+
+    const kmlString = generarKMLString(ubicaciones);
+    const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `KML_GIS_${new Date().getTime()}.kml`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
+
+
 
  	// ========================================
 // 📊 CARGAR INTERFAZ DETALLE OS
