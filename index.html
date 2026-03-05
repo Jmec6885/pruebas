@@ -4747,86 +4747,86 @@ function descargarKML() {
 }
 
 // ========================================
-// 📝 PREPARAR DESCRIPCIÓN DETALLADA PARA KML (CDATA SEGURO)
+// 📝 PREPARAR DESCRIPCIÓN DETALLADA PARA KML (SIMPLIFICADA)
 // ========================================
 function prepararDescripcionKML(item, tipoTabla, orden) {
-    let html = '<![CDATA[';
+    let html = '';
     
-    // Header con número de orden y tipo
-    html += `<h3 style="color:#1e3a8a;margin:0 0 10px 0;font-size:16px;border-bottom:2px solid #3b82f6;padding-bottom:8px;">`;
-    html += `#${orden} - ${tipoTabla === 'TX y Cortes' ? 'TX/Corte' : (tipoTabla === 'consultas_servicios' ? 'Medidor' : 'OS')}`;
-    html += `</h3>`;
+    // Header simple
+    html += '<b>' + escapeXml('#' + orden + ' - ' + 
+        (tipoTabla === 'TX y Cortes' ? 'TX/Corte' : 
+        (tipoTabla === 'consultas_servicios' ? 'Medidor' : 'OS'))) + '</b><br/><br/>';
     
-    // Datos principales según tabla
+    // Datos principales
     if (tipoTabla === 'TX y Cortes') {
-        if (item.TXCortes) html += `<p style="margin:4px 0;"><strong>TX/Corte:</strong> ${escapeHtml(item.TXCortes)}</p>`;
-        if (item.Circuitos) html += `<p style="margin:4px 0;"><strong>Circuito:</strong> ${escapeHtml(item.Circuitos)}</p>`;
-        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${escapeHtml(item.NombreCliente)}</p>`;
-        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${escapeHtml(item.Direccion)}</p>`;
+        if (item.TXCortes) html += '<b>TX/Corte:</b> ' + escapeXml(item.TXCortes) + '<br/>';
+        if (item.Circuitos) html += '<b>Circuito:</b> ' + escapeXml(item.Circuitos) + '<br/>';
+        if (item.NombreCliente) html += '<b>Cliente:</b> ' + escapeXml(item.NombreCliente) + '<br/>';
         
     } else if (tipoTabla === 'consultas_servicios') {
-        if (item.Medidor) html += `<p style="margin:4px 0;"><strong>Medidor:</strong> ${escapeHtml(item.Medidor)}</p>`;
-        if (item.CuentaContrato) html += `<p style="margin:4px 0;"><strong>NIC:</strong> ${escapeHtml(item.CuentaContrato)}</p>`;
-        if (item.NombreCliente) html += `<p style="margin:4px 0;"><strong>Cliente:</strong> ${escapeHtml(item.NombreCliente)}</p>`;
-        if (item.Direccion) html += `<p style="margin:4px 0;"><strong>Dirección:</strong> ${escapeHtml(item.Direccion)}</p>`;
+        if (item.Medidor) html += '<b>Medidor:</b> ' + escapeXml(item.Medidor) + '<br/>';
+        if (item.CuentaContrato) html += '<b>NIC:</b> ' + escapeXml(item.CuentaContrato) + '<br/>';
+        if (item.NombreCliente) html += '<b>Cliente:</b> ' + escapeXml(item.NombreCliente) + '<br/>';
         
     } else {  // kml_ruta / OS Pendientes
         if (item.OSATMO || item.osatomo || item.OSATOMO) {
-            html += `<p style="margin:4px 0;"><strong>OS:</strong> ${escapeHtml(item.OSATMO || item.osatomo || item.OSATOMO)}</p>`;
+            html += '<b>OS:</b> ' + escapeXml(item.OSATMO || item.osatomo || item.OSATOMO) + '<br/>';
         }
-        if (item.Tipologia) html += `<p style="margin:4px 0;"><strong>Tipología:</strong> ${escapeHtml(item.Tipologia)}</p>`;
-        if (item.Unidad) html += `<p style="margin:4px 0;"><strong>Unidad:</strong> ${escapeHtml(item.Unidad)}</p>`;
+        if (item.Tipologia) html += '<b>Tipología:</b> ' + escapeXml(item.Tipologia) + '<br/>';
+        if (item.Unidad) html += '<b>Unidad:</b> ' + escapeXml(item.Unidad) + '<br/>';
         if (item.Deuda && parseFloat(item.Deuda) > 0) {
-            html += `<p style="margin:4px 0;"><strong>Deuda:</strong> $${parseFloat(item.Deuda).toFixed(2)}</p>`;
+            html += '<b>Deuda:</b> $' + parseFloat(item.Deuda).toFixed(2) + '<br/>';
         }
     }
     
-    // ✅ COMENTARIO PRINCIPAL (con formato preservado)
+    // Comentario
     const comentario = obtenerComentarioParaKML(item, tipoTabla);
     if (comentario && comentario.trim() !== '' && comentario !== 'Sin comentario disponible') {
-        html += `<hr style="margin:12px 0;border:0;border-top:1px solid #e2e8f0;">`;
-        html += `<p style="margin:8px 0 4px 0;"><strong style="color:#059669;">💬 Comentario:</strong></p>`;
-        const comentarioFormateado = escapeHtml(comentario)
-            .replace(/\n/g, '<br>')
-            .replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
-        html += `<p style="margin:0;padding:8px;background:#f8fafc;border-radius:4px;font-size:13px;color:#334155;white-space:normal;">${comentarioFormateado}</p>`;
+        html += '<br/><b>💬 Comentario:</b><br/>';
+        html += '<font color="#555555">' + escapeXml(comentario).replace(/\n/g, '<br/>') + '</font><br/>';
     }
     
-    // Footer con fecha de generación
-    html += `<hr style="margin:12px 0;border:0;border-top:1px solid #e2e8f0;">`;
-    html += `<p style="margin:0;font-size:11px;color:#94a3b8;">Generado: ${new Date().toLocaleString('es-SV')}</p>`;
+    // Footer
+    html += '<br/><font color="#999999" size="1">Generado: ' + escapeXml(new Date().toLocaleString('es-SV')) + '</font>';
     
-    html += ']]>';
     return html;
 }
 
 
 
+// ========================================
+// 🔒 ESCAPAR CARACTERES ESPECIALES PARA HTML
+// ========================================
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 
 // ========================================
-// 💬 OBTENER COMENTARIO PARA KML (PRIORIDADES)
+// 💬 OBTENER COMENTARIO PARA KML
 // ========================================
 function obtenerComentarioParaKML(item, tipoTabla) {
-    // Prioridad 1: Comentario específico de KML
     if (item.ComentarioKML && item.ComentarioKML.trim() !== '' && item.ComentarioKML !== 'Sin comentario disponible') {
         return item.ComentarioKML;
     }
-    
-    // Prioridad 2: Comentario de OS Pendientes / TX / Consulta
     if (item.Comentario && item.Comentario.trim() !== '' && 
         item.Comentario !== 'N/A' && item.Comentario !== 'Sin comentario disponible') {
         return item.Comentario;
     }
-    
-    // Prioridad 3: ComentarioGeneral
     if (item.ComentarioGeneral && item.ComentarioGeneral.trim() !== '' && 
         item.ComentarioGeneral !== 'Sin comentario disponible') {
         return item.ComentarioGeneral;
     }
-    
-    // Fallback: otros campos posibles
     return item.comentario || item.Observaciones || item.descripcion || item.Nota || '';
 }
+
+
 
 
 function escapeHtml(text) {
@@ -4842,7 +4842,7 @@ function escapeHtml(text) {
 
 
 // ========================================
-// 🗺️ GENERAR KML STRING (CORREGIDO - ICONOS + CDATA SEGURO)
+// 🗺️ GENERAR KML STRING (CORREGIDO - XML VÁLIDO)
 // ========================================
 function generarKMLString(ubicaciones) {
     if (!ubicaciones || ubicaciones.length === 0) {
@@ -4853,33 +4853,19 @@ function generarKMLString(ubicaciones) {
     kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
     kml += '<Document>\n';
     kml += '<name>Rutas CLESA - Ordenadas por Cercanía</name>\n';
-    kml += '<description>Generado por Sistema CLESA - ' + new Date().toLocaleString('es-SV') + '</description>\n';
+    kml += '<description>Generado por Sistema CLESA - ' + escapeXml(new Date().toLocaleString('es-SV')) + '</description>\n';
     
-    // 🎨 ESTILOS DEFINIDOS (colores por tipo de marcador)
-    const estilos = {
-        'rojo': 'ff0000ff',
-        'verde': 'ff00ff00',
-        'azul': 'ffff0000',
-        'amarillo': 'ff00ffff',
-        'naranja': 'ff0080ff',
-        'rosa': 'ffff00ff',
-        'cyan': 'ffffff00',
-        'morado': 'ffff0080'
-    };
-    
-    const coloresArray = Object.values(estilos);
+    // 🎨 ESTILOS DEFINIDOS
+    const colores = ['ff0000ff', 'ff00ff00', 'ffff0000', 'ff00ffff', 'ff0080ff', 'ffff00ff'];
     
     ubicaciones.forEach(({ etiqueta, coordenadas, descripcion, numeroOrden }, index) => {
-        // Parsear coordenadas para KML (lng,lat,alt)
+        // Parsear coordenadas
         const partes = coordenadas.split(',').map(s => s.trim());
         let coordsKML = partes.length >= 2 
             ? `${partes[1]},${partes[0]}${partes[2] ? ',' + partes[2] : ''}` 
             : coordenadas;
         
-        const colorIndex = index % coloresArray.length;
-        const color = coloresArray[colorIndex];
-        
-        // ✅ ICONO ESTÁNDAR DE KML (más confiable que URLs externas)
+        const color = colores[index % colores.length];
         const iconos = [
             'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png',
             'http://maps.google.com/mapfiles/kml/shapes/placemark_square.png',
@@ -4889,16 +4875,20 @@ function generarKMLString(ubicaciones) {
         
         kml += '<Placemark>\n';
         
-        // ✅ NAME: Solo el identificador principal (SIN número)
-        kml += `<name><![CDATA[${etiqueta}]]></name>\n`;
+        // ✅ NAME: Solo el identificador (escapeado)
+        kml += `<name>${escapeXml(etiqueta)}</name>\n`;
         
-        // ✅ DESCRIPTION: CDATA seguro (escapear caracteres problemáticos)
-        const descripcionSegura = descripcion 
-            ? descripcion.replace(/]]>/g, ']]]]><![CDATA[>')  // Escape CDATA
-            : 'Sin información disponible';
-        kml += `<description>${descripcionSegura}</description>\n`;
+        // ✅ DESCRIPTION: CDATA seguro con XML escapeado
+        if (descripcion) {
+            // Escapear caracteres especiales ANTES de poner en CDATA
+            const descripcionSegura = escapeXml(descripcion)
+                .replace(/]]>/g, ']]]]><![CDATA[>'); // Escape CDATA
+            kml += `<description><![CDATA[${descripcionSegura}]]></description>\n`;
+        } else {
+            kml += '<description>Sin información disponible</description>\n';
+        }
         
-        // ✅ ESTILO CON COLOR E ICONO
+        // Estilo
         kml += '<Style>\n';
         kml += '  <IconStyle>\n';
         kml += `    <color>${color}</color>\n`;
@@ -4906,27 +4896,39 @@ function generarKMLString(ubicaciones) {
         kml += '    <Icon>\n';
         kml += `      <href>${iconoUrl}</href>\n`;
         kml += '    </Icon>\n';
-        kml += '    <hotSpot x="0.5" y="0.5" xunits="fraction" yunits="fraction"/>\n';
         kml += '  </IconStyle>\n';
         kml += '  <LabelStyle>\n';
         kml += '    <scale>1.1</scale>\n';
-        kml += '    <color>ffffffff</color>\n';  // Blanco
+        kml += '    <color>ffffffff</color>\n';
         kml += '  </LabelStyle>\n';
-        kml += '  <BalloonStyle>\n';
-        kml += '    <text>$[description]</text>\n';
-        kml += '    <bgColor>ffffffff</bgColor>\n';
-        kml += '  </BalloonStyle>\n';
         kml += '</Style>\n';
         
-        // Coordenadas del punto
+        // Coordenadas
         kml += '<Point>\n';
         kml += `  <coordinates>${coordsKML}</coordinates>\n`;
         kml += '</Point>\n';
         kml += '</Placemark>\n';
     });
     
-    kml += '</Document>\n</kml>';
+    kml += '</Document>\n';
+    kml += '</kml>';
     return kml;
+}
+
+// ========================================
+// 🔒 ESCAPAR CARACTERES ESPECIALES PARA XML
+// ========================================
+function escapeXml(unsafe) {
+    if (!unsafe) return '';
+    return String(unsafe)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+        .replace(/\n/g, '<br>')
+        .replace(/\r/g, '')
+        .replace(/\t/g, '  ');
 }
 
 
