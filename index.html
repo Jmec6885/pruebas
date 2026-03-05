@@ -7774,7 +7774,7 @@ async function generarKMLAdminPorUnidad(tipo) {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA CON FALLBACK DE NORMALIZACIÓN)
+// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA - USA window.osParaMapaActual)
 // ========================================
 async function generarMapaKMLSoloAsignadas(unidad) {
     console.group('🗺️ [MAPA] Generando mapa para unidad:', unidad);
@@ -7796,99 +7796,67 @@ async function generarMapaKMLSoloAsignadas(unidad) {
     
     console.log(`📍 Punto de partida: ${osPartida}`);
     
-    // 3️⃣ Obtener OS asignadas automáticamente para esta unidad
-    const osBase = window.osAsignadasKML || [];
-    const osAsignadasUnidad = osBase.filter(os => {
-        if (!os.Unidad) return false;
-        return normalizarUnidad(os.Unidad) === normalizarUnidad(unidad);
-    });
-    console.log(`✅ OS asignadas para ${unidad}: ${osAsignadasUnidad.length}`);
+    // 3️⃣ ✅ USAR window.osParaMapaActual (YA CARGADO EN cargarInterfazKMLRuta)
+    // En lugar de consultar BD nuevamente
+    const osParaMapa = window.osParaMapaActual || [];
     
-    // 4️⃣ Obtener OS preseleccionadas para esta unidad/fecha
-    const fechaHoy = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
-    let osPreseleccionadas = [];
-    
-    try {
-        console.log(`🔍 Consultando preseleccionadas para ${unidad} en ${fechaHoy}`);
+    if (osParaMapa.length === 0) {
+        console.warn('⚠️ No hay datos en window.osParaMapaActual, consultando BD...');
         
-        // Intentar con formato exacto primero
-        const {  pre, error } = await supabaseClient
-            .from('os_preseleccionadas')
-            .select('osatomo, comentarios')
-            .eq('unidad_destino', unidad)
-            .eq('fecha_programada', fechaHoy)
-            .eq('estado', 'pendiente');
+        // Fallback solo si window.osParaMapaActual está vacío
+        const osBase = window.osAsignadasKML || [];
+        const osAsignadasUnidad = osBase.filter(os => {
+            if (!os.Unidad) return false;
+            return normalizarUnidad(os.Unidad) === normalizarUnidad(unidad);
+        });
         
-        if (!error && pre?.length > 0) {
-            console.log(`✅ ${pre.length} OS preseleccionadas encontradas`);
-            
-            // Obtener detalles completos
-            const osIds = pre.map(p => p.osatomo);
-            const {  detalles } = await supabaseClient
-                .from('OS Pendientes')
-                .select('*')
-                .in('OSATMO', osIds);
-            
-            if (detalles) {
-                osPreseleccionadas = detalles.map(os => ({
-                    ...os,
-                    esPreseleccionada: true,
-                    comentarioPreseleccion: pre.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                    fechaPreseleccion: fechaHoy
-                }));
-            }
-        } else if (!pre || pre.length === 0) {
-            // 🔹 FALLBACK: Intentar con normalización (ignora guiones, espacios, case)
-            console.log(`🔄 Búsqueda exacta no encontró resultados, intentando con normalización...`);
-            
-            const {  preFallback } = await supabaseClient
+        const fechaHoy = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
+        let osPreseleccionadas = [];
+        
+        try {
+            const {  pre, error } = await supabaseClient
                 .from('os_preseleccionadas')
-                .select('osatomo, comentarios, unidad_destino')
+                .select('osatomo, comentarios')
+                .eq('unidad_destino', unidad)
                 .eq('fecha_programada', fechaHoy)
                 .eq('estado', 'pendiente');
             
-            if (preFallback) {
-                const filtradas = preFallback.filter(p => 
-                    normalizarUnidad(p.unidad_destino) === normalizarUnidad(unidad)
-                );
+            if (!error && pre?.length > 0) {
+                const osIds = pre.map(p => p.osatomo);
+                const {  detalles } = await supabaseClient
+                    .from('OS Pendientes')
+                    .select('*')
+                    .in('OSATMO', osIds);
                 
-                if (filtradas.length > 0) {
-                    console.log(`✅ ${filtradas.length} OS encontradas con búsqueda normalizada`);
-                    const osIds = filtradas.map(p => p.osatomo);
-                    const {  detalles } = await supabaseClient
-                        .from('OS Pendientes')
-                        .select('*')
-                        .in('OSATMO', osIds);
-                    
-                    if (detalles) {
-                        osPreseleccionadas = detalles.map(os => ({
-                            ...os,
-                            esPreseleccionada: true,
-                            comentarioPreseleccion: filtradas.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                            fechaPreseleccion: fechaHoy
-                        }));
-                    }
+                if (detalles) {
+                    osPreseleccionadas = detalles.map(os => ({
+                        ...os,
+                        esPreseleccionada: true,
+                        comentarioPreseleccion: pre.find(p => p.osatomo === os.OSATMO)?.comentarios,
+                        fechaPreseleccion: fechaHoy
+                    }));
                 }
             }
+        } catch (err) {
+            console.warn('⚠️ Error cargando preseleccionadas:', err.message);
         }
-    } catch (err) {
-        console.warn('⚠️ Error cargando preseleccionadas:', err.message);
+        
+        const osParaMapa = [
+            ...osAsignadasUnidad,
+            ...osPreseleccionadas.filter(osPre => 
+                !osAsignadasUnidad.some(osAsig => 
+                    String(osAsig.OSATMO || osAsig.osatomo).trim() === 
+                    String(osPre.OSATMO || osPre.osatomo).trim()
+                )
+            )
+        ];
+        
+        window.osParaMapaActual = osParaMapa;
     }
     
-    // 5️⃣ COMBINAR datasets (sin duplicados)
-    const osParaMapa = [
-        ...osAsignadasUnidad,
-        ...osPreseleccionadas.filter(osPre => 
-            !osAsignadasUnidad.some(osAsig => 
-                String(osAsig.OSATMO || osAsig.osatomo).trim() === 
-                String(osPre.OSATMO || osPre.osatomo).trim()
-            )
-        )
-    ];
+    console.log(`🗺️ Dataset para mapa: ${osParaMapa.length} OS totales`);
     
-    console.log(`🗺️ Dataset para mapa: ${osAsignadasUnidad.length} asignadas + ${osPreseleccionadas.length} preseleccionadas = ${osParaMapa.length} totales`);
-    
-    // 6️⃣ Validar que haya datos
+    // 4️⃣ Validar que haya datos
     if (osParaMapa.length === 0) {
         console.warn('⚠️ No hay datos disponibles para generar el mapa');
         alert('⚠️ No hay órdenes disponibles. Por favor recargue la página.');
@@ -7896,15 +7864,13 @@ async function generarMapaKMLSoloAsignadas(unidad) {
         return;
     }
     
-    // 7️⃣ Guardar temporalmente
-    window.osParaMapaActual = osParaMapa;
-    
-    // 8️⃣ Llamar a generar mapa
+    // 5️⃣ Llamar a generar mapa
     console.log('🚀 Llamando a generarMapaKMLConPuntoPartida...');
     generarMapaKMLConPuntoPartida(unidad, osParaMapa);
     
     console.groupEnd();
 }
+
 
 
 
