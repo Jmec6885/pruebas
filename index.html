@@ -7774,7 +7774,7 @@ async function generarKMLAdminPorUnidad(tipo) {
 
 
 // ========================================
-// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA - CON PRESELECCIONADAS)
+// 🗺️ GENERAR MAPA KML SOLO ASIGNADAS (CORREGIDA CON FALLBACK DE NORMALIZACIÓN)
 // ========================================
 async function generarMapaKMLSoloAsignadas(unidad) {
     console.group('🗺️ [MAPA] Generando mapa para unidad:', unidad);
@@ -7804,22 +7804,25 @@ async function generarMapaKMLSoloAsignadas(unidad) {
     });
     console.log(`✅ OS asignadas para ${unidad}: ${osAsignadasUnidad.length}`);
     
-    // 4️⃣ Obtener OS preseleccionadas para esta unidad/fecha (se AGREGAN al mapa)
+    // 4️⃣ Obtener OS preseleccionadas para esta unidad/fecha
     const fechaHoy = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
     let osPreseleccionadas = [];
     
     try {
+        console.log(`🔍 Consultando preseleccionadas para ${unidad} en ${fechaHoy}`);
+        
+        // Intentar con formato exacto primero
         const {  pre, error } = await supabaseClient
             .from('os_preseleccionadas')
-            .select('osatomo')
+            .select('osatomo, comentarios')
             .eq('unidad_destino', unidad)
             .eq('fecha_programada', fechaHoy)
             .eq('estado', 'pendiente');
         
         if (!error && pre?.length > 0) {
-            console.log(`📋 OS preseleccionadas encontradas: ${pre.length}`);
+            console.log(`✅ ${pre.length} OS preseleccionadas encontradas`);
             
-            // Obtener detalles completos desde OS Pendientes
+            // Obtener detalles completos
             const osIds = pre.map(p => p.osatomo);
             const {  detalles } = await supabaseClient
                 .from('OS Pendientes')
@@ -7830,15 +7833,49 @@ async function generarMapaKMLSoloAsignadas(unidad) {
                 osPreseleccionadas = detalles.map(os => ({
                     ...os,
                     esPreseleccionada: true,
+                    comentarioPreseleccion: pre.find(p => p.osatomo === os.OSATMO)?.comentarios,
                     fechaPreseleccion: fechaHoy
                 }));
+            }
+        } else if (!pre || pre.length === 0) {
+            // 🔹 FALLBACK: Intentar con normalización (ignora guiones, espacios, case)
+            console.log(`🔄 Búsqueda exacta no encontró resultados, intentando con normalización...`);
+            
+            const {  preFallback } = await supabaseClient
+                .from('os_preseleccionadas')
+                .select('osatomo, comentarios, unidad_destino')
+                .eq('fecha_programada', fechaHoy)
+                .eq('estado', 'pendiente');
+            
+            if (preFallback) {
+                const filtradas = preFallback.filter(p => 
+                    normalizarUnidad(p.unidad_destino) === normalizarUnidad(unidad)
+                );
+                
+                if (filtradas.length > 0) {
+                    console.log(`✅ ${filtradas.length} OS encontradas con búsqueda normalizada`);
+                    const osIds = filtradas.map(p => p.osatomo);
+                    const {  detalles } = await supabaseClient
+                        .from('OS Pendientes')
+                        .select('*')
+                        .in('OSATMO', osIds);
+                    
+                    if (detalles) {
+                        osPreseleccionadas = detalles.map(os => ({
+                            ...os,
+                            esPreseleccionada: true,
+                            comentarioPreseleccion: filtradas.find(p => p.osatomo === os.OSATMO)?.comentarios,
+                            fechaPreseleccion: fechaHoy
+                        }));
+                    }
+                }
             }
         }
     } catch (err) {
         console.warn('⚠️ Error cargando preseleccionadas:', err.message);
     }
     
-    // 5️⃣ COMBINAR datasets (asignadas + preseleccionadas) SIN duplicados
+    // 5️⃣ COMBINAR datasets (sin duplicados)
     const osParaMapa = [
         ...osAsignadasUnidad,
         ...osPreseleccionadas.filter(osPre => 
@@ -7859,15 +7896,17 @@ async function generarMapaKMLSoloAsignadas(unidad) {
         return;
     }
     
-    // 7️⃣ Guardar temporalmente para que generarMapaKMLConPuntoPartida lo use
+    // 7️⃣ Guardar temporalmente
     window.osParaMapaActual = osParaMapa;
     
-    // 8️⃣ Llamar a la función que genera el mapa
+    // 8️⃣ Llamar a generar mapa
     console.log('🚀 Llamando a generarMapaKMLConPuntoPartida...');
     generarMapaKMLConPuntoPartida(unidad, osParaMapa);
     
     console.groupEnd();
 }
+
+
 
 async function generarMapaKMLConFiltrosGuardados(unidad) {
     const btn = document.getElementById('btnAplicarFiltro');
@@ -14655,14 +14694,25 @@ misAsignacionesPropias.forEach(os => {
         // ✅ EN cargarInterfazKMLRuta(), reemplazar el bloque de rol === 'Consulta' || 'Contratista':
 
 // ========================================
-// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa
+// ✅ PARA CONTRATISTA/CONSULTA: Separar dropdown y mapa (VERSIÓN INLINE)
 // ========================================
 else if (rol === 'Consulta' || rol === 'Contratista') {
+    console.group('👷 [CONTRATISTA] Cargando interfaz KML Ruta');
+    
     const unidadUsuario = transformarUsuarioAUnidad(currentUser.usuario);
     const HOY = getFechaHoyElSalvador();
     
-    // 🔹 1. Obtener OS para DROPDOWN (solo asignadas automáticamente)
-    const osParaDropdown = obtenerOSParaDropdown(unidadUsuario, misAsignacionesPropias);
+    console.log(`📍 Unidad usuario: ${unidadUsuario}`);
+    console.log(`📅 Fecha: ${HOY}`);
+    
+    // 🔹 1. Obtener OS asignadas automáticamente (para dropdown) - Lógica INLINE
+    console.log('🔹 Paso 1: Obteniendo OS asignadas para dropdown...');
+    const osParaDropdown = (misAsignacionesPropias || []).filter(os => {
+        if (!os.Unidad) return false;
+        return normalizarUnidad(os.Unidad) === normalizarUnidad(unidadUsuario);
+    });
+    
+    console.log(`✅ OS para dropdown: ${osParaDropdown.length}`);
     
     if (osParaDropdown.length === 0) {
         searchGrid.innerHTML = `
@@ -14672,17 +14722,92 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                     No tienes OS asignadas automáticamente para la unidad <b>${unidadUsuario}</b>.
                 </p>
             </div>`;
+        console.groupEnd();
         return;
     }
     
-    // 🔹 2. Obtener OS para MAPA (asignadas + preseleccionadas)
-    const osParaMapa = await obtenerOSParaMapa(unidadUsuario, HOY, misAsignacionesPropias);
+    // 🔹 2. Obtener OS para MAPA (asignadas + preseleccionadas) - Consulta DIRECTA
+    console.log('🔹 Paso 2: Obteniendo OS para mapa (combinado)...');
     
-    console.log(`📊 Resumen:`);
-    console.log(`   • Dropdown (punto de partida): ${osParaDropdown.length} OS`);
-    console.log(`   • Mapa (todas las OS): ${osParaMapa.length} OS`);
+    let osPreseleccionadas = [];
+    try {
+        console.log(`🔍 Consultando os_preseleccionadas para unidad="${unidadUsuario}", fecha="${HOY}"`);
+        
+        // Intentar con formato exacto primero
+        const {  preExacta, error: errorPre1 } = await supabaseClient
+            .from('os_preseleccionadas')
+            .select('osatomo, comentarios')
+            .eq('unidad_destino', unidadUsuario)
+            .eq('fecha_programada', HOY)
+            .eq('estado', 'pendiente');
+        
+        if (errorPre1) throw errorPre1;
+        
+        // Fallback con normalización si no encuentra
+        if (!preExacta || preExacta.length === 0) {
+            const unidadSinGuiones = unidadUsuario.replace(/[^A-Z0-9]/g, '').toUpperCase();
+            console.log(`🔄 Intentando búsqueda alternativa: ${unidadSinGuiones}`);
+            
+            const {  preFallback } = await supabaseClient
+                .from('os_preseleccionadas')
+                .select('osatomo, comentarios, unidad_destino')
+                .eq('fecha_programada', HOY)
+                .eq('estado', 'pendiente');
+            
+            if (preFallback) {
+                osPreseleccionadas = preFallback.filter(p => 
+                    normalizarUnidad(p.unidad_destino) === normalizarUnidad(unidadUsuario)
+                );
+                console.log(`✅ Encontradas ${osPreseleccionadas.length} OS con búsqueda normalizada`);
+            }
+        } else {
+            osPreseleccionadas = preExacta;
+            console.log(`✅ Encontradas ${osPreseleccionadas.length} OS con búsqueda exacta`);
+        }
+        
+        // Obtener detalles completos desde OS Pendientes
+        if (osPreseleccionadas.length > 0) {
+            const osIds = osPreseleccionadas.map(p => p.osatomo);
+            console.log(`🔍 Obteniendo detalles para OS: ${osIds.join(', ')}`);
+            
+            const {  detalles, error: errorDetalles } = await supabaseClient
+                .from('OS Pendientes')
+                .select('*')
+                .in('OSATMO', osIds);
+            
+            if (errorDetalles) {
+                console.warn('⚠️ Error obteniendo detalles:', errorDetalles.message);
+            } else if (detalles) {
+                osPreseleccionadas = detalles.map(os => ({
+                    ...os,
+                    esPreseleccionada: true,
+                    comentarioPreseleccion: osPreseleccionadas.find(p => p.osatomo === os.OSATMO)?.comentarios,
+                    fechaPreseleccion: HOY
+                }));
+                console.log(`✅ Detalles obtenidos para ${osPreseleccionadas.length} OS preseleccionadas`);
+            }
+        }
+        
+    } catch (err) {
+        console.warn('⚠️ Error cargando preseleccionadas:', err.message);
+    }
     
-    // 🔹 3. Generar interfaz con dropdown de solo asignadas
+    // 🔹 3. COMBINAR datasets (asignadas + preseleccionadas) SIN duplicados
+    console.log('🔹 Paso 3: Combinando datasets...');
+    
+    const osParaMapa = [
+        ...osParaDropdown,
+        ...osPreseleccionadas.filter(osPre => 
+            !osParaDropdown.some(osAsig => 
+                String(osAsig.OSATMO || osAsig.osatomo).trim() === 
+                String(osPre.OSATMO || osPre.osatomo).trim()
+            )
+        )
+    ];
+    
+    console.log(`📊 Dataset combinado: ${osParaDropdown.length} asignadas + ${osPreseleccionadas.length} preseleccionadas = ${osParaMapa.length} totales`);
+    
+    // 🔹 4. Generar interfaz con dropdown de solo asignadas
     const opcionesDropdown = osParaDropdown.map(os => 
         `<option value="${os.OSATMO || os.osatomo}">${os.OSATMO || os.osatomo} - ${os.Tipologia || 'N/A'}</option>`
     ).join('');
@@ -14718,8 +14843,8 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
                 <strong style="color: #166534; display: block; margin-bottom: 5px;">📊 Resumen de OS:</strong>
                 <div style="font-size: 14px; color: #374151; line-height: 1.5;">
                     <div>• <strong>Asignadas automáticamente:</strong> ${osParaDropdown.length} OS</div>
-                    ${osParaMapa.length > osParaDropdown.length ? 
-                        `<div>• <strong>Preseleccionadas por Admin:</strong> ${osParaMapa.length - osParaDropdown.length} OS</div>` 
+                    ${osPreseleccionadas.length > 0 ? 
+                        `<div>• <strong>Preseleccionadas por Admin:</strong> ${osPreseleccionadas.length} OS</div>` 
                         : ''}
                     <div>• <strong>Total en mapa:</strong> ${osParaMapa.length} OS</div>
                 </div>
@@ -14734,16 +14859,13 @@ else if (rol === 'Consulta' || rol === 'Contratista') {
         </div>
     `;
     
-    // 🔹 4. Guardar OS para mapa en variable global para usar al generar mapa
+    // 🔹 5. Guardar OS para mapa en variable global
     window.osParaMapaActual = osParaMapa;
+    window.unidadSeleccionadaKML = unidadUsuario;
     
     console.log('✅ Interfaz KML Ruta generada correctamente');
+    console.groupEnd();
 }
-
-    } catch (err) {
-        console.error('❌ Error en KML Ruta:', err);
-        searchGrid.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
-    }
 }
 
 
@@ -14788,9 +14910,13 @@ function seleccionarOSDeLista(osatomo, lat, lng) {
     // Buscar el marcador específico y abrir su popup
     const markers = Object.values(window.markersPorEstado).flat();
     const markerEncontrado = markers.find(m => {
-        const popupContent = m.getPopup()?.getContent();
-        return popupContent && popupContent.includes(osatomo);
-    });
+    // Intentar match por datos del marcador primero
+    if (m.options?.osatomo === osatomo || m._osatomo === osatomo) return true;
+    
+    // Fallback: buscar en contenido del popup
+    const popupContent = m.getPopup()?.getContent();
+    return popupContent && popupContent.includes(`OS: ${osatomo}`);
+});
     
     if (markerEncontrado) {
         markerEncontrado.openPopup();
@@ -14909,7 +15035,6 @@ const comentarioTexto = (() => {
 const comentarioFormateado = (() => {
     if (!comentarioTexto || comentarioTexto.trim() === '' || 
         comentarioTexto === 'Sin comentario disponible' || comentarioTexto === 'Sin Datos') {
-        // Fallback con información alternativa
         return `
         <div style="background: #fff3cd; padding: 10px; border-radius: 6px; border-left: 4px solid #ffc107;">
             <strong style="color: #856404;">ℹ️ Sin comentario disponible</strong><br>
@@ -14919,9 +15044,11 @@ const comentarioFormateado = (() => {
             </small>
         </div>`;
     }
-    return formatearComentario(comentarioTexto);
+    // ✅ Validar que la función existe antes de llamarla
+    return typeof formatearComentario === 'function' 
+        ? formatearComentario(comentarioTexto) 
+        : `<div style="white-space: pre-wrap;">${comentarioTexto}</div>`;
 })();
-
 
     // ========================================
     // DETERMINAR COLOR SEGÚN ESTADO
