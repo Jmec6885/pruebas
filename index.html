@@ -19284,39 +19284,6 @@ async function diagnosticarTablaTX() {
         return;
     }
 
-// 🔍 TEST: Verificar consulta directa a TX y Cortes
-console.group('🧪 DIAGNÓSTICO TX Y CORTES');
-
-// 1. Probar consulta simple
-const {  test1, error1 } = await supabaseClient
-    .from('TX y Cortes')
-    .select('TXCortes, Coordenadas')
-    .limit(3);
-
-console.log('✅ Consulta básica:', test1?.length || 0, 'registros');
-if (test1?.length > 0) {
-    test1.forEach(tx => {
-        console.log(`   • ${tx.TXCortes}: "${tx.Coordenadas}"`);
-    });
-}
-if (error1) console.error('❌ Error:', error1);
-
-// 2. Probar con coordenadas específicas
-const coordsBusqueda = '13.94033276,-89.56567566';
-const [latB, lngB] = coordsBusqueda.split(',').map(Number);
-
-if (test1?.length > 0) {
-    // Probar cálculo de distancia con un registro real
-    const txEjemplo = test1[0];
-    if (txEjemplo.Coordenadas?.includes(',')) {
-        const [latTX, lngTX] = txEjemplo.Coordenadas.split(',').map(Number);
-        const dist = calcularDistanciaMetros(latB, lngB, latTX, lngTX);
-        console.log(`🧪 Distancia de prueba: ${dist} metros`);
-    }
-}
-
-
-
 
 // 🔍 TEST: Verificar que la tabla renombrada funciona
 const {  test, error } = await supabaseClient
@@ -19343,6 +19310,45 @@ console.log('✅ Tabla TX y Cortes:', test?.length > 0 ? 'FUNCIONA' : 'ERROR', e
     }
     
     console.groupEnd();
+}
+
+
+	async function buscarTXPorCoordenadas(lat, lng) {
+    try {
+        console.log(`🔍 Buscando TX cerca de: ${lat}, ${lng}`);
+        
+        // La consulta a Supabase
+        const { data, error } = await supabaseClient
+            .from('TX y Cortes') // <-- Verifica que este nombre sea EXACTO al de la base de datos
+            .select('TXCortes, Coordenadas');
+
+        if (error) {
+            console.error('❌ Error de Supabase:', error);
+            throw error;
+        }
+
+        if (!data || data.length === 0) {
+            console.warn('⚠️ No se encontraron registros en TX y Cortes');
+            return null;
+        }
+
+        // Aquí es donde calculas la distancia con los datos obtenidos
+        // Supabase leyó todas las filas, ahora filtramos por cercanía en JS
+        const radioBusqueda = 500; // metros
+        const cercanos = data.filter(tx => {
+            if (!tx.Coordenadas) return false;
+            const [txLat, txLng] = tx.Coordenadas.split(',').map(Number);
+            const distancia = calcularDistanciaMetros(lat, lng, txLat, txLng);
+            return distancia <= radioBusqueda;
+        });
+
+        console.log(`✅ Hallados ${cercanos.length} TX cercanos.`);
+        return cercanos;
+
+    } catch (err) {
+        console.error('❌ Error en buscarTXPorCoordenadas:', err.message);
+        throw new Error("No se pudo consultar la tabla");
+    }
 }
 
 
