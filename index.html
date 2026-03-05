@@ -4339,15 +4339,17 @@ const tableConfigs = {
         actions: ['Coordenadas', 'FotoLink']
     },
     'TX y Cortes': {
-        title: 'TX y Cortes',
-        icon: '⚡',
-        fields: [
-            { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
-            { key: 'Circuitos', label: 'Circuitos', type: 'like' }
-        ],
-        resultFields: ['TXCortes', 'Circuitos', 'Comentario'],
-        actions: ['Coordenadas']
-    },
+    title: 'TX y Cortes',
+    icon: '⚡',
+    fields: [
+        { key: 'TXCortes', label: 'TX/Cortes', type: 'like' },
+        { key: 'Circuitos', label: 'Circuitos', type: 'like' },
+        // ✅ NUEVO CAMPO: Búsqueda por coordenadas (tipo especial)
+        { key: 'coordenadas_busqueda', label: '📍 Coordenadas', type: 'coordenadas', placeholder: 'Ej: 13.7981427,-89.4436187' }
+    ],
+    resultFields: ['TXCortes', 'Circuitos', 'Comentario'],
+    actions: ['Coordenadas']
+},
     'usuarios': {
         title: 'Gestión de Usuarios',
         icon: '👥',
@@ -5252,6 +5254,41 @@ async function logout() {
                 </div>
             `;
         }); // ✅ Cierra forEach
+
+        // ========================================
+        // ✅ NUEVO: CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO)
+        // ========================================
+        if (selectedTable === 'TX y Cortes') {
+            html += `
+            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+                <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
+                <input type="text" id="coordenadasTX" 
+                       placeholder="Ej: 13.7981427,-89.4436187" 
+                       style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 8px;">
+                <small style="color: #64748b; display: block; margin-top: 4px;">
+                    Formato: latitud,longitud (Ej: 13.7981427,-89.4436187)
+                </small>
+                
+                <div style="margin-top: 10px;">
+                    <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
+                    <input type="number" id="radioMetrosTX" 
+                           value="50" 
+                           min="10" 
+                           max="1000" 
+                           step="10"
+                           style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
+                    <small style="color: #64748b; display: block; margin-top: 4px;">
+                        Default: 50 metros (mín: 10m, máx: 1000m)
+                    </small>
+                </div>
+                
+                <button onclick="buscarTXPorCoordenadas()" 
+                        style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+                    🔍 Buscar TX/Cortes Cercanos
+                </button>
+            </div>
+            `;
+        } // ✅ Cierra if TX y Cortes
 
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
@@ -18992,6 +19029,138 @@ if (typeof guardarPreseleccion === 'function') window.guardarPreseleccion = guar
 if (typeof eliminarPreseleccion === 'function') window.eliminarPreseleccion = eliminarPreseleccion;
 if (typeof refrescarMarcadorPreseleccionado === 'function') window.refrescarMarcadorPreseleccionado = refrescarMarcadorPreseleccionado;
 console.log('✅ Funciones de preselección expuestas globalmente');
+
+
+// ===================================================================
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS Y RADIO
+// ===================================================================
+async function buscarTXPorCoordenadas() {
+    const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
+    const radioMetros = parseInt(document.getElementById('radioMetrosTX')?.value) || 50;
+    
+    // Validar coordenadas
+    if (!coordenadasInput || !coordenadasInput.includes(',')) {
+        alert('⚠️ Por favor ingresa coordenadas válidas en formato: latitud,longitud\nEjemplo: 13.7981427,-89.4436187');
+        return;
+    }
+    
+    // Validar radio
+    if (radioMetros < 10 || radioMetros > 1000) {
+        alert('⚠️ El radio debe estar entre 10 y 1000 metros');
+        return;
+    }
+    
+    // Parsear coordenadas
+    const [latBusqueda, lngBusqueda] = coordenadasInput.split(',').map(c => parseFloat(c.trim()));
+    
+    if (isNaN(latBusqueda) || isNaN(lngBusqueda)) {
+        alert('⚠️ Coordenadas inválidas. Asegúrate de usar números en formato: 13.7981427,-89.4436187');
+        return;
+    }
+    
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div><p style="text-align: center; color: #666;">Buscando TX/Cortes en ' + radioMetros + ' metros de radio...</p>';
+    
+    try {
+        console.log(`🔍 Buscando TX/Cortes cerca de [${latBusqueda}, ${lngBusqueda}] en ${radioMetros}m de radio`);
+        
+        // Consultar todos los TX y Cortes
+        const {  txData, error } = await supabaseClient
+            .from('TX y Cortes')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (!txData || txData.length === 0) {
+            resultsContainer.innerHTML = `<div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;"><div class="result-header">⚠️ Sin resultados</div><p>No se encontraron registros en TX y Cortes</p></div>`;
+            return;
+        }
+        
+        // Filtrar por coordenadas y radio
+        const resultadosCercanos = [];
+        
+        txData.forEach(tx => {
+            const coordsStr = tx.Coordenadas;
+            if (!coordsStr || !coordsStr.includes(',')) return;
+            
+            const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+            if (isNaN(latTX) || isNaN(lngTX)) return;
+            
+            const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, latTX, lngTX);
+            
+            if (distanciaMetros <= radioMetros) {
+                resultadosCercanos.push({ ...tx, distancia: distanciaMetros });
+            }
+        });
+        
+        // Ordenar por distancia
+        resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
+        
+        console.log(`✅ Encontrados ${resultadosCercanos.length} TX/Cortes dentro de ${radioMetros}m`);
+        
+        // Mostrar resultados
+        if (resultadosCercanos.length === 0) {
+            resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header">❌ Sin resultados</div><p>No se encontraron TX/Cortes dentro de <strong>${radioMetros} metros</strong> de las coordenadas ingresadas.</p></div>`;
+        } else {
+            mostrarResultadosTXCoordenadas(resultadosCercanos, latBusqueda, lngBusqueda, radioMetros);
+        }
+        
+    } catch (err) {
+        console.error('❌ Error buscando TX por coordenadas:', err);
+        resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header" style="color: #b91c1c;">❌ Error de Conexión</div><p>${err.message || 'No se pudo conectar con la base de datos.'}</p></div>`;
+    }
+}
+
+// ===================================================================
+// 📏 CALCULAR DISTANCIA EN METROS (Fórmula Haversine)
+// ===================================================================
+function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
+    const R = 6371000; // Radio de la Tierra en metros
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c);
+}
+
+// ===================================================================
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
+// ===================================================================
+function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    let html = `<div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+        <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🔍 TX/Cortes Encontrados</span>
+            <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">${resultados.length} resultados en ${radioMetros}m</span>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
+            <strong>📊 Resumen:</strong><br>
+            • Coordenadas: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
+            • Radio: <strong>${radioMetros} metros</strong><br>
+            • Encontrados: <strong>${resultados.length}</strong>
+        </div>
+        <div style="display: grid; gap: 15px;">`;
+    
+    resultados.forEach((tx, index) => {
+        const distancia = tx.distancia || 0;
+        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+        html += `<div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+            <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</div>
+            <div style="font-size: 13px; color: #64748b;">
+                <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
+                <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
+            </div>
+            ${tx.Comentario ? `<div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;"><strong>💬 Comentario:</strong><br>${tx.Comentario}</div>` : ''}
+        </div>`;
+    });
+    
+    html += `</div></div>`;
+    resultsContainer.innerHTML = html;
+}
 
 
 
