@@ -19293,51 +19293,191 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
 
 
 // ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON COMENTARIOS FORMATEADOS)
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET)
 // ===================================================================
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
     const resultsContainer = document.getElementById('searchResults');
     
-    let html = `<div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-        <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <span>🔍 TX/Cortes Encontrados</span>
-            <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">${resultados.length} resultados en ${radioMetros}m</span>
+    // Verificar que Leaflet está cargado
+    if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado');
+        resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+            <div class="result-header">❌ Error</div>
+            <p>El mapa no está disponible. Por favor recargue la página.</p>
+        </div>`;
+        return;
+    }
+    
+    // 1️⃣ MOSTRAR CONTENEDOR DEL MAPA Y RESUMEN
+    let html = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>🗺️ TX/Cortes Encontrados en el Mapa</span>
+                <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">
+                    ${resultados.length} resultados en ${radioMetros}m
+                </span>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
+                <strong>📊 Resumen:</strong><br>
+                • Coordenadas de búsqueda: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
+                • Radio: <strong>${radioMetros} metros</strong><br>
+                • TX/Cortes encontrados: <strong>${resultados.length}</strong>
+            </div>
+            <!-- MAPA LEAFLET -->
+            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1; margin: 15px 0;"></div>
+            <!-- PANEL DE DETALLES -->
+            <div id="panelDetalleTX" style="margin-top: 20px;">
+                <div style="text-align: center; padding: 40px; color: #999;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
+                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p>
+                </div>
+            </div>
         </div>
-        <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
-            <strong>📊 Resumen:</strong><br>
-            • Coordenadas: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
-            • Radio: <strong>${radioMetros} metros</strong><br>
-            • Encontrados: <strong>${resultados.length}</strong>
-        </div>
-        <div style="display: grid; gap: 15px;">`;
+    `;
+    
+    resultsContainer.innerHTML = html;
+    
+    // 2️⃣ INICIALIZAR MAPA LEAFLET
+    const mapa = L.map('mapaTXCoordenadas').setView([latCentro, lngCentro], 15);
+    
+    // Agregar capa de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(mapa);
+    
+    // 3️⃣ AGREGAR MARCADOR DEL CENTRO DE BÚSQUEDA
+    L.circle([latCentro, lngCentro], {
+        radius: radioMetros,
+        color: '#3b82f6',
+        fillColor: '#3b82f6',
+        fillOpacity: 0.1,
+        weight: 2
+    }).addTo(mapa).bindPopup(`📍 Centro de búsqueda<br>Radio: ${radioMetros} metros`);
+    
+    L.marker([latCentro, lngCentro], {
+        icon: L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div style='background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+        })
+    }).addTo(mapa).bindPopup('📍 Centro de búsqueda');
+    
+    // 4️⃣ AGREGAR MARCADORES DE TX/CORTES
+    const bounds = [];
+    bounds.push([latCentro, lngCentro]);
     
     resultados.forEach((tx, index) => {
         const distancia = tx.distancia || 0;
         const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+        const iconoColor = distancia <= 50 ? 'green' : (distancia <= 100 ? 'orange' : 'red');
         
-        // ✅ APLICAR formatearComentario() al comentario
-        const comentarioFormateado = tx.Comentario ? formatearComentario(tx.Comentario) : '';
+        // Parsear coordenadas del TX
+        const coordsStr = tx.Coordenadas;
+        if (!coordsStr || !coordsStr.includes(',')) return;
         
-        html += `
-            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
-                <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">
-                    #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
-                </div>
-                <div style="font-size: 13px; color: #64748b;">
-                    <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
-                    <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
-                </div>
-                ${comentarioFormateado ? `
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
-                        <strong>💬 Comentario:</strong><br>${comentarioFormateado}
-                    </div>` : ''}
-            </div>`;
+        const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+        if (isNaN(latTX) || isNaN(lngTX)) return;
+        
+        bounds.push([latTX, lngTX]);
+        
+        // Crear marcador
+        const marker = L.marker([latTX, lngTX], {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style='background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;'>${index + 1}</div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            })
+        }).addTo(mapa);
+        
+        // Popup simple
+        marker.bindPopup(`
+            <div style="min-width: 200px;">
+                <strong>#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</strong><br>
+                <span style="color: #666;">Circuito: ${tx.Circuitos || 'N/A'}</span><br>
+                <span style="color: ${color}; font-weight: bold;">📏 ${distancia} metros</span>
+            </div>
+        `);
+        
+        // Click en marcador → Mostrar detalles en panel
+        marker.on('click', () => {
+            mostrarDetalleTXEnPanel(tx, index, color, distancia);
+        });
     });
     
-    html += `</div></div>`;
-    resultsContainer.innerHTML = html;
+    // 5️⃣ AJUSTAR VISTA DEL MAPA
+    if (bounds.length > 0) {
+        const group = new L.featureGroup(bounds.map(b => L.marker(b)));
+        mapa.fitBounds(group.getBounds().pad(0.1));
+    }
+    
+    // 6️⃣ FUNCIÓN PARA MOSTRAR DETALLES EN PANEL
+    function mostrarDetalleTXEnPanel(tx, index, color, distancia) {
+        const panel = document.getElementById('panelDetalleTX');
+        
+        // Aplicar formatearComentario() si existe
+        const comentarioFormateado = tx.Comentario && typeof formatearComentario === 'function' 
+            ? formatearComentario(tx.Comentario) 
+            : (tx.Comentario || 'Sin comentario disponible');
+        
+        // Extraer y formatear enlace de Google Maps si existe
+        let enlaceMapsHTML = '';
+        if (tx.Coordenadas && tx.Coordenadas.includes(',')) {
+            const [lat, lng] = tx.Coordenadas.split(',').map(c => c.trim());
+            const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            enlaceMapsHTML = `
+                <div style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
+                    <strong style="color: #1565c0;">📍 Coordenadas:</strong><br>
+                    <a href="${mapsUrl}" target="_blank" style="color: #1976d2; text-decoration: underline; font-weight: 600;">
+                        🔗 Abrir en Google Maps
+                    </a><br>
+                    <small style="color: #666;">${tx.Coordenadas}</small>
+                </div>
+            `;
+        }
+        
+        panel.innerHTML = `
+            <div style="background: white; padding: 20px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
+                    <h3 style="margin: 0; color: #1e293b; font-size: 20px;">
+                        #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
+                    </h3>
+                    <span style="background: ${color}; color: white; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 14px;">
+                        📏 ${distancia} metros
+                    </span>
+                </div>
+                
+                <div style="display: grid; gap: 12px; font-size: 14px; line-height: 1.6;">
+                    <div>
+                        <strong style="color: #2d3748;">🔌 Circuito:</strong> 
+                        <span style="color: #64748b;">${tx.Circuitos || 'N/A'}</span>
+                    </div>
+                    
+                    ${comentarioFormateado && comentarioFormateado !== 'Sin comentario disponible' ? `
+                        <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 6px;">
+                            <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
+                            <div style="color: #555; line-height: 1.8; font-size: 13px;">
+                                ${comentarioFormateado}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${enlaceMapsHTML}
+                </div>
+                
+                <button onclick="document.getElementById('panelDetalleTX').innerHTML = '<div style=\"text-align: center; padding: 40px; color: #999;\"><div style=\"font-size: 48px; margin-bottom: 10px;\">📍</div><p style=\"font-size: 16px; font-weight: 600;\">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p></div>'" 
+                        style="margin-top: 20px; background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    ✕ Cerrar detalles
+                </button>
+            </div>
+        `;
+        
+        // Scroll suave al panel
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 }
-
 
 
 // ===================================================================
