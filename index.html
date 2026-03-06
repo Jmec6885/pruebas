@@ -8767,53 +8767,116 @@ async function calcularYMostrarOSCercanas() {
 }
 
 // ===================================================================
-// 💾 GUARDAR OS MÁS CERCANAS EN BD (UI)
+// 💾 GUARDAR OS MÁS CERCANAS EN BD (CORREGIDA - CAPTURA AUTOMÁTICA)
 // ===================================================================
 async function guardarOSCercanasEnBD() {
+    console.group('💾 ==========================================');
+    console.log('💾 GUARDAR OS MÁS CERCANAS - INICIANDO');
+    
+    // 🔹 1. Validar que hay OS calculadas
     if (!osCercanasCalculadas || osCercanasCalculadas.length === 0) {
         alert('⚠️ Primero debe calcular las OS más cercanas');
+        console.groupEnd();
         return;
     }
     
-    const unidad = window.unidadSeleccionadaKML || currentUser.unidad;
-    const fecha = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
-    const comentario = document.getElementById('comentarioOSCercanas')?.value || '';
+    // 🔹 2. CAPTAR UNIDAD DESDE MÚLTIPLES FUENTES (en orden de prioridad)
+    let unidad = null;
+    
+    // Prioridad 1: Unidades seleccionadas en checkboxes
+    const checkboxesUnidades = document.querySelectorAll('.checkbox-unidad-filtro:checked');
+    if (checkboxesUnidades.length > 0) {
+        unidad = checkboxesUnidades[0].value; // Tomar la primera seleccionada
+        console.log(`📍 Unidad desde checkbox: ${unidad}`);
+    }
+    // Prioridad 2: Variable global (de búsqueda "Mostrar Mapa")
+    else if (window.unidadFiltroActual) {
+        unidad = window.unidadFiltroActual;
+        console.log(`📍 Unidad desde window.unidadFiltroActual: ${unidad}`);
+    }
+    // Prioridad 3: Usuario actual
+    else if (currentUser?.unidad) {
+        unidad = currentUser.unidad;
+        console.log(`📍 Unidad desde currentUser: ${unidad}`);
+    }
     
     if (!unidad) {
-        alert('⚠️ No hay unidad seleccionada');
+        alert('⚠️ No se detectó ninguna unidad.\n\nPor favor:\n1. Seleccione una unidad en "Seleccionar Unidades", O\n2. Busque una OS con "Mostrar Mapa" primero');
+        console.groupEnd();
         return;
     }
     
-    // Confirmar
-    const confirmacion = confirm(
-        `¿Guardar ${osCercanasCalculadas.length} OS más cercanas?\n\n` +
-        `Unidad: ${unidad}\n` +
-        `Fecha: ${fecha}\n` +
-        `Comentario: ${comentario || 'Sin comentario'}`
-    );
+    // 🔹 3. CAPTAR FECHA DESDE MÚLTIPLES FUENTES
+    let fechaProgramada = null;
     
-    if (!confirmacion) return;
-    
-    // Guardar
-    const btnGuardar = document.getElementById('btnGuardarOSCercanas');
-    btnGuardar.disabled = true;
-    btnGuardar.innerText = '⏳ Guardando...';
-    
-    const resultado = await guardarOSMasCercanas(osCercanasCalculadas, unidad, fecha, comentario);
-    
-    if (resultado.success) {
-        alert(`✅ ${resultado.message}`);
-        
-        // Recargar mapa para mostrar las nuevas OS
-        if (confirm('¿Recargar mapa para ver las OS guardadas?')) {
-            location.reload();
-        }
-    } else {
-        alert(`❌ Error: ${resultado.message}`);
+    // Prioridad 1: Input de fecha de vigencia
+    const inputFecha = document.getElementById('fechaVigenciaFiltros');
+    if (inputFecha && inputFecha.value) {
+        fechaProgramada = inputFecha.value;
+        console.log(`📅 Fecha desde input: ${fechaProgramada}`);
+    }
+    // Prioridad 2: Variable global
+    else if (window.fechaSeleccionadaKML) {
+        fechaProgramada = window.fechaSeleccionadaKML;
+        console.log(`📅 Fecha desde window.fechaSeleccionadaKML: ${fechaProgramada}`);
+    }
+    // Prioridad 3: Fecha de hoy
+    else {
+        fechaProgramada = getFechaHoyElSalvador();
+        console.log(`📅 Fecha desde hoy: ${fechaProgramada}`);
     }
     
-    btnGuardar.disabled = false;
-    btnGuardar.innerText = '💾 Guardar en BD';
+    // 🔹 4. Obtener comentario
+    const comentarioInput = document.getElementById('comentarioOSCercanas');
+    const comentario = comentarioInput?.value?.trim() || '';
+    
+    // 🔹 5. Confirmar con el usuario
+    const confirmacion = confirm(
+        `¿Guardar ${osCercanasCalculadas.length} OS más cercanas?\n\n` +
+        `📍 Unidad: ${unidad}\n` +
+        `📅 Fecha: ${fechaProgramada}\n` +
+        `💬 Comentario: ${comentario || 'Sin comentario'}`
+    );
+    
+    if (!confirmacion) {
+        console.log('❌ Usuario canceló la operación');
+        console.groupEnd();
+        return;
+    }
+    
+    // 🔹 6. Deshabilitar botón durante la operación
+    const btnGuardar = document.getElementById('btnGuardarOSCercanas');
+    if (btnGuardar) {
+        btnGuardar.disabled = true;
+        btnGuardar.innerText = '⏳ Guardando...';
+    }
+    
+    // 🔹 7. Guardar en Supabase
+    try {
+        const resultado = await guardarOSMasCercanas(osCercanasCalculadas, unidad, fechaProgramada, comentario);
+        
+        if (resultado.success) {
+            alert(`✅ ${resultado.message}\n\nUnidad: ${unidad}\nFecha: ${fechaProgramada}`);
+            
+            // Opcional: Recargar o limpiar
+            if (confirm('¿Desea recargar la página para ver los cambios?')) {
+                location.reload();
+            }
+        } else {
+            alert(`❌ Error: ${resultado.message}`);
+        }
+        
+    } catch (err) {
+        console.error('❌ Error crítico guardando:', err);
+        alert(`❌ Error inesperado: ${err.message}`);
+    } finally {
+        // Restaurar botón
+        if (btnGuardar) {
+            btnGuardar.disabled = false;
+            btnGuardar.innerText = '💾 Guardar en BD';
+        }
+        console.groupEnd();
+    }
 }
 
 
