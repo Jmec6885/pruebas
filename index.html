@@ -20026,23 +20026,28 @@ function mostrarInfoCircuito(nombreCircuito, totalElementos) {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
     
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
-            <div class="result-header">🗺️ Circuito: ${nombreCircuito}</div>
+    // ✅ Agregar panel DESPUÉS del mapa, sin destruirlo
+    const infoPanel = document.createElement('div');
+    infoPanel.innerHTML = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; margin-top: 10px;">
+            <div class="result-header">🗺️ Circuito: ${escapeHtml(nombreCircuito)}</div>
             <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
                 <strong>📊 Información:</strong><br>
-                • Archivo KMZ cargado correctamente<br>
-                • Elementos visibles: <strong>${totalElementos}</strong><br>
-                • Haz clic en los marcadores para ver detalles
-            </div>
-            <div style="text-align: center; margin-top: 15px;">
-                <button class="btn btn-secondary" onclick="window.mapaLeafletInstance.eachLayer(function(l) { if(l.getBounds) window.mapaLeafletInstance.fitBounds(l.getBounds()); })">
-                    📍 Centrar en Circuito
-                </button>
+                Archivo KMZ cargado correctamente<br>
+                Elementos visibles: <strong>${totalElementos}</strong>
             </div>
         </div>
     `;
+    resultsContainer.appendChild(infoPanel);
+    
+    // ✅ Forzar recálculo del mapa
+    setTimeout(() => {
+        if (window.mapaLeafletInstance) {
+            window.mapaLeafletInstance.invalidateSize();
+        }
+    }, 200);
 }
+
 
 
 
@@ -20050,43 +20055,19 @@ function mostrarInfoCircuito(nombreCircuito, totalElementos) {
 // 🎯 FUNCIÓN GLOBAL: Centrar mapa en circuito cargado
 // ===================================================================
 window.centrarEnCircuito = function() {
-    if (!window.capaCircuitoActual || !window.mapaCircuitoBusquedaActual) {
+    if (!window.capaCircuitoActual || !window.mapaLeafletInstance) {
         alert('⚠️ No hay circuito cargado en el mapa');
         return;
     }
     
-    const layer = window.capaCircuitoActual;
-    const mapa = window.mapaCircuitoBusquedaActual;
-    
-    if (layer.getLayers) {
-        let bounds = L.latLngBounds();
-        let count = 0;
-        
-        layer.getLayers().forEach(cap => {
-            if (cap.getLatLng) {
-                const latlng = cap.getLatLng();
-                if (latlng && !isNaN(latlng.lat) && !isNaN(latlng.lng)) {
-                    bounds.extend(latlng);
-                    count++;
-                }
-            } else if (cap.getBounds) {
-                const b = cap.getBounds();
-                if (b && b.isValid()) {
-                    bounds.extend(b);
-                    count++;
-                }
-            }
-        });
-        
-        if (count > 0 && bounds.isValid()) {
-            mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
-            console.log(`✅ Mapa centrado en ${count} elementos del circuito`);
-        } else {
-            console.warn('⚠️ No se pudieron calcular bounds para centrar');
-            mapa.setView([13.6929, -89.2182], 10);
+    if (window.capaCircuitoActual.getBounds) {
+        const bounds = window.capaCircuitoActual.getBounds();
+        if (bounds.isValid()) {
+            window.mapaLeafletInstance.fitBounds(bounds, { padding: [50, 50] });
         }
     }
 };
+
 
 // ===================================================================
 // 👁️ FUNCIÓN GLOBAL: Toggle visibilidad de capa de circuito
