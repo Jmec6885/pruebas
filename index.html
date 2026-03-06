@@ -19809,26 +19809,29 @@ async function cargarCircuitoEnMapa() {
 
 
 
-function limpiarMapaCircuito() {
-    // Remover capa de circuito
-    if (window.capaCircuitoActual && window.mapaLeafletInstance) {
-        window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
+// Limpiar capa anterior
+limpiarMapaCircuito();
+
+// ✅ CREAR contenedor del mapa si no existe
+let contenedorMapa = document.getElementById('mapaCircuito');
+if (!contenedorMapa) {
+    const searchResults = document.getElementById('searchResults');
+    if (!searchResults) {
+        console.error('❌ No existe #searchResults para insertar el mapa');
+        return;
     }
-    
-    // Remover todos los marcadores de TX si existen
-    if (window.markersTX && Array.isArray(window.markersTX)) {
-        window.markersTX.forEach(marker => {
-            if (window.mapaLeafletInstance?.hasLayer(marker)) {
-                window.mapaLeafletInstance.removeLayer(marker);
-            }
-        });
-        window.markersTX = [];
-    }
-    
-    // Resetear referencias
-    window.capaCircuitoActual = null;
-    console.log('🧹 Mapa de circuito limpiado');
+    searchResults.innerHTML = `
+        <div id="mapaCircuitoContainer">
+            <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc;"></div>
+        </div>
+    `;
+    console.log('✅ Contenedor #mapaCircuito creado dinámicamente');
 }
+
+// Crear mapa si no existe
+if (!window.mapaLeafletInstance) {
+
+
 
 
 // Cerrar mapa de circuito
