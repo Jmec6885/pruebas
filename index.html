@@ -19882,13 +19882,14 @@ function cerrarMapaCircuito() {
 }
 
 // ===================================================================
-// 🗺️ CARGAR CIRCUITO KMZ EN MAPA LEAFLET (CORREGIDA - getPublicUrl)
+// 🗺️ CARGAR CIRCUITO KMZ EN MAPA LEAFLET (VERSIÓN COMPLETA Y DIAGNÓSTICA)
 // ===================================================================
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     const resultsContainer = document.getElementById('searchResults');
     
     try {
         console.log(`📡 Cargando circuito KMZ: ${nombreCircuito}`);
+        console.group('🔍 DIAGNÓSTICO CARGA KMZ');
         
         // 1️⃣ Mostrar interfaz de carga
         resultsContainer.innerHTML = `
@@ -19904,6 +19905,7 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
                     </div>
                 </div>
                 <div id="mapaCircuitoBusqueda" style="display: none; height: 500px; border-radius: 8px; border: 2px solid #cbd5e1;"></div>
+                <div id="resultadoCircuito" style="margin-top: 15px;"></div>
                 <button onclick="cerrarMapaCircuitoBusqueda()" 
                         style="margin-top: 10px; padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">
                     ✕ Cancelar
@@ -19915,16 +19917,20 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         if (typeof L === 'undefined') throw new Error('Leaflet no está cargado');
         if (typeof omnivore === 'undefined') throw new Error('leaflet-omnivore no está cargado');
         
+        console.log('✅ Dependencias verificadas: Leaflet y omnivore disponibles');
+        
         // 3️⃣ Crear mapa
-        const mapa = L.map('mapaCircuitoBusqueda').setView([13.7, -89.2], 10);
+        const mapaCircuito = L.map('mapaCircuitoBusqueda').setView([13.7, -89.2], 10);
+        console.log('🗺️ Instancia de mapa creada');
         
         // 4️⃣ Capa base
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
-        }).addTo(mapa);
+        }).addTo(mapaCircuito);
+        console.log('🗺️ Capa base OpenStreetMap agregada');
         
-        // 5️⃣ Construir nombre del archivo
+        // 5️⃣ Construir nombre del archivo y obtener URL pública
         const archivoKMZ = `${nombreCircuito}.kmz`;
         
         // ✅ CORRECCIÓN CLAVE: getPublicUrl() devuelve { data: { publicUrl: '...' } }
@@ -19932,15 +19938,14 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
             .from('circuitos-kmz')
             .getPublicUrl(archivoKMZ);
         
-        // Acceder correctamente a la URL pública
         const publicUrl = response?.data?.publicUrl;
         
-        console.log(`🔗 KMZ URL: ${publicUrl}`);
+        console.log(`🔗 KMZ URL generada: ${publicUrl}`);
+        console.log('📦 Respuesta completa de getPublicUrl:', response);
         
         // Validar que la URL existe
         if (!publicUrl) {
-            // 🔍 DEBUG: Mostrar qué devuelve realmente getPublicUrl
-            console.error('❌ getPublicUrl response:', response);
+            console.error('❌ URL no generada para:', archivoKMZ);
             throw new Error(`URL no generada para: ${archivoKMZ}. Verifica que el bucket "circuitos-kmz" sea PÚBLICO en Supabase Storage.`);
         }
         
@@ -19949,83 +19954,294 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         
         omnivore.kml(publicUrl)
             .on('ready', function() {
+                console.groupEnd(); // Cerrar grupo de diagnóstico
                 console.log('✅ KMZ cargado correctamente');
                 
-                // Ajustar vista
-                const bounds = this.getBounds();
-                if (bounds && bounds.isValid() && !bounds.isEmpty()) {
-                    mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                // Guardar referencia de la capa cargada
+                const layer = this;
+                window.capaCircuitoActual = layer;
+                console.log(`📊 Capa guardada en window.capaCircuitoActual`);
+                
+                // 🔍 DIAGNÓSTICO: Verificar contenido del KMZ
+                if (layer.getLayers) {
+                    const capas = layer.getLayers();
+                    console.log(`📍 Total de elementos en KMZ: ${capas.length}`);
+                    
+                    if (capas.length === 0) {
+                        console.warn('⚠️ El KMZ está vacío o no tiene geometrías válidas');
+                        document.getElementById('resultadoCircuito').innerHTML = `
+                            <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                                <div class="result-header">⚠️ Circuito vacío</div>
+                                <p>El archivo KMZ existe pero no contiene geometrías válidas.</p>
+                                <button class="btn btn-secondary" onclick="descargarKMZ('${nombreCircuito}')" style="margin-top: 10px;">
+                                    📥 Descargar KMZ para verificar
+                                </button>
+                            </div>`;
+                        return;
+                    }
+                    
+                    // Calcular bounds manualmente para mayor compatibilidad
+                    let bounds = L.latLngBounds();
+                    let tieneCoordenadasValidas = false;
+                    
+                    capas.forEach(cap => {
+                        if (cap.getLatLng) {
+                            const latlng = cap.getLatLng();
+                            if (latlng && !isNaN(latlng.lat) && !isNaN(latlng.lng)) {
+                                bounds.extend(latlng);
+                                tieneCoordenadasValidas = true;
+                            }
+                        } else if (cap.getBounds) {
+                            const b = cap.getBounds();
+                            if (b && b.isValid()) {
+                                bounds.extend(b);
+                                tieneCoordenadasValidas = true;
+                            }
+                        }
+                    });
+                    
+                    console.log('📍 Bounds calculados:', bounds);
+                    console.log('¿Coordenadas válidas?', tieneCoordenadasValidas);
+                    
+                    if (tieneCoordenadasValidas && bounds.isValid()) {
+                        // 🎯 AJUSTAR MAPA A LOS DATOS CON ZOOM APROPIADO
+                        setTimeout(() => {
+                            mapaCircuito.fitBounds(bounds, {
+                                padding: [50, 50],
+                                maxZoom: 16,
+                                animate: true
+                            });
+                            console.log('✅ Mapa ajustado a los datos del circuito');
+                        }, 500);
+                    } else {
+                        console.warn('⚠️ No se pudieron calcular bounds válidos');
+                        // Fallback: centrar en San Salvador
+                        mapaCircuito.setView([13.6929, -89.2182], 10);
+                    }
                 }
                 
-                // Agregar popups
-                this.eachLayer(function(layer) {
-                    if (layer.feature?.properties) {
-                        const props = layer.feature.properties;
-                        let popup = '<div style="min-width:200px;font-size:13px;">';
-                        if (props.name) popup += `<strong>${props.name}</strong><br>`;
-                        if (props.description) popup += `<small>${props.description}</small>`;
+                // Agregar popups a cada capa con información del KMZ
+                layer.eachLayer(function(subLayer) {
+                    if (subLayer.feature?.properties) {
+                        const props = subLayer.feature.properties;
+                        let popup = '<div style="min-width:200px;font-size:13px;font-family:sans-serif;">';
+                        if (props.name) popup += `<strong style="color:#1e40af;">${props.name}</strong><br>`;
+                        if (props.description) popup += `<small style="color:#666;">${props.description}</small>`;
+                        if (props.circuito) popup += `<br><strong>Circuito:</strong> ${props.circuito}`;
                         popup += '</div>';
-                        layer.bindPopup(popup);
+                        subLayer.bindPopup(popup);
                     }
                 });
+                console.log('✅ Popups agregados a las capas');
                 
-                // Mostrar mapa y ocultar loader
+                // Agregar al mapa si no está ya agregado
+                if (!mapaCircuito.hasLayer(layer)) {
+                    layer.addTo(mapaCircuito);
+                    console.log('✅ Capa agregada al mapa');
+                }
+                
+                // Mostrar mapa y actualizar UI
                 document.getElementById('mapaCircuitoBusqueda').style.display = 'block';
                 document.getElementById('cargaProgreso').innerHTML = `
                     <div style="background:#e8f5e9;padding:12px;border-radius:6px;text-align:center;">
                         <strong style="color:#2e7d32;">✅ Circuito cargado</strong>
                     </div>`;
                 
-                // Forzar recálculo
-                setTimeout(() => mapa.invalidateSize(), 100);
+                // Forzar recálculo del tamaño del mapa
+                setTimeout(() => mapaCircuito.invalidateSize(), 100);
                 
-                // Guardar referencia
-                window.mapaCircuitoBusquedaActual = mapa;
+                // Guardar referencia del mapa actual
+                window.mapaCircuitoBusquedaActual = mapaCircuito;
+                
+                // Mostrar mensaje de éxito con acciones
+                const elementosCargados = layer.getLayers ? layer.getLayers().length : 'N/A';
+                document.getElementById('resultadoCircuito').innerHTML = `
+                    <div class="result-card" style="background: #e8f5e9; border-left: 4px solid #4caf50; margin-top: 15px;">
+                        <div class="result-header">✅ Circuito cargado</div>
+                        <p><strong>Circuito:</strong> ${nombreCircuito}</p>
+                        <p><strong>Elementos cargados:</strong> ${elementosCargados}</p>
+                        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="exportarCircuitoKMZ('${nombreCircuito}')" style="flex: 1; min-width: 120px;">
+                                📥 Descargar KMZ
+                            </button>
+                            <button class="btn btn-secondary" onclick="centrarEnCircuito()" style="flex: 1; min-width: 120px;">
+                                🎯 Centrar mapa
+                            </button>
+                            <button class="btn btn-secondary" onclick="toggleCapasCircuito()" style="flex: 1; min-width: 120px;">
+                                👁️ Mostrar/Ocultar
+                            </button>
+                        </div>
+                    </div>`;
+                
+                console.log(`✅ Circuito ${nombreCircuito} cargado con ${elementosCargados} elementos`);
                 
             })
             .on('error', function(err) {
+                console.groupEnd(); // Cerrar grupo de diagnóstico
                 console.error('❌ Error en omnivore:', err);
+                console.error('🔗 URL intentada:', publicUrl);
+                
                 resultsContainer.innerHTML = `
                     <div class="result-card" style="background:#fee2e2;border-left:4px solid #ef4444;">
                         <div class="result-header">❌ Error al cargar KMZ</div>
                         <p><strong>${nombreCircuito}.kmz</strong></p>
                         <p style="font-size:13px;color:#666;">${err.message || 'Error desconocido'}</p>
-                        <details style="margin-top:10px;">
-                            <summary>🔍 Ver URL generada</summary>
-                            <code style="background:#f1f5f9;padding:8px;display:block;font-size:11px;">${publicUrl}</code>
+                        <details style="margin-top:10px;font-size:12px;">
+                            <summary>🔍 Ver detalles técnicos</summary>
+                            <div style="background:#f1f5f9;padding:10px;border-radius:4px;margin-top:5px;">
+                                <strong>URL:</strong><br>
+                                <code style="display:block;word-break:break-all;font-size:10px;">${publicUrl}</code><br><br>
+                                <strong>Error:</strong><br>
+                                <code>${err.message}</code>
+                            </div>
                         </details>
+                        <button class="btn btn-secondary" onclick="verificarBucketCircuitos()" style="margin-top:10px;">
+                            🔍 Verificar bucket en Supabase
+                        </button>
                     </div>`;
             })
-            .addTo(mapa);
+            .addTo(mapaCircuito);
+        
+        console.groupEnd(); // Cerrar grupo principal
         
     } catch (err) {
+        console.groupEnd?.(); // Cerrar grupo si está abierto
         console.error('❌ Error cargando circuito:', err);
         resultsContainer.innerHTML = `
             <div class="result-card" style="background:#fee2e2;border-left:4px solid #ef4444;">
                 <div class="result-header">❌ Error</div>
                 <p><strong>${nombreCircuito}.kmz</strong></p>
                 <p style="font-size:13px;color:#666;">${err.message || 'Error desconocido'}</p>
+                <button class="btn btn-secondary" onclick="location.reload()" style="margin-top:10px;">
+                    🔄 Recargar página
+                </button>
             </div>`;
     }
 }
 
-
+// ===================================================================
+// 🎯 FUNCIÓN GLOBAL: Centrar mapa en circuito cargado
+// ===================================================================
+window.centrarEnCircuito = function() {
+    if (!window.capaCircuitoActual || !window.mapaCircuitoBusquedaActual) {
+        alert('⚠️ No hay circuito cargado en el mapa');
+        return;
+    }
+    
+    const layer = window.capaCircuitoActual;
+    const mapa = window.mapaCircuitoBusquedaActual;
+    
+    if (layer.getLayers) {
+        let bounds = L.latLngBounds();
+        let count = 0;
+        
+        layer.getLayers().forEach(cap => {
+            if (cap.getLatLng) {
+                const latlng = cap.getLatLng();
+                if (latlng && !isNaN(latlng.lat) && !isNaN(latlng.lng)) {
+                    bounds.extend(latlng);
+                    count++;
+                }
+            } else if (cap.getBounds) {
+                const b = cap.getBounds();
+                if (b && b.isValid()) {
+                    bounds.extend(b);
+                    count++;
+                }
+            }
+        });
+        
+        if (count > 0 && bounds.isValid()) {
+            mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+            console.log(`✅ Mapa centrado en ${count} elementos del circuito`);
+        } else {
+            console.warn('⚠️ No se pudieron calcular bounds para centrar');
+            mapa.setView([13.6929, -89.2182], 10);
+        }
+    }
+};
 
 // ===================================================================
-// ✕ CERRAR MAPA DE CIRCUITO DE BÚSQUEDA
+// 👁️ FUNCIÓN GLOBAL: Toggle visibilidad de capa de circuito
 // ===================================================================
+window.toggleCapasCircuito = function() {
+    if (!window.capaCircuitoActual || !window.mapaCircuitoBusquedaActual) {
+        alert('⚠️ No hay circuito cargado');
+        return;
+    }
+    
+    const mapa = window.mapaCircuitoBusquedaActual;
+    const layer = window.capaCircuitoActual;
+    
+    if (mapa.hasLayer(layer)) {
+        mapa.removeLayer(layer);
+        console.log('👁️ Capa de circuito oculta');
+    } else {
+        layer.addTo(mapa);
+        console.log('👁️ Capa de circuito visible');
+    }
+};
+
+// ===================================================================
+// 📥 FUNCIÓN: Exportar/Descargar KMZ (placeholder para implementación)
+// ===================================================================
+window.exportarCircuitoKMZ = function(nombreCircuito) {
+    const archivoKMZ = `${nombreCircuito}.kmz`;
+    const response = supabaseClient.storage
+        .from('circuitos-kmz')
+        .getPublicUrl(archivoKMZ);
+    
+    const publicUrl = response?.data?.publicUrl;
+    
+    if (publicUrl) {
+        window.open(publicUrl, '_blank');
+        console.log(`📥 Descargando: ${publicUrl}`);
+    } else {
+        alert('❌ No se pudo generar enlace de descarga');
+    }
+};
+
+// ===================================================================
+// 🔍 FUNCIÓN: Verificar bucket de circuitos en Supabase
+// ===================================================================
+async function verificarBucketCircuitos() {
+    try {
+        console.log('🔍 Verificando bucket "circuitos-kmz"...');
+        
+        // Intentar listar archivos (requiere permisos de lectura)
+        const { data, error } = await supabaseClient.storage
+            .from('circuitos-kmz')
+            .list('', { limit: 10 });
+        
+        if (error) {
+            console.error('❌ Error listando bucket:', error);
+            alert(`❌ Error: ${error.message}\n\nVerifica que:\n1. El bucket "circuitos-kmz" existe\n2. Tiene políticas de lectura públicas\n3. Tu usuario tiene permisos`);
+        } else {
+            console.log('✅ Bucket accesible. Archivos encontrados:', data?.length || 0);
+            alert(`✅ Bucket accesible\n\nArchivos encontrados: ${data?.length || 0}\n\nPrimeros archivos:\n${data?.slice(0,5).map(f => f.name).join('\n') || 'Ninguno'}`);
+        }
+    } catch (err) {
+        console.error('❌ Error verificando bucket:', err);
+        alert('Error de conexión con Supabase Storage');
+    }
+}
+
 function cerrarMapaCircuitoBusqueda() {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Limpiar mapa si existe
-    if (window.mapaCircuitoBusquedaActual) {
+    // Limpiar capa del mapa si existe
+    if (window.capaCircuitoActual && window.mapaCircuitoBusquedaActual) {
+        window.mapaCircuitoBusquedaActual.removeLayer(window.capaCircuitoActual);
         window.mapaCircuitoBusquedaActual.remove();
-        window.mapaCircuitoBusquedaActual = null;
     }
     
-    // Restaurar interfaz normal
+    // Limpiar referencias
+    delete window.capaCircuitoActual;
+    delete window.mapaCircuitoBusquedaActual;
+    
+    // Resetear interfaz
     if (resultsContainer) {
-        resultsContainer.innerHTML = '';
+        resultsContainer.innerHTML = '<div class="result-card"><p style="text-align:center;color:#666;">Selecciona un circuito para cargar su mapa</p></div>';
     }
     
     // Limpiar campo de búsqueda
@@ -20033,82 +20249,108 @@ function cerrarMapaCircuitoBusqueda() {
     if (inputCircuito) {
         inputCircuito.value = '';
     }
+    
+    console.log('🗑️ Mapa de circuito cerrado y limpiado');
 }
 
 
 // ===================================================================
-// 🧪 DIAGNÓSTICO INTEGRAL: Mapa, Base de Datos y Storage (KMZ)
+// 🧪 DIAGNÓSTICO INTEGRAL: Mapa, Capas, Base de Datos y Storage
 // ===================================================================
 async function diagnosticarTodo() {
-    console.group('🔍 DIAGNÓSTICO INTEGRAL DEL SISTEMA');
- 
-    // 1. 🗺️ ESTADO DEL MAPA Y LIBRERÍAS
-    console.log('--- 🗺️ ESTADO DEL MAPA ---');
-    console.log('✅ Leaflet cargado:', typeof L !== 'undefined');
-    console.log('✅ Div mapa existe:', !!document.getElementById('mapaTXCoordenadas'));
+    console.group('%c🔍 DIAGNÓSTICO INTEGRAL DEL SISTEMA', 'color: #00ff00; font-weight: bold;');
+    
+    // 1. 🗺️ ESTADO DEL MAPA Y CAPAS (Lo nuevo que pediste)
+    console.log('--- 🗺️ ESTADO DEL MAPA Y CAPAS ---');
+    console.log('✅ Leaflet cargado:', typeof L !== 'undefined');
+    
+    const divMapa = document.getElementById('mapaTXCoordenadas');
+    console.log('✅ Div mapa existe:', !!divMapa);
 
-    // 2. 📦 TEST DE STORAGE: Archivos KMZ (Lo nuevo que pediste)
-    console.log('\n--- 📦 TEST STORAGE: CIRCUITOS KMZ ---');
-    try {
-        const testKMZ = supabaseClient.storage
-            .from('circuitos-kmz')
-            .getPublicUrl('429-4-11.kmz');
+    // Verificar estado del objeto mapaCircuito
+    if (typeof mapaCircuito !== 'undefined' && mapaCircuito) {
+        console.log('✅ Capas activas en el mapa:', mapaCircuito.getLayers ? mapaCircuito.getLayers().length : 'N/A');
+    } else {
+        console.warn('⚠️ mapaCircuito: No inicializado.');
+    }
 
-        console.log('📦 Respuesta completa Storage:', testKMZ);
-        if (testKMZ?.data?.publicUrl) {
-            console.log('🔗 URL pública generada:', testKMZ.data.publicUrl);
-            // Tip: Puedes copiar esa URL en el navegador para ver si el archivo descarga
-        } else {
-            console.warn('⚠️ No se pudo generar la URL pública. Revisa si el bucket "circuitos-kmz" existe.');
-        }
-    } catch (err) {
-        console.error('❌ Error al consultar el Storage:', err.message);
-    }
+    // Verificar bounds y características de la capa actual
+    if (typeof capaCircuitoActual !== 'undefined' && capaCircuitoActual) {
+        console.log('📍 Bounds de la capa actual:', capaCircuitoActual.getBounds ? capaCircuitoActual.getBounds() : 'Sin bounds');
+        const numFeatures = capaCircuitoActual.getLayers ? capaCircuitoActual.getLayers().length : 0;
+        console.log('📊 Número de elementos (features) en capa:', numFeatures);
+        
+        if (numFeatures === 0) {
+            console.warn('⚠️ La capa actual está cargada pero NO tiene elementos visuales.');
+        }
+    } else {
+        console.log('⚪ Sin capa de circuito activa actualmente.');
+    }
 
-    // 3. 📥 PRUEBAS DE BASE DE DATOS (Range vs No Range)
-    console.log('\n--- 🗄️ PRUEBAS DE TABLA: tx_y_cortes ---');
+    // 2. 📦 TEST DE STORAGE: Archivos KMZ
+    console.log('\n--- 📦 TEST STORAGE: CIRCUITOS KMZ ---');
+    try {
+        const testKMZ = supabaseClient.storage
+            .from('circuitos-kmz')
+            .getPublicUrl('429-4-11.kmz');
 
-    // TEST A: Sin .range()
-    console.log('📥 TEST A: Consulta SIN .range()');
-    const testA = await supabaseClient
-        .from('tx_y_cortes')
-        .select('TXCortes, Coordenadas')
-        .limit(5);
- 
-    console.log('✅ Resultado TEST A:', {
-        data: testA?.data?.length || 0,
-        error: testA?.error?.message || 'Ninguno',
-        isArray: Array.isArray(testA?.data)
-    });
- 
-    // TEST B: Con .range()
-    console.log('📥 TEST B: Consulta CON .range(0, 999)');
-    const testB = await supabaseClient
-        .from('tx_y_cortes')
-        .select('TXCortes, Coordenadas')
-        .range(0, 999);
- 
-    console.log('✅ Resultado TEST B:', {
-        data: testB?.data?.length || 0,
-        error: testB?.error?.message || 'Ninguno',
-        isArray: Array.isArray(testB?.data)
-    });
- 
-    // 4. 📊 CONCLUSIONES
-    console.log('\n--- 📊 CONCLUSIÓN FINAL ---');
-    const funcRange = testB?.data?.length > 0;
-    const funcNoRange = testA?.data?.length > 0;
+        console.log('📦 URL pública generada:', testKMZ?.data?.publicUrl || 'Fallo al generar URL');
+    } catch (err) {
+        console.error('❌ Error Storage:', err.message);
+    }
 
-    if (funcNoRange && !funcRange) {
-        console.warn('⚠️ ALERTA: .range() está fallando. Usa .limit() por ahora.');
-    } else if (funcNoRange && funcRange) {
-        console.log('✨ Base de datos: Todo OK.');
-    } else {
-        console.error('❌ Error: No se reciben datos de la tabla. Revisa el nombre o RLS.');
-    }
- 
-    console.groupEnd();
+    // 3. 📥 PRUEBAS DE BASE DE DATOS (Range vs No Range)
+    console.log('\n--- 🗄️ PRUEBAS DE TABLA: tx_y_cortes ---');
+    
+    const testA = await supabaseClient.from('tx_y_cortes').select('TXCortes, Coordenadas').limit(5);
+    console.log('📥 TEST A (Sin range):', testA?.data?.length || 0, 'registros.');
+
+    const testB = await supabaseClient.from('tx_y_cortes').select('TXCortes, Coordenadas').range(0, 999);
+    console.log('📥 TEST B (Con range):', testB?.data?.length || 0, 'registros.');
+
+    // 4. 📊 CONCLUSIÓN
+    console.log('\n--- 📊 CONCLUSIÓN ---');
+    if (testA?.data?.length > 0 && (!testB?.data || testB.data.length === 0)) {
+        console.warn('💡 Diagnóstico: .range() está bloqueado. Usa .limit() obligatoriamente.');
+    } else {
+        console.log('🚀 Todo el flujo parece estar configurado correctamente.');
+    }
+    
+    console.groupEnd();
 }
+
+
+// Función para verificar el contenido del KMZ
+async function diagnosticarKMZ(numeroCircuito) {
+    console.group(`🔍 Diagnóstico KMZ: ${numeroCircuito}`);
+    
+    try {
+        const url = `https://bsxllefnehbwkuqbelec.supabase.co/storage/v1/object/public/circuitos-kmz/${numeroCircuito}.kmz`;
+        console.log('📡 URL:', url);
+        
+        const response = await fetch(url);
+        console.log('📊 Status:', response.status);
+        console.log('📦 Size:', response.headers.get('content-length'), 'bytes');
+        
+        const blob = await response.blob();
+        console.log('📄 Content-Type:', blob.type);
+        console.log('💾 Blob size:', blob.size, 'bytes');
+        
+        // Leer contenido como texto (si es posible)
+        const text = await blob.text();
+        console.log('📝 Primeros 500 caracteres:', text.substring(0, 500));
+        
+        // Verificar si contiene coordenadas
+        const tieneCoordenadas = /-?\d+\.\d+,-?\d+\.\d+/.test(text);
+        console.log('¿Contiene coordenadas?', tieneCoordenadas);
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+    }
+    
+    console.groupEnd();
+}
+
 
 
 </script>
