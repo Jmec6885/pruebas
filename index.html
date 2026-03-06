@@ -19860,6 +19860,55 @@ async function ensureOmnivoreLoaded() {
 }
 
 
+async function verDetalleTX(nombreTX) {
+    if (!nombreTX) return;
+
+    const panelDetalle = document.getElementById('detalleTXPanel');
+    if (panelDetalle) {
+        panelDetalle.innerHTML = '<p style="text-align:center;color:#666;">⏳ Cargando...</p>';
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('tx_y_cortes')
+            .select('TXCortes, Comentario, Circuitos, Coordenadas')
+            .eq('TXCortes', nombreTX)
+            .single();
+
+        if (error || !data) {
+            if (panelDetalle) panelDetalle.innerHTML = '<p style="color:red;">❌ No se encontró información</p>';
+            return;
+        }
+
+        const comentarioFormateado = data.Comentario
+            ? formatearComentario(data.Comentario)
+            : '<em>Sin comentario</em>';
+
+        const coordsBoton = data.Coordenadas
+            ? `<button onclick="abrirCoordenadas('${data.Coordenadas}')" 
+                style="margin-top:8px; padding:6px 12px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer;">
+                📍 Ver en Google Maps
+               </button>`
+            : '';
+
+        if (panelDetalle) {
+            panelDetalle.innerHTML = `
+                <div style="background:white; padding:15px; border-radius:8px; border-left:5px solid #3b82f6; margin-top:10px;">
+                    <h3 style="margin:0 0 10px 0;">⚡ ${escapeHtml(data.TXCortes || 'N/A')}</h3>
+                    <p><strong>🔌 Circuito:</strong> ${escapeHtml(data.Circuitos || 'N/A')}</p>
+                    <div style="background:#f8fafc; padding:10px; border-radius:5px; line-height:1.7; font-size:13px;">
+                        ${comentarioFormateado}
+                    </div>
+                    ${coordsBoton}
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error('❌ Error cargando detalle TX:', err);
+    }
+}
+
+
 function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
     const capasProcesadas = [];
     
@@ -19877,6 +19926,23 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
             capasProcesadas.push(layer);
             return;
         }
+
+if (layer.getLatLng && typeof layer.getLatLng === 'function') {
+    if (layer.feature && layer.feature.properties) {
+        const props = layer.feature.properties;
+        const nombreTX = props.name || '';
+        let popupContent = `<strong>Circuito: ${escapeHtml(nombreCircuito)}</strong><br>`;
+        if (props.name) popupContent += `TX/Corte: ${escapeHtml(props.name)}<br>`;
+        popupContent += `<button onclick="verDetalleTX('${escapeHtml(nombreTX)}')" 
+            style="margin-top:8px; padding:6px 12px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">
+            🔍 Ver Detalle
+        </button>`;
+        layer.bindPopup(popupContent);
+    }
+    layer.addTo(mapa);
+    capasProcesadas.push(layer);
+    return;
+}
         
         // Polígonos y polilíneas
         if (layer.getLatLngs && typeof layer.getLatLngs === 'function') {
@@ -20026,7 +20092,6 @@ function mostrarInfoCircuito(nombreCircuito, totalElementos) {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
     
-    // ✅ Agregar panel DESPUÉS del mapa, sin destruirlo
     const infoPanel = document.createElement('div');
     infoPanel.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; margin-top: 10px;">
@@ -20037,17 +20102,20 @@ function mostrarInfoCircuito(nombreCircuito, totalElementos) {
                 Elementos visibles: <strong>${totalElementos}</strong>
             </div>
         </div>
+        <div id="detalleTXPanel" style="margin-top:10px;">
+            <div style="text-align:center; padding:15px; color:#999;">
+                🔍 Haz clic en un marcador y presiona "Ver Detalle"
+            </div>
+        </div>
     `;
     resultsContainer.appendChild(infoPanel);
     
-    // ✅ Forzar recálculo del mapa
     setTimeout(() => {
         if (window.mapaLeafletInstance) {
             window.mapaLeafletInstance.invalidateSize();
         }
     }, 200);
 }
-
 
 
 
@@ -20263,7 +20331,7 @@ async function diagnosticarKMZ(numeroCircuito) {
 }
 
 document.getElementById('btnCerrarCircuito')?.addEventListener('click', limpiarMapaCircuito);
-
+window.verDetalleTX = verDetalleTX;
 
 
 </script>
