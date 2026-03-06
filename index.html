@@ -1813,6 +1813,12 @@ if (debeForzarDescanso) {
 
 
 
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 async function resetearTurnosUsuario() {
     if (!currentUser?.id) return;
@@ -19072,227 +19078,145 @@ if (typeof refrescarMarcadorPreseleccionado === 'function') window.refrescarMarc
 console.log('✅ Funciones de preselección expuestas globalmente');
 
 
-// ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET - CORREGIDO)
-// ===================================================================
-function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
-    const resultsContainer = document.getElementById('searchResults');
-    
-    // Verificar que Leaflet está cargado
-    if (typeof L === 'undefined') {
-        console.error('❌ Leaflet no está cargado');
-        resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-            <div class="result-header">❌ Error</div>
-            <p>El mapa no está disponible. Por favor recargue la página.</p>
-        </div>`;
-        return;
+
+function inicializarMapaTX(idContenedor, lat, lng) {
+    const contenedor = document.getElementById(idContenedor);
+    if (!contenedor) {
+        console.error(`❌ Contenedor #${idContenedor} no existe`);
+        return null;
     }
     
-    // 1️⃣ MOSTRAR CONTENEDOR DEL MAPA Y RESUMEN
-    let html = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>🗺️ TX/Cortes Encontrados en el Mapa</span>
-                <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">
-                    ${resultados.length} resultados en ${radioMetros}m
-                </span>
-            </div>
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
-                <strong>📊 Resumen:</strong><br>
-                • Coordenadas de búsqueda: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
-                • Radio: <strong>${radioMetros} metros</strong><br>
-                • TX/Cortes encontrados: <strong>${resultados.length}</strong>
-            </div>
-            <!-- MAPA LEAFLET -->
-            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1; margin: 15px 0; position: relative;"></div>
-            <!-- PANEL DE DETALLES -->
-            <div id="panelDetalleTX" style="margin-top: 20px;">
-                <div style="text-align: center; padding: 40px; color: #999;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p>
-                </div>
-            </div>
-        </div>
-    `;
+    // Forzar dimensiones si no están definidas
+    if (!contenedor.style.height || contenedor.style.height === '0px') {
+        contenedor.style.height = '500px';
+        contenedor.style.minHeight = '500px';
+    }
     
-    resultsContainer.innerHTML = html;
-    
-    // 🔹 IMPORTANTE: Esperar un tick para que el DOM se renderice antes de crear el mapa
-    setTimeout(() => {
-        try {
-            // 2️⃣ INICIALIZAR MAPA LEAFLET
-            const mapa = L.map('mapaTXCoordenadas', {
-                zoomControl: true,
-                attributionControl: true
-            }).setView([latCentro, lngCentro], 15);
-            
-            // 🔹 CRÍTICO: Forzar recálculo de tamaño del mapa
-            setTimeout(() => mapa.invalidateSize(), 100);
-            
-            // Agregar capa de OpenStreetMap
+    // Esperar un tick para que el DOM aplique estilos
+    return new Promise(resolve => {
+        setTimeout(() => {
+            const mapa = L.map(idContenedor).setView([lat, lng], 15);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             }).addTo(mapa);
             
-            // 3️⃣ AGREGAR MARCADOR DEL CENTRO DE BÚSQUEDA
+            // Forzar recálculo de tamaño
+            setTimeout(() => mapa.invalidateSize(), 100);
+            resolve(mapa);
+        }, 50);
+    });
+}
+
+
+// ===================================================================
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET - CORREGIDO)
+// ===================================================================
+function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
+    const resultsContainer = document.getElementById('searchResults');
+    if (!resultsContainer) return;
+    
+    if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado');
+        resultsContainer.innerHTML = `<div class="result-card">❌ Error: El mapa no está disponible.</div>`;
+        return;
+    }
+    
+    // Renderizado del contenedor HTML
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
+            <div class="result-header" style="display: flex; justify-content: space-between;">
+                <span>🗺️ TX/Cortes Cercanos</span>
+                <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 15px; font-size: 13px;">
+                    ${resultados.length} hallados
+                </span>
+            </div>
+            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; margin: 15px 0; border: 1px solid #ccc;"></div>
+            <div id="panelDetalleTX">
+                <div style="text-align: center; padding: 20px; color: #999;">
+                    📍 Haz clic en un marcador para ver detalles
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Retardo para asegurar que el div exista en el DOM
+    setTimeout(async () => {
+    try {
+            const mapa = await inicializarMapaTX('mapaTXCoordenadas', latCentro, lngCentro);
+if (!mapa) return;
+
+            
+            // Dibujar círculo de búsqueda
             L.circle([latCentro, lngCentro], {
                 radius: radioMetros,
                 color: '#3b82f6',
-                fillColor: '#3b82f6',
-                fillOpacity: 0.1,
-                weight: 2
-            }).addTo(mapa).bindPopup(`📍 Centro de búsqueda<br>Radio: ${radioMetros} metros`);
-            
-            L.marker([latCentro, lngCentro], {
-                icon: L.divIcon({
-                    className: 'custom-div-icon',
-                    html: "<div style='background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
-                    iconSize: [16, 16],
-                    iconAnchor: [8, 8]
-                })
-            }).addTo(mapa).bindPopup('📍 Centro de búsqueda');
-            
-            // 4️⃣ AGREGAR MARCADORES DE TX/CORTES
-            const bounds = [];
-            bounds.push([latCentro, lngCentro]);
-            
+                fillOpacity: 0.1
+            }).addTo(mapa);
+
+            const markersGroup = L.featureGroup();
+            const bounds = [[latCentro, lngCentro]];
+
             resultados.forEach((tx, index) => {
+                const coords = parsearCoordenadasSeguras(tx.Coordenadas);
+		if (!coords) return;
+		const { lat: latTX, lng: lngTX } = coords;
                 const distancia = tx.distancia || 0;
                 const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
                 
-                // Parsear coordenadas del TX
-                const coordsStr = tx.Coordenadas;
-                if (!coordsStr || !coordsStr.includes(',')) return;
-                
-                const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-                if (isNaN(latTX) || isNaN(lngTX)) return;
-                
-                bounds.push([latTX, lngTX]);
-                
-                // Crear marcador
                 const marker = L.marker([latTX, lngTX], {
                     icon: L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div style='background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;'>${index + 1}</div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
+                        className: 'custom-icon',
+                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; color: 			white; text-align: center; font-size: 11px; line-height: 20px;">${index + 1}</div>`,
+                        iconSize: [20, 20]
                     })
-                }).addTo(mapa);
-                
-                // Popup simple
-                marker.bindPopup(`
-                    <div style="min-width: 200px;">
-                        <strong>#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</strong><br>
-                        <span style="color: #666;">Circuito: ${tx.Circuitos || 'N/A'}</span><br>
-                        <span style="color: ${color}; font-weight: bold;">📏 ${distancia} metros</span>
-                    </div>
-                `);
-                
-                // Click en marcador → Mostrar detalles en panel
-                marker.on('click', () => {
-                    mostrarDetalleTXEnPanel(tx, index, color, distancia);
                 });
+
+                marker.on('click', () => {
+                    actualizarDetallePanel(tx, index, color, distancia);
+                });
+
+                marker.addTo(markersGroup);
+                bounds.push([latTX, lngTX]);
             });
-            
-            // 5️⃣ AJUSTAR VISTA DEL MAPA
-            if (bounds.length > 1) {
-                const group = new L.featureGroup(bounds.map(b => L.marker(b)));
-                mapa.fitBounds(group.getBounds().pad(0.15));
-            }
-            
-            console.log('✅ Mapa Leaflet inicializado correctamente');
-            
+
+            markersGroup.addTo(mapa);
+            mapa.fitBounds(bounds, { padding: [30, 30] });
+            mapa.invalidateSize();
+
         } catch (err) {
             console.error('❌ Error inicializando mapa:', err);
-            document.getElementById('mapaTXCoordenadas').innerHTML = 
-                `<div style="padding: 20px; color: #ef4444; text-align: center;">
-                    ❌ Error al cargar el mapa<br>
-                    <small>${err.message}</small>
-                </div>`;
         }
-    }, 50); // Esperar 50ms para que el DOM esté listo
-    
-    // 6️⃣ FUNCIÓN PARA MOSTRAR DETALLES EN PANEL (CORREGIDA - SIN COMILLAS PROBLEMÁTICAS)
-    function mostrarDetalleTXEnPanel(tx, index, color, distancia) {
-        const panel = document.getElementById('panelDetalleTX');
-        
-        // Aplicar formatearComentario() si existe
-        const comentarioFormateado = tx.Comentario && typeof formatearComentario === 'function' 
-            ? formatearComentario(tx.Comentario) 
-            : (tx.Comentario || 'Sin comentario disponible');
-        
-        // Extraer y formatear enlace de Google Maps si existe
-        let enlaceMapsHTML = '';
-        if (tx.Coordenadas && tx.Coordenadas.includes(',')) {
-            const [lat, lng] = tx.Coordenadas.split(',').map(c => c.trim());
-            const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-            enlaceMapsHTML = `
-                <div style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
-                    <strong style="color: #1565c0;">📍 Coordenadas:</strong><br>
-                    <a href="${mapsUrl}" target="_blank" style="color: #1976d2; text-decoration: underline; font-weight: 600;">
-                        🔗 Abrir en Google Maps
-                    </a><br>
-                    <small style="color: #666;">${tx.Coordenadas}</small>
-                </div>
-            `;
-        }
-        
-        // ✅ CORRECCIÓN: Usar función separada para cerrar el panel (evita problemas de comillas)
-        panel.innerHTML = `
-            <div style="background: white; padding: 20px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
-                    <h3 style="margin: 0; color: #1e293b; font-size: 20px;">
-                        #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
-                    </h3>
-                    <span style="background: ${color}; color: white; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 14px;">
-                        📏 ${distancia} metros
-                    </span>
-                </div>
-                
-                <div style="display: grid; gap: 12px; font-size: 14px; line-height: 1.6;">
-                    <div>
-                        <strong style="color: #2d3748;">🔌 Circuito:</strong> 
-                        <span style="color: #64748b;">${tx.Circuitos || 'N/A'}</span>
-                    </div>
-                    
-                    ${comentarioFormateado && comentarioFormateado !== 'Sin comentario disponible' ? `
-                        <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 6px;">
-                            <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
-                            <div style="color: #555; line-height: 1.8; font-size: 13px;">
-                                ${comentarioFormateado}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    ${enlaceMapsHTML}
-                </div>
-                
-                <!-- ✅ BOTÓN CERRAR CON FUNCIÓN SEPARADA (SIN COMILLAS PROBLEMÁTICAS) -->
-                <button id="btnCerrarDetalleTX" 
-                        style="margin-top: 20px; background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    ✕ Cerrar detalles
-                </button>
+    }, 100);
+
+
+    // Función interna para evitar conflictos de comillas en HTML
+    function actualizarDetallePanel(tx, index, color, distancia) {
+    const panel = document.getElementById('panelDetalleTX');
+    panel.innerHTML = `
+        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <h3 style="margin: 0 0 10px 0;">#${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}</h3>
+            <p><strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}</p>
+            <p><strong>📏 Distancia:</strong> ${distancia} metros</p>
+            <div style="background: #f8fafc; padding: 10px; border-radius: 5px; font-size: 13px;">
+                ${escapeHtml(tx.Comentario || 'Sin comentario')}
             </div>
-        `;
-        
-        // ✅ AGREGAR EVENTO CLICK AL BOTÓN CERRAR (en lugar de onclick inline)
+            <button id="btnCerrarDetalleTX" style="margin-top: 10px; width: 100%; padding: 8px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">✕ Cerrar detalles</button>
+        </div>
+    `;
+
+    setTimeout(() => {
         const btnCerrar = document.getElementById('btnCerrarDetalleTX');
         if (btnCerrar) {
-            btnCerrar.onclick = function() {
-                panel.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #999;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                        <p style="font-size: 16px; font-weight: 600;">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p>
-                    </div>
-                `;
-            };
+            btnCerrar.addEventListener('click', () => {
+                panel.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">📍 Haz clic en un marcador para ver detalles</div>';
+            });
         }
-        
-        // Scroll suave al panel
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    }, 10);
 }
+
+
+
 
 // ===================================================================
 // 📏 CALCULAR DISTANCIA EN METROS (Sin cambios)
@@ -19306,6 +19230,24 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
               Math.sin(dLng/2) * Math.sin(dLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return Math.round(R * c);
+}
+
+function parsearCoordenadasSeguras(coordsStr) {
+    if (!coordsStr || typeof coordsStr !== 'string' || !coordsStr.includes(',')) {
+        return null;
+    }
+    
+    const partes = coordsStr.split(',').map(c => parseFloat(c.trim()));
+    if (partes.length !== 2 || isNaN(partes[0]) || isNaN(partes[1])) {
+        return null;
+    }
+    
+    // Validar rangos geográficos
+    if (Math.abs(partes[0]) > 90 || Math.abs(partes[1]) > 180) {
+        return null;
+    }
+    
+    return { lat: partes[0], lng: partes[1] };
 }
 
 
@@ -19354,6 +19296,17 @@ async function buscarTXPorCoordenadas() {
             console.groupEnd();
             return;
         }
+
+	// 🔹 PASO 1.5: Obtener conteo real de registros
+const { count: totalReal, error: errorCount } = await supabaseClient
+    .from('tx_y_cortes')
+    .select('*', { count: 'exact', head: true });
+
+if (errorCount) {
+    console.warn('⚠️ No se pudo obtener conteo total, porcentaje desactivado');
+}
+
+
         
         // 🔹 PASO 2: CARGAR DATOS CON PAGINACIÓN (40 LOTES = ~40,000 registros)
         console.log('📥 Cargando datos por lotes (máx 40 lotes de 1000)...');
@@ -19403,7 +19356,9 @@ async function buscarTXPorCoordenadas() {
             totalCargados += datosDelLote.length;
             
             // ✅ Actualizar UI con progreso y porcentaje
-            const porcentaje = Math.min(100, Math.round((totalCargados / 32206) * 100));
+            const porcentaje = totalReal > 0 
+    ? Math.min(100, Math.round((totalCargados / totalReal) * 100))
+    : 0;
             resultsContainer.innerHTML = `<div class="loading"></div><p>Cargando... ${totalCargados.toLocaleString()} registros (${porcentaje}%)</p>`;
             
             console.log(`📦 Lote #${intentos}: ${datosDelLote.length} registros. Total: ${totalCargados.toLocaleString()}`);
@@ -19437,14 +19392,12 @@ async function buscarTXPorCoordenadas() {
         let coordenadasInvalidas = 0;
         let fueraDeRadio = 0;
         
-        txData.forEach(tx => {
-            const coordsStr = tx.Coordenadas;
-            if (!coordsStr || !coordsStr.includes(',')) { sinCoordenadas++; return; }
-            
-            const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-            if (isNaN(latTX) || isNaN(lngTX)) { coordenadasInvalidas++; return; }
-            
-            const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, latTX, lngTX);
+        // ✅ DESPUÉS
+txData.forEach(tx => {
+    const coords = parsearCoordenadasSeguras(tx.Coordenadas);
+    if (!coords) { sinCoordenadas++; return; }
+    
+    const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, coords.lat, coords.lng);
             if (distanciaMetros <= radioMetros) {
                 resultadosCercanos.push({ ...tx, distancia: distanciaMetros });
             } else {
@@ -19740,8 +19693,10 @@ async function testConexionTX() {
 // ===================================================================
 
 // Variable global para el mapa de circuitos
-let mapaCircuitoActual = null;
-let capaCircuitoActual = null;
+window.mapaCircuitoActual = null;
+window.capaCircuitoActual = null;
+window.mapaCircuitoBusquedaActual = null;
+
 
 // Cargar lista de circuitos disponibles
 async function cargarListaCircuitosKMZ() {
@@ -19778,7 +19733,6 @@ async function cargarListaCircuitosKMZ() {
     }
 }
 
-// Cargar circuito seleccionado en el mapa
 async function cargarCircuitoEnMapa() {
     const select = document.getElementById('selectCircuitoKMZ');
     const archivoKMZ = select?.value;
@@ -19789,23 +19743,17 @@ async function cargarCircuitoEnMapa() {
     }
     
     try {
-        // Mostrar contenedor del mapa
         const container = document.getElementById('mapaCircuitoContainer');
         if (container) container.style.display = 'block';
         
         // Limpiar mapa anterior si existe
-        if (mapaCircuitoActual) {
-            mapaCircuitoActual.remove();
+        if (window.mapaCircuitoActual) {
+            window.mapaCircuitoActual.remove();
         }
         
         // Crear nuevo mapa
-        mapaCircuitoActual = L.map('mapaCircuito').setView([13.7, -89.2], 13);
-        
-        // Agregar capa base
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(mapaCircuitoActual);
+        window.mapaCircuitoActual = await inicializarMapaTX('mapaCircuito', 13.7, -89.2);
+        if (!window.mapaCircuitoActual) return;
         
         // URL del archivo KMZ en Supabase Storage
         const { data: publicUrl } = supabaseClient.storage
@@ -19816,45 +19764,35 @@ async function cargarCircuitoEnMapa() {
         console.log(`🔗 URL: ${publicUrl}`);
         
         // Cargar KMZ/KML con leaflet-omnivore
-        capaCircuitoActual = omnivore.kml(publicUrl)
+        window.capaCircuitoActual = omnivore.kml(publicUrl)
             .on('ready', function() {
                 console.log('✅ Circuito cargado correctamente');
                 
-                // Ajustar vista para mostrar todo el circuito
                 const bounds = this.getBounds();
                 if (bounds.isValid()) {
-                    mapaCircuitoActual.fitBounds(bounds, { padding: [50, 50] });
+                    window.mapaCircuitoActual.fitBounds(bounds, { padding: [50, 50] });
                 }
                 
-                // Agregar popup con información
                 this.eachLayer(function(layer) {
                     if (layer.feature && layer.feature.properties) {
                         const props = layer.feature.properties;
                         let popupContent = '<div style="min-width: 200px;">';
-                        
-                        if (props.name) {
-                            popupContent += `<strong>${props.name}</strong><br>`;
-                        }
-                        if (props.description) {
-                            popupContent += `<small>${props.description}</small><br>`;
-                        }
-                        
+                        if (props.name) popupContent += `<strong>${escapeHtml(props.name)}</strong><br>`;
+                        if (props.description) popupContent += `<small>${escapeHtml(props.description)}</small><br>`;
                         popupContent += '</div>';
                         layer.bindPopup(popupContent);
                     }
                 });
-                
             })
             .on('error', function(err) {
                 console.error('❌ Error cargando KMZ:', err);
                 alert(`❌ Error al cargar el circuito: ${err.message}`);
             })
-            .addTo(mapaCircuitoActual);
+            .addTo(window.mapaCircuitoActual);
         
-        // Forzar recálculo de tamaño después de un momento
         setTimeout(() => {
-            if (mapaCircuitoActual) {
-                mapaCircuitoActual.invalidateSize();
+            if (window.mapaCircuitoActual) {
+                window.mapaCircuitoActual.invalidateSize();
             }
         }, 100);
         
@@ -19864,29 +19802,105 @@ async function cargarCircuitoEnMapa() {
     }
 }
 
-// Cerrar mapa de circuito
-function cerrarMapaCircuito() {
-    const container = document.getElementById('mapaCircuitoContainer');
-    if (container) {
-        container.style.display = 'none';
+
+
+
+function limpiarMapaCircuito() {
+    // Remover capa de circuito
+    if (window.capaCircuitoActual && window.mapaLeafletInstance) {
+        window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
     }
     
-    if (mapaCircuitoActual) {
-        mapaCircuitoActual.remove();
-        mapaCircuitoActual = null;
+    // Remover todos los marcadores de TX si existen
+    if (window.markersTX && Array.isArray(window.markersTX)) {
+        window.markersTX.forEach(marker => {
+            if (window.mapaLeafletInstance?.hasLayer(marker)) {
+                window.mapaLeafletInstance.removeLayer(marker);
+            }
+        });
+        window.markersTX = [];
     }
     
-    if (capaCircuitoActual) {
-        capaCircuitoActual = null;
-    }
+    // Resetear referencias
+    window.capaCircuitoActual = null;
+    console.log('🧹 Mapa de circuito limpiado');
 }
 
-// ===================================================================
-// 🗺️ CARGAR CIRCUITO KMZ EN MAPA LEAFLET (VERSIÓN COMPLETA Y DIAGNÓSTICA)
-// ===================================================================
+
+// Cerrar mapa de circuito
+function cerrarMapaCircuito() {
+    limpiarMapaCircuito(); // ✅ Limpia capas y memoria
+
+    if (window.mapaCircuitoActual) {
+        window.mapaCircuitoActual.remove();
+        window.mapaCircuitoActual = null;
+    }
+
+    const container = document.getElementById('mapaCircuitoContainer');
+    if (container) container.style.display = 'none';
+
+    console.log('🗑️ Mapa cerrado');
+}
+
+async function ensureOmnivoreLoaded() {
+    if (typeof omnivore !== 'undefined') return; // Ya está cargado, salir
+    
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js';
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('No se pudo cargar leaflet-omnivore'));
+        document.head.appendChild(script);
+    });
+}
+
+
+function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
+    const capasProcesadas = [];
+    
+    function procesarCapa(layer) {
+        // Marcadores
+        if (layer.getLatLng && typeof layer.getLatLng === 'function') {
+            if (layer.feature && layer.feature.properties) {
+                const props = layer.feature.properties;
+                let popupContent = `<strong>Circuito: ${escapeHtml(nombreCircuito)}</strong><br>`;
+                if (props.name) popupContent += `Nombre: ${escapeHtml(props.name)}<br>`;
+                if (props.description) popupContent += `Descripción: ${escapeHtml(props.description)}`;
+                layer.bindPopup(popupContent);
+            }
+            layer.addTo(mapa);
+            capasProcesadas.push(layer);
+            return;
+        }
+        
+        // Polígonos y polilíneas
+        if (layer.getLatLngs && typeof layer.getLatLngs === 'function') {
+            layer.addTo(mapa);
+            capasProcesadas.push(layer);
+            return;
+        }
+        
+        // LayerGroup o FeatureGroup (recursivo)
+        if (layer.getLayers && typeof layer.getLayers === 'function') {
+            layer.getLayers().forEach(procesarCapa);
+            return;
+        }
+        
+        // Capa genérica
+        if (layer.addTo) {
+            layer.addTo(mapa);
+            capasProcesadas.push(layer);
+        }
+    }
+    
+    procesarCapa(capaKMZ);
+    return capasProcesadas;
+}
+
+
+
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     console.log('📡 Cargando circuito KMZ:', nombreCircuito);
-    console.log('🔍 DIAGNÓSTICO CARGA KMZ');
     
     // Verificar dependencias
     if (typeof L === 'undefined') {
@@ -19894,55 +19908,50 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         return;
     }
     
-    // Verificar si omnivore está disponible
-    if (typeof omnivore === 'undefined') {
-        console.error('❌ leaflet-omnivore no está cargado');
-        // Intentar cargar dinámicamente
-        await cargarScriptOmnivore();
-    }
-    
+    await ensureOmnivoreLoaded();
     console.log('✅ Dependencias verificadas: Leaflet y omnivore disponibles');
     
-    // Crear o limpiar capa anterior
-    if (window.capaCircuitoActual) {
-        window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
-    }
+    // Limpiar capa anterior
+    limpiarMapaCircuito();
     
     // Crear mapa si no existe
     if (!window.mapaLeafletInstance) {
-        window.mapaLeafletInstance = L.map('mapaCircuito').setView([13.7981427, -89.4436187], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(window.mapaLeafletInstance);
+        window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', 13.7981427, -89.4436187);
+        if (!window.mapaLeafletInstance) return;
         console.log('🗺️ Instancia de mapa creada');
     } else {
         console.log('🗺️ Usando instancia de mapa existente');
     }
     
-    // Agregar capa base si no existe
-    if (!window.capaBaseCircuito) {
-        window.capaBaseCircuito = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(window.mapaLeafletInstance);
-        console.log('🗺️ Capa base OpenStreetMap agregada');
-    }
-    
-    // Obtener URL pública del KMZ
-    const { data } = supabaseClient
-        .storage
+    // Obtener y validar URL del KMZ
+    const { data } = supabaseClient.storage
         .from('circuitos-kmz')
         .getPublicUrl(`${nombreCircuito}.kmz`);
     
-    const kmzUrl = data.publicUrl;
+    const kmzUrl = data?.publicUrl;
+    if (!kmzUrl) {
+        throw new Error('No se pudo generar URL pública para el KMZ');
+    }
     console.log('🔗 KMZ URL generada:', kmzUrl);
-    console.log('📦 Respuesta completa de getPublicUrl:', data);
+    
+    // Verificar que el archivo existe antes de cargarlo
+    try {
+        const check = await fetch(kmzUrl, { method: 'HEAD' });
+        if (!check.ok) {
+            throw new Error(`Archivo no accesible (Status: ${check.status})`);
+        }
+    } catch (err) {
+        console.error('❌ Error verificando KMZ:', err);
+        alert(`⚠️ El circuito "${nombreCircuito}" no está disponible`);
+        return;
+    }
     
     // Cargar KMZ con omnivore
     console.log('📥 Iniciando carga con leaflet-omnivore...');
     
     try {
         const capaKMZ = await new Promise((resolve, reject) => {
-            const layer = omnivore.kmz(kmzUrl)
+            omnivore.kmz(kmzUrl)
                 .on('ready', function() {
                     console.log('✅ KMZ cargado correctamente');
                     resolve(this);
@@ -19953,133 +19962,35 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
                 });
         });
         
-        // ✅ CORRECCIÓN PRINCIPAL: Iterar correctamente sobre las capas
-        let totalElementos = 0;
-        let geometríasEncontradas = false;
+        const capasProcesadas = procesarCapasKMZ(capaKMZ, window.mapaLeafletInstance, nombreCircuito);
+        const totalElementos = capasProcesadas.length;
+        const geometriasEncontradas = totalElementos > 0;
+        console.log('📊 Capas procesadas:', totalElementos);
         
-        // Método 1: Si es un LayerGroup
-        if (capaKMZ.getLayers) {
-            const layers = capaKMZ.getLayers();
-            console.log('📊 Tipo: LayerGroup con', layers.length, 'capas');
-            
-            layers.forEach((layer, index) => {
-                console.log(`🔍 Capa ${index}:`, layer.constructor.name);
-                
-                // Verificar si es una característica GeoJSON
-                if (layer.feature) {
-                    console.log('   ✅ Es Feature GeoJSON');
-                    console.log('   📋 Propiedades:', layer.feature.properties);
-                    totalElementos++;
-                    geometríasEncontradas = true;
-                }
-                
-                // Verificar si tiene coordenadas
-                if (layer.getLatLng) {
-                    console.log('   📍 Marker en:', layer.getLatLng());
-                    totalElementos++;
-                    geometríasEncontradas = true;
-                } else if (layer.getLatLngs) {
-                    const latlngs = layer.getLatLngs();
-                    console.log('   📍 Polígono/Polyline con', latlngs.length, 'puntos');
-                    totalElementos++;
-                    geometríasEncontradas = true;
-                }
-                
-                // Agregar al mapa
-                layer.addTo(window.mapaLeafletInstance);
-                
-                // Agregar popup con información
-                if (layer.feature && layer.feature.properties) {
-                    const props = layer.feature.properties;
-                    let popupContent = '<strong>Circuito: ' + nombreCircuito + '</strong><br>';
-                    
-                    if (props.name) popupContent += 'Nombre: ' + props.name + '<br>';
-                    if (props.description) popupContent += 'Descripción: ' + props.description + '<br>';
-                    
-                    layer.bindPopup(popupContent);
-                }
-            });
-        }
-        // Método 2: Si es una capa individual
-        else {
-            console.log('📊 Tipo: Capa individual');
-            console.log('🔍 Constructor:', capaKMZ.constructor.name);
-            
-            if (capaKMZ.getLatLng || capaKMZ.getLatLngs) {
-                totalElementos = 1;
-                geometríasEncontradas = true;
-                console.log('✅ Geometría encontrada en capa individual');
-            }
-            
-            capaKMZ.addTo(window.mapaLeafletInstance);
-        }
-        
-        console.log('📊 Total de elementos en KMZ:', totalElementos);
-        
-        if (!geometríasEncontradas || totalElementos === 0) {
-            console.warn('⚠️ El KMZ está vacío o no tiene geometrías válidas');
-            console.log('🔍 Contenido de la capa:', capaKMZ);
-            
-            // Intentar inspeccionar más a fondo
-            if (capaKMZ.toGeoJSON) {
-                const geojson = capaKMZ.toGeoJSON();
-                console.log('📄 GeoJSON generado:', geojson);
-                if (geojson.features && geojson.features.length > 0) {
-                    console.log('✅ ¡Hay features en GeoJSON!', geojson.features.length);
-                    geojson.features.forEach((f, i) => {
-                        console.log(`   Feature ${i}:`, f.geometry.type, f.properties);
-                    });
-                }
-            }
-            
-            alert('⚠️ El archivo KMZ existe pero no contiene geometrías válidas visibles en el mapa.\n\nVerifica que el archivo KMZ contenga:\n• Placemarks con coordenadas\n• Polígonos o líneas válidas\n• Estructura KML correcta');
+        if (!geometriasEncontradas) {
+            console.warn('⚠️ El KMZ no tiene geometrías válidas');
+            alert('El archivo KMZ no contiene elementos visibles.');
         } else {
-            console.log('✅ Se mostraron', totalElementos, 'elementos en el mapa');
-            
-            // Ajustar vista al contenido
             if (capaKMZ.getBounds) {
                 const bounds = capaKMZ.getBounds();
                 if (bounds.isValid()) {
                     window.mapaLeafletInstance.fitBounds(bounds, { padding: [50, 50] });
-                    console.log('📍 Mapa ajustado a los límites del circuito');
                 }
             }
         }
         
-        // Guardar referencia
         window.capaCircuitoActual = capaKMZ;
-        console.log('📊 Capa guardada en window.capaCircuitoActual');
-        
-        // Mostrar información en la interfaz
-        mostrarInfoCircuito(nombreCircuito, totalElementos);
+        if (typeof mostrarInfoCircuito === 'function') {
+            mostrarInfoCircuito(nombreCircuito, totalElementos);
+        }
         
     } catch (error) {
-        console.error('❌ Error cargando KMZ:', error);
-        alert('❌ Error al cargar el circuito: ' + error.message);
+        console.error('❌ Error fatal en cargarCircuitoKMZEnMapa:', error);
     }
 }
 
-// Función auxiliar para cargar omnivore si no está disponible
-async function cargarScriptOmnivore() {
-    return new Promise((resolve, reject) => {
-        if (typeof omnivore !== 'undefined') {
-            resolve();
-            return;
-        }
-        
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js';
-        script.onload = () => {
-            console.log('✅ leaflet-omnivore cargado dinámicamente');
-            resolve();
-        };
-        script.onerror = () => {
-            console.error('❌ Error cargando leaflet-omnivore');
-            reject(new Error('No se pudo cargar leaflet-omnivore'));
-        };
-        document.head.appendChild(script);
-    });
-}
+
+
 
 function mostrarInfoCircuito(nombreCircuito, totalElementos) {
     const resultsContainer = document.getElementById('searchResults');
@@ -20212,6 +20123,9 @@ async function verificarBucketCircuitos() {
     }
 }
 
+
+
+
 function cerrarMapaCircuitoBusqueda() {
     const resultsContainer = document.getElementById('searchResults');
     
@@ -20336,6 +20250,8 @@ async function diagnosticarKMZ(numeroCircuito) {
     
     console.groupEnd();
 }
+
+document.getElementById('btnCerrarCircuito')?.addEventListener('click', limpiarMapaCircuito);
 
 
 
