@@ -19977,8 +19977,7 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         console.log(`🔗 URL del KMZ: ${publicUrl}`);
         
         // 7️⃣ Cargar KMZ con leaflet-omnivore
-        // ⚠️ Asegúrate de tener esta librería en tu HTML:
-        // <script src="https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+        
         
         if (typeof omnivore === 'undefined') {
             throw new Error('leaflet-omnivore no está cargado. Agrega el script en el <head>.');
