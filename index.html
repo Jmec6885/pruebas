@@ -8569,117 +8569,200 @@ async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
 }
 
 // ===================================================================
-// 🎯 CALCULAR Y MOSTRAR OS MÁS CERCANAS (UI)
+// 🎯 CALCULAR Y MOSTRAR OS MÁS CERCANAS (UI) - VERSIÓN CORREGIDA
 // ===================================================================
 let osCercanasCalculadas = null;
 
 async function calcularYMostrarOSCercanas() {
-    const selectPuntoPartida = document.getElementById('selectPuntoPartidaAdmin') || 
-                               document.getElementById('selectPuntoPartidaKML');
+    console.group('🎯 ==========================================');
+    console.log('🎯 CALCULAR OS MÁS CERCANAS - INICIANDO');
+    
+    // 🔹 1. Obtener selectores de punto de partida
+    const selectAdmin = document.getElementById('selectPuntoPartidaAdmin');
+    const selectKML = document.getElementById('selectPuntoPartidaKML');
     const cantidadInput = document.getElementById('cantidadOSCercanas');
     const resultadoDiv = document.getElementById('resultadoOSCercanas');
     const btnGuardar = document.getElementById('btnGuardarOSCercanas');
     
-    // Validaciones
-    const osPartidaId = selectPuntoPartida?.value;
-    const cantidad = parseInt(cantidadInput?.value) || 15;
+    // 🔹 2. Obtener OS de partida con FALLBACK en cascada
+    let osPartidaId = null;
+    let fuentePuntoPartida = '';
     
+    // Prioridad 1: Selector Admin (si está visible y tiene valor)
+    if (selectAdmin && selectAdmin.value && selectAdmin.offsetParent !== null) {
+        osPartidaId = selectAdmin.value.trim();
+        fuentePuntoPartida = 'selectAdmin';
+    }
+    // Prioridad 2: Selector KML (si está visible y tiene valor)
+    else if (selectKML && selectKML.value && selectKML.offsetParent !== null) {
+        osPartidaId = selectKML.value.trim();
+        fuentePuntoPartida = 'selectKML';
+    }
+    // Prioridad 3: Variable global (OS buscada con "Mostrar Mapa")
+    else if (window.osPartidaSeleccionada) {
+        osPartidaId = String(window.osPartidaSeleccionada).trim();
+        fuentePuntoPartida = 'window.osPartidaSeleccionada';
+        console.log(`🔄 Usando OS de partida desde variable global: ${osPartidaId}`);
+    }
+    
+    console.log(`📍 Punto de partida: "${osPartidaId}" (fuente: ${fuentePuntoPartida || 'NINGUNA'})`);
+    
+    // 🔹 3. Validar que tenemos un punto de partida
     if (!osPartidaId) {
-        alert('⚠️ Seleccione una OS como punto de partida');
-        selectPuntoPartida?.focus();
+        console.error('❌ No se encontró punto de partida en ninguna fuente');
+        alert('⚠️ Seleccione una OS como punto de partida\n\nO busque una OS con "Mostrar Mapa" primero.');
+        console.groupEnd();
         return;
     }
+    
+    const cantidad = parseInt(cantidadInput?.value) || 15;
     
     if (cantidad < 1 || cantidad > 100) {
         alert('⚠️ La cantidad debe estar entre 1 y 100');
+        console.groupEnd();
         return;
     }
     
-    // Obtener OS disponibles
-    const osDisponibles = window.osParaMapaActual || window.osAsignadasKML || [];
+    // 🔹 4. Obtener OS disponibles (en orden de prioridad)
+    const fuentesDatos = [
+        window.osParaMapaActual,
+        window.osAsignadasKML,
+        window.datosMapaExportar
+    ].filter(f => f && Array.isArray(f));
     
-    if (osDisponibles.length === 0) {
-        alert('⚠️ No hay OS disponibles para calcular');
+    if (fuentesDatos.length === 0) {
+        alert('⚠️ No hay datos disponibles para calcular');
+        console.groupEnd();
         return;
     }
     
-    // Encontrar OS de partida
-    const osPartida = osDisponibles.find(os => 
-        String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
+    // 🔹 5. Encontrar OS de partida en los datos
+    let osPartida = null;
+    let osDisponibles = [];
+    
+    for (const fuente of fuentesDatos) {
+        // Buscar OS de partida
+        if (!osPartida) {
+            osPartida = fuente.find(os => 
+                String(os.OSATMO || os.osatomo || os.OSATOMO || '').trim().toUpperCase() === osPartidaId.toUpperCase()
+            );
+        }
+        // Acumular OS disponibles para calcular
+        osDisponibles = [...osDisponibles, ...fuente];
+    }
+    
+    // Eliminar duplicados por OSATMO
+    const osUnicas = osDisponibles.filter((os, index, self) => 
+        index === self.findIndex(o => 
+            String(o.OSATMO || o.osatomo) === String(os.OSATMO || os.osatomo)
+        )
     );
     
+    console.log(`📊 OS disponibles para calcular: ${osUnicas.length}`);
+    
     if (!osPartida) {
-        alert('⚠️ OS de partida no encontrada');
+        console.error(`❌ OS de partida "${osPartidaId}" no encontrada en los datos`);
+        alert(`⚠️ La OS "${osPartidaId}" no está en los datos cargados`);
+        console.groupEnd();
         return;
     }
     
-    // Mostrar loading
-    resultadoDiv.style.display = 'block';
-    resultadoDiv.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div class="loading" style="margin: 0 auto 10px;"></div>
-            <p style="color: #666;">Calculando ${cantidad} OS más cercanas...</p>
-        </div>
-    `;
+    console.log(`✅ OS de partida encontrada: ${osPartida.OSATMO || osPartida.osatomo}`);
     
-    // Calcular
-    setTimeout(() => {
-        osCercanasCalculadas = calcularOSMasCercanas(osPartida, osDisponibles, cantidad);
-        
-        if (osCercanasCalculadas.length === 0) {
-            resultadoDiv.innerHTML = `
-                <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
-                    <strong style="color: #b91c1c;">❌ Error</strong>
-                    <p style="color: #666; margin: 5px 0 0 0;">No se pudieron calcular las OS más cercanas</p>
-                </div>
-            `;
-            btnGuardar.disabled = true;
-            btnGuardar.style.opacity = '0.5';
-            return;
-        }
-        
-        // Mostrar resultados
-        let html = `
-            <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
-                <strong style="color: #2e7d32;">✅ ${osCercanasCalculadas.length} OS calculadas</strong>
-                <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
-                    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-                        <thead>
-                            <tr style="background: #c8e6c9;">
-                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Orden</th>
-                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">OS</th>
-                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Distancia (km)</th>
-                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Tipología</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${osCercanasCalculadas.map(os => `
-                                <tr style="${os.es_origen ? 'background: #fff3e0;' : ''}">
-                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                        ${os.es_origen ? '🚩 ORIGEN' : os.orden_cercania}
-                                    </td>
-                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                        ${os.OSATMO || os.osatomo}
-                                    </td>
-                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                        ${os.distancia_km?.toFixed(2) || '0.00'}
-                                    </td>
-                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                        ${os.Tipologia || 'N/A'}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
+    // 🔹 6. Mostrar loading
+    if (resultadoDiv) {
+        resultadoDiv.style.display = 'block';
+        resultadoDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div class="loading" style="margin: 0 auto 10px;"></div>
+                <p style="color: #666;">Calculando ${cantidad} OS más cercanas desde ${osPartidaId}...</p>
             </div>
         `;
-        
-        resultadoDiv.innerHTML = html;
-        btnGuardar.disabled = false;
-        btnGuardar.style.opacity = '1';
-        
-        console.log('✅ OS más cercanas calculadas y listas para guardar');
+    }
+    
+    // 🔹 7. Calcular OS más cercanas (con pequeño delay para UI)
+    setTimeout(() => {
+        try {
+            osCercanasCalculadas = calcularOSMasCercanas(osPartida, osUnicas, cantidad);
+            
+            if (!osCercanasCalculadas || osCercanasCalculadas.length === 0) {
+                if (resultadoDiv) {
+                    resultadoDiv.innerHTML = `
+                        <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                            <strong style="color: #b91c1c;">❌ Error</strong>
+                            <p style="color: #666; margin: 5px 0 0 0;">No se pudieron calcular las OS más cercanas</p>
+                        </div>
+                    `;
+                }
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.style.opacity = '0.5';
+                }
+                console.groupEnd();
+                return;
+            }
+            
+            // 🔹 8. Mostrar resultados
+            if (resultadoDiv) {
+                let html = `
+                    <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
+                        <strong style="color: #2e7d32;">✅ ${osCercanasCalculadas.length} OS calculadas</strong>
+                        <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                            <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #c8e6c9;">
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Orden</th>
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">OS</th>
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Distancia (km)</th>
+                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Tipología</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${osCercanasCalculadas.map(os => `
+                                        <tr style="${os.es_origen ? 'background: #fff3e0;' : ''}">
+                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                                ${os.es_origen ? '🚩 ORIGEN' : os.orden_cercania}
+                                            </td>
+                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                                ${os.OSATMO || os.osatomo}
+                                            </td>
+                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                                ${os.distancia_km?.toFixed(2) || '0.00'}
+                                            </td>
+                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                                ${os.Tipologia || 'N/A'}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                resultadoDiv.innerHTML = html;
+            }
+            
+            // Habilitar botón de guardar
+            if (btnGuardar) {
+                btnGuardar.disabled = false;
+                btnGuardar.style.opacity = '1';
+            }
+            
+            console.log(`✅ OS más cercanas calculadas y listas para guardar`);
+            console.groupEnd();
+            
+        } catch (err) {
+            console.error('❌ Error calculando OS más cercanas:', err);
+            if (resultadoDiv) {
+                resultadoDiv.innerHTML = `
+                    <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                        <strong style="color: #b91c1c;">❌ Error</strong>
+                        <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
+                    </div>
+                `;
+            }
+            console.groupEnd();
+        }
     }, 100);
 }
 
@@ -19789,7 +19872,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         }, 10);
     }
 
-} // ← cierra mostrarResultadosTXCoordenadas
+
 
 
     // Función interna para evitar conflictos de comillas en HTML
@@ -19817,7 +19900,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
     }, 10);
     } // ← cierra actualizarDetallePanel
 
-
+} // ← cierra mostrarResultadosTXCoordenadas
 
 
 
