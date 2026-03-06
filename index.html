@@ -19967,7 +19967,7 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     
     try {
         const capaKMZ = await new Promise((resolve, reject) => {
-            omnivore.kmz(kmzUrl)
+            omnivore.kml(kmzUrl)
                 .on('ready', function() {
                     console.log('✅ KMZ cargado correctamente');
                     resolve(this);
