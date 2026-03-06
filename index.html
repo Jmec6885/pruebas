@@ -19190,6 +19190,7 @@ if (!mapa) return;
     }, 100);
 
 
+
     // Función interna para evitar conflictos de comillas en HTML
     function actualizarDetallePanel(tx, index, color, distancia) {
     const panel = document.getElementById('panelDetalleTX');
@@ -19213,8 +19214,9 @@ if (!mapa) return;
             });
         }
     }, 10);
-}
+    } // ← cierra actualizarDetallePanel
 
+} // ← cierra mostrarResultadosTXCoordenadas
 
 
 
@@ -19231,6 +19233,8 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return Math.round(R * c);
 }
+
+
 
 function parsearCoordenadasSeguras(coordsStr) {
     if (!coordsStr || typeof coordsStr !== 'string' || !coordsStr.includes(',')) {
