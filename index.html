@@ -5247,7 +5247,6 @@ async function logout() {
             }
             
             // 🚫 FILTRO ADICIONAL: NO generar input para 'coordenadas_busqueda' en tx_y_cortes
-            // (porque ya tenemos el campo especial con GPS más abajo)
             if (
                 field.key === 'coordenadas_busqueda' &&
                 selectedTable === 'tx_y_cortes'
@@ -5267,9 +5266,11 @@ async function logout() {
         }); // ✅ Cierra forEach
 
         // ========================================
-        // ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + GPS) - ÚNICO
+        // ✅ CAMPOS ESPECIALES PARA TX Y CORTES (tx_y_cortes)
         // ========================================
         if (selectedTable === 'tx_y_cortes') {
+            
+            // 🔹 BLOQUE 1: Búsqueda por Coordenadas + GPS
             html += `
             <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
                 <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
@@ -5314,11 +5315,48 @@ async function logout() {
                 </button>
             </div>
             `;
+            
+            // 🔹 BLOQUE 2: Selector de Circuitos con KMZ
+            html += `
+            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+                <label style="font-weight: 600; color: #2d3748;">📡 Ver Circuito en Mapa:</label>
+                <select id="selectCircuitoKMZ" 
+                        style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 8px;">
+                    <option value="">-- Seleccione un Circuito --</option>
+                    <!-- Los circuitos se cargarán dinámicamente -->
+                </select>
+                <button onclick="cargarCircuitoEnMapa()" 
+                        style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+                    🗺️ Ver Circuito en Mapa
+                </button>
+                <small style="color: #64748b; display: block; margin-top: 4px;">
+                    Muestra TX/Cortes y líneas de alimentación del circuito seleccionado
+                </small>
+            </div>
+            
+            <!-- Contenedor del mapa (inicialmente oculto) -->
+            <div id="mapaCircuitoContainer" style="display: none; margin-top: 20px;">
+                <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1;"></div>
+                <button onclick="cerrarMapaCircuito()" 
+                        style="margin-top: 10px; padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    ✕ Cerrar Mapa
+                </button>
+            </div>
+            `;
         } // ✅ Cierra if tx_y_cortes
 
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
         console.log('✅ Campos de búsqueda generados correctamente');
+        
+        // 🔹 Cargar lista de circuitos si es tx_y_cortes
+        if (selectedTable === 'tx_y_cortes') {
+            setTimeout(() => {
+                if (typeof cargarListaCircuitosKMZ === 'function') {
+                    cargarListaCircuitosKMZ();
+                }
+            }, 100);
+        }
         
     } catch (error) {
         console.error('❌ Error al generar campos de búsqueda:', error);
@@ -5326,6 +5364,8 @@ async function logout() {
         searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
     }
 } // ✅ Cierra función generarCamposBusqueda
+
+
 
 
     function volverATablas() {
@@ -19763,6 +19803,153 @@ async function diagnosticarRangeVsNoRange() {
     }
     
     console.groupEnd();
+}
+
+
+// ===================================================================
+// 📡 CARGAR CIRCUITO KMZ EN MAPA LEAFLET
+// ===================================================================
+
+// Variable global para el mapa de circuitos
+let mapaCircuitoActual = null;
+let capaCircuitoActual = null;
+
+// Cargar lista de circuitos disponibles
+async function cargarListaCircuitosKMZ() {
+    try {
+        // Obtener lista de archivos del bucket
+        const { data: files, error } = await supabaseClient.storage
+            .from('circuitos-kmz')
+            .list('', { limit: 200 });
+        
+        if (error) throw error;
+        
+        // Llenar el select
+        const select = document.getElementById('selectCircuitoKMZ');
+        if (select) {
+            // Mantener la primera opción
+            select.innerHTML = '<option value="">-- Seleccione un Circuito --</option>';
+            
+            // Agregar cada circuito
+            files.forEach(file => {
+                if (file.name.endsWith('.kmz') || file.name.endsWith('.kml')) {
+                    const nombreCircuito = file.name.replace('.kmz', '').replace('.kml', '');
+                    const option = document.createElement('option');
+                    option.value = file.name;
+                    option.textContent = nombreCircuito;
+                    select.appendChild(option);
+                }
+            });
+            
+            console.log(`✅ ${files.length} circuitos cargados disponibles`);
+        }
+        
+    } catch (err) {
+        console.error('❌ Error cargando lista de circuitos:', err);
+    }
+}
+
+// Cargar circuito seleccionado en el mapa
+async function cargarCircuitoEnMapa() {
+    const select = document.getElementById('selectCircuitoKMZ');
+    const archivoKMZ = select?.value;
+    
+    if (!archivoKMZ) {
+        alert('⚠️ Seleccione un circuito primero');
+        return;
+    }
+    
+    try {
+        // Mostrar contenedor del mapa
+        const container = document.getElementById('mapaCircuitoContainer');
+        if (container) container.style.display = 'block';
+        
+        // Limpiar mapa anterior si existe
+        if (mapaCircuitoActual) {
+            mapaCircuitoActual.remove();
+        }
+        
+        // Crear nuevo mapa
+        mapaCircuitoActual = L.map('mapaCircuito').setView([13.7, -89.2], 13);
+        
+        // Agregar capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(mapaCircuitoActual);
+        
+        // URL del archivo KMZ en Supabase Storage
+        const { data: publicUrl } = supabaseClient.storage
+            .from('circuitos-kmz')
+            .getPublicUrl(archivoKMZ);
+        
+        console.log(`📡 Cargando circuito: ${archivoKMZ}`);
+        console.log(`🔗 URL: ${publicUrl}`);
+        
+        // Cargar KMZ/KML con leaflet-omnivore
+        capaCircuitoActual = omnivore.kml(publicUrl)
+            .on('ready', function() {
+                console.log('✅ Circuito cargado correctamente');
+                
+                // Ajustar vista para mostrar todo el circuito
+                const bounds = this.getBounds();
+                if (bounds.isValid()) {
+                    mapaCircuitoActual.fitBounds(bounds, { padding: [50, 50] });
+                }
+                
+                // Agregar popup con información
+                this.eachLayer(function(layer) {
+                    if (layer.feature && layer.feature.properties) {
+                        const props = layer.feature.properties;
+                        let popupContent = '<div style="min-width: 200px;">';
+                        
+                        if (props.name) {
+                            popupContent += `<strong>${props.name}</strong><br>`;
+                        }
+                        if (props.description) {
+                            popupContent += `<small>${props.description}</small><br>`;
+                        }
+                        
+                        popupContent += '</div>';
+                        layer.bindPopup(popupContent);
+                    }
+                });
+                
+            })
+            .on('error', function(err) {
+                console.error('❌ Error cargando KMZ:', err);
+                alert(`❌ Error al cargar el circuito: ${err.message}`);
+            })
+            .addTo(mapaCircuitoActual);
+        
+        // Forzar recálculo de tamaño después de un momento
+        setTimeout(() => {
+            if (mapaCircuitoActual) {
+                mapaCircuitoActual.invalidateSize();
+            }
+        }, 100);
+        
+    } catch (err) {
+        console.error('❌ Error cargando circuito:', err);
+        alert(`❌ Error: ${err.message}`);
+    }
+}
+
+// Cerrar mapa de circuito
+function cerrarMapaCircuito() {
+    const container = document.getElementById('mapaCircuitoContainer');
+    if (container) {
+        container.style.display = 'none';
+    }
+    
+    if (mapaCircuitoActual) {
+        mapaCircuitoActual.remove();
+        mapaCircuitoActual = null;
+    }
+    
+    if (capaCircuitoActual) {
+        capaCircuitoActual = null;
+    }
 }
 
 
