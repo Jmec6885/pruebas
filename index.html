@@ -19869,11 +19869,13 @@ async function verDetalleTX(nombreTX) {
     }
 
     try {
-        const { data, error } = await supabaseClient
+        const { data: resultado, error } = await supabaseClient
             .from('tx_y_cortes')
             .select('TXCortes, Comentario, Circuitos, Coordenadas')
             .eq('TXCortes', nombreTX)
-            .single();
+            .limit(1);  // ← cambio aquí
+
+        const data = resultado?.[0];  // ← cambio aquí
 
         if (error || !data) {
             if (panelDetalle) panelDetalle.innerHTML = '<p style="color:red;">❌ No se encontró información</p>';
@@ -19909,6 +19911,7 @@ async function verDetalleTX(nombreTX) {
 }
 
 
+
 function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
     const capasProcesadas = [];
     
@@ -19933,11 +19936,21 @@ if (layer.getLatLng && typeof layer.getLatLng === 'function') {
         const nombreTX = props.name || '';
         let popupContent = `<strong>Circuito: ${escapeHtml(nombreCircuito)}</strong><br>`;
         if (props.name) popupContent += `TX/Corte: ${escapeHtml(props.name)}<br>`;
-        popupContent += `<button onclick="verDetalleTX('${escapeHtml(nombreTX)}')" 
+        popupContent += `<button 
+            data-txnombre="${escapeHtml(nombreTX)}"
+            class="btnVerDetalleTX"
             style="margin-top:8px; padding:6px 12px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">
             🔍 Ver Detalle
         </button>`;
         layer.bindPopup(popupContent);
+
+        // ✅ Evento delegado al abrir el popup
+        layer.on('popupopen', function() {
+            const btn = document.querySelector('.btnVerDetalleTX');
+            if (btn) {
+                btn.onclick = () => verDetalleTX(btn.getAttribute('data-txnombre'));
+            }
+        });
     }
     layer.addTo(mapa);
     capasProcesadas.push(layer);
