@@ -8477,8 +8477,10 @@ function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
     return resultado;
 }
 
+
+
 // ===================================================================
-// 💾 GUARDAR OS MÁS CERCANAS EN SUPABASE
+// 💾 GUARDAR OS MÁS CERCANAS EN SUPABASE (CORREGIDA - SIN DUPLICADOS)
 // ===================================================================
 async function guardarOSMasCercanas(osCercanas, unidad, fechaProgramada, comentario = '') {
     console.group('💾 ==========================================');
@@ -8494,11 +8496,25 @@ async function guardarOSMasCercanas(osCercanas, unidad, fechaProgramada, comenta
     }
     
     try {
-        // Preparar datos para inserción
-        const datosParaGuardar = osCercanas.map((os, index) => ({
+        // ✅ FILTRAR DUPLICADOS por os_destino antes de guardar
+        const osUnicas = [];
+        const osIdsVistos = new Set();
+        
+        osCercanas.forEach(os => {
+            const osId = String(os.OSATMO || os.osatomo).trim();
+            if (!osIdsVistos.has(osId)) {
+                osIdsVistos.add(osId);
+                osUnicas.push(os);
+            }
+        });
+        
+        console.log(`🔍 OS únicas después de filtrar: ${osUnicas.length} (eliminadas ${osCercanas.length - osUnicas.length} duplicadas)`);
+        
+        // Preparar datos para inserción (SOLO OS ÚNICAS)
+        const datosParaGuardar = osUnicas.map((os, index) => ({
             unidad_destino: unidad,
             fecha_programada: fechaProgramada,
-            os_origen: index === 0 ? (os.OSATMO || os.osatomo) : (osCercanas[0].OSATMO || osCercanas[0].osatomo),
+            os_origen: index === 0 ? (os.OSATMO || os.osatomo) : (osUnicas[0].OSATMO || osUnicas[0].osatomo),
             os_destino: os.OSATMO || os.osatomo,
             orden_cercania: os.orden_cercania || index,
             distancia_km: os.distancia_km || 0,
@@ -8506,12 +8522,26 @@ async function guardarOSMasCercanas(osCercanas, unidad, fechaProgramada, comenta
             comentario: index === 0 ? comentario : ''
         }));
         
-        // Insertar en Supabase (usando upsert para evitar duplicados)
+        console.log(`📦 Datos preparados: ${datosParaGuardar.length} registros`);
+        
+        // ✅ ESTRATEGIA 1: Eliminar primero, luego insertar (más seguro)
+        console.log('🗑️ Eliminando OS más cercanas existentes para esta unidad/fecha...');
+        const { error: deleteError } = await supabaseClient
+            .from('os_mas_cercanas')
+            .delete()
+            .eq('unidad_destino', unidad)
+            .eq('fecha_programada', fechaProgramada);
+        
+        if (deleteError) {
+            console.warn('⚠️ Error eliminando registros existentes:', deleteError.message);
+            // Continuar de todas formas, puede que no existan
+        }
+        
+        // ✅ ESTRATEGIA 2: Insertar sin upsert (evita el error ON CONFLICT)
+        console.log('💾 Insertando nuevas OS más cercanas...');
         const { data, error } = await supabaseClient
             .from('os_mas_cercanas')
-            .upsert(datosParaGuardar, {
-                onConflict: 'unidad_destino,fecha_programada,os_destino'
-            })
+            .insert(datosParaGuardar)
             .select();
         
         if (error) {
@@ -8535,6 +8565,7 @@ async function guardarOSMasCercanas(osCercanas, unidad, fechaProgramada, comenta
         };
     }
 }
+
 
 // ===================================================================
 // 📥 OBTENER OS MÁS CERCANAS GUARDADAS
@@ -8703,68 +8734,258 @@ async function calcularYMostrarOSCercanas() {
             }
             
             // 🔹 8. Mostrar resultados
-            if (resultadoDiv) {
-                let html = `
-                    <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
-                        <strong style="color: #2e7d32;">✅ ${osCercanasCalculadas.length} OS calculadas</strong>
-                        <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
-                            <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="background: #c8e6c9;">
-                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Orden</th>
-                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">OS</th>
-                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Distancia (km)</th>
-                                        <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Tipología</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${osCercanasCalculadas.map(os => `
-                                        <tr style="${os.es_origen ? 'background: #fff3e0;' : ''}">
-                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                                ${os.es_origen ? '🚩 ORIGEN' : os.orden_cercania}
-                                            </td>
-                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                                ${os.OSATMO || os.osatomo}
-                                            </td>
-                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                                ${os.distancia_km?.toFixed(2) || '0.00'}
-                                            </td>
-                                            <td style="padding: 8px; border: 1px solid #a5d6a7;">
-                                                ${os.Tipologia || 'N/A'}
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                resultadoDiv.innerHTML = html;
-            }
-            
-            // Habilitar botón de guardar
-            if (btnGuardar) {
-                btnGuardar.disabled = false;
-                btnGuardar.style.opacity = '1';
-            }
-            
-            console.log(`✅ OS más cercanas calculadas y listas para guardar`);
-            console.groupEnd();
-            
-        } catch (err) {
-            console.error('❌ Error calculando OS más cercanas:', err);
-            if (resultadoDiv) {
-                resultadoDiv.innerHTML = `
-                    <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
-                        <strong style="color: #b91c1c;">❌ Error</strong>
-                        <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
-                    </div>
-                `;
-            }
-            console.groupEnd();
-        }
-    }, 100);
+if (resultadoDiv) {
+    let html = `
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
+            <strong style="color: #2e7d32;">✅ ${osCercanasCalculadas.length} OS calculadas</strong>
+            <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #c8e6c9;">
+                            <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Orden</th>
+                            <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">OS</th>
+                            <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Distancia (km)</th>
+                            <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Tipología</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${osCercanasCalculadas.map(os => `
+                            <tr style="${os.es_origen ? 'background: #fff3e0;' : ''}">
+                                <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                    ${os.es_origen ? '🚩 ORIGEN' : os.orden_cercania}
+                                </td>
+                                <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                    ${os.OSATMO || os.osatomo}
+                                </td>
+                                <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                    ${os.distancia_km?.toFixed(2) || '0.00'}
+                                </td>
+                                <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                    ${os.Tipologia || 'N/A'}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    resultadoDiv.innerHTML = html;
 }
+
+// ✅ Habilitar botón de guardar
+if (btnGuardar) {
+    btnGuardar.disabled = false;
+    btnGuardar.style.opacity = '1';
+}
+
+console.log(`✅ OS más cercanas calculadas y listas para guardar`);
+
+// ✅ NUEVO: Filtrar mapa automáticamente (SOLO si la función existe)
+setTimeout(() => {
+    if (osCercanasCalculadas && osCercanasCalculadas.length > 0) {
+        console.log('🗺️ Aplicando filtro de OS más cercanas al mapa...');
+        
+        // Validar que la función exista antes de llamarla
+        if (typeof mostrarSoloOSCercanasEnMapa === 'function') {
+            mostrarSoloOSCercanasEnMapa(osCercanasCalculadas);
+        } else {
+            console.warn('⚠️ Función mostrarSoloOSCercanasEnMapa no definida');
+        }
+    }
+}, 200);
+
+console.groupEnd(); // ← ÚNICO console.groupEnd() al final
+
+} catch (err) {
+    console.error('❌ Error calculando OS más cercanas:', err);
+    if (resultadoDiv) {
+        resultadoDiv.innerHTML = `
+            <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                <strong style="color: #b91c1c;">❌ Error</strong>
+                <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
+            </div>
+        `;
+    }
+    // Habilitar botón en caso de error también
+    if (btnGuardar) {
+        btnGuardar.disabled = false;
+        btnGuardar.style.opacity = '1';
+        btnGuardar.innerText = '💾 Guardar en BD';
+    }
+    console.groupEnd();
+}
+}, 100);
+}
+
+
+// ===================================================================
+// 🗺️ FILTRAR MAPA PARA MOSTRAR SOLO OS MÁS CERCANAS
+// ===================================================================
+function mostrarSoloOSCercanasEnMapa(osCercanas) {
+    console.group('🗺️ ==========================================');
+    console.log('🗺️ FILTRANDO MAPA - MOSTRAR SOLO OS MÁS CERCANAS');
+    console.log('🗺️ Total OS a mostrar:', osCercanas?.length || 0);
+    console.groupEnd();
+    
+    if (!window.mapaLeafletInstance || !osCercanas || osCercanas.length === 0) {
+        console.warn('⚠️ No hay mapa o no hay OS para filtrar');
+        return;
+    }
+    
+    // ✅ 1. Ocultar TODOS los marcadores actuales
+    if (window.markersPorEstado) {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                window.mapaLeafletInstance.removeLayer(marker);
+            });
+        });
+        console.log('👁️ Todos los marcadores ocultos');
+    }
+    
+    // ✅ 2. Crear nuevos marcadores SOLO para las OS más cercanas
+    const bounds = L.latLngBounds();
+    let marcadoresCreados = 0;
+    
+    osCercanas.forEach((os, index) => {
+        const coordsRaw = os.Coordenadas || os.Coordendasgis;
+        if (!coordsRaw || !coordsRaw.includes(',')) return;
+        
+        const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
+        if (isNaN(lat) || isNaN(lng)) return;
+        
+        // Determinar color según orden
+        let color = '#3b82f6'; // Azul default
+        if (os.orden_cercania === 0) {
+            color = '#ef4444'; // Rojo para origen
+        } else if (os.orden_cercania <= 5) {
+            color = '#10b981'; // Verde para primeras 5
+        } else if (os.orden_cercania <= 10) {
+            color = '#f59e0b'; // Naranja para 6-10
+        }
+        
+        // Crear marcador
+        const marker = L.circleMarker([lat, lng], {
+            radius: 8,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9,
+            zIndexOffset: os.orden_cercania === 0 ? 1000 : 100
+        }).addTo(window.mapaLeafletInstance);
+        
+        // Popup con información
+        const popupContent = `
+            <div style="min-width: 200px; font-family: sans-serif;">
+                <strong style="color: ${color}; font-size: 14px; display: block; margin-bottom: 5px;">
+                    ${os.orden_cercania === 0 ? '🚩 ORIGEN' : `#${os.orden_cercania}`}
+                </strong>
+                <div><strong>OS:</strong> ${os.OSATMO || os.osatomo}</div>
+                ${os.distancia_km !== undefined ? `<div><strong>Distancia:</strong> ${os.distancia_km.toFixed(2)} km</div>` : ''}
+                ${os.Tipologia ? `<div><strong>Tipología:</strong> ${os.Tipologia}</div>` : ''}
+            </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        bounds.extend([lat, lng]);
+        marcadoresCreados++;
+    });
+    
+    // ✅ 3. Ajustar vista del mapa a los marcadores
+    if (marcadoresCreados > 0 && bounds.isValid()) {
+        window.mapaLeafletInstance.fitBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 16,
+            animate: true
+        });
+        console.log(`✅ Mapa ajustado a ${marcadoresCreados} OS más cercanas`);
+    }
+    
+    // ✅ 4. Guardar referencia para poder restaurar
+    window.osCercanasActivas = osCercanas;
+    window.mapaFiltradoActivo = true;
+    
+    // ✅ 5. Agregar botón para restaurar vista completa
+    agregarBotonRestaurarVistaMapa();
+}
+
+// ===================================================================
+// 🔄 RESTAURAR VISTA COMPLETA DEL MAPA
+// ===================================================================
+function restaurarVistaCompletaMapa() {
+    console.log('🔄 Restaurando vista completa del mapa...');
+    
+    if (!window.mapaLeafletInstance) return;
+    
+    // Eliminar marcadores de OS más cercanas si existen
+    window.mapaLeafletInstance.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) {
+            window.mapaLeafletInstance.removeLayer(layer);
+        }
+    });
+    
+    // Recargar todos los marcadores originales
+    if (window.markersPorEstado) {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                marker.addTo(window.mapaLeafletInstance);
+            });
+        });
+    }
+    
+    // Limpiar referencias
+    window.osCercanasActivas = null;
+    window.mapaFiltradoActivo = false;
+    
+    // Remover botón de restaurar
+    const btnRestaurar = document.getElementById('btnRestaurarVistaMapa');
+    if (btnRestaurar) {
+        btnRestaurar.remove();
+    }
+    
+    console.log('✅ Vista completa restaurada');
+}
+
+// ===================================================================
+// ➕ AGREGAR BOTÓN PARA RESTAURAR VISTA
+// ===================================================================
+function agregarBotonRestaurarVistaMapa() {
+    // Remover botón existente si hay
+    const btnExistente = document.getElementById('btnRestaurarVistaMapa');
+    if (btnExistente) {
+        btnExistente.remove();
+    }
+    
+    // Crear botón
+    const btnRestaurar = document.createElement('button');
+    btnRestaurar.id = 'btnRestaurarVistaMapa';
+    btnRestaurar.innerHTML = '🔄 Mostrar Todas las OS';
+    btnRestaurar.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        padding: 10px 15px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    btnRestaurar.onclick = restaurarVistaCompletaMapa;
+    
+    // Agregar al contenedor del mapa
+    const mapaContainer = document.getElementById('mapaLeaflet');
+    if (mapaContainer) {
+        mapaContainer.appendChild(btnRestaurar);
+    }
+}
+
+
 
 // ===================================================================
 // 💾 GUARDAR OS MÁS CERCANAS EN BD (CORREGIDA - CAPTURA AUTOMÁTICA)
