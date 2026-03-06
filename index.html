@@ -19929,6 +19929,9 @@ function cerrarMapaCircuito() {
 // ===================================================================
 // 🗺️ CARGAR CIRCUITO KMZ EN MAPA LEAFLET (PARA BÚSQUEDA DE CIRCUITOS)
 // ===================================================================
+// ===================================================================
+// 🗺️ CARGAR CIRCUITO KMZ EN MAPA LEAFLET (PARA BÚSQUEDA DE CIRCUITOS) - CORREGIDA
+// ===================================================================
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     const resultsContainer = document.getElementById('searchResults');
     
@@ -19970,15 +19973,21 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         const archivoKMZ = `${nombreCircuito}.kmz`;
         
         // 6️⃣ Obtener URL pública desde Supabase Storage
-        const {  publicUrl } = supabaseClient.storage
+        // ✅ CORRECCIÓN CLAVE: getPublicUrl() devuelve { data: { publicUrl: '...' } }
+        const response = supabaseClient.storage
             .from('circuitos-kmz')
             .getPublicUrl(archivoKMZ);
         
+        const publicUrl = response?.data?.publicUrl;
+        
         console.log(`🔗 URL del KMZ: ${publicUrl}`);
         
+        // Validar que la URL existe
+        if (!publicUrl) {
+            throw new Error(`No se pudo generar la URL pública para: ${archivoKMZ}`);
+        }
+        
         // 7️⃣ Cargar KMZ con leaflet-omnivore
-        
-        
         if (typeof omnivore === 'undefined') {
             throw new Error('leaflet-omnivore no está cargado. Agrega el script en el <head>.');
         }
@@ -20013,11 +20022,17 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
                 resultsContainer.innerHTML = `
                     <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                         <div class="result-header">❌ Error al cargar circuito</div>
-                        <p><strong>${nombreCircuito}.kmz</strong> no encontrado en Supabase.</p>
+                        <p><strong>${nombreCircuito}.kmz</strong> no encontrado o inválido.</p>
                         <p style="font-size: 13px; color: #666;">
-                            Verifica que el archivo exista en el bucket "circuitos-kmz"<br>
-                            y que el nombre coincida exactamente con el circuito buscado.
+                            Verifica que:<br>
+                            1. El archivo exista en el bucket "circuitos-kmz"<br>
+                            2. El nombre coincida exactamente: "${nombreCircuito}.kmz"<br>
+                            3. El bucket sea público en Supabase Storage
                         </p>
+                        <details style="margin-top: 10px;">
+                            <summary>🔍 Ver URL generada</summary>
+                            <code style="background: #f1f5f9; padding: 8px; display: block; margin-top: 5px; font-size: 11px;">${publicUrl}</code>
+                        </details>
                     </div>`;
             })
             .addTo(mapa);
@@ -20039,6 +20054,8 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
             </div>`;
     }
 }
+
+
 
 // ===================================================================
 // ✕ CERRAR MAPA DE CIRCUITO DE BÚSQUEDA
