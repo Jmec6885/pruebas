@@ -6739,6 +6739,34 @@ console.log('✅ normalizarUnidad definida globalmente');
 async function determinarOSParaUnidad(unidad, fechaProgramada, datasetCompleto = null) {
     console.log(`🔄 Determinando fuente para ${unidad} en ${fechaProgramada}...`);
     
+    // ✅ Definir osBase
+    let osBase = datasetCompleto || window.osAsignadasKML || [];
+    
+    // ✅ AGREGAR: Si osBase está vacío, intentar recargar
+    if (osBase.length === 0 && (!window.osAsignadasKML || window.osAsignadasKML.length === 0)) {
+        console.warn('⚠️ No hay datos en memoria, intentando recargar desde Supabase...');
+        try {
+            const { data: asignaciones } = await supabaseClient
+                .from('os_asignadas')
+                .select('*');
+            if (asignaciones) {
+                window.osAsignadasKML = asignaciones;
+                osBase = asignaciones; // ✅ Actualizar osBase local también
+                console.log(`✅ Recargadas ${asignaciones.length} OS asignadas`);
+            }
+        } catch (err) {
+            console.warn('⚠️ No se pudo recargar desde Supabase:', err.message);
+        }
+    }
+    
+    // ✅ AHORA sí llamar a obtenerOSMasCercanasGuardadas
+    if (typeof obtenerOSMasCercanasGuardadas === 'function') {
+        const osMasCercanas = await obtenerOSMasCercanasGuardadas(unidad, fechaProgramada);
+        if (osMasCercanas?.length > 0) {
+            return { /* ... */ };
+        }
+    }
+    
     const osBase = datasetCompleto || window.osAsignadasKML || [];
     
     // 🔹 PASO 1: Preseleccionadas (Máxima prioridad)
@@ -8351,6 +8379,361 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
 }
 
 
+// ===================================================================
+// 🎯 CALCULAR N OS MÁS CERCANAS (ALGORITMO DE CADENA)
+// ===================================================================
+function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
+    console.group('🎯 ==========================================');
+    console.log('🎯 CALCULANDO OS MÁS CERCANAS (Algoritmo de Cadena)');
+    console.log('🎯 OS Origen:', osOrigen?.OSATMO || osOrigen?.osatomo);
+    console.log('🎯 Cantidad solicitada:', cantidad);
+    console.log('🎯 OS disponibles para calcular:', osDisponibles.length);
+    console.groupEnd();
+    
+    if (!osOrigen || !osDisponibles || osDisponibles.length === 0) {
+        console.warn('⚠️ No hay datos suficientes para calcular OS más cercanas');
+        return [];
+    }
+    
+    // Validar que la OS origen tenga coordenadas
+    const coordsOrigen = osOrigen.Coordenadas || osOrigen.Coordendasgis;
+    if (!coordsOrigen || !coordsOrigen.includes(',')) {
+        console.error('❌ OS origen sin coordenadas válidas');
+        return [];
+    }
+    
+    const [latOrigen, lngOrigen] = coordsOrigen.split(',').map(c => parseFloat(c.trim()));
+    if (isNaN(latOrigen) || isNaN(lngOrigen)) {
+        console.error('❌ Coordenadas de OS origen inválidas');
+        return [];
+    }
+    
+    // Clonar array para no modificar el original
+    const disponibles = [...osDisponibles];
+    const resultado = [];
+    
+    // La OS origen es el punto 0
+    resultado.push({
+        ...osOrigen,
+        orden_cercania: 0,
+        distancia_km: 0,
+        es_origen: true
+    });
+    
+    let puntoActual = { lat: latOrigen, lng: lngOrigen };
+    let osActualId = String(osOrigen.OSATMO || osOrigen.osatomo).trim();
+    
+    // Algoritmo de cadena: cada siguiente es el más cercano al anterior
+    for (let orden = 1; orden <= cantidad && disponibles.length > 0; orden++) {
+        let osMasCercana = null;
+        let distanciaMinima = Infinity;
+        let indexMasCercano = -1;
+        
+        // Buscar la OS más cercana al punto actual
+        for (let i = 0; i < disponibles.length; i++) {
+            const os = disponibles[i];
+            const coords = os.Coordenadas || os.Coordendasgis;
+            
+            if (!coords || !coords.includes(',')) continue;
+            
+            const [lat, lng] = coords.split(',').map(c => parseFloat(c.trim()));
+            if (isNaN(lat) || isNaN(lng)) continue;
+            
+            // Calcular distancia en KM
+            const distancia = calcularDistanciaKm(puntoActual.lat, puntoActual.lng, lat, lng);
+            
+            if (distancia < distanciaMinima) {
+                distanciaMinima = distancia;
+                osMasCercana = os;
+                indexMasCercano = i;
+            }
+        }
+        
+        // Si encontramos una OS válida
+        if (osMasCercana && indexMasCercano >= 0) {
+            resultado.push({
+                ...osMasCercana,
+                orden_cercania: orden,
+                distancia_km: parseFloat(distanciaMinima.toFixed(2)),
+                es_origen: false
+            });
+            
+            // Actualizar punto actual para la siguiente iteración
+            const coordsSiguiente = osMasCercana.Coordenadas || osMasCercana.Coordendasgis;
+            const [latSiguiente, lngSiguiente] = coordsSiguiente.split(',').map(c => parseFloat(c.trim()));
+            puntoActual = { lat: latSiguiente, lng: lngSiguiente };
+            
+            // Remover de disponibles para no repetir
+            disponibles.splice(indexMasCercano, 1);
+            
+            console.log(`✅ Orden ${orden}: ${osMasCercana.OSATMO || osMasCercana.osatomo} (${distanciaMinima.toFixed(2)} km)`);
+        } else {
+            console.warn(`⚠️ No se encontró OS válida para orden ${orden}`);
+            break;
+        }
+    }
+    
+    console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
+    return resultado;
+}
+
+// ===================================================================
+// 💾 GUARDAR OS MÁS CERCANAS EN SUPABASE
+// ===================================================================
+async function guardarOSMasCercanas(osCercanas, unidad, fechaProgramada, comentario = '') {
+    console.group('💾 ==========================================');
+    console.log('💾 GUARDANDO OS MÁS CERCANAS EN SUPABASE');
+    console.log('💾 Unidad:', unidad);
+    console.log('💾 Fecha:', fechaProgramada);
+    console.log('💾 Total OS a guardar:', osCercanas.length);
+    console.groupEnd();
+    
+    if (!osCercanas || osCercanas.length === 0) {
+        console.warn('⚠️ No hay OS para guardar');
+        return { success: false, message: 'No hay OS para guardar' };
+    }
+    
+    try {
+        // Preparar datos para inserción
+        const datosParaGuardar = osCercanas.map((os, index) => ({
+            unidad_destino: unidad,
+            fecha_programada: fechaProgramada,
+            os_origen: index === 0 ? (os.OSATMO || os.osatomo) : (osCercanas[0].OSATMO || osCercanas[0].osatomo),
+            os_destino: os.OSATMO || os.osatomo,
+            orden_cercania: os.orden_cercania || index,
+            distancia_km: os.distancia_km || 0,
+            usuario_creo: currentUser?.usuario || 'sistema',
+            comentario: index === 0 ? comentario : ''
+        }));
+        
+        // Insertar en Supabase (usando upsert para evitar duplicados)
+        const { data, error } = await supabaseClient
+            .from('os_mas_cercanas')
+            .upsert(datosParaGuardar, {
+                onConflict: 'unidad_destino,fecha_programada,os_destino'
+            })
+            .select();
+        
+        if (error) {
+            console.error('❌ Error guardando OS más cercanas:', error);
+            throw error;
+        }
+        
+        console.log(`✅ ${data?.length || 0} OS guardadas exitosamente`);
+        
+        return {
+            success: true,
+            message: `${data?.length || 0} OS guardadas exitosamente`,
+            data: data
+        };
+        
+    } catch (err) {
+        console.error('❌ Error crítico guardando OS más cercanas:', err);
+        return {
+            success: false,
+            message: err.message || 'Error desconocido'
+        };
+    }
+}
+
+// ===================================================================
+// 📥 OBTENER OS MÁS CERCANAS GUARDADAS
+// ===================================================================
+async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
+    console.group('📥 ==========================================');
+    console.log('📥 OBTENIENDO OS MÁS CERCANAS GUARDADAS');
+    console.log('📥 Unidad:', unidad);
+    console.log('📥 Fecha:', fechaProgramada);
+    console.groupEnd();
+    
+    try {
+        const { data, error } = await supabaseClient
+            .from('os_mas_cercanas')
+            .select('*')
+            .eq('unidad_destino', unidad)
+            .eq('fecha_programada', fechaProgramada)
+            .order('orden_cercania', { ascending: true });
+        
+        if (error) {
+            console.error('❌ Error obteniendo OS más cercanas:', error);
+            return [];
+        }
+        
+        console.log(`📥 ${data?.length || 0} OS más cercanas encontradas`);
+        return data || [];
+        
+    } catch (err) {
+        console.error('❌ Error crítico obteniendo OS más cercanas:', err);
+        return [];
+    }
+}
+
+// ===================================================================
+// 🎯 CALCULAR Y MOSTRAR OS MÁS CERCANAS (UI)
+// ===================================================================
+let osCercanasCalculadas = null;
+
+async function calcularYMostrarOSCercanas() {
+    const selectPuntoPartida = document.getElementById('selectPuntoPartidaAdmin') || 
+                               document.getElementById('selectPuntoPartidaKML');
+    const cantidadInput = document.getElementById('cantidadOSCercanas');
+    const resultadoDiv = document.getElementById('resultadoOSCercanas');
+    const btnGuardar = document.getElementById('btnGuardarOSCercanas');
+    
+    // Validaciones
+    const osPartidaId = selectPuntoPartida?.value;
+    const cantidad = parseInt(cantidadInput?.value) || 15;
+    
+    if (!osPartidaId) {
+        alert('⚠️ Seleccione una OS como punto de partida');
+        selectPuntoPartida?.focus();
+        return;
+    }
+    
+    if (cantidad < 1 || cantidad > 100) {
+        alert('⚠️ La cantidad debe estar entre 1 y 100');
+        return;
+    }
+    
+    // Obtener OS disponibles
+    const osDisponibles = window.osParaMapaActual || window.osAsignadasKML || [];
+    
+    if (osDisponibles.length === 0) {
+        alert('⚠️ No hay OS disponibles para calcular');
+        return;
+    }
+    
+    // Encontrar OS de partida
+    const osPartida = osDisponibles.find(os => 
+        String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
+    );
+    
+    if (!osPartida) {
+        alert('⚠️ OS de partida no encontrada');
+        return;
+    }
+    
+    // Mostrar loading
+    resultadoDiv.style.display = 'block';
+    resultadoDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div class="loading" style="margin: 0 auto 10px;"></div>
+            <p style="color: #666;">Calculando ${cantidad} OS más cercanas...</p>
+        </div>
+    `;
+    
+    // Calcular
+    setTimeout(() => {
+        osCercanasCalculadas = calcularOSMasCercanas(osPartida, osDisponibles, cantidad);
+        
+        if (osCercanasCalculadas.length === 0) {
+            resultadoDiv.innerHTML = `
+                <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                    <strong style="color: #b91c1c;">❌ Error</strong>
+                    <p style="color: #666; margin: 5px 0 0 0;">No se pudieron calcular las OS más cercanas</p>
+                </div>
+            `;
+            btnGuardar.disabled = true;
+            btnGuardar.style.opacity = '0.5';
+            return;
+        }
+        
+        // Mostrar resultados
+        let html = `
+            <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
+                <strong style="color: #2e7d32;">✅ ${osCercanasCalculadas.length} OS calculadas</strong>
+                <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+                    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #c8e6c9;">
+                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Orden</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">OS</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Distancia (km)</th>
+                                <th style="padding: 8px; text-align: left; border: 1px solid #a5d6a7;">Tipología</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${osCercanasCalculadas.map(os => `
+                                <tr style="${os.es_origen ? 'background: #fff3e0;' : ''}">
+                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                        ${os.es_origen ? '🚩 ORIGEN' : os.orden_cercania}
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                        ${os.OSATMO || os.osatomo}
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                        ${os.distancia_km?.toFixed(2) || '0.00'}
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #a5d6a7;">
+                                        ${os.Tipologia || 'N/A'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        resultadoDiv.innerHTML = html;
+        btnGuardar.disabled = false;
+        btnGuardar.style.opacity = '1';
+        
+        console.log('✅ OS más cercanas calculadas y listas para guardar');
+    }, 100);
+}
+
+// ===================================================================
+// 💾 GUARDAR OS MÁS CERCANAS EN BD (UI)
+// ===================================================================
+async function guardarOSCercanasEnBD() {
+    if (!osCercanasCalculadas || osCercanasCalculadas.length === 0) {
+        alert('⚠️ Primero debe calcular las OS más cercanas');
+        return;
+    }
+    
+    const unidad = window.unidadSeleccionadaKML || currentUser.unidad;
+    const fecha = window.fechaSeleccionadaKML || getFechaHoyElSalvador();
+    const comentario = document.getElementById('comentarioOSCercanas')?.value || '';
+    
+    if (!unidad) {
+        alert('⚠️ No hay unidad seleccionada');
+        return;
+    }
+    
+    // Confirmar
+    const confirmacion = confirm(
+        `¿Guardar ${osCercanasCalculadas.length} OS más cercanas?\n\n` +
+        `Unidad: ${unidad}\n` +
+        `Fecha: ${fecha}\n` +
+        `Comentario: ${comentario || 'Sin comentario'}`
+    );
+    
+    if (!confirmacion) return;
+    
+    // Guardar
+    const btnGuardar = document.getElementById('btnGuardarOSCercanas');
+    btnGuardar.disabled = true;
+    btnGuardar.innerText = '⏳ Guardando...';
+    
+    const resultado = await guardarOSMasCercanas(osCercanasCalculadas, unidad, fecha, comentario);
+    
+    if (resultado.success) {
+        alert(`✅ ${resultado.message}`);
+        
+        // Recargar mapa para mostrar las nuevas OS
+        if (confirm('¿Recargar mapa para ver las OS guardadas?')) {
+            location.reload();
+        }
+    } else {
+        alert(`❌ Error: ${resultado.message}`);
+    }
+    
+    btnGuardar.disabled = false;
+    btnGuardar.innerText = '💾 Guardar en BD';
+}
+
+
 // ========================================
 // 📍 GENERAR RUTA DESDE UN PUNTO FIJO (COMPLETO Y MEJORADO)
 // ========================================
@@ -8462,6 +8845,16 @@ function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
 function generarMapaKMLConPuntoPartida(unidad, osParaGenerarMapa = null) {
     const startTime = performance.now();
     const osPartidaId = document.getElementById('selectPuntoPartidaKML')?.value;
+console.group('🗺️ ==========================================');
+    console.log('🗺️ GENERANDO MAPA KML CON PRIORIDAD DE TABLAS');
+    console.groupEnd();
+    
+    // ✅ USAR nueva función obtenerOSParaMapa con prioridad
+    const osParaMapa = await obtenerOSParaMapa(
+        unidad,
+        window.fechaSeleccionadaKML || getFechaHoyElSalvador(),
+        osParaGenerarMapa
+    );
     
     if (!osPartidaId) {
         alert('⚠️ Por favor seleccione un punto de partida');
@@ -10324,31 +10717,24 @@ window.buscarYMostrarMapaAdmin = buscarYMostrarMapaAdmin;
 // ========================================
 async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
     const searchGrid = document.getElementById('searchGrid');
-
-    // ✅ CARGAR UNIDADES DESDE os_asignadas (con debug mejorado)
     console.log('🔍 Cargando unidades desde os_asignadas...');
 
-    const unidadesUnicas = [];
+    const unidadesSet = new Set();
     let offset = 0;
     const BATCH_SIZE = 1000;
     let totalCargado = 0;
 
-    // ✅ CORRECCIÓN: Captura de errores en el proceso de carga con try/catch
     try {
         while (true) {
             const { data, error } = await supabaseClient
                 .from('os_asignadas')
                 .select('Unidad')
                 .range(offset, offset + BATCH_SIZE - 1);
-
-            if (error) throw error; 
-            
+            if (error) throw error;
             if (!data || data.length === 0) break;
 
             data.forEach(row => {
-                if (row.Unidad && !unidadesUnicas.includes(row.Unidad)) {
-                    unidadesUnicas.push(row.Unidad);
-                }
+                if (row.Unidad) unidadesSet.add(row.Unidad);
             });
 
             totalCargado += data.length;
@@ -10364,10 +10750,10 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
                 <code style="display: block; background: white; padding: 10px; margin: 10px 0; font-size: 12px;">${err.message}</code>
                 <button onclick="location.reload()" class="btn" style="background: #f44336; color: white;">🔄 Reintentar</button>
             </div>`;
-        return; 
+        return;
     }
 
-    unidadesUnicas.sort();
+    const unidadesUnicas = Array.from(unidadesSet).sort();
     console.log(`✅ ${unidadesUnicas.length} unidades únicas listas.`);
 
     // 🆕 Si no hay unidades, mostrar error
@@ -10579,7 +10965,48 @@ async function generarInterfazAdminMapaRutas(filtros, tipologiasDisponibles) {
                 </button>
             </div>
         </div>
-    `;
+
+// ========================================
+// 🎯 SECCIÓN: OS MÁS CERCANAS
+// ========================================
+html += `
+<div class="result-card" style="margin-top: 20px; border: 2px solid #667eea;">
+        <div class="result-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            🎯 OS Más Cercanas
+        </div>
+        <div style="padding: 15px;">
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Calcula y guarda las OS más cercanas en cadena desde el punto de partida seleccionado.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">📊 Cantidad de OS:</label>
+                    <input type="number" id="cantidadOSCercanas" value="15" min="1" max="100"
+                           style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                    <small style="color: #64748b; display: block; margin-top: 4px;">(1-100 OS)</small>
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">💬 Comentario (opcional):</label>
+                    <input type="text" id="comentarioOSCercanas" placeholder="Ej: Ruta optimizada"
+                           style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button onclick="calcularYMostrarOSCercanas()"
+                        style="padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                    🎯 Calcular Más Cercanas
+                </button>
+                <button onclick="guardarOSCercanasEnBD()" id="btnGuardarOSCercanas" disabled
+                        style="padding: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; opacity: 0.5;">
+                    💾 Guardar en BD
+                </button>
+            </div>
+            <div id="resultadoOSCercanas" style="margin-top: 15px; display: none;"></div>
+        </div>
+    </div>
+
+`; // ← aquí cierra searchGrid.innerHTML
+    
 
     // 1. Cargar tipologías dinámicas
     // ... (aquí termina tu bloque gigante de searchGrid.innerHTML = ` ... ` )
@@ -14636,27 +15063,75 @@ function obtenerOSParaDropdown(unidad, datasetCompleto = null) {
     return osAsignadas;
 }
 
-// ========================================
-// 🗺️ OBTENER OS PARA MAPA (ASIGNADAS + PRESELECCIONADAS)
-// ========================================
+// ===================================================================
+// 🗺️ OBTENER OS PARA MAPA (CON PRIORIDAD DE TABLAS) - VERSIÓN FINAL
+// ===================================================================
 async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null) {
-    console.log(`🗺️ Obteniendo OS para mapa para ${unidad} en ${fechaProgramada}...`);
+    console.group('🗺️ ==========================================');
+    console.log('🗺️ OBTENIENDO OS PARA MAPA - SISTEMA DE PRIORIDAD');
+    console.log('🗺️ Unidad:', unidad);
+    console.log('🗺️ Fecha:', fechaProgramada);
+    console.groupEnd();
     
-    const osBase = datasetCompleto || window.osAsignadasKML || [];
+    let osBase = datasetCompleto || window.osAsignadasKML || [];
+    
+    // 🔹 RECARGAR DATOS SI ESTÁN VACÍOS
+    if (osBase.length === 0) {
+        try {
+            const {  asignaciones } = await supabaseClient
+                .from('os_asignadas')
+                .select('*');
+            if (asignaciones?.length > 0) {
+                window.osAsignadasKML = asignaciones;
+                osBase = asignaciones;
+                console.log(`✅ Recargadas ${asignaciones.length} OS asignadas`);
+            }
+        } catch (err) {
+            console.warn('⚠️ No se pudo recargar desde Supabase:', err.message);
+        }
+    }
+    
+    let osFinales = [];
+    let osIdsYaIncluidas = new Set();
     
     // ========================================
-    // 🔹 PASO 1: Obtener OS asignadas automáticamente (base)
+    // 🔹 PRIORIDAD 1: OS MÁS CERCANAS
     // ========================================
-    const osAsignadasBase = osBase.filter(os => {
-        if (!os.Unidad) return false;
-        return normalizarUnidad(os.Unidad) === normalizarUnidad(unidad);
-    });
-    console.log(`✅ OS asignadas base: ${osAsignadasBase.length}`);
+    console.log('🔍 [PRIORIDAD 1] Buscando en os_mas_cercanas...');
+    
+    if (typeof obtenerOSMasCercanasGuardadas === 'function') {
+        const osMasCercanas = await obtenerOSMasCercanasGuardadas(unidad, fechaProgramada);
+        
+        if (osMasCercanas.length > 0) {
+            console.log(`✅ ${osMasCercanas.length} OS encontradas en os_mas_cercanas`);
+            
+            osMasCercanas.forEach(os => {
+                const osId = String(os.os_destino).trim();
+                if (!osIdsYaIncluidas.has(osId)) {
+                    const osCompleta = osBase.find(o => 
+                        String(o.OSATMO || o.osatomo).trim() === osId
+                    );
+                    
+                    if (osCompleta) {
+                        osFinales.push({
+                            ...osCompleta,
+                            es_mas_cercana: true,
+                            orden_cercania: os.orden_cercania,
+                            fuente: 'os_mas_cercanas'
+                        });
+                        osIdsYaIncluidas.add(osId);
+                    }
+                }
+            });
+        }
+    } else {
+        console.warn('⚠️ Función obtenerOSMasCercanasGuardadas no disponible');
+    }
     
     // ========================================
-    // 🔹 PASO 2: Obtener OS preseleccionadas (se AGREGAN al mapa)
+    // 🔹 PRIORIDAD 2: OS PRESELECCIONADAS
     // ========================================
-    console.log('🔍 Buscando OS preseleccionadas...');
+    console.log('🔍 [PRIORIDAD 2] Buscando en os_preseleccionadas...');
     try {
         const {  preseleccionadas, error: errorPre } = await supabaseClient
             .from('os_preseleccionadas')
@@ -14665,58 +15140,104 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
             .eq('fecha_programada', fechaProgramada)
             .eq('estado', 'pendiente');
         
-        if (errorPre) throw errorPre;
-        
-        if (preseleccionadas?.length > 0) {
+        if (!errorPre && preseleccionadas?.length > 0) {
             console.log(`✅ ${preseleccionadas.length} OS preseleccionadas encontradas`);
             
-            // Obtener detalles completos desde OS Pendientes
-            const osIds = preseleccionadas.map(p => p.osatomo);
-            const {  detalles, error: errorDetalles } = await supabaseClient
-                .from('OS Pendientes')
-                .select('*')
-                .in('OSATMO', osIds);
-            
-            if (errorDetalles) {
-                console.warn('⚠️ Error obteniendo detalles:', errorDetalles.message);
-                // Retornar solo las asignadas si falla
-                return osAsignadasBase;
-            }
-            
-            // Marcar como preseleccionadas y agregar metadatos
-            const osPreseleccionadasDetalles = (detalles || []).map(os => ({
-                ...os,
-                esPreseleccionada: true,
-                comentarioPreseleccion: preseleccionadas.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                fechaPreseleccion: fechaProgramada
-            }));
-            
-            // 🔥 COMBINAR: asignadas base + preseleccionadas (sin duplicados por OSATMO)
-            const osCombinadas = [
-                ...osAsignadasBase,
-                ...osPreseleccionadasDetalles.filter(osPre => 
-                    !osAsignadasBase.some(osBase => 
-                        String(osBase.OSATMO || osBase.osatomo).trim() === 
-                        String(osPre.OSATMO || osPre.osatomo).trim()
-                    )
-                )
-            ];
-            
-            console.log(`✅ Dataset para mapa: ${osAsignadasBase.length} asignadas + ${osPreseleccionadasDetalles.length} preseleccionadas = ${osCombinadas.length} totales`);
-            
-            return osCombinadas;
+            preseleccionadas.forEach(osPre => {
+                const osId = String(osPre.osatomo).trim();
+                if (!osIdsYaIncluidas.has(osId)) {
+                    const osCompleta = osBase.find(o => 
+                        String(o.OSATMO || o.osatomo).trim() === osId
+                    );
+                    
+                    if (osCompleta) {
+                        osFinales.push({
+                            ...osCompleta,
+                            es_preseleccionada: true,
+                            comentario_preseleccion: osPre.comentarios,
+                            usuario_que_asigno: osPre.usuario_que_asigno,
+                            fuente: 'os_preseleccionadas'
+                        });
+                        osIdsYaIncluidas.add(osId);
+                    }
+                }
+            });
         }
-        console.log('ℹ️ No hay OS preseleccionadas para esta unidad/fecha');
-        
     } catch (err) {
         console.warn('⚠️ Error cargando preseleccionadas:', err.message);
-        // Continuar con solo las asignadas
     }
     
     // ========================================
-    // 🔹 PASO 3: Fallback - Solo OS asignadas
+    // 🔹 PRIORIDAD 3: FILTROS POR UNIDAD
     // ========================================
-    return osAsignadasBase;
+    console.log('🔍 [PRIORIDAD 3] Buscando filtros_por_unidad...');
+    try {
+        let { data: filtroFecha } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidad)
+            .eq('fecha_programada', fechaProgramada)
+            .maybeSingle();
+        
+        if (!filtroFecha) {
+            let { data: filtroBase } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidad)
+                .is('fecha_programada', null)
+                .maybeSingle();
+            if (filtroBase) {
+                console.log('✅ Filtros base encontrados');
+                // Aquí podrías aplicar los filtros si lo necesitas
+            }
+        } else {
+            console.log('✅ Filtros por fecha encontrados');
+        }
+    } catch (err) {
+        console.warn('⚠️ Error cargando filtros por unidad:', err.message);
+    }
+    
+    // ========================================
+    // 🔹 PRIORIDAD 4: OS ASIGNADAS AUTOMÁTICAMENTE
+    // ========================================
+    console.log('🔍 [PRIORIDAD 4] Obteniendo OS asignadas automáticamente...');
+    
+    const osAsignadasBase = osBase.filter(os => {
+        if (!os.Unidad) return false;
+        return normalizarUnidad(os.Unidad) === normalizarUnidad(unidad);
+    });
+    
+    console.log(`✅ ${osAsignadasBase.length} OS asignadas base encontradas`);
+    
+    osAsignadasBase.forEach(os => {
+        const osId = String(os.OSATMO || os.osatomo).trim();
+        if (!osIdsYaIncluidas.has(osId)) {
+            osFinales.push({
+                ...os,
+                es_asignada_automatica: true,
+                fuente: 'os_asignadas'
+            });
+            osIdsYaIncluidas.add(osId);
+        }
+    });
+    
+    // ========================================
+    // 📊 RESUMEN FINAL
+    // ========================================
+    const resumen = {
+        total: osFinales.length,
+        mas_cercanas: osFinales.filter(o => o.fuente === 'os_mas_cercanas').length,
+        preseleccionadas: osFinales.filter(o => o.fuente === 'os_preseleccionadas').length,
+        filtros_unidad: osFinales.filter(o => o.fuente === 'filtros_unidad').length, // ✅ CORREGIDO
+        asignadas_automaticas: osFinales.filter(o => o.fuente === 'os_asignadas').length
+    };
+    
+    console.log('📊 ==========================================');
+    console.log('📊 RESUMEN OS PARA MAPA:');
+    console.table(resumen);
+    console.log('📊 ==========================================');
+    
+    return osFinales;
 }
 
 
