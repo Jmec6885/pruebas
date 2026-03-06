@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2 "></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- Leaflet para mapas -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19966,17 +19967,29 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     console.log('📥 Iniciando carga con leaflet-omnivore...');
     
     try {
-        const capaKMZ = await new Promise((resolve, reject) => {
-            omnivore.kml(kmzUrl)
-                .on('ready', function() {
-                    console.log('✅ KMZ cargado correctamente');
-                    resolve(this);
-                })
-                .on('error', function(error) {
-                    console.error('❌ Error cargando KMZ:', error);
-                    reject(error);
-                });
+        const respuesta = await fetch(kmzUrl);
+const arrayBuffer = await respuesta.arrayBuffer();
+const zip = await JSZip.loadAsync(arrayBuffer);
+
+// Buscar el archivo .kml dentro del ZIP
+const archivoKML = Object.values(zip.files).find(f => f.name.endsWith('.kml'));
+if (!archivoKML) throw new Error('No se encontró .kml dentro del KMZ');
+
+const kmlTexto = await archivoKML.async('string');
+const kmlBlob = new Blob([kmlTexto], { type: 'application/xml' });
+const kmlUrl = URL.createObjectURL(kmlBlob);
+
+const capaKMZ = await new Promise((resolve, reject) => {
+    omnivore.kml(kmlUrl)
+        .on('ready', function() {
+            URL.revokeObjectURL(kmlUrl); // liberar memoria
+            resolve(this);
+        })
+        .on('error', function(error) {
+            URL.revokeObjectURL(kmlUrl);
+            reject(error);
         });
+});
         
         const capasProcesadas = procesarCapasKMZ(capaKMZ, window.mapaLeafletInstance, nombreCircuito);
         const totalElementos = capasProcesadas.length;
