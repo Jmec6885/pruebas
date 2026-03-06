@@ -19916,46 +19916,32 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
     const capasProcesadas = [];
     
     function procesarCapa(layer) {
-        // Marcadores
+        // Marcadores (solo un bloque, con botón Ver Detalle)
         if (layer.getLatLng && typeof layer.getLatLng === 'function') {
             if (layer.feature && layer.feature.properties) {
                 const props = layer.feature.properties;
+                const nombreTX = props.name || '';
                 let popupContent = `<strong>Circuito: ${escapeHtml(nombreCircuito)}</strong><br>`;
-                if (props.name) popupContent += `Nombre: ${escapeHtml(props.name)}<br>`;
-                if (props.description) popupContent += `Descripción: ${escapeHtml(props.description)}`;
+                if (props.name) popupContent += `TX/Corte: ${escapeHtml(props.name)}<br>`;
+                popupContent += `<button 
+                    data-txnombre="${escapeHtml(nombreTX)}"
+                    class="btnVerDetalleTX"
+                    style="margin-top:8px; padding:6px 12px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">
+                    🔍 Ver Detalle
+                </button>`;
                 layer.bindPopup(popupContent);
+
+                layer.on('popupopen', function() {
+                    const btn = document.querySelector('.btnVerDetalleTX');
+                    if (btn) {
+                        btn.onclick = () => verDetalleTX(btn.getAttribute('data-txnombre'));
+                    }
+                });
             }
             layer.addTo(mapa);
             capasProcesadas.push(layer);
             return;
         }
-
-if (layer.getLatLng && typeof layer.getLatLng === 'function') {
-    if (layer.feature && layer.feature.properties) {
-        const props = layer.feature.properties;
-        const nombreTX = props.name || '';
-        let popupContent = `<strong>Circuito: ${escapeHtml(nombreCircuito)}</strong><br>`;
-        if (props.name) popupContent += `TX/Corte: ${escapeHtml(props.name)}<br>`;
-        popupContent += `<button 
-            data-txnombre="${escapeHtml(nombreTX)}"
-            class="btnVerDetalleTX"
-            style="margin-top:8px; padding:6px 12px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">
-            🔍 Ver Detalle
-        </button>`;
-        layer.bindPopup(popupContent);
-
-        // ✅ Evento delegado al abrir el popup
-        layer.on('popupopen', function() {
-            const btn = document.querySelector('.btnVerDetalleTX');
-            if (btn) {
-                btn.onclick = () => verDetalleTX(btn.getAttribute('data-txnombre'));
-            }
-        });
-    }
-    layer.addTo(mapa);
-    capasProcesadas.push(layer);
-    return;
-}
         
         // Polígonos y polilíneas
         if (layer.getLatLngs && typeof layer.getLatLngs === 'function') {
