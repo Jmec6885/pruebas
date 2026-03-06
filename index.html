@@ -10614,7 +10614,7 @@ async function buscarYMostrarMapaAdmin() {
         return;
     }
     
-    // ✅ NORMALIZAR ID DE OS (para evitar problemas de formato)
+    // ✅ NORMALIZAR ID DE OS
     const osIngresada = String(osIngresadaRaw).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     console.log(`🔍 OS buscada (normalizada): "${osIngresada}" (original: "${osIngresadaRaw}")`);
     
@@ -10626,11 +10626,10 @@ async function buscarYMostrarMapaAdmin() {
     
     try {
         // ========================================
-        // 🔹 PASO 1: BUSCAR PRIMERO EN MEMORIA (MÁS RÁPIDO)
+        // 🔹 PASO 1: BUSCAR PRIMERO EN MEMORIA
         // ========================================
-        console.log('🔍 [PASO 1] Buscando en memoria (window.osAsignadasKML / osParaMapaActual)...');
+        console.log('🔍 [PASO 1] Buscando en memoria...');
         
-        // Fuentes de datos en memoria (en orden de prioridad)
         const fuentesMemoria = [
             window.osParaMapaActual,
             window.osAsignadasKML,
@@ -10654,41 +10653,24 @@ async function buscarYMostrarMapaAdmin() {
         }
         
         // ========================================
-        // 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD CON PAGINACIÓN
+        // 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD (SIN PAGINACIÓN)
         // ========================================
         if (!osEncontrada) {
-            console.log('⚠️ OS no encontrada en memoria, consultando BD con paginación...');
+            console.log('⚠️ OS no encontrada en memoria, consultando BD...');
             
-            // Buscar en OS Pendientes con paginación (como en cargarInterfazKMLRuta)
-            let todasLasPendientes = [];
-            let r_inicio = 0;
-            const BATCH_SIZE = 1000;
-            let hayMas = true;
+            // ✅ BÚSQUEDA DIRECTA sin paginación (más eficiente)
+            const { data: osData, error: errorBD } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
+                .eq('OSATMO', osIngresadaRaw)
+                .single();  // ← Solo esperamos un resultado
             
-            while (hayMas) {
-                const { data: lote, error: errorLote } = await supabaseClient
-                    .from('OS Pendientes')
-                    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
-                    .eq('OSATMO', osIngresadaRaw)  // Buscar por el valor original (no normalizado)
-                    .range(r_inicio, r_inicio + BATCH_SIZE - 1);
-                
-                if (errorLote) {
-                    console.warn('⚠️ Error en lote de BD:', errorLote.message);
-                    break;
-                }
-                
-                if (lote && lote.length > 0) {
-                    osEncontrada = lote[0];
-                    unidadDetectada = osEncontrada.Unidad;
-                    console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
-                    break;
-                }
-                
-                hayMas = (lote?.length === BATCH_SIZE);
-                if (hayMas) r_inicio += BATCH_SIZE;
-                
-                // Seguridad: máximo 10 lotes (10k registros)
-                if (r_inicio >= 10000) break;
+            if (errorBD && errorBD.code !== 'PGRST116') {  // PGRST116 = no rows
+                console.error('❌ Error en BD:', errorBD);
+            } else if (osData) {
+                osEncontrada = osData;
+                unidadDetectada = osEncontrada.Unidad;
+                console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
             }
         }
         
@@ -10696,9 +10678,8 @@ async function buscarYMostrarMapaAdmin() {
         // 🔹 PASO 3: VALIDAR RESULTADO
         // ========================================
         if (!osEncontrada) {
-            console.error(`❌ OS "${osIngresadaRaw}" no encontrada en memoria ni en BD`);
+            console.error(`❌ OS "${osIngresadaRaw}" no encontrada`);
             
-            // 🔍 DIAGNÓSTICO: Mostrar sugerencias al usuario
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                     <div class="result-header">❌ OS No Encontrada</div>
@@ -10708,13 +10689,8 @@ async function buscarYMostrarMapaAdmin() {
                         <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">
                             <strong>Possibles causas:</strong><br>
                             • El número de OS está mal escrito<br>
-                            • La OS no está en la tabla "OS Pendientes"<br>
-                            • La OS fue eliminada o archivada<br>
-                            • Problema de conexión con la base de datos<br><br>
-                            <strong>💡 Sugerencias:</strong><br>
-                            1. Verifica el número de OS en el sistema<br>
-                            2. Intenta buscar con otro formato (sin guiones, espacios)<br>
-                            3. Contacta al administrador si el problema persiste
+                            • La OS no está en "OS Pendientes"<br>
+                            • La OS fue cerrada/archivada
                         </div>
                     </details>
                 </div>`;
@@ -10726,46 +10702,50 @@ async function buscarYMostrarMapaAdmin() {
         // ========================================
         const coordenadas = osEncontrada.Coordenadas || osEncontrada.Coordendasgis;
         if (!coordenadas || !String(coordenadas).includes(',')) {
-            console.warn(`⚠️ OS "${osEncontrada.OSATMO}" sin coordenadas válidas`);
+            console.warn(`⚠️ OS sin coordenadas válidas`);
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
                     <div class="result-header">⚠️ Coordenadas Inválidas</div>
-                    <p>La OS <strong>${osEncontrada.OSATMO}</strong> existe, pero no tiene coordenadas válidas.</p>
-                    <p style="font-size: 13px; color: #666;">
-                        Coordenadas encontradas: "${coordenadas || 'N/A'}"
-                    </p>
+                    <p>La OS <strong>${osEncontrada.OSATMO}</strong> existe pero no tiene coordenadas.</p>
                 </div>`;
             return;
         }
+
+        // ========================================
+        // 🔹 PASO 5: ESTABLECER VARIABLES GLOBALES
+        // ========================================
+        window.osPartidaSeleccionada = osIngresada;
+        window.unidadFiltroActual = unidadDetectada;
+        
+        console.log(`📍 Punto de partida: ${osIngresada}`);
         
         // ========================================
-        // 🔹 PASO 5: MOSTRAR MAPA
+        // 🔹 PASO 6: MOSTRAR MAPA
         // ========================================
-        console.log("📍 Datos listos, llamando al mapa...");
+        console.log("📍 Cargando mapa...");
         resultsContainer.innerHTML = ""; // Limpiar loading
         
         if (typeof cargarYMostrarMapa === 'function') {
-            await cargarYMostrarMapa(osEncontrada, unidadDetectada);
-            console.log(`✅ Mapa cargado exitosamente para OS: ${osEncontrada.OSATMO}`);
+            await cargarYMostrarMapa(osEncontrada, unidadDetectada);  // ✅ Variable correcta
+            console.log(`✅ Mapa cargado: ${osEncontrada.OSATMO}`);
         } else {
             throw new Error("La función 'cargarYMostrarMapa' no está definida.");
         }
         
     } catch (err) {
-        console.error('❌ Error crítico en búsqueda:', err);
+        console.error('❌ Error crítico:', err);
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: #f8d7da; color: #721c24;">
                 <div class="result-header">❌ Error de Sistema</div>
                 <p><strong>Detalle:</strong> ${err.message || 'Error desconocido'}</p>
                 <button onclick="location.reload()" class="btn" style="margin-top: 10px; background: #dc3545; color: white;">
-                    🔄 Recargar Página
+                    🔄 Recargar
                 </button>
             </div>`;
     }
 }
-// ✅ EXPOSICIÓN GLOBAL (Esto soluciona el ReferenceError)
-window.buscarYMostrarMapaAdmin = buscarYMostrarMapaAdmin;
 
+window.buscarYMostrarMapaAdmin = buscarYMostrarMapaAdmin;
 
 
 
@@ -19698,9 +19678,6 @@ function inicializarMapaTX(idContenedor, lat, lng) {
 }
 
 
-// ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET - CORREGIDO)
-// ===================================================================
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
@@ -19711,7 +19688,6 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         return;
     }
     
-    // Renderizado del contenedor HTML
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
             <div class="result-header" style="display: flex; justify-content: space-between;">
@@ -19729,14 +19705,11 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         </div>
     `;
     
-    // Retardo para asegurar que el div exista en el DOM
     setTimeout(async () => {
-    try {
+        try {
             const mapa = await inicializarMapaTX('mapaTXCoordenadas', latCentro, lngCentro);
-if (!mapa) return;
-
+            if (!mapa) return;
             
-            // Dibujar círculo de búsqueda
             L.circle([latCentro, lngCentro], {
                 radius: radioMetros,
                 color: '#3b82f6',
@@ -19748,24 +19721,38 @@ if (!mapa) return;
 
             resultados.forEach((tx, index) => {
                 const coords = parsearCoordenadasSeguras(tx.Coordenadas);
-		if (!coords) return;
-		const { lat: latTX, lng: lngTX } = coords;
+                if (!coords) return;
+                const { lat: latTX, lng: lngTX } = coords;
                 const distancia = tx.distancia || 0;
                 const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-                
+
                 const marker = L.marker([latTX, lngTX], {
                     icon: L.divIcon({
-                        className: 'custom-icon',
-                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; color: 			white; text-align: center; font-size: 11px; line-height: 20px;">${index + 1}</div>`,
-                        iconSize: [20, 20]
+                        className: 'custom-div-icon',
+                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;">${index + 1}</div>`,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
                     })
-                });
+                }).addTo(mapa);
+
+                marker.txData = { ...tx, distancia };
+
+                marker.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <strong>#${index + 1} - TX/Corte: ${escapeHtml(tx.TXCortes || 'N/A')}</strong><br>
+                        <span style="color: #666;">Circuito: ${escapeHtml(tx.Circuitos || 'N/A')}</span><br>
+                        <span style="color: ${color}; font-weight: bold;">📏 ${Math.round(distancia)} metros</span>
+                    </div>
+                `);
 
                 marker.on('click', () => {
-                    actualizarDetallePanel(tx, index, color, distancia);
+                    const distanciaReal = tx.distancia !== undefined
+                        ? Math.round(tx.distancia)
+                        : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
+                    actualizarDetallePanel(tx, index, color, distanciaReal);
                 });
 
-                marker.addTo(markersGroup);
+                markersGroup.addLayer(marker);
                 bounds.push([latTX, lngTX]);
             });
 
@@ -19778,6 +19765,31 @@ if (!mapa) return;
         }
     }, 100);
 
+    function actualizarDetallePanel(tx, index, color, distancia) {
+        const panel = document.getElementById('panelDetalleTX');
+        panel.innerHTML = `
+            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <h3 style="margin: 0 0 10px 0;">#${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}</h3>
+                <p><strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}</p>
+                <p><strong>📏 Distancia:</strong> ${distancia} metros</p>
+                <div style="background: #f8fafc; padding: 10px; border-radius: 5px; font-size: 13px; line-height: 1.7;">
+                    ${tx.Comentario ? formatearComentario(tx.Comentario) : '<em>Sin comentario</em>'}
+                </div>
+                <button id="btnCerrarDetalleTX" style="margin-top: 10px; width: 100%; padding: 8px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">✕ Cerrar detalles</button>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const btnCerrar = document.getElementById('btnCerrarDetalleTX');
+            if (btnCerrar) {
+                btnCerrar.addEventListener('click', () => {
+                    panel.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">📍 Haz clic en un marcador para ver detalles</div>';
+                });
+            }
+        }, 10);
+    }
+
+} // ← cierra mostrarResultadosTXCoordenadas
 
 
     // Función interna para evitar conflictos de comillas en HTML
@@ -19987,16 +19999,26 @@ if (errorCount) {
         
         // ✅ DESPUÉS
 txData.forEach(tx => {
-    const coords = parsearCoordenadasSeguras(tx.Coordenadas);
-    if (!coords) { sinCoordenadas++; return; }
+    const coordsStr = tx.Coordenadas;
+    if (!coordsStr || !coordsStr.includes(',')) { sinCoordenadas++; return; }
     
-    const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, coords.lat, coords.lng);
-            if (distanciaMetros <= radioMetros) {
-                resultadosCercanos.push({ ...tx, distancia: distanciaMetros });
-            } else {
-                fueraDeRadio++;
-            }
+    const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
+    if (isNaN(latTX) || isNaN(lngTX)) { coordenadasInvalidas++; return; }
+    
+    const distanciaMetros = calcularDistanciaMetros(latBusqueda, lngBusqueda, latTX, lngTX);
+    
+    if (distanciaMetros <= radioMetros) {
+        console.log(`✅ TX encontrado: ${tx.TXCortes}, Distancia: ${distanciaMetros}m, Coordenadas TX: ${latTX},${lngTX}`);
+        resultadosCercanos.push({ 
+            ...tx, 
+            distancia: distanciaMetros,
+            latBusqueda,
+            lngBusqueda
         });
+    } else {
+        fueraDeRadio++;
+    }
+});
         
         // Ordenar por distancia (más cercano primero)
         resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
