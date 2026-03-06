@@ -8842,7 +8842,7 @@ function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
 // ========================================
 // 🗺️ GENERAR MAPA KML CON PUNTO DE PARTIDA (REVISADO Y FILTRADO)
 // ========================================
-function generarMapaKMLConPuntoPartida(unidad, osParaGenerarMapa = null) {
+async function generarMapaKMLConPuntoPartida(unidad, osParaGenerarMapa = null) {
     const startTime = performance.now();
     const osPartidaId = document.getElementById('selectPuntoPartidaKML')?.value;
 console.group('🗺️ ==========================================');
