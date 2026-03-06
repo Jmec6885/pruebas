@@ -19809,29 +19809,26 @@ async function cargarCircuitoEnMapa() {
 
 
 
-// Limpiar capa anterior
-limpiarMapaCircuito();
-
-// ✅ CREAR contenedor del mapa si no existe
-let contenedorMapa = document.getElementById('mapaCircuito');
-if (!contenedorMapa) {
-    const searchResults = document.getElementById('searchResults');
-    if (!searchResults) {
-        console.error('❌ No existe #searchResults para insertar el mapa');
-        return;
+function limpiarMapaCircuito() {
+    // Remover capa de circuito
+    if (window.capaCircuitoActual && window.mapaLeafletInstance) {
+        window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
     }
-    searchResults.innerHTML = `
-        <div id="mapaCircuitoContainer">
-            <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc;"></div>
-        </div>
-    `;
-    console.log('✅ Contenedor #mapaCircuito creado dinámicamente');
+    
+    // Remover todos los marcadores de TX si existen
+    if (window.markersTX && Array.isArray(window.markersTX)) {
+        window.markersTX.forEach(marker => {
+            if (window.mapaLeafletInstance?.hasLayer(marker)) {
+                window.mapaLeafletInstance.removeLayer(marker);
+            }
+        });
+        window.markersTX = [];
+    }
+    
+    // Resetear referencias
+    window.capaCircuitoActual = null;
+    console.log('🧹 Mapa de circuito limpiado');
 }
-
-// Crear mapa si no existe
-if (!window.mapaLeafletInstance) {
-
-
 
 
 // Cerrar mapa de circuito
@@ -19909,7 +19906,6 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     console.log('📡 Cargando circuito KMZ:', nombreCircuito);
     
-    // Verificar dependencias
     if (typeof L === 'undefined') {
         console.error('❌ Leaflet no está cargado');
         return;
@@ -19921,6 +19917,22 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     // Limpiar capa anterior
     limpiarMapaCircuito();
     
+    // ✅ Crear contenedor del mapa si no existe
+    let contenedorMapa = document.getElementById('mapaCircuito');
+    if (!contenedorMapa) {
+        const searchResults = document.getElementById('searchResults');
+        if (!searchResults) {
+            console.error('❌ No existe #searchResults para insertar el mapa');
+            return;
+        }
+        searchResults.innerHTML = `
+            <div id="mapaCircuitoContainer">
+                <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc;"></div>
+            </div>
+        `;
+        console.log('✅ Contenedor #mapaCircuito creado dinámicamente');
+    }
+    
     // Crear mapa si no existe
     if (!window.mapaLeafletInstance) {
         window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', 13.7981427, -89.4436187);
@@ -19930,7 +19942,6 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         console.log('🗺️ Usando instancia de mapa existente');
     }
     
-    // Obtener y validar URL del KMZ
     const { data } = supabaseClient.storage
         .from('circuitos-kmz')
         .getPublicUrl(`${nombreCircuito}.kmz`);
@@ -19941,7 +19952,6 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     }
     console.log('🔗 KMZ URL generada:', kmzUrl);
     
-    // Verificar que el archivo existe antes de cargarlo
     try {
         const check = await fetch(kmzUrl, { method: 'HEAD' });
         if (!check.ok) {
@@ -19953,7 +19963,6 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         return;
     }
     
-    // Cargar KMZ con omnivore
     console.log('📥 Iniciando carga con leaflet-omnivore...');
     
     try {
@@ -19995,6 +20004,7 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         console.error('❌ Error fatal en cargarCircuitoKMZEnMapa:', error);
     }
 }
+
 
 
 
