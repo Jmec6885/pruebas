@@ -10594,9 +10594,12 @@ async function cargarInterfazMapaRutas() {
 /**
  * Busca una OS y muestra el mapa para el rol Administrador/Despacho
  */
+// ===================================================================
+// 🔍 BUSCAR Y MOSTRAR MAPA (ADMIN) - VERSIÓN CORREGIDA CON BÚSQUEDA EN MEMORIA
+// ===================================================================
 async function buscarYMostrarMapaAdmin() {
     console.log("🔍 Iniciando búsqueda de OS (Admin Mode)...");
-
+    
     const osInput = document.getElementById('buscarOSAdmin');
     const resultsContainer = document.getElementById('searchResults');
     
@@ -10604,107 +10607,162 @@ async function buscarYMostrarMapaAdmin() {
         console.error("❌ No se encontró el input 'buscarOSAdmin'");
         return;
     }
-
-    const osIngresada = osInput.value.trim();
-    if (!osIngresada) {
+    
+    const osIngresadaRaw = osInput.value.trim();
+    if (!osIngresadaRaw) {
         alert('⚠️ Por favor ingrese un número de OS');
         return;
     }
     
+    // ✅ NORMALIZAR ID DE OS (para evitar problemas de formato)
+    const osIngresada = String(osIngresadaRaw).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    console.log(`🔍 OS buscada (normalizada): "${osIngresada}" (original: "${osIngresadaRaw}")`);
+    
     // Feedback visual de carga
-    resultsContainer.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div class="loading" style="display: inline-block;"></div>
-            <p>Buscando OS ${osIngresada}...</p>
-        </div>`;
+    resultsContainer.innerHTML = `<div style="text-align: center; padding: 20px;">
+        <div class="loading" style="display: inline-block;"></div>
+        <p>Buscando OS <strong>${osIngresadaRaw}</strong>...</p>
+    </div>`;
     
     try {
-        // 1️⃣ Búsqueda de Asignación (Informativa)
+        // ========================================
+        // 🔹 PASO 1: BUSCAR PRIMERO EN MEMORIA (MÁS RÁPIDO)
+        // ========================================
+        console.log('🔍 [PASO 1] Buscando en memoria (window.osAsignadasKML / osParaMapaActual)...');
+        
+        // Fuentes de datos en memoria (en orden de prioridad)
+        const fuentesMemoria = [
+            window.osParaMapaActual,
+            window.osAsignadasKML,
+            window.datosMapaExportar
+        ].filter(f => f && Array.isArray(f));
+        
+        let osEncontrada = null;
         let unidadDetectada = null;
-        const { data: asignacion, error: errorAsig } = await supabaseClient
-            .from('os_asignadas')
-            .select('osatomo, Unidad')
-            .eq('osatomo', osIngresada)
-            .maybeSingle();
+        
+        for (const fuente of fuentesMemoria) {
+            osEncontrada = fuente.find(os => {
+                const osId = String(os.OSATMO || os.osatomo || os.OSATOMO || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                return osId === osIngresada;
+            });
             
-        if (asignacion) {
-            console.log(`✅ Unidad asignada: ${asignacion.Unidad}`);
-            unidadDetectada = asignacion.Unidad;
-
-            // Validación específica para Despacho
-            if (currentUser && currentUser.rol === 'Despacho' && unidadDetectada) {
-                const { data: filtrosUnidad } = await supabaseClient
-                    .from('filtros_por_unidad')
-                    .select('*')
-                    .eq('Unidad', unidadDetectada)
-                    .maybeSingle();
-                
-                if (!filtrosUnidad) {
-                    const confirmar = confirm(
-                        `⚠️ No tienes filtros específicos para ${unidadDetectada}\n\n` +
-                        `¿Deseas configurarlos ahora? (Cancelar para usar filtros globales)`
-                    );
-                    if (confirmar) {
-                        if (typeof volverATablas === 'function') volverATablas();
-                        return;
-                    }
-                }
+            if (osEncontrada) {
+                console.log(`✅ OS encontrada en memoria: ${osEncontrada.OSATMO || osEncontrada.osatomo}`);
+                unidadDetectada = osEncontrada.Unidad;
+                break;
             }
         }
-
-        // 2️⃣ Búsqueda en OS Pendientes (Fuente de Verdad)
-        const { data: osCentro, error: errorPend } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .eq('OSATMO', osIngresada)
-            .maybeSingle();
-
-        if (errorPend) throw errorPend;
-
-        if (!osCentro) {
+        
+        // ========================================
+        // 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD CON PAGINACIÓN
+        // ========================================
+        if (!osEncontrada) {
+            console.log('⚠️ OS no encontrada en memoria, consultando BD con paginación...');
+            
+            // Buscar en OS Pendientes con paginación (como en cargarInterfazKMLRuta)
+            let todasLasPendientes = [];
+            let r_inicio = 0;
+            const BATCH_SIZE = 1000;
+            let hayMas = true;
+            
+            while (hayMas) {
+                const { data: lote, error: errorLote } = await supabaseClient
+                    .from('OS Pendientes')
+                    .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
+                    .eq('OSATMO', osIngresadaRaw)  // Buscar por el valor original (no normalizado)
+                    .range(r_inicio, r_inicio + BATCH_SIZE - 1);
+                
+                if (errorLote) {
+                    console.warn('⚠️ Error en lote de BD:', errorLote.message);
+                    break;
+                }
+                
+                if (lote && lote.length > 0) {
+                    osEncontrada = lote[0];
+                    unidadDetectada = osEncontrada.Unidad;
+                    console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
+                    break;
+                }
+                
+                hayMas = (lote?.length === BATCH_SIZE);
+                if (hayMas) r_inicio += BATCH_SIZE;
+                
+                // Seguridad: máximo 10 lotes (10k registros)
+                if (r_inicio >= 10000) break;
+            }
+        }
+        
+        // ========================================
+        // 🔹 PASO 3: VALIDAR RESULTADO
+        // ========================================
+        if (!osEncontrada) {
+            console.error(`❌ OS "${osIngresadaRaw}" no encontrada en memoria ni en BD`);
+            
+            // 🔍 DIAGNÓSTICO: Mostrar sugerencias al usuario
             resultsContainer.innerHTML = `
-                <div class="result-card" style="border-left: 5px solid #f44336; background: #ffebee;">
+                <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
                     <div class="result-header">❌ OS No Encontrada</div>
-                    <p>La OS <b>${osIngresada}</b> no existe en el sistema de pendientes.</p>
+                    <p>La OS <strong>${osIngresadaRaw}</strong> no existe en el sistema.</p>
+                    <details style="margin-top: 10px; font-size: 13px;">
+                        <summary style="cursor: pointer; color: #666;">🔍 Ver posibles causas</summary>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px;">
+                            <strong>Possibles causas:</strong><br>
+                            • El número de OS está mal escrito<br>
+                            • La OS no está en la tabla "OS Pendientes"<br>
+                            • La OS fue eliminada o archivada<br>
+                            • Problema de conexión con la base de datos<br><br>
+                            <strong>💡 Sugerencias:</strong><br>
+                            1. Verifica el número de OS en el sistema<br>
+                            2. Intenta buscar con otro formato (sin guiones, espacios)<br>
+                            3. Contacta al administrador si el problema persiste
+                        </div>
+                    </details>
                 </div>`;
             return;
         }
         
-        // Sincronizar unidad si no se encontró en la primera tabla
-        if (!unidadDetectada && osCentro.Unidad) {
-            unidadDetectada = osCentro.Unidad;
-        }
-
-        // 3️⃣ Validación de Coordenadas
-        const coordenadas = osCentro.Coordenadas || osCentro.Coordendasgis;
-        if (!coordenadas || !coordenadas.includes(',')) {
+        // ========================================
+        // 🔹 PASO 4: VALIDAR COORDENADAS
+        // ========================================
+        const coordenadas = osEncontrada.Coordenadas || osEncontrada.Coordendasgis;
+        if (!coordenadas || !String(coordenadas).includes(',')) {
+            console.warn(`⚠️ OS "${osEncontrada.OSATMO}" sin coordenadas válidas`);
             resultsContainer.innerHTML = `
-                <div class="result-card" style="border-left: 5px solid #ff9800; background: #fff3cd;">
+                <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
                     <div class="result-header">⚠️ Coordenadas Inválidas</div>
-                    <p>La OS existe, pero los datos de ubicación son incorrectos.</p>
+                    <p>La OS <strong>${osEncontrada.OSATMO}</strong> existe, pero no tiene coordenadas válidas.</p>
+                    <p style="font-size: 13px; color: #666;">
+                        Coordenadas encontradas: "${coordenadas || 'N/A'}"
+                    </p>
                 </div>`;
             return;
         }
         
-        // 4️⃣ Renderizado del Mapa
+        // ========================================
+        // 🔹 PASO 5: MOSTRAR MAPA
+        // ========================================
         console.log("📍 Datos listos, llamando al mapa...");
-        resultsContainer.innerHTML = ""; // Limpiar el loading
+        resultsContainer.innerHTML = ""; // Limpiar loading
         
         if (typeof cargarYMostrarMapa === 'function') {
-            await cargarYMostrarMapa(osCentro, unidadDetectada);
+            await cargarYMostrarMapa(osEncontrada, unidadDetectada);
+            console.log(`✅ Mapa cargado exitosamente para OS: ${osEncontrada.OSATMO}`);
         } else {
             throw new Error("La función 'cargarYMostrarMapa' no está definida.");
         }
-
+        
     } catch (err) {
         console.error('❌ Error crítico en búsqueda:', err);
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: #f8d7da; color: #721c24;">
-                <b>Error de conexión:</b> No se pudo consultar la base de datos.
+                <div class="result-header">❌ Error de Sistema</div>
+                <p><strong>Detalle:</strong> ${err.message || 'Error desconocido'}</p>
+                <button onclick="location.reload()" class="btn" style="margin-top: 10px; background: #dc3545; color: white;">
+                    🔄 Recargar Página
+                </button>
             </div>`;
     }
 }
-
 // ✅ EXPOSICIÓN GLOBAL (Esto soluciona el ReferenceError)
 window.buscarYMostrarMapaAdmin = buscarYMostrarMapaAdmin;
 
@@ -18680,6 +18738,19 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Propiedad :/g, '<br><strong>Propiedad:</strong>')
 	.replace(/SUBESTACION/g, '<br><strong>SUBESTACION:</strong>')
 	.replace(/Voltaje Primario Nominal :/g, '<br><strong>Voltaje Primario Nominal :</strong>')
+.replace(/Placa\s*=\s*/gi, '<br><strong>Placa:</strong> ')
+    .replace(/Capacidad\s*Sum\s*:\s*/gi, '<br><strong>Capacidad Suministro:</strong> ')
+    .replace(/Circuito\s*:\s*/gi, '<br><strong>Circuito:</strong> ')
+    .replace(/Uicacion\s*:\s*/gi, '<br><strong>Ubicación:</strong> ')
+    .replace(/Cantidad\s*de\s*clientes\s*:\s*/gi, '<br><strong>Cantidad de clientes:</strong> ')
+    .replace(/Estructura\s*Tx\s*:\s*/gi, '<br><strong>Estructura TX:</strong> ')
+    .replace(/Primary\s*Phase\s*ConcatSet\s*:\s*/gi, '<br><strong>Fase Primaria (ConcatSet):</strong> ')
+    .replace(/Usos\s*:\s*/gi, '<br><strong>Usos:</strong> ')
+    .replace(/Voltaje\s*Secundario\s*Nominal\s*:\s*/gi, '<br><strong>Voltaje Secundario Nominal:</strong> ')
+    .replace(/Proteccion\s*que\s*lo\s*Alimenta\s*:\s*/gi, '<br><strong>Protección que lo Alimenta:</strong> ')
+    .replace(/Propiedad\s*:\s*/gi, '<br><strong>Propiedad:</strong> ')
+    .replace(/SUBESTACION/g, '<br><strong>SUBESTACION:</strong>')
+    .replace(/Voltaje\s*Primario\s*Nominal\s*:\s*/gi, '<br><strong>Voltaje Primario Nominal:</strong> ')
     
 
     // --- ENLACES ---
@@ -20433,7 +20504,80 @@ async function verDetalleTX(nombreTX) {
     }
 }
 
-
+// ===================================================================
+// 🎨 FUNCIÓN AUXILIAR: Agregar popup formateado a capas KMZ
+// ===================================================================
+function agregarPopupFormateado(layer, nombreCircuito = '') {
+    // Solo procesar si la capa tiene propiedades GeoJSON
+    if (!layer.feature || !layer.feature.properties) return;
+ 
+    const props = layer.feature.properties;
+    const nombreTX = props.name || props.TXCortes || props.circuito || 'Sin identificar';
+ 
+    // Construir contenido del popup
+    let popupContent = `
+        <div style="min-width: 220px; font-family: system-ui, sans-serif;">
+            <strong style="color: #1e40af; font-size: 14px; display: block; margin-bottom: 8px;">
+                🔌 Circuito: ${escapeHtml(nombreCircuito || 'N/A')}
+            </strong>
+    `;
+ 
+    // Agregar campos dinámicamente según propiedades disponibles
+    if (props.name) {
+        popupContent += `<div><strong>TX/Corte:</strong> ${escapeHtml(props.name)}</div>`;
+    }
+    if (props.description || props.Comentario) {
+        const comentario = props.description || props.Comentario;
+        popupContent += `<div style="margin: 8px 0; padding: 8px; background: #f8fafc; border-radius: 4px; font-size: 12px; color: #475569;">
+            💬 ${escapeHtml(comentario).substring(0, 150)}${comentario.length > 150 ? '...' : ''}
+        </div>`;
+    }
+    if (props.voltaje || props.Voltaje) {
+        popupContent += `<div><strong>⚡ Voltaje:</strong> ${escapeHtml(props.voltaje || props.Voltaje)}</div>`;
+    }
+ 
+    // Botón Ver Detalle (solo si hay nombre de TX)
+    if (nombreTX && nombreTX !== 'Sin identificar') {
+        popupContent += `
+            <button
+                data-txnombre="${escapeHtml(nombreTX)}"
+                class="btnVerDetalleTX"
+                style="margin-top: 10px; padding: 8px 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; font-size: 13px; transition: opacity 0.2s;">
+                🔍 Ver Detalle Completo
+            </button>
+        `;
+    }
+ 
+    popupContent += `</div>`;
+ 
+    // Asignar popup a la capa
+    layer.bindPopup(popupContent);
+ 
+    // ⚠️ IMPORTANTE: Usar event delegation para el botón dinámico
+    layer.on('popupopen', function(e) {
+        // Pequeño delay para asegurar que el DOM del popup esté renderizado
+        setTimeout(() => {
+            const popupContainer = e.popup.getElement();
+            if (popupContainer) {
+                const btn = popupContainer.querySelector('.btnVerDetalleTX');
+                if (btn) {
+                    // Remover listener previo si existe (evitar duplicados)
+                    btn.replaceWith(btn.cloneNode(true));
+                    const nuevoBtn = popupContainer.querySelector('.btnVerDetalleTX');
+ 
+                    // Asignar nuevo listener
+                    nuevoBtn?.addEventListener('click', function(ev) {
+                        ev.stopPropagation(); // Evitar que el click cierre el popup
+                        const txNombre = this.getAttribute('data-txnombre');
+                        if (txNombre && typeof verDetalleTX === 'function') {
+                            verDetalleTX(txNombre);
+                        }
+                    }, { once: true }); // { once: true } asegura que solo se ejecute una vez
+                }
+            }
+        }, 50);
+    });
+}
 
 function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
     const capasProcesadas = [];
@@ -20489,6 +20633,8 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
     procesarCapa(capaKMZ);
     return capasProcesadas;
 }
+
+
 
 
 
