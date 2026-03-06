@@ -5245,6 +5245,15 @@ async function logout() {
             ) {
                 return; // ← Saltar este campo, no generar input
             }
+            
+            // 🚫 FILTRO ADICIONAL: NO generar input para 'coordenadas_busqueda' en tx_y_cortes
+            // (porque ya tenemos el campo especial con GPS más abajo)
+            if (
+                field.key === 'coordenadas_busqueda' &&
+                selectedTable === 'tx_y_cortes'
+            ) {
+                return; // ← Saltar este campo para evitar duplicado
+            }
 
             const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
 
@@ -5258,54 +5267,54 @@ async function logout() {
         }); // ✅ Cierra forEach
 
         // ========================================
-        // ✅ NUEVO: CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO)
+        // ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + GPS) - ÚNICO
         // ========================================
         if (selectedTable === 'tx_y_cortes') {
-    html += `
-    <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
-        <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
-        
-        <!-- Campo de coordenadas con botón GPS -->
-        <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 8px;">
-            <input type="text" id="coordenadasTX" 
-                   placeholder="Ej: 13.7981427,-89.4436187" 
-                   style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
-            <button onclick="capturarCoordenadasGPS_TX()" 
-                    style="padding: 10px 15px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;"
-                    title="Capturar mi ubicación actual">
-                📍 GPS
-            </button>
-        </div>
-        
-        <small style="color: #64748b; display: block; margin-top: 4px;">
-            Formato: latitud,longitud (Ej: 13.7981427,-89.4436187) o usa el botón GPS 📍
-        </small>
-        
-        <!-- Indicador de carga GPS -->
-        <div id="gpsStatus_TX" style="display: none; margin-top: 8px; padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1976d2;">
-            📡 Obteniendo ubicación...
-        </div>
-        
-        <div style="margin-top: 10px;">
-            <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
-            <input type="number" id="radioMetrosTX" 
-                   value="50" 
-                   min="10" 
-                   max="1000" 
-                   step="10"
-                   style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
-            <small style="color: #64748b; display: block; margin-top: 4px;">
-                Default: 50 metros (mín: 10m, máx: 1000m)
-            </small>
-        </div>
-        
-        <button onclick="buscarTXPorCoordenadas()" 
-                style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
-            🔍 Buscar TX/Cortes Cercanos
-        </button>
-    </div>
-    `;
-}
+            html += `
+            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+                <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
+                
+                <!-- Campo de coordenadas con botón GPS -->
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 8px;">
+                    <input type="text" id="coordenadasTX" 
+                           placeholder="Ej: 13.7981427,-89.4436187" 
+                           style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+                    <button onclick="capturarCoordenadasGPS_TX()" 
+                            style="padding: 10px 15px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;"
+                            title="Capturar mi ubicación actual">
+                        📍 GPS
+                    </button>
+                </div>
+                
+                <small style="color: #64748b; display: block; margin-top: 4px;">
+                    Formato: latitud,longitud (Ej: 13.7981427,-89.4436187) o usa el botón GPS 📍
+                </small>
+                
+                <!-- Indicador de carga GPS -->
+                <div id="gpsStatus_TX" style="display: none; margin-top: 8px; padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1976d2;">
+                    📡 Obteniendo ubicación...
+                </div>
+                
+                <div style="margin-top: 10px;">
+                    <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
+                    <input type="number" id="radioMetrosTX" 
+                           value="50" 
+                           min="10" 
+                           max="1000" 
+                           step="10"
+                           style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
+                    <small style="color: #64748b; display: block; margin-top: 4px;">
+                        Default: 50 metros (mín: 10m, máx: 1000m)
+                    </small>
+                </div>
+                
+                <button onclick="buscarTXPorCoordenadas()" 
+                        style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+                    🔍 Buscar TX/Cortes Cercanos
+                </button>
+            </div>
+            `;
+        } // ✅ Cierra if tx_y_cortes
 
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
@@ -5317,7 +5326,6 @@ async function logout() {
         searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
     }
 } // ✅ Cierra función generarCamposBusqueda
-
 
 
     function volverATablas() {
