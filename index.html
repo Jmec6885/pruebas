@@ -5243,15 +5243,6 @@ async function logout() {
             ) {
                 return; // ← Saltar este campo, no generar input
             }
-            
-            // 🚫 FILTRO ADICIONAL: NO generar input para 'coordenadas_busqueda' en tx_y_cortes
-            // (porque ya tenemos el campo especial con radio más abajo)
-            if (
-                field.key === 'coordenadas_busqueda' &&
-                selectedTable === 'tx_y_cortes'
-            ) {
-                return; // ← Saltar este campo para evitar duplicado
-            }
 
             const esNombre = field.key === 'NombreCliente' ? 'full-width' : '';
 
@@ -5265,39 +5256,54 @@ async function logout() {
         }); // ✅ Cierra forEach
 
         // ========================================
-        // ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO) - ÚNICO
+        // ✅ NUEVO: CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + RADIO)
         // ========================================
         if (selectedTable === 'tx_y_cortes') {
-            html += `
-            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
-                <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
-                <input type="text" id="coordenadasTX" 
-                       placeholder="Ej: 13.7981427,-89.4436187" 
-                       style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 8px;">
-                <small style="color: #64748b; display: block; margin-top: 4px;">
-                    Formato: latitud,longitud (Ej: 13.7981427,-89.4436187)
-                </small>
-                
-                <div style="margin-top: 10px;">
-                    <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
-                    <input type="number" id="radioMetrosTX" 
-                           value="50" 
-                           min="10" 
-                           max="1000" 
-                           step="10"
-                           style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
-                    <small style="color: #64748b; display: block; margin-top: 4px;">
-                        Default: 50 metros (mín: 10m, máx: 1000m)
-                    </small>
-                </div>
-                
-                <button onclick="buscarTXPorCoordenadas()" 
-                        style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
-                    🔍 Buscar TX/Cortes Cercanos
-                </button>
-            </div>
-            `;
-        } // ✅ Cierra if tx_y_cortes
+    html += `
+    <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+        <label style="font-weight: 600; color: #2d3748;">📍 Búsqueda por Coordenadas:</label>
+        
+        <!-- Campo de coordenadas con botón GPS -->
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 8px;">
+            <input type="text" id="coordenadasTX" 
+                   placeholder="Ej: 13.7981427,-89.4436187" 
+                   style="width: 100%; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px;">
+            <button onclick="capturarCoordenadasGPS_TX()" 
+                    style="padding: 10px 15px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;"
+                    title="Capturar mi ubicación actual">
+                📍 GPS
+            </button>
+        </div>
+        
+        <small style="color: #64748b; display: block; margin-top: 4px;">
+            Formato: latitud,longitud (Ej: 13.7981427,-89.4436187) o usa el botón GPS 📍
+        </small>
+        
+        <!-- Indicador de carga GPS -->
+        <div id="gpsStatus_TX" style="display: none; margin-top: 8px; padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 13px; color: #1976d2;">
+            📡 Obteniendo ubicación...
+        </div>
+        
+        <div style="margin-top: 10px;">
+            <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
+            <input type="number" id="radioMetrosTX" 
+                   value="50" 
+                   min="10" 
+                   max="1000" 
+                   step="10"
+                   style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
+            <small style="color: #64748b; display: block; margin-top: 4px;">
+                Default: 50 metros (mín: 10m, máx: 1000m)
+            </small>
+        </div>
+        
+        <button onclick="buscarTXPorCoordenadas()" 
+                style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+            🔍 Buscar TX/Cortes Cercanos
+        </button>
+    </div>
+    `;
+}
 
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
@@ -5309,7 +5315,6 @@ async function logout() {
         searchGrid.innerHTML = '<div style="color: red; padding: 20px;">Error al cargar la interfaz de búsqueda. Por favor recargue la página.</div>';
     }
 } // ✅ Cierra función generarCamposBusqueda
-
 
 
 
@@ -19042,7 +19047,7 @@ console.log('✅ Funciones de preselección expuestas globalmente');
 
 
 // ===================================================================
-// 🔍 BUSCAR TX/CORTES POR COORDENADAS (VERSIÓN PRODUCCIÓN - 40 LOTES)
+// 🔍 BUSCAR TX/CORTES POR COORDENADAS (CON LOGS ULTRA-DETALLADOS)
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
@@ -19065,29 +19070,58 @@ async function buscarTXPorCoordenadas() {
     }
     
     const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<div class="loading"></div><p>Cargando datos de TX y Cortes... (0%)</p>';
+    resultsContainer.innerHTML = '<div class="loading"></div><p>Diagnostico avanzado...</p>';
     
     try {
-        console.group('🔍 BÚSQUEDA TX POR COORDENADAS');
+        console.group('🔍 DIAGNÓSTICO AVANZADO - TX y Cortes');
         console.log(`📍 Coordenadas: [${latBusqueda}, ${lngBusqueda}]`);
         console.log(`📏 Radio: ${radioMetros} metros`);
         
+        // 🔹 PASO 0: LOG ULTRA-DETALLADO DE LA RESPUESTA DE SUPABASE
+        console.log('🧪 TEST 0: Consulta simple SIN .range() para comparar...');
+        const testSimple = await supabaseClient
+            .from('tx_y_cortes')
+            .select('TXCortes, Coordenadas')
+            .limit(3);
+        
+        console.log('📊 Respuesta de consulta simple:', {
+            type: typeof testSimple,
+            hasData: testSimple?.data !== undefined,
+            dataIsArray: Array.isArray(testSimple?.data),
+            dataLength: testSimple?.data?.length,
+            hasError: !!testSimple?.error,
+            error: testSimple?.error,
+            fullResponse: JSON.stringify(testSimple, null, 2).slice(0, 500) + '...'
+        });
+        
+        if (testSimple?.data?.length > 0) {
+            console.log('✅ Consulta simple FUNCIONA - muestra de datos:');
+            testSimple.data.slice(0, 2).forEach((tx, i) => {
+                console.log(`   ${i+1}. TXCortes: "${tx.TXCortes}" | Coordenadas: "${tx.Coordenadas}"`);
+            });
+        }
+        
         // 🔹 PASO 1: Verificar acceso básico
-        console.log('📥 Verificando acceso a tabla "tx_y_cortes"...');
+        console.log('📥 Paso 1: Verificando acceso a tabla "tx_y_cortes"...');
         
         const {  verificacion, error: errorVerif } = await supabaseClient
             .from('tx_y_cortes')
             .select('TXCortes', { count: 'exact', head: true });
         
+        console.log('📊 Verificación:', {
+            tieneDatos: verificacion !== null,
+            error: errorVerif?.message || 'Ninguno'
+        });
+        
         if (errorVerif) {
             console.error('❌ Error de acceso:', errorVerif);
-            resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header">❌ Error</div><p>${errorVerif.message}</p></div>`;
+            resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;"><div class="result-header">❌ Error de acceso</div><p>${errorVerif.message}</p></div>`;
             console.groupEnd();
             return;
         }
         
-        // 🔹 PASO 2: CARGAR DATOS CON PAGINACIÓN (40 LOTES = ~40,000 registros)
-        console.log('📥 Cargando datos por lotes (máx 40 lotes de 1000)...');
+        // 🔹 PASO 2: CARGAR DATOS CON LOGS DETALLADOS
+        console.log('📥 Paso 2: Cargando datos por lotes con diagnóstico...');
         
         const txData = [];
         let r_inicio = 0;
@@ -19095,12 +19129,13 @@ async function buscarTXPorCoordenadas() {
         let hayMas = true;
         let totalCargados = 0;
         let intentos = 0;
-        
-        // ✅ CAMBIO CLAVE: 35 intentos para cargar hasta ~40,000 registros
-        const MAX_INTENTOS = 35;
+        const MAX_INTENTOS = 5; // Solo 5 intentos para diagnóstico
         
         while (hayMas && intentos < MAX_INTENTOS) {
             intentos++;
+            
+            console.log(`\n🔄 === LOTE #${intentos} ===`);
+            console.log(`📍 Rango: ${r_inicio} a ${r_inicio + BATCH_SIZE - 1}`);
             
             // Ejecutar consulta
             const response = await supabaseClient
@@ -19108,17 +19143,49 @@ async function buscarTXPorCoordenadas() {
                 .select('*')
                 .range(r_inicio, r_inicio + BATCH_SIZE - 1);
             
-            // Manejar error si existe
-            if (response.error) {
-                console.error('❌ Error en lote #', intentos, ':', response.error);
-                throw response.error;
+            // 🔍 LOG ULTRA-DETALLADO DE LA RESPUESTA
+            console.log('📦 Respuesta completa de Supabase:');
+            console.log('   • typeof response:', typeof response);
+            console.log('   • response instanceof Object:', response instanceof Object);
+            console.log('   • response.data:', response.data);
+            console.log('   • typeof response.data:', typeof response.data);
+            console.log('   • Array.isArray(response.data):', Array.isArray(response.data));
+            console.log('   • response.data?.length:', response.data?.length);
+            console.log('   • response.error:', response.error);
+            console.log('   • response.status:', response.status);
+            console.log('   • response.count:', response.count);
+            console.log('   • response.keys:', Object.keys(response || {}));
+            
+            // Intentar desestructurar como en tu código original
+            const {  lote, error: errorLote, status } = response;
+            
+            console.log('📦 Después de desestructurar:');
+            console.log('   • lote:', lote);
+            console.log('   • typeof lote:', typeof lote);
+            console.log('   • lote === null:', lote === null);
+            console.log('   • lote === undefined:', lote === undefined);
+            console.log('   • errorLote:', errorLote);
+            console.log('   • status:', status);
+            
+            // 🧪 PRUEBA ALTERNATIVA: ¿Y si usamos response.data directamente?
+            if (!lote && response?.data && Array.isArray(response.data)) {
+                console.log('⚠️ ALERTA: lote es null pero response.data ES un array válido!');
+                console.log('💡 Posible causa: problema con desestructuración o versión de supabase-js');
+                console.log('🔄 Usando response.data directamente como workaround...');
             }
             
-            // Usar response.data directamente (más confiable que desestructurar)
-            const datosDelLote = response.data;
+            // Manejar error si existe
+            if (errorLote) {
+                console.error('❌ Error en lote:', errorLote);
+                throw errorLote;
+            }
             
-            if (!datosDelLote || !Array.isArray(datosDelLote)) {
-                console.warn('⚠️ Respuesta inválida en lote #', intentos, ', deteniendo');
+            // Determinar qué datos usar: lote (original) o response.data (workaround)
+            const datosDelLote = lote || (response?.data && Array.isArray(response.data) ? response.data : null);
+            
+            if (!datosDelLote) {
+                console.warn('⚠️ No hay datos válidos en la respuesta, deteniendo');
+                console.log('💡 Esto podría ser un bug de supabase-js con .range() en tu entorno');
                 break;
             }
             
@@ -19132,15 +19199,10 @@ async function buscarTXPorCoordenadas() {
             // Agregar datos y continuar
             txData.push(...datosDelLote);
             totalCargados += datosDelLote.length;
+            console.log(`📦 Lote #${intentos}: ${datosDelLote.length} registros. Total: ${totalCargados}`);
             
-            // ✅ Actualizar UI con progreso y porcentaje
-            const porcentaje = Math.min(100, Math.round((totalCargados / 32206) * 100));
-            resultsContainer.innerHTML = `<div class="loading"></div><p>Cargando... ${totalCargados.toLocaleString()} registros (${porcentaje}%)</p>`;
-            
-            console.log(`📦 Lote #${intentos}: ${datosDelLote.length} registros. Total: ${totalCargados.toLocaleString()}`);
-            
-            // ✅ Pequeño delay para no saturar la API (50ms)
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Actualizar UI
+            resultsContainer.innerHTML = `<div class="loading"></div><p>Cargando... ${totalCargados} registros</p>`;
             
             // Continuar si el lote estaba lleno
             hayMas = (datosDelLote.length === BATCH_SIZE);
@@ -19149,20 +19211,30 @@ async function buscarTXPorCoordenadas() {
             }
         }
         
-        console.log(`✅ Total cargado: ${txData.length.toLocaleString()} registros en ${intentos} lotes`);
+        console.log(`\n✅ Total cargado: ${txData.length} registros en ${intentos} intentos`);
         
         // Si no hay datos, mostrar mensaje útil
         if (txData.length === 0) {
             resultsContainer.innerHTML = `
                 <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
-                    <div class="result-header">⚠️ Sin datos</div>
-                    <p>No se encontraron registros en la tabla.</p>
+                    <div class="result-header">⚠️ Sin datos cargados</div>
+                    <p>La tabla existe pero no se pudieron cargar registros con .range().</p>
+                    <details style="margin-top: 10px; font-size: 13px;">
+                        <summary>🔍 Ver diagnóstico técnico</summary>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace;">
+                        Posible causa: Bug de supabase-js con .range()<br><br>
+                        <strong>💡 Workaround:</strong><br>
+                        1. Usar .limit() en lugar de .range() para pruebas<br>
+                        2. Actualizar supabase-js a la última versión<br>
+                        3. Contactar soporte de Supabase si persiste
+                        </div>
+                    </details>
                 </div>`;
             console.groupEnd();
             return;
         }
         
-        // 🔹 FILTRAR POR COORDENADAS Y RADIO
+        // 🔹 FILTRAR POR COORDENADAS Y RADIO (lógica existente)
         const resultadosCercanos = [];
         let sinCoordenadas = 0;
         let coordenadasInvalidas = 0;
@@ -19183,11 +19255,10 @@ async function buscarTXPorCoordenadas() {
             }
         });
         
-        // Ordenar por distancia (más cercano primero)
         resultadosCercanos.sort((a, b) => a.distancia - b.distancia);
         
-        console.log(`📊 Resumen:`);
-        console.log(`   • Total cargados: ${txData.length.toLocaleString()}`);
+        console.log(`📊 Resumen de filtrado:`);
+        console.log(`   • Total cargados: ${txData.length}`);
         console.log(`   • Sin coordenadas: ${sinCoordenadas}`);
         console.log(`   • Coordenadas inválidas: ${coordenadasInvalidas}`);
         console.log(`   • Fuera de radio: ${fueraDeRadio}`);
@@ -19225,227 +19296,174 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
 
 
 
+
 // ===================================================================
-// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS (CON MAPA LEAFLET - CORREGIDO)
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
 // ===================================================================
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
     const resultsContainer = document.getElementById('searchResults');
     
-    // Verificar que Leaflet está cargado
-    if (typeof L === 'undefined') {
-        console.error('❌ Leaflet no está cargado');
-        resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-            <div class="result-header">❌ Error</div>
-            <p>El mapa no está disponible. Por favor recargue la página.</p>
+    let html = `<div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+        <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🔍 TX/Cortes Encontrados</span>
+            <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">${resultados.length} resultados en ${radioMetros}m</span>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
+            <strong>📊 Resumen:</strong><br>
+            • Coordenadas: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
+            • Radio: <strong>${radioMetros} metros</strong><br>
+            • Encontrados: <strong>${resultados.length}</strong>
+        </div>
+        <div style="display: grid; gap: 15px;">`;
+    
+    resultados.forEach((tx, index) => {
+        const distancia = tx.distancia || 0;
+        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+        html += `<div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+            <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</div>
+            <div style="font-size: 13px; color: #64748b;">
+                <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
+                <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
+            </div>
+            ${tx.Comentario ? `<div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;"><strong>💬 Comentario:</strong><br>${tx.Comentario}</div>` : ''}
         </div>`;
+    });
+    
+    html += `</div></div>`;
+    resultsContainer.innerHTML = html;
+}
+
+
+
+
+// ===================================================================
+// 📋 MOSTRAR RESULTADOS DE BÚSQUEDA POR COORDENADAS
+// ===================================================================
+function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    let html = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+            <div class="result-header">🔍 TX/Cortes Encontrados</div>
+            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>📊 Resumen:</strong><br>
+                • Coordenadas: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}<br>
+                • Radio: ${radioMetros} metros<br>
+                • Encontrados: ${resultados.length}
+            </div>
+            <div style="display: grid; gap: 15px;">`;
+    
+    resultados.forEach((tx, index) => {
+        const distancia = tx.distancia || 0;
+        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+        
+        html += `
+            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${color};">
+                <div style="font-weight: 700; color: #1e293b; font-size: 16px; margin-bottom: 5px;">
+                    #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
+                </div>
+                <div style="font-size: 13px; color: #64748b;">
+                    <strong>Circuito:</strong> ${tx.Circuitos || 'N/A'}<br>
+                    <strong>Distancia:</strong> <span style="color: ${color}; font-weight: 700;">${distancia} metros</span>
+                </div>
+                ${tx.Comentario ? `
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+                        <strong>💬 Comentario:</strong><br>${tx.Comentario}
+                    </div>` : ''}
+            </div>`;
+    });
+    
+    html += `</div></div>`;
+    resultsContainer.innerHTML = html;
+}
+
+// ===================================================================
+// 📍 CAPTURAR COORDENADAS GPS PARA BÚSQUEDA TX Y CORTES
+// ===================================================================
+async function capturarCoordenadasGPS_TX() {
+    const inputCoordenadas = document.getElementById('coordenadasTX');
+    const gpsStatus = document.getElementById('gpsStatus_TX');
+    
+    if (!navigator.geolocation) {
+        alert('❌ Tu dispositivo no soporta geolocalización GPS');
         return;
     }
     
-    // 1️⃣ MOSTRAR CONTENEDOR DEL MAPA Y RESUMEN
-    let html = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
-            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>🗺️ TX/Cortes Encontrados en el Mapa</span>
-                <span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: bold;">
-                    ${resultados.length} resultados en ${radioMetros}m
-                </span>
-            </div>
-            <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; font-size: 14px;">
-                <strong>📊 Resumen:</strong><br>
-                • Coordenadas de búsqueda: <strong>${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}</strong><br>
-                • Radio: <strong>${radioMetros} metros</strong><br>
-                • TX/Cortes encontrados: <strong>${resultados.length}</strong>
-            </div>
-            <!-- MAPA LEAFLET -->
-            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; border: 2px solid #cbd5e1; margin: 15px 0; position: relative;"></div>
-            <!-- PANEL DE DETALLES -->
-            <div id="panelDetalleTX" style="margin-top: 20px;">
-                <div style="text-align: center; padding: 40px; color: #999;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                    <p style="font-size: 16px; font-weight: 600;">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p>
-                </div>
-            </div>
-        </div>
-    `;
+    // Mostrar indicador de carga
+    if (gpsStatus) {
+        gpsStatus.style.display = 'block';
+        gpsStatus.innerHTML = '📡 Obteniendo ubicación GPS...';
+        gpsStatus.style.background = '#e3f2fd';
+        gpsStatus.style.color = '#1976d2';
+    }
     
-    resultsContainer.innerHTML = html;
-    
-    // 🔹 IMPORTANTE: Esperar un tick para que el DOM se renderice antes de crear el mapa
-    setTimeout(() => {
-        try {
-            // 2️⃣ INICIALIZAR MAPA LEAFLET
-            const mapa = L.map('mapaTXCoordenadas', {
-                zoomControl: true,
-                attributionControl: true
-            }).setView([latCentro, lngCentro], 15);
-            
-            // 🔹 CRÍTICO: Forzar recálculo de tamaño del mapa
-            setTimeout(() => mapa.invalidateSize(), 100);
-            
-            // Agregar capa de OpenStreetMap
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(mapa);
-            
-            // 3️⃣ AGREGAR MARCADOR DEL CENTRO DE BÚSQUEDA
-            L.circle([latCentro, lngCentro], {
-                radius: radioMetros,
-                color: '#3b82f6',
-                fillColor: '#3b82f6',
-                fillOpacity: 0.1,
-                weight: 2
-            }).addTo(mapa).bindPopup(`📍 Centro de búsqueda<br>Radio: ${radioMetros} metros`);
-            
-            L.marker([latCentro, lngCentro], {
-                icon: L.divIcon({
-                    className: 'custom-div-icon',
-                    html: "<div style='background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'></div>",
-                    iconSize: [16, 16],
-                    iconAnchor: [8, 8]
-                })
-            }).addTo(mapa).bindPopup('📍 Centro de búsqueda');
-            
-            // 4️⃣ AGREGAR MARCADORES DE TX/CORTES
-            const bounds = [];
-            bounds.push([latCentro, lngCentro]);
-            
-            resultados.forEach((tx, index) => {
-                const distancia = tx.distancia || 0;
-                const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-                
-                // Parsear coordenadas del TX
-                const coordsStr = tx.Coordenadas;
-                if (!coordsStr || !coordsStr.includes(',')) return;
-                
-                const [latTX, lngTX] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-                if (isNaN(latTX) || isNaN(lngTX)) return;
-                
-                bounds.push([latTX, lngTX]);
-                
-                // Crear marcador
-                const marker = L.marker([latTX, lngTX], {
-                    icon: L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div style='background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;'>${index + 1}</div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                    })
-                }).addTo(mapa);
-                
-                // Popup simple
-                marker.bindPopup(`
-                    <div style="min-width: 200px;">
-                        <strong>#${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}</strong><br>
-                        <span style="color: #666;">Circuito: ${tx.Circuitos || 'N/A'}</span><br>
-                        <span style="color: ${color}; font-weight: bold;">📏 ${distancia} metros</span>
-                    </div>
-                `);
-                
-                // Click en marcador → Mostrar detalles en panel
-                marker.on('click', () => {
-                    mostrarDetalleTXEnPanel(tx, index, color, distancia);
-                });
-            });
-            
-            // 5️⃣ AJUSTAR VISTA DEL MAPA
-            if (bounds.length > 1) {
-                const group = new L.featureGroup(bounds.map(b => L.marker(b)));
-                mapa.fitBounds(group.getBounds().pad(0.15));
-            }
-            
-            console.log('✅ Mapa Leaflet inicializado correctamente');
-            
-        } catch (err) {
-            console.error('❌ Error inicializando mapa:', err);
-            document.getElementById('mapaTXCoordenadas').innerHTML = 
-                `<div style="padding: 20px; color: #ef4444; text-align: center;">
-                    ❌ Error al cargar el mapa<br>
-                    <small>${err.message}</small>
-                </div>`;
-        }
-    }, 50); // Esperar 50ms para que el DOM esté listo
-    
-    // 6️⃣ FUNCIÓN PARA MOSTRAR DETALLES EN PANEL (CORREGIDA - SIN COMILLAS PROBLEMÁTICAS)
-    function mostrarDetalleTXEnPanel(tx, index, color, distancia) {
-        const panel = document.getElementById('panelDetalleTX');
+    try {
+        // Obtener posición actual
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                {
+                    enableHighAccuracy: true,  // Usar GPS de alta precisión
+                    timeout: 15000,             // 15 segundos máximo
+                    maximumAge: 0               // No usar cache
+                }
+            );
+        });
         
-        // Aplicar formatearComentario() si existe
-        const comentarioFormateado = tx.Comentario && typeof formatearComentario === 'function' 
-            ? formatearComentario(tx.Comentario) 
-            : (tx.Comentario || 'Sin comentario disponible');
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        const accuracy = position.coords.accuracy;
+        const coordenadas = `${lat},${lng}`;
         
-        // Extraer y formatear enlace de Google Maps si existe
-        let enlaceMapsHTML = '';
-        if (tx.Coordenadas && tx.Coordenadas.includes(',')) {
-            const [lat, lng] = tx.Coordenadas.split(',').map(c => c.trim());
-            const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-            enlaceMapsHTML = `
-                <div style="margin-top: 15px; padding: 12px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196f3;">
-                    <strong style="color: #1565c0;">📍 Coordenadas:</strong><br>
-                    <a href="${mapsUrl}" target="_blank" style="color: #1976d2; text-decoration: underline; font-weight: 600;">
-                        🔗 Abrir en Google Maps
-                    </a><br>
-                    <small style="color: #666;">${tx.Coordenadas}</small>
-                </div>
-            `;
+        // Llenar el campo de coordenadas
+        if (inputCoordenadas) {
+            inputCoordenadas.value = coordenadas;
         }
         
-        // ✅ CORRECCIÓN: Usar función separada para cerrar el panel (evita problemas de comillas)
-        panel.innerHTML = `
-            <div style="background: white; padding: 20px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
-                    <h3 style="margin: 0; color: #1e293b; font-size: 20px;">
-                        #${index + 1} - TX/Corte: ${tx.TXCortes || 'N/A'}
-                    </h3>
-                    <span style="background: ${color}; color: white; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 14px;">
-                        📏 ${distancia} metros
-                    </span>
-                </div>
-                
-                <div style="display: grid; gap: 12px; font-size: 14px; line-height: 1.6;">
-                    <div>
-                        <strong style="color: #2d3748;">🔌 Circuito:</strong> 
-                        <span style="color: #64748b;">${tx.Circuitos || 'N/A'}</span>
-                    </div>
-                    
-                    ${comentarioFormateado && comentarioFormateado !== 'Sin comentario disponible' ? `
-                        <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 6px;">
-                            <strong style="color: #2d3748; display: block; margin-bottom: 10px;">💬 Comentario:</strong>
-                            <div style="color: #555; line-height: 1.8; font-size: 13px;">
-                                ${comentarioFormateado}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    ${enlaceMapsHTML}
-                </div>
-                
-                <!-- ✅ BOTÓN CERRAR CON FUNCIÓN SEPARADA (SIN COMILLAS PROBLEMÁTICAS) -->
-                <button id="btnCerrarDetalleTX" 
-                        style="margin-top: 20px; background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    ✕ Cerrar detalles
-                </button>
-            </div>
-        `;
-        
-        // ✅ AGREGAR EVENTO CLICK AL BOTÓN CERRAR (en lugar de onclick inline)
-        const btnCerrar = document.getElementById('btnCerrarDetalleTX');
-        if (btnCerrar) {
-            btnCerrar.onclick = function() {
-                panel.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #999;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
-                        <p style="font-size: 16px; font-weight: 600;">Haz clic en un marcador del mapa para ver detalles del TX/Corte</p>
-                    </div>
-                `;
-            };
+        // Mostrar éxito
+        if (gpsStatus) {
+            gpsStatus.innerHTML = `✅ Ubicación capturada<br>
+                                   <strong>Precisión: ${Math.round(accuracy)} metros</strong><br>
+                                   <small>${coordenadas}</small>`;
+            gpsStatus.style.background = '#e8f5e9';
+            gpsStatus.style.color = '#2e7d32';
+            
+            // Ocultar después de 3 segundos
+            setTimeout(() => {
+                gpsStatus.style.display = 'none';
+            }, 3000);
         }
         
-        // Scroll suave al panel
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        console.log(`✅ Coordenadas GPS capturadas: ${coordenadas} (precisión: ${Math.round(accuracy)}m)`);
+        
+        // Opcional: Buscar automáticamente después de capturar
+        // Descomenta la siguiente línea si quieres búsqueda automática:
+        // setTimeout(() => buscarTXPorCoordenadas(), 500);
+        
+    } catch (error) {
+        console.error('❌ Error GPS:', error);
+        
+        let mensajeError = 'No se pudo obtener la ubicación.';
+        
+        if (error.code === 1) {
+            mensajeError = 'Permiso denegado. Habilita el permiso de ubicación en tu navegador.';
+        } else if (error.code === 2) {
+            mensajeError = 'Ubicación no disponible. Activa el GPS de tu dispositivo.';
+        } else if (error.code === 3) {
+            mensajeError = 'Tiempo agotado. Intenta de nuevo en un área con mejor señal.';
+        }
+        
+        if (gpsStatus) {
+            gpsStatus.innerHTML = `❌ ${mensajeError}`;
+            gpsStatus.style.background = '#fee2e2';
+            gpsStatus.style.color = '#b91c1c';
+        } else {
+            alert(`❌ Error GPS: ${mensajeError}`);
+        }
     }
 }
+
 
 
 
@@ -19611,25 +19629,11 @@ async function testConexionTX() {
 
 
 // ===================================================================
-// 🧪 DIAGNÓSTICO RÁPIDO: Comparar .range() vs sin .range() + Mapa
+// 🧪 DIAGNÓSTICO RÁPIDO: Comparar .range() vs sin .range()
 // ===================================================================
 async function diagnosticarRangeVsNoRange() {
-    console.group('🔍 DIAGNÓSTICO INTEGRAL: Mapa y Supabase');
+    console.group('🔍 DIAGNÓSTICO: .range() vs sin .range()');
     
-    // 🗺️ VALIDACIÓN DE LIBRERÍA Y DOM (Lo que me pediste agregar)
-    console.log('--- 🗺️ ESTADO DEL MAPA ---');
-    console.log('✅ Leaflet cargado:', typeof L !== 'undefined');
-    console.log('✅ Div mapa existe:', !!document.getElementById('mapaTXCoordenadas'));
-    
-    if (typeof L === 'undefined') {
-        console.error('❌ ERROR: La librería Leaflet no está cargada. Los mapas no funcionarán.');
-    }
-    if (!document.getElementById('mapaTXCoordenadas')) {
-        console.warn('⚠️ ADVERTENCIA: No se encontró el ID "mapaTXCoordenadas" en el HTML.');
-    }
-
-    console.log('\n--- 🗄️ PRUEBAS DE SUPABASE ---');
-
     // TEST A: Sin .range()
     console.log('📥 TEST A: Consulta SIN .range()');
     const testA = await supabaseClient
@@ -19656,22 +19660,19 @@ async function diagnosticarRangeVsNoRange() {
         dataIsArray: Array.isArray(testB?.data)
     });
     
-    // COMPARACIÓN FINAL
-    console.log('\n📊 COMPARACIÓN Y CONCLUSIÓN:');
+    // COMPARACIÓN
+    console.log('\n📊 COMPARACIÓN:');
     console.log(`   • Sin .range(): ${testA?.data?.length || 0} registros`);
     console.log(`   • Con .range(): ${testB?.data?.length || 0} registros`);
     
     if (testA?.data?.length > 0 && (!testB?.data || testB.data.length === 0)) {
         console.warn('⚠️ CONFIRMADO: .range() está fallando mientras que sin .range() funciona');
-        console.log('💡 Solución: Usar .limit() en lugar de .range() temporalmente en tu código.');
-    } else if (testA?.data?.length === 0) {
-        console.error('❌ ERROR CRÍTICO: Ambas consultas fallaron o la tabla está vacía.');
-    } else {
-        console.log('✨ Todo parece estar en orden con las consultas.');
+        console.log('💡 Solución: Usar .limit() en lugar de .range() temporalmente');
     }
     
     console.groupEnd();
 }
+
 
 </script>
 </body>
