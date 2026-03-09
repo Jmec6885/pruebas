@@ -5193,27 +5193,6 @@ async function logout() {
         // ========================================
         
         if (selectedTable === 'usuarios') {
-            searchGrid.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
-                    <div class="form-group" style="margin: 0;">
-                        <label>Buscar Usuario:</label>
-                        <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
-                    </div>
-                    <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                    <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
-                        ➕ Crear Nuevo Usuario
-                    </button>
-                    <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        📤 Actualización Masiva
-                    </button>
-                </div>
-            `;
-            console.log('✅ Campos de búsqueda generados para: usuarios');
-            return;
-        }
-if (selectedTable === 'usuarios') {
     searchGrid.innerHTML = `
         <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
             <div class="form-group" style="margin: 0;">
