@@ -5213,6 +5213,35 @@ async function logout() {
             console.log('✅ Campos de búsqueda generados para: usuarios');
             return;
         }
+if (selectedTable === 'usuarios') {
+    searchGrid.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
+            <div class="form-group" style="margin: 0;">
+                <label>Buscar Usuario:</label>
+                <input type="text" id="searchusuario" placeholder="Ingrese nombre de usuario" />
+            </div>
+            <button class="btn btn-secondary" onclick="buscarUsuarioAdmin()" style="margin: 0;">🔍 Buscar</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+            <button class="btn" onclick="mostrarFormularioNuevoUsuario()" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                ➕ Crear Nuevo Usuario
+            </button>
+            <button class="btn" onclick="mostrarActualizacionMasiva()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                📤 Actualización Masiva
+            </button>
+        </div>
+        ${currentUser.rol === 'Administrador' ? `
+        <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
+            <label style="font-weight: 600; color: #2d3748;">💰 Gestión de Deuda:</label>
+            <button onclick="mostrarActualizacionDeuda()" 
+                    style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                💰 Actualizar Deuda Masiva
+            </button>
+        </div>` : ''}
+    `;
+    return;
+}
+
 
         if (selectedTable === 'kml_ruta') { 
             console.log('✅ Cargando interfaz KML Ruta');
@@ -5325,23 +5354,6 @@ async function logout() {
             `;
         } // ✅ Cierra if tx_y_cortes
 
-// ========================================
-// ✅ BOTÓN: ACTUALIZAR DEUDA (Solo para OS Pendientes)
-// ========================================
-if (selectedTable === 'OS Pendientes' && currentUser.rol === 'Administrador') {
-    html += `
-    <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
-        <label style="font-weight: 600; color: #2d3748;">💰 Gestión de Deuda:</label>
-        <button onclick="mostrarActualizacionDeuda()" 
-                style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
-            💰 Actualizar Deuda Masiva
-        </button>
-        <small style="color: #64748b; display: block; margin-top: 4px;">
-            Sube un Excel con OSATMO y Deuda para actualizar masivamente
-        </small>
-    </div>
-    `;
-}
 
 
         html += '</div>'; // ✅ Cierra search-grid
