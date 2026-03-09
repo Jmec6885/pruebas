@@ -4328,8 +4328,8 @@ const tableConfigs = {
             { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
             { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
             { key: 'Medidor', label: 'Medidor', type: 'exact' },
-            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' },
-	    { key: 'Deuda', label: 'Deuda', type: 'exact' }  // ✅ NUEVO
+            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+	   
         ],
         resultFields: ['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
         actions: ['Coordenadas', 'FotoLink', 'CoordenadasGis']
@@ -19283,20 +19283,28 @@ if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes'
     verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
 }
         config.resultFields.forEach(field => {
-    // 🚫 OCULTAR SOLO EN CONSULTAS_SERVICIOS Y SOLO PARA BÚSQUEDA, NO PARA VISUALIZACIÓN
-    // ✅ PERMITIR QUE NOMBRECLIENTE SE MUESTRE EN RESULTADOS PARA TODOS (puede venir en comentario)
-    
-    
     let valor = String(item[field] || 'N/A');
     
-    // ✅ FORMATEAR COMENTARIOS (aquí sí se muestra el nombre si viene dentro del texto)
     if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong>
             <div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
+    
+    } else if (field === 'Deuda' && item.Deuda !== null && item.Deuda !== undefined) {
+        const montoDeuda = parseFloat(item.Deuda);
+        if (!isNaN(montoDeuda)) {
+            const colorDeuda = montoDeuda > 500 ? '#f44336' : 
+                              montoDeuda >= 100 ? '#ff9800' : 
+                              montoDeuda >= 50 ? '#f48fb1' : '#4caf50';
+            html += `<div class="result-item">
+                <strong>💰 Deuda:</strong> 
+                <span style="color: ${colorDeuda}; font-weight: 600;">$${montoDeuda.toFixed(2)}</span>
+            </div>`;
+        }
+    
     } else {
-        html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
-    }
+        html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
+    }
 });
  
         html += generarBotonesAccion(item, index, config);
