@@ -4328,7 +4328,8 @@ const tableConfigs = {
             { key: 'OSSAP', label: 'OS SAP', type: 'exact' },
             { key: 'CuentaContrato', label: 'Cuenta/Contrato', type: 'exact' },
             { key: 'Medidor', label: 'Medidor', type: 'exact' },
-            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
+            { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' },
+	    { key: 'Deuda', label: 'Deuda', type: 'exact' }  // ✅ NUEVO
         ],
         resultFields: ['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
         actions: ['Coordenadas', 'FotoLink', 'CoordenadasGis']
@@ -5324,6 +5325,25 @@ async function logout() {
             `;
         } // ✅ Cierra if tx_y_cortes
 
+// ========================================
+// ✅ BOTÓN: ACTUALIZAR DEUDA (Solo para OS Pendientes)
+// ========================================
+if (selectedTable === 'OS Pendientes' && currentUser.rol === 'Administrador') {
+    html += `
+    <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
+        <label style="font-weight: 600; color: #2d3748;">💰 Gestión de Deuda:</label>
+        <button onclick="mostrarActualizacionDeuda()" 
+                style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+            💰 Actualizar Deuda Masiva
+        </button>
+        <small style="color: #64748b; display: block; margin-top: 4px;">
+            Sube un Excel con OSATMO y Deuda para actualizar masivamente
+        </small>
+    </div>
+    `;
+}
+
+
         html += '</div>'; // ✅ Cierra search-grid
         searchGrid.innerHTML = html;
         console.log('✅ Campos de búsqueda generados correctamente');
@@ -5395,6 +5415,9 @@ async function buscarUsuarioAdmin() {
     }
 }
 
+
+
+
 function mostrarResultadosUsuarios(usuarios) {
     const container = document.getElementById('searchResults');
  
@@ -5416,6 +5439,340 @@ function mostrarResultadosUsuarios(usuarios) {
     });
  
     container.innerHTML = html;
+}
+
+// ===================================================================
+// 📤 MOSTRAR ACTUALIZACIÓN MASIVA (Función que faltaba)
+// ===================================================================
+function mostrarActualizacionMasiva() {
+    console.log('📤 Mostrando interfaz de Actualización Masiva...');
+    
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
+            <div class="result-header">📤 Actualización Masiva de Usuarios</div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <strong>📋 Formato requerido:</strong><br>
+                <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                    • Archivo: Excel (.xlsx) o CSV<br>
+                    • Columnas: <code>usuario, rol, activo, razon_bloqueo</code><br>
+                    • El usuario debe existir previamente en la tabla
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📁 Seleccionar archivo:</label>
+                <input type="file" id="archivoActualizacionMasiva" 
+                       accept=".xlsx,.xls,.csv"
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: white;">
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="procesarActualizacionMasivaUsuarios()" 
+                        style="font-size: 16px; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    🚀 Procesar Actualización
+                </button>
+            </div>
+            
+            <div id="resultadoActualizacionMasiva" style="margin-top: 20px;"></div>
+        </div>
+    `;
+}
+
+// ===================================================================
+// 💰 MOSTRAR ACTUALIZACIÓN DE DEUDA (NUEVA FUNCIONALIDAD)
+// ===================================================================
+function mostrarActualizacionDeuda() {
+    console.log('💰 Mostrando interfaz de Actualización de Deuda...');
+    
+    const resultsContainer = document.getElementById('searchResults');
+    
+    resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <div class="result-header">💰 Actualizar Deuda - OS Pendientes</div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                <strong>⚠️ ADVERTENCIA:</strong><br>
+                <span style="color: #666; font-size: 14px;">
+                    Esta operación <strong>REEMPLAZARÁ</strong> todos los valores de la columna "Deuda" 
+                    en la tabla "OS Pendientes" para las OS que coincidan con el archivo.<br><br>
+                    • Los OS que NO estén en el archivo mantendrán su deuda actual<br>
+                    • Los OS que SÍ estén en el archivo tendrán su deuda actualizada<br>
+                    • Se recomienda hacer backup antes de ejecutar
+                </span>
+            </div>
+            
+            <div style="background: #f3e5f5; padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <strong>📋 Formato del archivo Excel:</strong><br>
+                <div style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.8;">
+                    • <strong>Archivo:</strong> Excel (.xlsx) o CSV<br>
+                    • <strong>Columna A:</strong> <code>OSATMO</code> (número de OS, texto)<br>
+                    • <strong>Columna B:</strong> <code>Deuda</code> (monto numérico, ej: 150.50)<br><br>
+                    <strong>Ejemplo:</strong><br>
+                    <code style="background: #fff; padding: 8px; display: block; border-radius: 4px;">
+                        OSATMO,Deuda<br>
+                        11070321,150.50<br>
+                        11196541,0<br>
+                        11079036,2500.00
+                    </code>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label style="font-weight: 600; display: block; margin-bottom: 10px;">📁 Seleccionar archivo de deuda:</label>
+                <input type="file" id="archivoDeuda" 
+                       accept=".xlsx,.xls,.csv"
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: white;">
+            </div>
+            
+            <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin: 15px 0;">
+                <strong>💡 Opciones:</strong><br>
+                <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer;">
+                    <input type="checkbox" id="soloActualizarCoincidencias" checked style="width: 18px; height: 18px;">
+                    <span style="font-size: 14px;">Actualizar SOLO las OS que estén en el archivo (recomendado)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer;">
+                    <input type="checkbox" id="establecerCeroNoCoincidencias" style="width: 18px; height: 18px;">
+                    <span style="font-size: 14px;">Poner deuda = $0 a las OS que NO estén en el archivo</span>
+                </label>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="procesarArchivoDeuda()" 
+                        style="font-size: 16px; padding: 15px 30px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);">
+                    💾 Actualizar Deuda en BD
+                </button>
+            </div>
+            
+            <div id="resultadoDeuda" style="margin-top: 20px;"></div>
+        </div>
+    `;
+}
+
+// ===================================================================
+// 💰 PROCESAR ARCHIVO DE DEUDA Y ACTUALIZAR BD
+// ===================================================================
+async function procesarArchivoDeuda() {
+    console.group('💰 ==========================================');
+    console.log('💰 PROCESAR ACTUALIZACIÓN DE DEUDA - INICIANDO');
+    
+    const fileInput = document.getElementById('archivoDeuda');
+    const resultadoDiv = document.getElementById('resultadoDeuda');
+    
+    // Validaciones
+    if (!fileInput?.files?.[0]) {
+        alert('⚠️ Por favor selecciona un archivo Excel o CSV');
+        console.groupEnd();
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const soloCoincidencias = document.getElementById('soloActualizarCoincidencias')?.checked ?? true;
+    const ceroNoCoincidencias = document.getElementById('establecerCeroNoCoincidencias')?.checked ?? false;
+    
+    // Mostrar loading
+    if (resultadoDiv) {
+        resultadoDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div class="loading" style="margin: 0 auto 10px;"></div>
+                <p style="color: #666;">Procesando archivo: <strong>${file.name}</strong>...</p>
+            </div>
+        `;
+    }
+    
+    try {
+        // Leer archivo con SheetJS
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const datos = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+        
+        console.log(`📊 Filas leídas del archivo: ${datos.length}`);
+        
+        // Validar encabezados
+        const encabezados = datos[0]?.map(h => String(h).trim().toLowerCase()) || [];
+        const tieneOSATMO = encabezados.includes('osatmo') || encabezados.includes('os_atmo') || encabezados[0]?.toLowerCase().includes('os');
+        const tieneDeuda = encabezados.includes('deuda') || encabezados.includes('monto') || encabezados[1]?.toLowerCase().includes('deuda');
+        
+        if (!tieneOSATMO || !tieneDeuda) {
+            throw new Error(`El archivo debe tener columnas "OSATMO" y "Deuda". Encabezados detectados: ${encabezados.join(', ')}`);
+        }
+        
+        // Parsear datos válidos
+        const actualizaciones = [];
+        const erroresParseo = [];
+        
+        for (let i = 1; i < datos.length; i++) {
+            const fila = datos[i];
+            if (!fila || fila.length < 2) continue;
+            
+            const osatomo = String(fila[0]).trim();
+            const deudaRaw = fila[1];
+            const deuda = typeof deudaRaw === 'number' ? deudaRaw : parseFloat(String(deudaRaw).replace(/[^0-9.]/g, ''));
+            
+            if (!osatomo || isNaN(deuda)) {
+                erroresParseo.push({ fila: i + 1, osatomo, deudaRaw });
+                continue;
+            }
+            
+            actualizaciones.push({
+                OSATMO: osatomo,
+                Deuda: Math.round(deuda * 100) / 100 // Redondear a 2 decimales
+            });
+        }
+        
+        console.log(`✅ Datos válidos: ${actualizaciones.length} | Errores: ${erroresParseo.length}`);
+        
+        if (actualizaciones.length === 0) {
+            throw new Error('No se encontraron datos válidos en el archivo');
+        }
+        
+        // Mostrar resumen
+        if (resultadoDiv) {
+            resultadoDiv.innerHTML = `
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #2e7d32;">📊 Resumen del archivo:</strong><br>
+                    • Filas totales: ${datos.length - 1}<br>
+                    • Datos válidos: ${actualizaciones.length}<br>
+                    • Errores de parseo: ${erroresParseo.length}<br>
+                    • OS a actualizar: ${actualizaciones.length}
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="btn" onclick="ejecutarActualizacionDeuda(${JSON.stringify(actualizaciones).replace(/"/g, '&quot;')}, ${soloCoincidencias}, ${ceroNoCoincidencias})"
+                            style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 12px 24px;">
+                        ✅ Confirmar y Actualizar en BD
+                    </button>
+                </div>
+            `;
+        }
+        
+        console.groupEnd();
+        
+    } catch (err) {
+        console.error('❌ Error procesando archivo:', err);
+        if (resultadoDiv) {
+            resultadoDiv.innerHTML = `
+                <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                    <strong style="color: #b91c1c;">❌ Error</strong><br>
+                    <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
+                </div>
+            `;
+        }
+        console.groupEnd();
+    }
+}
+
+// ===================================================================
+// 💰 EJECUTAR ACTUALIZACIÓN EN SUPABASE
+// ===================================================================
+async function ejecutarActualizacionDeuda(actualizaciones, soloCoincidencias, ceroNoCoincidencias) {
+    console.group('💰 EJECUTANDO ACTUALIZACIÓN EN SUPABASE');
+    console.log('💰 Total OS a procesar:', actualizaciones.length);
+    
+    const resultadoDiv = document.getElementById('resultadoDeuda');
+    
+    try {
+        // Mostrar progreso
+        if (resultadoDiv) {
+            resultadoDiv.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div class="loading" style="margin: 0 auto 10px;"></div>
+                    <p style="color: #666;">Actualizando ${actualizaciones.length} registros en BD...</p>
+                    <div id="progresoDeuda" style="margin-top: 10px; font-size: 14px; color: #1565c0;"></div>
+                </div>
+            `;
+        }
+        
+        let actualizadas = 0;
+        let noEncontradas = 0;
+        let errores = 0;
+        const BATCH_SIZE = 100;
+        
+        // Procesar en lotes para no saturar la API
+        for (let i = 0; i < actualizaciones.length; i += BATCH_SIZE) {
+            const lote = actualizaciones.slice(i, i + BATCH_SIZE);
+            
+            // Actualizar cada OS del lote
+            for (const item of lote) {
+                try {
+                    const { error } = await supabaseClient
+                        .from('OS Pendientes')
+                        .update({ Deuda: item.Deuda })
+                        .eq('OSATMO', item.OSATMO);
+                    
+                    if (error) {
+                        console.warn(`⚠️ Error actualizando ${item.OSATMO}:`, error.message);
+                        errores++;
+                    } else {
+                        actualizadas++;
+                    }
+                } catch (err) {
+                    console.error(`❌ Error crítico con ${item.OSATMO}:`, err);
+                    errores++;
+                }
+            }
+            
+            // Actualizar progreso
+            const porcentaje = Math.round(((i + lote.length) / actualizaciones.length) * 100);
+            if (resultadoDiv) {
+                document.getElementById('progresoDeuda').textContent = 
+                    `Progreso: ${Math.min(i + lote.length, actualizaciones.length)}/${actualizaciones.length} (${porcentaje}%)`;
+            }
+            
+            // Pequeño delay para no saturar
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // 🔹 OPCIONAL: Poner deuda = 0 a las que no están en el archivo
+        if (ceroNoCoincidencias && !soloCoincidencias) {
+            console.log('🔄 Estableciendo deuda = 0 para OS no incluidas...');
+            
+            const osIds = actualizaciones.map(a => a.OSATMO);
+            const { error: errorCero } = await supabaseClient
+                .from('OS Pendientes')
+                .update({ Deuda: 0 })
+                .not('OSATMO', 'in', `(${osIds.map(id => `'${id}'`).join(',')})`);
+            
+            if (errorCero) {
+                console.warn('⚠️ Error actualizando deuda a 0:', errorCero.message);
+            }
+        }
+        
+        // Mostrar resultado final
+        if (resultadoDiv) {
+            resultadoDiv.innerHTML = `
+                <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <strong style="color: #2e7d32; font-size: 18px;">✅ Actualización Completada</strong>
+                    <div style="margin-top: 15px; display: grid; gap: 10px; font-size: 14px;">
+                        <div>✅ Actualizadas: <strong>${actualizadas}</strong></div>
+                        <div>⚠️ No encontradas: <strong>${noEncontradas}</strong></div>
+                        <div>❌ Errores: <strong>${errores}</strong></div>
+                    </div>
+                    <button class="btn" onclick="location.reload()" 
+                            style="margin-top: 20px; background: #667eea; color: white; padding: 10px 20px;">
+                        🔄 Recargar para ver cambios
+                    </button>
+                </div>
+            `;
+        }
+        
+        console.log(`✅ Actualización finalizada: ${actualizadas} exitosas, ${errores} errores`);
+        console.groupEnd();
+        
+    } catch (err) {
+        console.error('❌ Error crítico en actualización:', err);
+        if (resultadoDiv) {
+            resultadoDiv.innerHTML = `
+                <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+                    <strong style="color: #b91c1c;">❌ Error</strong><br>
+                    <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
+                </div>
+            `;
+        }
+        console.groupEnd();
+    }
 }
 
  	// ========================================
@@ -7536,7 +7893,7 @@ console.log(`📍 Punto de origen definido en: ${latCentro}, ${lngCentro} (OS: $
         // ✅ CORRECTO (sin "Días Vencimiento")
 const { data: osPendientes, error: errorPendientes } = await supabaseClient
     .from('OS Pendientes')
-    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario')
+    .select('OSATMO, Tipologia, Tipo_de_OS, "Fecha Gen.", Coordenadas, Coordendasgis, Unidad, Deuda, Estado_ATOMO, Comentario, Deuda')
  
         if (errorPendientes) {
             console.error('❌ Error cargando OS pendientes:', errorPendientes);
@@ -8040,9 +8397,15 @@ async function generarKMLAdminPorUnidad(tipo) {
  
     // Generar KML
     const ubicaciones = osFiltradas.map(os => ({
-        etiqueta: os.OSATMO || 'Sin OS',
-        coordenadas: tipo === 'lector' ? os.Coordenadas : os.Coordendasgis
-    }));
+    etiqueta: os.OSATMO || 'Sin OS',
+    coordenadas: tipo === 'lector' ? os.Coordenadas : os.Coordendasgis,
+    descripcion: `
+        <b>OS:</b> ${os.OSATMO || 'N/A'}<br/>
+        <b>Tipología:</b> ${os.Tipologia || 'N/A'}<br/>
+        <b>Unidad:</b> ${os.Unidad || 'N/A'}<br/>
+        ${os.Deuda && parseFloat(os.Deuda) > 0 ? '<b>Deuda:</b> $' + parseFloat(os.Deuda).toFixed(2) + '<br/>' : ''}
+    `
+}));
  
     const kmlString = generarKMLString(ubicaciones);
     const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
@@ -19049,7 +19412,9 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
     .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
     .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
-    .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
+          .replace(/Tel, Previa/g, '<br><strong>Tel, Previa:</strong>')
+          .replace(/Deuda/g, '<br><strong>Deuda:</strong>')
+           .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
     
     // Prioridad para Medidor con número, luego la palabra sola
     .replace(/Medidor (\d+)/g, '<br><strong>Medidor:</strong> $1')
