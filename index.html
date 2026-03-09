@@ -9583,7 +9583,9 @@ console.group('🗺️ ==========================================');
     }
     
     // ✅ 1️⃣ USAR datos personalizados si se pasan, sino fallback a globales
-    const osDataOriginal = osParaGenerarMapa || window.osParaMapaActual || window.osKMLDataTemporal || window.osAsignadasKML || [];
+    const osDataOriginal = osParaMapa.length > 0 
+    ? osParaMapa 
+    : (osParaGenerarMapa || window.osParaMapaActual || window.osAsignadasKML || []);
     
     if (!osDataOriginal || !Array.isArray(osDataOriginal)) {
         console.error('❌ No hay datos disponibles para generar el mapa');
@@ -9894,6 +9896,8 @@ console.log(`📊 Filtro completado: Se mantienen ${osFiltradasNegocio.length} O
             </div>`;
     }
 }
+
+
 
  	// ========================================
 // 📥 DESCARGAR KML COORDENADAS LECTOR (CON DESCRIPCIONES)
@@ -11300,17 +11304,17 @@ async function cargarInterfazMapaRutas() {
         const rolesAdmin = ['Administrador', 'Despacho', 'Supervisor'];
         
         if (rolesAdmin.includes(currentUser.rol)) {
-            generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
-        } else {
-            // Para Contratistas, pasamos sus OS asignadas para que el mapa se centre en ellas
-            generarInterfazUnidadMapaRutas(filtros, osAsignadas);
-        }
+    generarInterfazAdminKMLRuta(unidadesUnicas, osAsignadas);
+} else {
+    cargarInterfazKMLRuta(); // ← esta sí existe y maneja el rol Contratista/Consulta
+}
  
     } catch (err) {
         console.error('❌ Error cargando Mapa de Rutas:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error al cargar la interfaz de mapas</div>';
     }
 }
+
 
 /**
  * Busca una OS y muestra el mapa para el rol Administrador/Despacho
@@ -17714,9 +17718,7 @@ function mostrarRegistrosIPR(registros) {
 
 
 
- 	// ========================================
-// 🔄 APLICAR FILTROS IPR
-// ========================================
+
 // ========================================
 // 🔄 APLICAR FILTROS IPR
 // ========================================
