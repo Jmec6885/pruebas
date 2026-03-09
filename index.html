@@ -19282,26 +19282,39 @@ function mostrarResultados(resultados) {
 if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas') {
     verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
 }
-        config.resultFields.forEach(field => {
+       config.resultFields.forEach(field => {
+    // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
+    if (field === 'NombreCliente' && selectedTable === 'consultas_servicios' && !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
+        return; // Saltar este campo
+    }
+    
     let valor = String(item[field] || 'N/A');
     
+    // ✅ FORMATEAR COMENTARIOS
     if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong>
             <div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
     
-    } else if (field === 'Deuda' && item.Deuda !== null && item.Deuda !== undefined) {
+    // ✅ AGREGAR ESTE BLOQUE PARA DEUDA (ANTES DEL ELSE FINAL)
+    } else if (field === 'Deuda' && item.Deuda !== null && item.Deuda !== undefined && item.Deuda !== '') {
         const montoDeuda = parseFloat(item.Deuda);
         if (!isNaN(montoDeuda)) {
-            const colorDeuda = montoDeuda > 500 ? '#f44336' : 
-                              montoDeuda >= 100 ? '#ff9800' : 
-                              montoDeuda >= 50 ? '#f48fb1' : '#4caf50';
+            // Colores según monto de deuda
+            const colorDeuda = montoDeuda > 500 ? '#f44336' :    // Rojo: alta
+                              montoDeuda >= 100 ? '#ff9800' :    // Naranja: media
+                              montoDeuda >= 50 ? '#f48fb1' :     // Rosado: baja
+                              '#4caf50';                          // Verde: mínima
+            
             html += `<div class="result-item">
                 <strong>💰 Deuda:</strong> 
-                <span style="color: ${colorDeuda}; font-weight: 600;">$${montoDeuda.toFixed(2)}</span>
+                <span style="color: ${colorDeuda}; font-weight: 700; font-size: 16px;">
+                    $${montoDeuda.toFixed(2)}
+                </span>
             </div>`;
         }
     
+    // ✅ ELSE FINAL para campos normales
     } else {
         html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
     }
