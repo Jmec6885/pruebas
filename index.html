@@ -11701,14 +11701,13 @@ for (const fuente of fuentesMemoria) {
     }
 }
         // ========================================
-        // 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD (SIN PAGINACIÓN)
-        // ========================================
-        if (!osEncontrada) {
+// 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD (CORREGIDA)
+// ========================================
+if (!osEncontrada) {
     console.log('⚠️ OS no encontrada en memoria, consultando BD...');
     
     try {
-        // ✅ CORRECCIÓN 1: Usar maybeSingle() en lugar de single()
-        // ✅ CORRECCIÓN 2: Escapar correctamente columnas con espacios
+        // ✅ CORRECCIÓN: Usar .limit(1) en lugar de .single() para evitar error con duplicados
         const { data: osData, error: errorBD } = await supabaseClient
             .from('OS Pendientes')
             .select(`
@@ -11727,17 +11726,17 @@ for (const fuente of fuentesMemoria) {
                 Estado_SAP,
                 Direccion
             `)
-            .eq('OSATMO', osIngresadaRaw)  // ← Usar valor original, no normalizado
-            .maybeSingle();  // ← maybeSingle evita error 406 si no hay resultados
+            .eq('OSATMO', osIngresadaRaw)  // ← Usar valor original (no normalizado)
+            .limit(1);  // ← CORRECCIÓN CLAVE: limit(1) en lugar de single()
         
-        // ✅ CORRECCIÓN 3: Manejar error PGRST116 (no rows) como caso válido
-        if (errorBD && errorBD.code !== 'PGRST116') {
+        if (errorBD) {
             console.error('❌ Error en BD:', errorBD);
             throw new Error(`Error consultando BD: ${errorBD.message}`);
         }
         
-        if (osData) {
-            osEncontrada = osData;
+        // ✅ Tomar el primer resultado si existe
+        if (osData && osData.length > 0) {
+            osEncontrada = osData[0];  // ← Tomar primer registro
             unidadDetectada = osEncontrada.Unidad;
             console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
         } else {
@@ -11746,9 +11745,12 @@ for (const fuente of fuentesMemoria) {
         
     } catch (err) {
         console.error('❌ Error crítico consultando BD:', err);
-        throw err;  // Re-lanzar para manejo en catch principal
+        throw err;
     }
 }
+
+
+
         
         // ========================================
         // 🔹 PASO 3: VALIDAR RESULTADO
@@ -22552,24 +22554,42 @@ function toggleMarcadoresPorFuente(mapa, fuente, visible) {
 }
 
 
-// Ejecutar en consola del navegador:
-async function verificarOS(osId) {
+async function diagnosticarOS(osId) {
+    console.group(`🔍 Diagnóstico OS: ${osId}`);
+    
+    // 1. Contar cuántos registros existen
+    const { count, error: countError } = await supabaseClient
+        .from('OS Pendientes')
+        .select('*', { count: 'exact', head: true })
+        .eq('OSATMO', osId);
+    
+    console.log('📊 Cantidad de registros:', count);
+    
+    // 2. Obtener todos los registros (para ver duplicados)
     const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('OSATMO, Unidad')
-        .eq('OSATMO', osId)
-        .maybeSingle();
+        .select('id, OSATMO, Unidad, "Fecha Gen."')
+        .eq('OSATMO', osId);
     
-    console.log('🔍 Resultado:', {
-        encontrado: !!data,
-        os: data?.OSATMO,
-        unidad: data?.Unidad,
-        error: error?.message
-    });
+    console.log('📋 Registros encontrados:', data?.length || 0);
+    if (data?.length > 0) {
+        console.table(data);
+    }
+    
+    // 3. Verificar en os_asignadas también
+    const { data: asignada, error: asigError } = await supabaseClient
+        .from('os_asignadas')
+        .select('osatomo, Unidad')
+        .eq('osatomo', osId)
+        .limit(1);
+    
+    console.log('🔗 En os_asignadas:', asignada?.length > 0 ? '✅ SÍ' : '❌ NO');
+    
+    console.groupEnd();
 }
 
 // Usar:
-verificarOS('11196024');
+diagnosticarOS('11196024');
 
 
 
