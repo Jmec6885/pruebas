@@ -9407,63 +9407,71 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
         const estilo = getEstiloPorFuente(primeraOS.fuente || 'os_asignadas', primeraOS.orden_cercania);
         
         // ✅ Determinar texto del marcador
-        let textoMarcador = '';
-        if (primeraOS.fuente === 'os_mas_cercanas') {
-            textoMarcador = primeraOS.orden_cercania === 0 ? '🚩' : primeraOS.orden_cercania;
-        } else if (primeraOS.fuente === 'os_preseleccionadas') {
-            textoMarcador = '📋';
-        } else {
-            textoMarcador = primeraOS.numeroOrden || 1;
-        }
-        
-        // ✅ Crear icono con indicador de múltiple si aplica
-        const iconoConNumero = L.divIcon({
-            className: 'custom-div-icon-orden',
-            html: `
+let textoMarcador = '';
+if (primeraOS.fuente === 'os_mas_cercanas') {
+    textoMarcador = primeraOS.orden_cercania === 0 ? '🚩' : primeraOS.orden_cercania;
+} else if (primeraOS.fuente === 'os_preseleccionadas') {
+    textoMarcador = '📋';
+} else {
+    textoMarcador = primeraOS.numeroOrden || 1;
+}
+
+// ✅ CORRECCIÓN: Calcular valores CSS ANTES del template string
+const anchoIcono = esMultiple ? '40px' : `${estilo.radio * 2}px`;
+const altoIcono = esMultiple ? '40px' : `${estilo.radio * 2}px`;
+const fontSizeIcono = esMultiple ? '16px' : (estilo.radio >= 13 ? '12px' : '10px');
+const iconAnchorX = esMultiple ? 20 : estilo.radio;
+const iconAnchorY = esMultiple ? 40 : estilo.radio * 2;
+const popupAnchorY = esMultiple ? -40 : -(estilo.radio * 2);
+
+// ✅ Crear icono con valores precalculados
+const iconoConNumero = L.divIcon({
+    className: 'custom-div-icon-orden',
+    html: `
+        <div style="
+            background-color: ${estilo.marcador};
+            width: ${anchoIcono};
+            height: ${altoIcono};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid ${estilo.borde};
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            position: relative;
+            user-select: none;
+        ">
+            <span style="
+                transform: rotate(45deg);
+                color: ${estilo.texto};
+                font-weight: bold;
+                font-size: ${fontSizeIcono};
+                line-height: 1;
+            ">${textoMarcador}${esMultiple ? '+' : ''}</span>
+            
+            ${esMultiple ? `
                 <div style="
-                    background-color: ${estilo.marcador};
-                    width: ${esMultiple ? '40px' : '${estilo.radio * 2}px'};
-                    height: ${esMultiple ? '40px' : '${estilo.radio * 2}px'};
-                    border-radius: 50% 50% 50% 0;
-                    transform: rotate(-45deg);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 2px solid ${estilo.borde};
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                    position: relative;
-                    user-select: none;
-                ">
-                    <span style="
-                        transform: rotate(45deg);
-                        color: ${estilo.texto};
-                        font-weight: bold;
-                        font-size: ${esMultiple ? '16px' : '${estilo.radio >= 13 ? '12px' : '10px'}'};
-                        line-height: 1;
-                    ">${textoMarcador}${esMultiple ? '+' : ''}</span>
-                    
-                    ${esMultiple ? `
-                        <div style="
-                            position:absolute;
-                            top:-5px;
-                            right:-5px;
-                            background:#ff5722;
-                            color:white;
-                            border-radius:50%;
-                            width:20px;
-                            height:20px;
-                            font-size:10px;
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            border:2px solid white;
-                            font-weight:bold;
-                        ">${osList.length}</div>` : ''}
-                </div>`,
-            iconSize: [esMultiple ? 40 : estilo.radio * 2, esMultiple ? 40 : estilo.radio * 2],
-            iconAnchor: [esMultiple ? 20 : estilo.radio, esMultiple ? 40 : estilo.radio * 2],
-            popupAnchor: [0, esMultiple ? -40 : -(estilo.radio * 2)]
-        });
+                    position:absolute;
+                    top:-5px;
+                    right:-5px;
+                    background:#ff5722;
+                    color:white;
+                    border-radius:50%;
+                    width:20px;
+                    height:20px;
+                    font-size:10px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:2px solid white;
+                    font-weight:bold;
+                ">${osList.length}</div>` : ''}
+        </div>`,
+    iconSize: [esMultiple ? 40 : estilo.radio * 2, esMultiple ? 40 : estilo.radio * 2],
+    iconAnchor: [iconAnchorX, iconAnchorY],
+    popupAnchor: [0, popupAnchorY]
+});
         
         // ✅ Generar popup con lista de todas las OS en este punto
         let popupContent = `
