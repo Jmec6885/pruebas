@@ -16674,6 +16674,29 @@ function seleccionarOSDeLista(osatomo, lat, lng) {
 window.seleccionarOSDeLista = seleccionarOSDeLista;
 
 
+// ===================================================================
+// 🔒 VALIDAR Y CONVERTIR A STRING SEGURO (FUNCIÓN AUXILIAR)
+// ===================================================================
+function toSafeString(valor, defaultValue = '') {
+    if (valor === null || valor === undefined) return defaultValue;
+    if (typeof valor === 'string') return valor.trim();
+    if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+    if (typeof valor === 'object') {
+        // Si es un objeto con propiedad 'text' o 'value', usarla
+        if (valor.text) return String(valor.text).trim();
+        if (valor.value) return String(valor.value).trim();
+        // Fallback: intentar JSON.stringify
+        try {
+            return JSON.stringify(valor);
+        } catch {
+            return defaultValue;
+        }
+    }
+    return defaultValue;
+}
+
+
+
  	// ========================================
 // 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
 // ========================================
@@ -16822,7 +16845,7 @@ else if (estadoStr.includes('ASIGNADA')) {
 } else {
     colorFondo = '#e3f2fd';
     colorBorde = '#2196f3';
-}]]
+}
     // ========================================
     // GENERAR HTML DEL PANEL
     // ========================================
@@ -22080,26 +22103,7 @@ function debugEstadoMapa() {
     console.groupEnd();
 }
 
-// ===================================================================
-// 🔒 VALIDAR Y CONVERTIR A STRING SEGURO (FUNCIÓN AUXILIAR)
-// ===================================================================
-function toSafeString(valor, defaultValue = '') {
-    if (valor === null || valor === undefined) return defaultValue;
-    if (typeof valor === 'string') return valor.trim();
-    if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
-    if (typeof valor === 'object') {
-        // Si es un objeto con propiedad 'text' o 'value', usarla
-        if (valor.text) return String(valor.text).trim();
-        if (valor.value) return String(valor.value).trim();
-        // Fallback: intentar JSON.stringify
-        try {
-            return JSON.stringify(valor);
-        } catch {
-            return defaultValue;
-        }
-    }
-    return defaultValue;
-}
+
 
 
 </script>
