@@ -9549,14 +9549,16 @@ const iconoConNumero = L.divIcon({
         popupContent += `</div>`;
         
         // ✅ Crear marcador con popup
-        const marker = L.marker([lat, lng], { 
-            icon: iconoConNumero,
-            zIndexOffset: esMultiple ? 500 : 100,
-            contexto: contexto,
-            fuente: primeraOS.fuente || 'os_asignadas'
-        })
-        .addTo(window.mapaLeafletInstance)
-        .bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
+       const marker = L.marker([lat, lng], { 
+    icon: iconoConNumero,
+    zIndexOffset: esMultiple ? 500 : 100,
+    contexto: contexto,
+    fuente: primeraOS.fuente || 'os_mas_cercanas',  // ✅ Asegurar que siempre tenga fuente
+    estado: primeraOS.fuente === 'os_mas_cercanas' ? 'os_mas_cercanas' : undefined,  // ✅ Para compatibilidad
+    osData: primeraOS
+})
+.addTo(window.mapaLeafletInstance)
+.bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
         
         nuevosMarcadores.push(marker);
         bounds.extend([lat, lng]);
@@ -14409,7 +14411,7 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
 
 
 // ===================================================================
-// 🎯 FILTRAR MARCADORES POR ESTADO (CORREGIDA PARA CENTRO)
+// 🎯 FILTRAR MARCADORES POR ESTADO (SINCRONIZADA CON LEYENDA)
 // ===================================================================
 function filtrarPorEstado(estado) {
     console.log(`🎯 Filtrando por estado: ${estado}`);
@@ -14419,56 +14421,62 @@ function filtrarPorEstado(estado) {
         return;
     }
     
+    const mapa = window.mapaLeafletInstance;
+    
     // ✅ CASO ESPECIAL: 'todas' = mostrar todo
     if (estado === 'todas') {
-        Object.values(window.markersPorEstado).forEach(markersArray => {
-            if (!Array.isArray(markersArray)) return;
-            markersArray.forEach(marker => {
-                if (!window.mapaLeafletInstance.hasLayer(marker)) {
-                    window.mapaLeafletInstance.addLayer(marker);
-                }
-            });
+        mapa.eachLayer(layer => {
+            if (!mapa.hasLayer(layer)) {
+                mapa.addLayer(layer);
+            }
         });
         console.log('✅ Filtro "todas" aplicado');
         return;
     }
     
-    // ✅ Iterar sobre todas las agrupaciones
-    Object.entries(window.markersPorEstado).forEach(([estadoKey, markersArray]) => {
-        if (!Array.isArray(markersArray)) return;
+    // ✅ Iterar sobre todos los marcadores del mapa
+    mapa.eachLayer(layer => {
+        const markerEstado = layer.options?.estado;
+        const markerFuente = layer.options?.fuente;
         
-        markersArray.forEach(marker => {
-            const markerEstado = marker.options?.estado;
-            const markerFuente = marker.options?.fuente;
-            
-            // ✅ Lógica de visibilidad:
-            // - Si estado === 'centro': mostrar solo marcadores con estado/fuente 'centro'
-            // - Si estado === otro: mostrar marcadores que coincidan O sean 'centro' (siempre visible)
-            let debeMostrar = false;
-            
-            if (estado === 'centro') {
-                // Solo mostrar el marcador centro
-                debeMostrar = (markerEstado === 'centro' || markerFuente === 'centro');
-            } else {
-                // Mostrar marcadores del estado seleccionado + siempre mostrar centro
-                debeMostrar = (markerEstado === estado) || (markerEstado === 'centro') || (markerFuente === 'centro');
+        // ✅ Siempre mantener visible el marcador centro
+        if (markerEstado === 'centro' || markerFuente === 'centro') {
+            if (!mapa.hasLayer(layer)) {
+                mapa.addLayer(layer);
             }
-            
-            // Aplicar visibilidad
-            if (debeMostrar) {
-                if (!window.mapaLeafletInstance.hasLayer(marker)) {
-                    window.mapaLeafletInstance.addLayer(marker);
-                }
-            } else {
-                if (window.mapaLeafletInstance.hasLayer(marker)) {
-                    window.mapaLeafletInstance.removeLayer(marker);
-                }
+            return;
+        }
+        
+        // ✅ Lógica de visibilidad:
+        let debeMostrar = false;
+        
+        if (estado === 'centro') {
+            // Solo mostrar el marcador centro (ya manejado arriba)
+            debeMostrar = false;
+        } else if (estado === 'regulada' || estado === 'no_regulada' || 
+                   estado === 'deuda_alta' || estado === 'deuda_media' || estado === 'deuda_baja') {
+            // Filtros por estado tradicional
+            debeMostrar = (markerEstado === estado);
+        } else if (estado === 'asignada') {
+            // ✅ Si usas 'asignada', mapear a 'os_asignadas'
+            debeMostrar = (markerEstado === 'asignada' || markerFuente === 'os_asignadas');
+        }
+        
+        // Aplicar visibilidad
+        if (debeMostrar) {
+            if (!mapa.hasLayer(layer)) {
+                mapa.addLayer(layer);
             }
-        });
+        } else {
+            if (mapa.hasLayer(layer)) {
+                mapa.removeLayer(layer);
+            }
+        }
     });
     
     console.log(`✅ Filtro aplicado: ${estado}`);
 }
+
 
 
  	// ========================================
@@ -14956,8 +14964,7 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 window.markersPorTipologia = {};
 window.markersPorEstado = {
     'centro': [],
-    'asignada': [],
-    'regulada': [],
+       'regulada': [],
     'no_regulada': [],
     'deuda_alta': [],
     'deuda_media': [],
@@ -15224,6 +15231,7 @@ const estiloBase = getEstiloPorFuente(fuenteOS, primeraOS.orden_cercania);
 
 // ✅ Determinar label y estadoKey para agrupación
 let labelEstado, estadoKey;
+
 if (fuenteOS === 'os_mas_cercanas') {
     labelEstado = estiloBase.label;
     estadoKey = 'os_mas_cercanas';
@@ -15233,11 +15241,19 @@ if (fuenteOS === 'os_mas_cercanas') {
 } else if (deuda > 500) {
     labelEstado = 'DEUDA ALTA';
     estadoKey = 'deuda_alta';
-} 
-// ... mantener condiciones existentes para deuda/tipo ...
-else {
-    labelEstado = estiloBase.label;
-    estadoKey = 'asignada';
+} else if (deuda >= 100 && deuda <= 500) {
+    labelEstado = 'DEUDA MEDIA';
+    estadoKey = 'deuda_media';
+} else if (deuda >= 50 && deuda < 100) {
+    labelEstado = 'DEUDA BAJA';
+    estadoKey = 'deuda_baja';
+} else if (tipoOS.includes('regulad') && !tipoOS.includes('no')) {
+    labelEstado = 'OS REGULADA';
+    estadoKey = 'regulada';
+} else {
+    // ✅ Para OS no reguladas/no prioritarias: usar 'no_regulada' (no 'asignada')
+    labelEstado = estiloBase.label || 'OS DISPONIBLE';
+    estadoKey = 'no_regulada';  // ← Clave consistente
 }
 
 // ✅ Usar color del estilo base (o fallback)
@@ -22570,20 +22586,30 @@ function agregarLeyendaFuentes(mapa, contexto = 'kml_ruta') {
 }
 
 // ===================================================================
-// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente (CON CENTRO)
+// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente (CORREGIDA)
 // ===================================================================
 function toggleMarcadoresPorFuente(mapa, fuente, visible) {
+    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'} (centro siempre visible)`);
+    
     mapa.eachLayer(layer => {
         // ✅ Siempre mantener visible el marcador centro
         if (layer.options?.estado === 'centro' || layer.options?.fuente === 'centro') {
             if (!mapa.hasLayer(layer)) {
                 mapa.addLayer(layer);
             }
-            return; // Saltar este marcador, no aplicar toggle
+            return; // Saltar este marcador
         }
         
-        // Aplicar toggle normal a otros marcadores
-        if (layer.options?.fuente === fuente) {
+        // ✅ Manejar marcadores SIN propiedad 'fuente' (compatibilidad con inicializarMapaLeaflet)
+        const layerFuente = layer.options?.fuente;
+        const layerEstado = layer.options?.estado;
+        
+        // Si el marcador no tiene 'fuente', intentar inferirla de 'estado'
+        const fuenteCoincide = layerFuente === fuente || 
+                              (layerEstado && layerEstado === fuente) ||
+                              (!layerFuente && !layerEstado && fuente === 'os_asignadas'); // Fallback
+        
+        if (fuenteCoincide) {
             if (visible) {
                 if (!mapa.hasLayer(layer)) {
                     mapa.addLayer(layer);
@@ -22595,8 +22621,11 @@ function toggleMarcadoresPorFuente(mapa, fuente, visible) {
             }
         }
     });
-    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'} (centro siempre visible)`);
 }
+
+
+
+
 
 async function diagnosticarOS(osId) {
     console.group(`🔍 Diagnóstico OS: ${osId}`);
@@ -22705,7 +22734,25 @@ function debugEstadoMapa() {
             console.warn('⚠️ No hay marcadores en markersPorEstado');
         }
 
-        // ✅ NUEVO: probar filtrarPorEstado
+        // Verificar fuente en marcadores
+        const marcadores = Object.values(window.markersPorEstado || {}).flat();
+        console.log('📊 Marcadores con fuente definida:', 
+            marcadores.filter(m => m.options?.fuente).length, 
+            'de', marcadores.length);
+
+        // Probar toggle de leyenda
+        if (typeof toggleMarcadoresPorFuente === 'function') {
+            console.log('🔄 Probando toggle de "os_mas_cercanas"...');
+            toggleMarcadoresPorFuente(window.mapaLeafletInstance, 'os_mas_cercanas', false);
+            setTimeout(() => {
+                toggleMarcadoresPorFuente(window.mapaLeafletInstance, 'os_mas_cercanas', true);
+                console.log('✅ Toggle completado');
+            }, 1000);
+        } else {
+            console.warn('⚠️ toggleMarcadoresPorFuente no está definida');
+        }
+
+        // Probar filtrarPorEstado
         if (typeof filtrarPorEstado === 'function') {
             filtrarPorEstado('os_mas_cercanas');
             console.log('✅ filtrarPorEstado ejecutada con os_mas_cercanas');
@@ -22715,7 +22762,6 @@ function debugEstadoMapa() {
     } catch (e) {
         console.warn('⚠️ Error leyendo marcadores:', e.message);
     }
-
 
     // Diagnóstico de marcador centro
     const centro = window.markersPorEstado?.centro?.[0];
@@ -22737,9 +22783,7 @@ function debugEstadoMapa() {
     } else {
         console.warn('⚠️ filtrarPorEstado no está definida');
     }
-
     console.groupEnd();
-
     console.groupEnd();
 }
 
