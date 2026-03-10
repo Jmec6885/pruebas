@@ -9198,11 +9198,12 @@ console.groupEnd(); // ← ÚNICO console.groupEnd() al final
 
 
 // ===================================================================
-// 🗺️ FILTRAR MAPA PARA MOSTRAR SOLO OS MÁS CERCANAS
+// 🗺️ FILTRAR MAPA PARA MOSTRAR SOLO OS MÁS CERCANAS (CON NUMERACIÓN Y DETALLES)
 // ===================================================================
-function mostrarSoloOSCercanasEnMapa(osCercanas) {
+function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
     console.group('🗺️ ==========================================');
     console.log('🗺️ FILTRANDO MAPA - MOSTRAR SOLO OS MÁS CERCANAS');
+    console.log('🗺️ Contexto:', contexto);
     console.log('🗺️ Total OS a mostrar:', osCercanas?.length || 0);
     console.groupEnd();
     
@@ -9211,19 +9212,27 @@ function mostrarSoloOSCercanasEnMapa(osCercanas) {
         return;
     }
     
-    // ✅ 1. Ocultar TODOS los marcadores actuales
+    // ✅ 1. Ocultar TODOS los marcadores actuales (solo del contexto actual)
     if (window.markersPorEstado) {
         Object.values(window.markersPorEstado).forEach(markersArray => {
             markersArray.forEach(marker => {
-                window.mapaLeafletInstance.removeLayer(marker);
+                // Solo remover si el marcador tiene el contexto correcto o es genérico
+                if (!marker.options?.contexto || marker.options.contexto === contexto) {
+                    if (window.mapaLeafletInstance.hasLayer(marker)) {
+                        window.mapaLeafletInstance.removeLayer(marker);
+                    }
+                }
             });
         });
-        console.log('👁️ Todos los marcadores ocultos');
+        console.log('👁️ Marcadores del contexto ocultados');
     }
     
-    // ✅ 2. Crear nuevos marcadores SOLO para las OS más cercanas
+    // ✅ 2. Crear nuevos marcadores CON NUMERACIÓN para las OS más cercanas
     const bounds = L.latLngBounds();
     let marcadoresCreados = 0;
+    
+    // Array para guardar referencias y permitir restaurar después
+    const nuevosMarcadores = [];
     
     osCercanas.forEach((os, index) => {
         const coordsRaw = os.Coordenadas || os.Coordendasgis;
@@ -9232,45 +9241,77 @@ function mostrarSoloOSCercanasEnMapa(osCercanas) {
         const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
         if (isNaN(lat) || isNaN(lng)) return;
         
-        // Determinar color según orden
+        // ✅ Determinar color y estilo según orden (igual que en generarMapaKMLRuta)
         let color = '#3b82f6'; // Azul default
+        let radio = 12;
+        let zIndex = 400 + index;
+        
         if (os.orden_cercania === 0) {
             color = '#ef4444'; // Rojo para origen
+            radio = 15;
+            zIndex = 1000;
         } else if (os.orden_cercania <= 5) {
             color = '#10b981'; // Verde para primeras 5
+            radio = 13;
         } else if (os.orden_cercania <= 10) {
             color = '#f59e0b'; // Naranja para 6-10
+            radio = 12;
         }
         
-        // Crear marcador
-        const marker = L.circleMarker([lat, lng], {
-            radius: 8,
-            fillColor: color,
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9,
-            zIndexOffset: os.orden_cercania === 0 ? 1000 : 100
+        // ✅ Crear marcador CON NÚMERO visible (igual que en generarMapaKMLRuta)
+        const numeroVisible = os.orden_cercania === 0 ? '🚩' : (os.orden_cercania || index + 1);
+        
+        const marker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: 'custom-div-icon-orden',
+                html: `<div style='
+                    background-color: ${color};
+                    width: ${radio * 2}px;
+                    height: ${radio * 2}px;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: ${radio >= 13 ? '12px' : '10px'};
+                '>${numeroVisible}</div>`,
+                iconSize: [radio * 2, radio * 2],
+                iconAnchor: [radio, radio]
+            }),
+            contexto: contexto, // ✅ Agregar contexto para filtrado futuro
+            orden_cercania: os.orden_cercania,
+            osData: os // ✅ Guardar datos completos para el popup
         }).addTo(window.mapaLeafletInstance);
         
-        // Popup con información
-        const popupContent = `
-            <div style="min-width: 200px; font-family: sans-serif;">
-                <strong style="color: ${color}; font-size: 14px; display: block; margin-bottom: 5px;">
-                    ${os.orden_cercania === 0 ? '🚩 ORIGEN' : `#${os.orden_cercania}`}
-                </strong>
-                <div><strong>OS:</strong> ${os.OSATMO || os.osatomo}</div>
-                ${os.distancia_km !== undefined ? `<div><strong>Distancia:</strong> ${os.distancia_km.toFixed(2)} km</div>` : ''}
-                ${os.Tipologia ? `<div><strong>Tipología:</strong> ${os.Tipologia}</div>` : ''}
-            </div>
-        `;
-        
+        // ✅ Popup con información DETALLADA (igual que en prepararDescripcionKML)
+        const popupContent = prepararDescripcionKML(os, contexto === 'kml_ruta' ? 'kml_ruta' : 'OS Pendientes', os.orden_cercania || index + 1);
         marker.bindPopup(popupContent);
+        
+        // Click para mostrar panel de detalles (si la función existe)
+        marker.on('click', () => {
+            if (typeof mostrarDetalleOSEnPanel === 'function') {
+                mostrarDetalleOSEnPanel(os, os.orden_cercania || index, color);
+            }
+        });
+        
         bounds.extend([lat, lng]);
+        nuevosMarcadores.push(marker);
         marcadoresCreados++;
     });
     
-    // ✅ 3. Ajustar vista del mapa a los marcadores
+    // ✅ 3. Guardar referencia para poder restaurar o limpiar después
+    window.osCercanasActivas = osCercanas;
+    window.mapaFiltradoActivo = true;
+    window.marcaCercanasContexto = contexto;
+    
+    // Guardar marcadores nuevos en estructura global para limpieza futura
+    if (!window.markersPorEstado) window.markersPorEstado = {};
+    window.markersPorEstado.cercanas = nuevosMarcadores;
+    
+    // ✅ 4. Ajustar vista del mapa a los marcadores
     if (marcadoresCreados > 0 && bounds.isValid()) {
         window.mapaLeafletInstance.fitBounds(bounds, {
             padding: [50, 50],
@@ -9280,13 +9321,15 @@ function mostrarSoloOSCercanasEnMapa(osCercanas) {
         console.log(`✅ Mapa ajustado a ${marcadoresCreados} OS más cercanas`);
     }
     
-    // ✅ 4. Guardar referencia para poder restaurar
-    window.osCercanasActivas = osCercanas;
-    window.mapaFiltradoActivo = true;
+    // ✅ 5. Agregar botón para restaurar vista completa (solo si no existe)
+    agregarBotonRestaurarVistaMapa(contexto);
     
-    // ✅ 5. Agregar botón para restaurar vista completa
-    agregarBotonRestaurarVistaMapa();
+    console.log(`✅ Filtrado aplicado: ${marcadoresCreados} marcadores con numeración y detalles`);
 }
+
+
+
+
 
 // ===================================================================
 // 🔄 RESTAURAR VISTA COMPLETA DEL MAPA
@@ -9325,43 +9368,6 @@ function restaurarVistaCompletaMapa() {
     console.log('✅ Vista completa restaurada');
 }
 
-// ===================================================================
-// ➕ AGREGAR BOTÓN PARA RESTAURAR VISTA
-// ===================================================================
-function agregarBotonRestaurarVistaMapa() {
-    // Remover botón existente si hay
-    const btnExistente = document.getElementById('btnRestaurarVistaMapa');
-    if (btnExistente) {
-        btnExistente.remove();
-    }
-    
-    // Crear botón
-    const btnRestaurar = document.createElement('button');
-    btnRestaurar.id = 'btnRestaurarVistaMapa';
-    btnRestaurar.innerHTML = '🔄 Mostrar Todas las OS';
-    btnRestaurar.style.cssText = `
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        padding: 10px 15px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    `;
-    btnRestaurar.onclick = restaurarVistaCompletaMapa;
-    
-    // Agregar al contenedor del mapa
-    const mapaContainer = document.getElementById('mapaLeaflet');
-    if (mapaContainer) {
-        mapaContainer.appendChild(btnRestaurar);
-    }
-}
 
 
 
@@ -9606,10 +9612,18 @@ console.group('🗺️ ==========================================');
         return;
     }
     
-    // ✅ 1️⃣ USAR datos personalizados si se pasan, sino fallback a globales
-    const osDataOriginal = osParaMapa.length > 0 
-    ? osParaMapa 
-    : (osParaGenerarMapa || window.osParaMapaActual || window.osAsignadasKML || []);
+
+    // ✅ SIEMPRE incluir asignadas + agregar las extras sin duplicar
+const asignadas = osParaGenerarMapa || window.osParaMapaActual || window.osAsignadasKML || [];
+
+const extras = osParaMapa.filter(os => 
+    !asignadas.some(asig => 
+        String(asig.OSATMO || asig.osatomo || '').trim() === 
+        String(os.OSATMO || os.osatomo || '').trim()
+    )
+);
+
+const osDataOriginal = [...asignadas, ...extras];
     
     if (!osDataOriginal || !Array.isArray(osDataOriginal)) {
         console.error('❌ No hay datos disponibles para generar el mapa');
@@ -9680,6 +9694,8 @@ console.group('🗺️ ==========================================');
         console.error('❌ mostrarMapaKMLConNumeracion no definida');
     }
 }
+
+
 
 // ========================================
 // 🔄 MOSTRAR MAPA KML CON NUMERACIÓN (MEJORADO)
@@ -15261,6 +15277,11 @@ if (osList.some(o => o.esPreseleccionada)) {
 // 🗺️ GENERAR MAPA KML RUTA (VERSIÓN OPTIMIZADA Y ROBUSTA)
 // ========================================
 async function generarMapaKMLRuta(osAsignadas, unidad) {
+ // ✅ LIMPIAR contexto anterior para evitar cruces
+    limpiarMarcadoresPorContexto('kml_ruta');
+    
+    // ✅ Establecer contexto actual
+    window.contextoMapaActual = 'kml_ruta';
     const resultsContainer = document.getElementById('searchResults');
     const unidadSeleccionada = unidad;
     
@@ -15598,16 +15619,33 @@ ${osNormalizadas.map(os =>
         </style>
     `;
 
-    resultsContainer.innerHTML = htmlSelector;
+     resultsContainer.innerHTML = htmlSelector;
     console.log('✅ Interfaz KML Ruta generada exitosamente');
     console.log('🗺️ ==========================================');
-}
+    
+    // ✅ AGREGAR ESTO: Marcar marcadores con contexto kml_ruta
+    if (window.markersPorEstado) {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (marker.options) {
+                    marker.options.contexto = 'kml_ruta';
+                }
+            });
+        });
+    }
+    
+} // ← Este es el cierre de generarMapaKMLRuta
 
 
 // ========================================
 // 🗺️ GENERAR MAPA KML RUTA - FUNCIÓN GLOBAL PARA ADMIN/DESPACHO/SUPERVISOR (CORREGIDA)
 // ========================================
 async function generarMapaAdminKMLRuta() {
+// ✅ LIMPIAR contexto anterior para evitar cruces
+    limpiarMarcadoresPorContexto('mapa_rutas');
+    
+    // ✅ Establecer contexto actual
+    window.contextoMapaActual = 'mapa_rutas';
     console.log('🗺️ ==========================================');
     console.log('🗺️ GENERANDO MAPA KML - MODO ADMIN/DESPACHO/SUPERVISOR');
     console.log('🗺️ ==========================================');
@@ -15719,11 +15757,154 @@ if (!osData || osData.length === 0) {
         console.error('❌ Error generando mapa:', err);
         resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
-}
+    
+    // ✅ AGREGAR ESTO: Marcar marcadores con contexto mapa_rutas
+    if (window.markersPorEstado) {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (marker.options) {
+                    marker.options.contexto = 'mapa_rutas';
+                }
+            });
+        });
+    }
+    
+} // ← Este es el cierre de generarMapaAdminKMLRuta
 
 // ✅ EXPOSICIÓN GLOBAL CRÍTICA: Hacer la función disponible para onclick HTML
 window.generarMapaAdminKMLRuta = generarMapaAdminKMLRuta;
 console.log('✅ generarMapaAdminKMLRuta expuesta globalmente');
+
+
+
+
+// ===================================================================
+// 🧹 LIMPIAR MARCADORES POR CONTEXTO (FUNCIÓN INDEPENDIENTE)
+// ===================================================================
+function limpiarMarcadoresPorContexto(contexto) {
+    if (!window.mapaLeafletInstance || !window.markersPorEstado) return;
+    
+    let removidos = 0;
+    
+    // Limpiar marcadores específicos del contexto
+    if (window.markersPorEstado.cercanas && window.marcaCercanasContexto === contexto) {
+        window.markersPorEstado.cercanas.forEach(marker => {
+            if (window.mapaLeafletInstance.hasLayer(marker)) {
+                window.mapaLeafletInstance.removeLayer(marker);
+                removidos++;
+            }
+        });
+        delete window.markersPorEstado.cercanas;
+    }
+    
+    // Limpiar otros marcadores con contexto específico
+    Object.keys(window.markersPorEstado).forEach(key => {
+        if (key !== 'centro' && Array.isArray(window.markersPorEstado[key])) {
+            window.markersPorEstado[key] = window.markersPorEstado[key].filter(marker => {
+                if (marker.options?.contexto === contexto) {
+                    if (window.mapaLeafletInstance.hasLayer(marker)) {
+                        window.mapaLeafletInstance.removeLayer(marker);
+                        removidos++;
+                    }
+                    return false;
+                }
+                return true;
+            });
+        }
+    });
+    
+    console.log(`🧹 ${removidos} marcadores del contexto "${contexto}" removidos`);
+}
+
+// ===================================================================
+// 🔄 RESTAURAR VISTA COMPLETA DEL MAPA (CON CONTEXTO)
+// ===================================================================
+function restaurarVistaCompletaMapa(contexto = null) {
+    console.log('🔄 Restaurando vista completa del mapa...', contexto ? `(contexto: ${contexto})` : '');
+    
+    if (!window.mapaLeafletInstance) return;
+    
+    if (contexto) {
+        limpiarMarcadoresPorContexto(contexto);
+    } else {
+        window.mapaLeafletInstance.eachLayer(layer => {
+            if (layer instanceof L.CircleMarker || layer instanceof L.Marker) {
+                if (layer !== window.markersPorEstado?.centro?.[0]) {
+                    window.mapaLeafletInstance.removeLayer(layer);
+                }
+            }
+        });
+    }
+    
+    if (window.markersPorEstado && window.contextoMapaActual) {
+        Object.keys(window.markersPorEstado).forEach(key => {
+            if (key !== 'centro' && Array.isArray(window.markersPorEstado[key])) {
+                window.markersPorEstado[key].forEach(marker => {
+                    if (!marker.options?.contexto || marker.options.contexto === window.contextoMapaActual) {
+                        if (!window.mapaLeafletInstance.hasLayer(marker)) {
+                            marker.addTo(window.mapaLeafletInstance);
+                        }
+                    }
+                });
+            }
+        });
+    }
+    
+    if (!contexto || contexto === window.marcaCercanasContexto) {
+        window.osCercanasActivas = null;
+        window.mapaFiltradoActivo = false;
+        window.marcaCercanasContexto = null;
+    }
+    
+    const btnRestaurar = document.getElementById('btnRestaurarVistaMapa');
+    if (btnRestaurar) btnRestaurar.remove();
+    
+    console.log('✅ Vista completa restaurada');
+}
+
+
+// ===================================================================
+// ➕ AGREGAR BOTÓN PARA RESTAURAR VISTA (CON CONTEXTO)
+// ===================================================================
+function agregarBotonRestaurarVistaMapa(contexto) {
+    // Remover botón existente
+    const btnExistente = document.getElementById('btnRestaurarVistaMapa');
+    if (btnExistente) {
+        btnExistente.remove();
+    }
+    
+    // Crear botón
+    const btnRestaurar = document.createElement('button');
+    btnRestaurar.id = 'btnRestaurarVistaMapa';
+    btnRestaurar.innerHTML = '🔄 Mostrar Todas las OS';
+    btnRestaurar.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        padding: 10px 15px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    
+    // ✅ Pasar contexto al restaurar
+    btnRestaurar.onclick = () => restaurarVistaCompletaMapa(contexto);
+    
+    // Agregar al contenedor del mapa
+    const mapaContainer = document.getElementById('mapaLeaflet') || 
+                         document.getElementById('mapaCircuito') ||
+                         document.querySelector('.leaflet-container')?.parentElement;
+    if (mapaContainer) {
+        mapaContainer.appendChild(btnRestaurar);
+    }
+}
+
 
 
 
@@ -20601,7 +20782,6 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
 
 
 
-
 // ===================================================================
 // 📏 CALCULAR DISTANCIA EN METROS (Sin cambios)
 // ===================================================================
@@ -21803,6 +21983,21 @@ async function diagnosticarKMZ(numeroCircuito) {
 
 document.getElementById('btnCerrarCircuito')?.addEventListener('click', limpiarMapaCircuito);
 window.verDetalleTX = verDetalleTX;
+
+
+function debugEstadoMapa() {
+    console.group('🗺️ DEBUG ESTADO MAPA');
+    console.log('Contexto actual:', window.contextoMapaActual);
+    console.log('OS en memoria:', window.osParaMapaActual?.length || 0);
+    console.log('Marcadores por estado:', Object.keys(window.markersPorEstado || {}));
+    console.log('Marcadores por tipología:', Object.keys(window.markersPorTipologia || {}));
+    console.log('Filtros aplicados:', window.filtrosAplicados);
+    console.log('OS Asignadas KML:', window.osAsignadasKML?.length || 0);
+    console.log('Fecha seleccionada:', window.fechaSeleccionadaKML);
+    console.log('Unidad seleccionada:', window.unidadSeleccionadaKML);
+    console.log('Punto de partida:', window.osPartidaSeleccionada);
+    console.groupEnd();
+}
 
 
 </script>
