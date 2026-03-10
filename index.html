@@ -20453,7 +20453,6 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
     if (!resultsContainer) return;
     
     if (typeof L === 'undefined') {
-        console.error('❌ Leaflet no está cargado');
         resultsContainer.innerHTML = `<div class="result-card">❌ Error: El mapa no está disponible.</div>`;
         return;
     }
@@ -20480,6 +20479,16 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
             const mapa = await inicializarMapaTX('mapaTXCoordenadas', latCentro, lngCentro);
             if (!mapa) return;
             
+            // ✅ FIX 1: Marcador del punto buscado
+            L.marker([latCentro, lngCentro], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color: #3b82f6; width: 26px; height: 26px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 14px;">📍</div>`,
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
+                })
+            }).addTo(mapa).bindPopup('<strong>📍 Tu ubicación buscada</strong>').openPopup();
+
             L.circle([latCentro, lngCentro], {
                 radius: radioMetros,
                 color: '#3b82f6',
@@ -20535,6 +20544,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         }
     }, 100);
 
+    // ✅ FIX 2: Solo UNA definición, usando formatearComentario
     function actualizarDetallePanel(tx, index, color, distancia) {
         const panel = document.getElementById('panelDetalleTX');
         panel.innerHTML = `
@@ -20558,12 +20568,13 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
             }
         }, 10);
     }
-
+}
+   
 
 
 
     // Función interna para evitar conflictos de comillas en HTML
-    function actualizarDetallePanel(tx, index, color, distancia) {
+    function actualizarDetallePanel(tx, index, color, distancia) {  1
     const panel = document.getElementById('panelDetalleTX');
     panel.innerHTML = `
         <div style="background: white; padding: 15px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
