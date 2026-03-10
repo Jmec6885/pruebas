@@ -14358,58 +14358,44 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
 }
 
 
-// ========================================
-// 3️⃣ NUEVA FUNCIÓN: FILTRAR MAPA POR ESTADO (CORREGIDA)
-// ========================================
+// ===================================================================
+// 🎯 FILTRAR MARCADORES POR ESTADO (CORREGIDA)
+// ===================================================================
 function filtrarPorEstado(estado) {
-    const mapa = window.mapaLeafletInstance;
+    console.log(`🎯 Filtrando por estado: ${estado}`);
     
-    // 1. Verificación de seguridad
-    if (!mapa || !window.markersPorEstado) {
-        console.error('❌ Mapa o marcadores no inicializados');
+    if (!window.mapaLeafletInstance) {
+        console.warn('⚠️ Mapa no inicializado');
         return;
     }
-
-    console.log(`🔍 Filtrando por estado: ${estado}`);
-    window.estadoFiltrado = estado;
-
-    const bounds = L.latLngBounds();
-    let hayMarcadoresVisibles = false;
-
-    // 2. Procesar visibilidad de marcadores
-    Object.entries(window.markersPorEstado).forEach(([key, markersArray]) => {
-        const debeMostrarse = (estado === 'todas' || key.toLowerCase() === estado.toLowerCase());
-
-    markersArray.forEach(marker => {
-        if (debeMostrarse) {
-            if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
-            bounds.extend(marker.getLatLng());
-            hayMarcadoresVisibles = true;
-        } else {
-            if (mapa.hasLayer(marker)) mapa.removeLayer(marker);
-        }
+    
+    // Iterar sobre todas las agrupaciones de marcadores
+    Object.values(window.markersPorEstado).forEach(markersArray => {
+        if (!Array.isArray(markersArray)) return;
+        
+        markersArray.forEach(marker => {
+            // ✅ Buscar por marker.options.estado (no por estadoKey interno)
+            const markerEstado = marker.options?.estado;
+            
+            // Determinar si debe estar visible
+            const debeMostrar = (estado === 'todas' || markerEstado === estado);
+            
+            // Aplicar visibilidad
+            if (debeMostrar) {
+                if (!window.mapaLeafletInstance.hasLayer(marker)) {
+                    window.mapaLeafletInstance.addLayer(marker);
+                }
+            } else {
+                if (window.mapaLeafletInstance.hasLayer(marker)) {
+                    window.mapaLeafletInstance.removeLayer(marker);
+                }
+            }
+        });
     });
-});
-
-
-    // 3. Ajustar vista SOLO si hay marcadores válidos (Evita el error de consola)
-    if (hayMarcadoresVisibles) {
-        // Solo hacemos fitBounds si el área es válida
-        if (bounds.isValid()) {
-            mapa.fitBounds(bounds, { 
-                padding: [50, 50], 
-                maxZoom: 16,
-                animate: true 
-            });
-        }
-    } else {
-        console.warn(`⚠️ No hay marcadores para el estado: ${estado}`);
-        // Opcional: Si no hay nada que mostrar, centrar en la OS principal
-        if (window.markerCentro) {
-            mapa.setView(window.markerCentro.getLatLng(), 15);
-        }
-    }
+    
+    console.log(`✅ Filtro aplicado: ${estado}`);
 }
+
 
 
  	// ========================================
@@ -14893,17 +14879,22 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         window.circuloRadio = null;
     }
 
-    // 3. Reinicializar agrupaciones de marcadores
-    window.markersPorTipologia = {};
-    window.markersPorEstado = {
-        'centro': [],
-        'asignada': [],
-        'regulada': [],
-        'no_regulada': [],
-        'deuda_alta': [],
-        'deuda_media': [],
-        'deuda_baja': []
-    };
+    // 3. Reinicializar agrupaciones de marcadores (CON TODAS LAS CLAVES NECESARIAS)
+window.markersPorTipologia = {};
+window.markersPorEstado = {
+    'centro': [],
+    'asignada': [],
+    'regulada': [],
+    'no_regulada': [],
+    'deuda_alta': [],
+    'deuda_media': [],
+    'deuda_baja': [],
+    // ✅ Claves para fuentes de prioridad (para evitar error de push en undefined)
+    'os_mas_cercanas': [],
+    'os_preseleccionadas': [],
+    'os_asignadas': [],
+    'filtros_unidad': []
+};
 
 
     // ========================================
@@ -15170,32 +15161,40 @@ if (fuenteOS === 'os_mas_cercanas') {
 // ... mantener condiciones existentes para deuda/tipo ...
 else {
     labelEstado = estiloBase.label;
-    estadoKey = 'os_asignadas';
+    estadoKey = 'asignada';
 }
 
 // ✅ Usar color del estilo base (o fallback)
 const colorFondo = estiloBase.marcador || '#2196f3';
 
-        // Contabilizar estadísticas
-        contadorProcesadas++;
-        estadisticas[estadoKey] += osList.length;
+// Contabilizar estadísticas
+contadorProcesadas++;
+estadisticas[estadoKey] += osList.length;
 
-        // Crear icono con indicador de múltiple si aplica
-        // ✅ AGREGAR indicador 📋 para OS preseleccionadas
+// Crear icono con indicador de múltiple si aplica
 const tienePreseleccionada = osList.some(o => o.esPreseleccionada);
 
-// 🔹 LOG para debug de preselección
 if (tienePreseleccionada) {
     console.log(`📋 Marcador con OS preseleccionada: ${osList.filter(o=>o.esPreseleccionada).length}/${osList.length}`);
 }
+
+// ✅ CALCULAR VALORES CSS CON FALLBACK (evita NaN y comentarios inválidos)
+const radioBase = estiloBase.radio || 12;
+
+const anchoIcono = esMultiple ? '40px' : `${radioBase * 2}px`;
+const altoIcono = esMultiple ? '40px' : `${radioBase * 2}px`;
+const fontSizeIcono = esMultiple ? '16px' : (radioBase >= 13 ? '12px' : '10px');
+const iconAnchorX = esMultiple ? 20 : radioBase;
+const iconAnchorY = esMultiple ? 40 : radioBase * 2;
+const popupAnchorY = esMultiple ? -40 : -(radioBase * 2);
 
 const iconoConNumero = L.divIcon({
     className: 'custom-marker',
     html: `
         <div style="
             background-color: ${colorFondo};
-            width: ${esMultiple ? '40px' : '${estiloBase.radio * 2}px'};
-            height: ${esMultiple ? '40px' : '${estiloBase.radio * 2}px'};
+            width: ${anchoIcono};
+            height: ${altoIcono};
             border-radius: 50% 50% 50% 0;
             transform: rotate(-45deg);
             display: flex;
@@ -15210,21 +15209,18 @@ const iconoConNumero = L.divIcon({
                 transform: rotate(45deg);
                 color: ${estiloBase.texto};
                 font-weight: bold;
-                font-size: ${estiloBase.radio >= 13 ? '12px' : '10px'};
+                font-size: ${fontSizeIcono};
                 line-height: 1;
             ">${estiloBase.icono || (primeraOS.numeroOrden || '1')}${esMultiple ? '+' : ''}</span>
-            <!-- ... resto del código existente para múltiple/preseleccionada ... -->
         </div>`,
-    iconSize: [esMultiple ? 40 : estiloBase.radio * 2, esMultiple ? 40 : estiloBase.radio * 2],
-    iconAnchor: [esMultiple ? 20 : estiloBase.radio, esMultiple ? 40 : estiloBase.radio * 2],
-    popupAnchor: [0, esMultiple ? -40 : -(estiloBase.radio * 2)]
+    iconSize: [esMultiple ? 40 : radioBase * 2, esMultiple ? 40 : radioBase * 2],
+    iconAnchor: [iconAnchorX, iconAnchorY],
+    popupAnchor: [0, popupAnchorY]
 });
 
-
-                // ========================================
-// ✅ CREAR POPUP CON LISTA DE TODAS LAS OS (CON COMENTARIO PRESELECCIÓN)
 // ========================================
-
+// ✅ CREAR POPUP CON LISTA DE TODAS LAS OS
+// ========================================
 let popupContent = `
     <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
         <strong style="color: ${estiloBase.marcador}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
@@ -15233,7 +15229,6 @@ let popupContent = `
 `;
 
 if (esMultiple) {
-    // Mostrar lista de todas las OS en este punto
     for (const [idx, os] of osList.entries()) {
         const osDeuda = parseFloat(os.Deuda) || 0;
         const osTipo = (os.Tipo_de_OS || '').toLowerCase();
@@ -15403,11 +15398,14 @@ popupContent += `</div>`;
         // ========================================
         try {
             const marker = L.marker([lat, lng], { 
-                icon: iconoConNumero,
-                zIndexOffset: esMultiple ? 500 : 100
-            })
-            .addTo(mapa)
-            .bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
+    icon: iconoConNumero,
+    zIndexOffset: esMultiple ? 500 : 100,
+    estado: estadoKey,  // ✅ AGREGAR: Para que filtrarPorEstado() funcione
+    osData: primeraOS,  // ✅ Mantener datos para popup
+    fuente: fuenteOS    // ✅ Opcional: para debug/filtros avanzados
+})
+.addTo(mapa)
+.bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
 
             window.markersPorEstado[estadoKey].push(marker);
             bounds.extend([lat, lng]);
@@ -22569,6 +22567,31 @@ function debugEstadoMapa() {
             ? getEstiloPorFuente(os.fuente, os.orden_cercania)?.marcador 
             : '⚠️ getEstiloPorFuente no definida'
     })));
+    console.groupEnd();
+
+    // Diagnóstico de marcadores
+    // Diagnóstico de marcadores
+    console.group('📍 Diagnóstico de marcadores');
+    console.log('Claves en markersPorEstado:', Object.keys(window.markersPorEstado || {}));
+    try {
+        const primerMarker = Object.values(window.markersPorEstado || {}).flat()[0];
+        if (primerMarker) {
+            console.log('Estado del primer marcador:', primerMarker?.options?.estado);
+            console.log('Icon size:', primerMarker?.options?.icon?.options?.iconSize);
+        } else {
+            console.warn('⚠️ No hay marcadores en markersPorEstado');
+        }
+
+        // ✅ NUEVO: probar filtrarPorEstado
+        if (typeof filtrarPorEstado === 'function') {
+            filtrarPorEstado('os_mas_cercanas');
+            console.log('✅ filtrarPorEstado ejecutada con os_mas_cercanas');
+        } else {
+            console.warn('⚠️ filtrarPorEstado no está definida');
+        }
+    } catch (e) {
+        console.warn('⚠️ Error leyendo marcadores:', e.message);
+    }
     console.groupEnd();
 
     console.groupEnd();
