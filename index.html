@@ -9293,7 +9293,12 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
         // Click para mostrar panel de detalles (si la función existe)
         marker.on('click', () => {
             if (typeof mostrarDetalleOSEnPanel === 'function') {
-                mostrarDetalleOSEnPanel(os, os.orden_cercania || index, color);
+               // ✅ CORREGIDO: Convertir a string descriptivo antes de pasar
+const labelParaPanel = os.orden_cercania === 0 
+    ? '🚩 ORIGEN - OS MÁS CERCANA' 
+    : `#${os.orden_cercania} - OS CERCANA`;
+
+mostrarDetalleOSEnPanel(os, labelParaPanel);
             }
         });
         
@@ -16783,34 +16788,41 @@ const comentarioFormateado = (() => {
 })();
 
     // ========================================
-    // DETERMINAR COLOR SEGÚN ESTADO
-    // ========================================
-    let colorFondo, colorBorde;
-    const deuda = parseFloat(os.Deuda) || 0;
+// 🎨 DETERMINAR COLOR SEGÚN ESTADO (CORREGIDO)
+// ========================================
+let colorFondo, colorBorde;
+const deuda = parseFloat(os.Deuda) || 0;
 
-    if (deuda > 500) {
-        colorFondo = '#fffde7';
-        colorBorde = '#fdd835';
-    } else if (deuda >= 100 && deuda <= 500) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
-    } else if (deuda >= 50 && deuda < 100) {
-        colorFondo = '#fce4ec';
-        colorBorde = '#f48fb1';
-    } else if (labelEstado && labelEstado.includes('ASIGNADA')) {
-        colorFondo = '#fff3e0';
-        colorBorde = '#ff9800';
-    } else if (labelEstado && labelEstado.includes('REGULADA')) {
-        colorFondo = '#ffebee';
-        colorBorde = '#f44336';
-    } else if (labelEstado && labelEstado.includes('TU OS')) {
-        colorFondo = '#e8f5e9';
-        colorBorde = '#4caf50';
-    } else {
-        colorFondo = '#e3f2fd';
-        colorBorde = '#2196f3';
-    }
+// ✅ CORRECCIÓN CLAVE: Convertir labelEstado a string seguro
+const estadoStr = toSafeString(labelEstado, '').toUpperCase();
 
+if (deuda > 500) {
+    colorFondo = '#fffde7';
+    colorBorde = '#fdd835';
+} else if (deuda >= 100 && deuda <= 500) {
+    colorFondo = '#fff3e0';
+    colorBorde = '#ff9800';
+} else if (deuda >= 50 && deuda < 100) {
+    colorFondo = '#fce4ec';
+    colorBorde = '#f48fb1';
+} 
+// ✅ USAR estadoStr (string seguro) en lugar de labelEstado directo
+else if (estadoStr.includes('ASIGNADA')) {
+    colorFondo = '#fff3e0';
+    colorBorde = '#ff9800';
+} else if (estadoStr.includes('REGULADA')) {
+    colorFondo = '#ffebee';
+    colorBorde = '#f44336';
+} else if (estadoStr.includes('TU OS') || estadoStr.includes('ORIGEN') || estadoStr.includes('🚩')) {
+    colorFondo = '#e8f5e9';
+    colorBorde = '#4caf50';
+} else if (estadoStr.includes('PRESELECCIONADA')) {
+    colorFondo = '#f3e5f5';
+    colorBorde = '#9c27b0';
+} else {
+    colorFondo = '#e3f2fd';
+    colorBorde = '#2196f3';
+}]]
     // ========================================
     // GENERAR HTML DEL PANEL
     // ========================================
@@ -16820,7 +16832,7 @@ const comentarioFormateado = (() => {
             <!-- Encabezado con botón cerrar -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid ${colorBorde};">
                 <strong style="color: ${colorBorde === '#4caf50' ? '#2e7d32' : (colorBorde === '#fdd835' ? '#f57f17' : (colorBorde === '#ff9800' ? '#e65100' : (colorBorde === '#f48fb1' ? '#c2185b' : (colorBorde === '#f44336' ? '#c62828' : '#1565c0'))))}; font-size: 18px;">
-                    ${labelEstado || 'DETALLE DE OS'}
+                    ${toSafeString(labelEstado, 'DETALLE DE OS')}
                 </strong>
                 <button onclick="cerrarDetalleOS()" style="background: ${colorBorde}; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 16px;">
                     ✕ Cerrar
@@ -22066,6 +22078,27 @@ function debugEstadoMapa() {
     console.groupEnd();
 
     console.groupEnd();
+}
+
+// ===================================================================
+// 🔒 VALIDAR Y CONVERTIR A STRING SEGURO (FUNCIÓN AUXILIAR)
+// ===================================================================
+function toSafeString(valor, defaultValue = '') {
+    if (valor === null || valor === undefined) return defaultValue;
+    if (typeof valor === 'string') return valor.trim();
+    if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+    if (typeof valor === 'object') {
+        // Si es un objeto con propiedad 'text' o 'value', usarla
+        if (valor.text) return String(valor.text).trim();
+        if (valor.value) return String(valor.value).trim();
+        // Fallback: intentar JSON.stringify
+        try {
+            return JSON.stringify(valor);
+        } catch {
+            return defaultValue;
+        }
+    }
+    return defaultValue;
 }
 
 
