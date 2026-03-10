@@ -11677,40 +11677,78 @@ async function buscarYMostrarMapaAdmin() {
         let osEncontrada = null;
         let unidadDetectada = null;
         
-        for (const fuente of fuentesMemoria) {
-            osEncontrada = fuente.find(os => {
-                const osId = String(os.OSATMO || os.osatomo || os.OSATOMO || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-                return osId === osIngresada;
-            });
-            
-            if (osEncontrada) {
-                console.log(`✅ OS encontrada en memoria: ${osEncontrada.OSATMO || osEncontrada.osatomo}`);
-                unidadDetectada = osEncontrada.Unidad;
-                break;
-            }
-        }
+        // En el bucle de búsqueda en memoria (PASO 1):
+for (const fuente of fuentesMemoria) {
+    osEncontrada = fuente.find(os => {
+        // ✅ Normalizar ambos lados de la comparación
+        const osIdEnMemoria = String(os.OSATMO || os.osatomo || os.OSATOMO || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
         
+        const osIdBuscado = String(osIngresadaRaw)
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
+        
+        return osIdEnMemoria === osIdBuscado;
+    });
+    
+    if (osEncontrada) {
+        console.log(`✅ OS encontrada en memoria: ${osEncontrada.OSATMO || osEncontrada.osatomo}`);
+        unidadDetectada = osEncontrada.Unidad;
+        break;
+    }
+}
         // ========================================
         // 🔹 PASO 2: SI NO ESTÁ EN MEMORIA, CONSULTAR BD (SIN PAGINACIÓN)
         // ========================================
         if (!osEncontrada) {
-            console.log('⚠️ OS no encontrada en memoria, consultando BD...');
-            
-            // ✅ BÚSQUEDA DIRECTA sin paginación (más eficiente)
-            const { data: osData, error: errorBD } = await supabaseClient
-                .from('OS Pendientes')
-                .select('OSATMO, Unidad, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Comentario, Deuda, "Fecha Gen.", Medidor, CuentaContrato, Estado_ATOMO, Estado_SAP, Direccion')
-                .eq('OSATMO', osIngresadaRaw)
-                .single();  // ← Solo esperamos un resultado
-            
-            if (errorBD && errorBD.code !== 'PGRST116') {  // PGRST116 = no rows
-                console.error('❌ Error en BD:', errorBD);
-            } else if (osData) {
-                osEncontrada = osData;
-                unidadDetectada = osEncontrada.Unidad;
-                console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
-            }
+    console.log('⚠️ OS no encontrada en memoria, consultando BD...');
+    
+    try {
+        // ✅ CORRECCIÓN 1: Usar maybeSingle() en lugar de single()
+        // ✅ CORRECCIÓN 2: Escapar correctamente columnas con espacios
+        const { data: osData, error: errorBD } = await supabaseClient
+            .from('OS Pendientes')
+            .select(`
+                OSATMO,
+                Unidad,
+                Tipologia,
+                Tipo_de_OS,
+                Coordenadas,
+                Coordendasgis,
+                Comentario,
+                Deuda,
+                "Fecha Gen.",
+                Medidor,
+                CuentaContrato,
+                Estado_ATOMO,
+                Estado_SAP,
+                Direccion
+            `)
+            .eq('OSATMO', osIngresadaRaw)  // ← Usar valor original, no normalizado
+            .maybeSingle();  // ← maybeSingle evita error 406 si no hay resultados
+        
+        // ✅ CORRECCIÓN 3: Manejar error PGRST116 (no rows) como caso válido
+        if (errorBD && errorBD.code !== 'PGRST116') {
+            console.error('❌ Error en BD:', errorBD);
+            throw new Error(`Error consultando BD: ${errorBD.message}`);
         }
+        
+        if (osData) {
+            osEncontrada = osData;
+            unidadDetectada = osEncontrada.Unidad;
+            console.log(`✅ OS encontrada en BD: ${osEncontrada.OSATMO}`);
+        } else {
+            console.log(`ℹ️ OS "${osIngresadaRaw}" no existe en "OS Pendientes"`);
+        }
+        
+    } catch (err) {
+        console.error('❌ Error crítico consultando BD:', err);
+        throw err;  // Re-lanzar para manejo en catch principal
+    }
+}
         
         // ========================================
         // 🔹 PASO 3: VALIDAR RESULTADO
@@ -22512,6 +22550,27 @@ function toggleMarcadoresPorFuente(mapa, fuente, visible) {
     });
     console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'}`);
 }
+
+
+// Ejecutar en consola del navegador:
+async function verificarOS(osId) {
+    const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO, Unidad')
+        .eq('OSATMO', osId)
+        .maybeSingle();
+    
+    console.log('🔍 Resultado:', {
+        encontrado: !!data,
+        os: data?.OSATMO,
+        unidad: data?.Unidad,
+        error: error?.message
+    });
+}
+
+// Usar:
+verificarOS('11196024');
+
 
 
 function debugEstadoMapa() {
