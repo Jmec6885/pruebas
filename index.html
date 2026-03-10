@@ -3073,6 +3073,15 @@ function retryWithLimit(fn, maxRetries = 3, delay = 300) {
 }
 
 
+// ===================================================================
+// 🔒 NORMALIZAR ID DE OS PARA COMPARACIÓN
+// ===================================================================
+function normalizarOSID(valor) {
+    if (!valor) return '';
+    return String(valor).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+
 // ========================================
 // 🚪 ACCEDER AL MENÚ ATTF (VERSIÓN CORREGIDA Y ROBUSTA)
 // ========================================
@@ -16080,8 +16089,10 @@ function obtenerOSParaDropdown(unidad, datasetCompleto = null) {
     return osAsignadas;
 }
 
+
+
 // ===================================================================
-// 🗺️ OBTENER OS PARA MAPA (CON PRIORIDAD DE TABLAS) - VERSIÓN FINAL
+// 🗺️ OBTENER OS PARA MAPA (CON PRIORIDAD DE TABLAS) - VERSIÓN FINAL CORREGIDA
 // ===================================================================
 async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null) {
     console.group('🗺️ ==========================================');
@@ -16095,7 +16106,7 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
     // 🔹 RECARGAR DATOS SI ESTÁN VACÍOS
     if (osBase.length === 0) {
         try {
-            const {  asignaciones } = await supabaseClient
+            const { data: asignaciones } = await supabaseClient
                 .from('os_asignadas')
                 .select('*');
             if (asignaciones?.length > 0) {
@@ -16111,8 +16122,42 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
     let osFinales = [];
     let osIdsYaIncluidas = new Set();
     
+    // 🔹 FUNCIÓN AUXILIAR: Buscar OS en osBase o consultar BD si no está
+    async function buscarOSCompleta(osId) {
+        // Intento 1: Buscar en osBase (memoria)
+        const enMemoria = osBase.find(o => 
+            normalizarOSID(o.OSATMO || o.osatomo || o.OSATOMO) === normalizarOSID(osId)
+        );
+        
+        if (enMemoria) return enMemoria;
+        
+        // Intento 2: Consultar OS Pendientes directamente
+        try {
+            const { data: osDetalle, error } = await supabaseClient
+                .from('OS Pendientes')
+                .select('OSATMO, OSSAP, CuentaContrato, Medidor, NombreCliente, Tipologia, Tipo_de_OS, Coordenadas, Coordendasgis, Unidad, "Fecha Gen.", Deuda, Comentario, Estado_ATOMO, Estado_SAP, Direccion')
+                .eq('OSATMO', osId)
+                .maybeSingle();
+            
+            if (osDetalle && !error) {
+                console.log(`🔍 OS ${osId} obtenida de OS Pendientes`);
+                return osDetalle;
+            }
+        } catch (err) {
+            console.warn(`⚠️ No se pudo obtener detalle de OS ${osId}:`, err.message);
+        }
+        
+        return null;
+    }
+    
+    // 🔹 FUNCIÓN AUXILIAR: Normalizar ID de OS para comparación robusta
+    function normalizarOSID(valor) {
+        if (!valor) return '';
+        return String(valor).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+    
     // ========================================
-    // 🔹 PRIORIDAD 1: OS MÁS CERCANAS
+    // 🔹 PRIORIDAD 1: OS MÁS CERCANAS (CORREGIDA)
     // ========================================
     console.log('🔍 [PRIORIDAD 1] Buscando en os_mas_cercanas...');
     
@@ -16122,35 +16167,40 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
         if (osMasCercanas.length > 0) {
             console.log(`✅ ${osMasCercanas.length} OS encontradas en os_mas_cercanas`);
             
-            osMasCercanas.forEach(os => {
-                const osId = String(os.os_destino).trim();
-                if (!osIdsYaIncluidas.has(osId)) {
-                    const osCompleta = osBase.find(o => 
-                        String(o.OSATMO || o.osatomo).trim() === osId
-                    );
-                    
-                    if (osCompleta) {
-                        osFinales.push({
-                            ...osCompleta,
-                            es_mas_cercana: true,
-                            orden_cercania: os.orden_cercania,
-                            fuente: 'os_mas_cercanas'
-                        });
-                        osIdsYaIncluidas.add(osId);
-                    }
+            for (const osCercana of osMasCercanas) {
+                const osId = String(osCercana.os_destino).trim();
+                
+                // Evitar duplicados
+                if (osIdsYaIncluidas.has(osId)) continue;
+                
+                // Buscar OS completa (en memoria o BD)
+                const osCompleta = await buscarOSCompleta(osId);
+                
+                if (osCompleta) {
+                    osFinales.push({
+                        ...osCompleta,
+                        es_mas_cercana: true,
+                        orden_cercania: osCercana.orden_cercania,
+                        distancia_km: osCercana.distancia_km,
+                        fuente: 'os_mas_cercanas'
+                    });
+                    osIdsYaIncluidas.add(osId);
+                    console.log(`✅ OS ${osId} agregada desde os_mas_cercanas`);
+                } else {
+                    console.warn(`⚠️ OS ${osId} no encontrada ni en osBase ni en OS Pendientes`);
                 }
-            });
+            }
         }
     } else {
         console.warn('⚠️ Función obtenerOSMasCercanasGuardadas no disponible');
     }
     
     // ========================================
-    // 🔹 PRIORIDAD 2: OS PRESELECCIONADAS
+    // 🔹 PRIORIDAD 2: OS PRESELECCIONADAS (CORREGIDA)
     // ========================================
     console.log('🔍 [PRIORIDAD 2] Buscando en os_preseleccionadas...');
     try {
-        const {  preseleccionadas, error: errorPre } = await supabaseClient
+        const { data: preseleccionadas, error: errorPre } = await supabaseClient
             .from('os_preseleccionadas')
             .select('osatomo, comentarios')
             .eq('unidad_destino', unidad)
@@ -16160,25 +16210,25 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
         if (!errorPre && preseleccionadas?.length > 0) {
             console.log(`✅ ${preseleccionadas.length} OS preseleccionadas encontradas`);
             
-            preseleccionadas.forEach(osPre => {
+            for (const osPre of preseleccionadas) {
                 const osId = String(osPre.osatomo).trim();
-                if (!osIdsYaIncluidas.has(osId)) {
-                    const osCompleta = osBase.find(o => 
-                        String(o.OSATMO || o.osatomo).trim() === osId
-                    );
-                    
-                    if (osCompleta) {
-                        osFinales.push({
-                            ...osCompleta,
-                            es_preseleccionada: true,
-                            comentario_preseleccion: osPre.comentarios,
-                            usuario_que_asigno: osPre.usuario_que_asigno,
-                            fuente: 'os_preseleccionadas'
-                        });
-                        osIdsYaIncluidas.add(osId);
-                    }
+                
+                if (osIdsYaIncluidas.has(osId)) continue;
+                
+                const osCompleta = await buscarOSCompleta(osId);
+                
+                if (osCompleta) {
+                    osFinales.push({
+                        ...osCompleta,
+                        es_preseleccionada: true,
+                        comentario_preseleccion: osPre.comentarios,
+                        usuario_que_asigno: osPre.usuario_que_asigno,
+                        fuente: 'os_preseleccionadas'
+                    });
+                    osIdsYaIncluidas.add(osId);
+                    console.log(`✅ OS ${osId} agregada desde os_preseleccionadas`);
                 }
-            });
+            }
         }
     } catch (err) {
         console.warn('⚠️ Error cargando preseleccionadas:', err.message);
@@ -16205,7 +16255,6 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
                 .maybeSingle();
             if (filtroBase) {
                 console.log('✅ Filtros base encontrados');
-                // Aquí podrías aplicar los filtros si lo necesitas
             }
         } else {
             console.log('✅ Filtros por fecha encontrados');
@@ -16227,7 +16276,7 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
     console.log(`✅ ${osAsignadasBase.length} OS asignadas base encontradas`);
     
     osAsignadasBase.forEach(os => {
-        const osId = String(os.OSATMO || os.osatomo).trim();
+        const osId = normalizarOSID(os.OSATMO || os.osatomo || os.OSATOMO);
         if (!osIdsYaIncluidas.has(osId)) {
             osFinales.push({
                 ...os,
@@ -16245,7 +16294,7 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
         total: osFinales.length,
         mas_cercanas: osFinales.filter(o => o.fuente === 'os_mas_cercanas').length,
         preseleccionadas: osFinales.filter(o => o.fuente === 'os_preseleccionadas').length,
-        filtros_unidad: osFinales.filter(o => o.fuente === 'filtros_unidad').length, // ✅ CORREGIDO
+        filtros_unidad: osFinales.filter(o => o.filtros_unidad).length,
         asignadas_automaticas: osFinales.filter(o => o.fuente === 'os_asignadas').length
     };
     
@@ -16256,7 +16305,6 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
     
     return osFinales;
 }
-
 
 
 // ========================================
