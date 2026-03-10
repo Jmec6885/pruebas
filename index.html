@@ -11254,6 +11254,12 @@ for (let i = 0; i < registrosValidos.length; i += BATCH_SIZE) {
 // 🗺️ CARGAR INTERFAZ MAPA DE RUTAS (OPTIMIZADA)
 // ========================================
 async function cargarInterfazMapaRutas() {
+ // ✅ LIMPIAR ESTADO ANTERIOR para evitar cruces
+    limpiarEstadoModulo(window.contextoMapaActual, 'mapa_rutas');
+    
+    console.group('🗺️ ==========================================');
+    console.log('🗺️ INICIALIZANDO: Mapa de Rutas (Admin/Despacho)');
+
     const searchGrid = document.getElementById('searchGrid');
     const resultsContainer = document.getElementById('searchResults');
  
@@ -11341,12 +11347,15 @@ async function cargarInterfazMapaRutas() {
         }
  
         // 5️⃣ GENERAR INTERFAZ SEGÚN ROL
-        const rolesAdmin = ['Administrador', 'Despacho', 'Supervisor'];
-        
-        if (rolesAdmin.includes(currentUser.rol)) {
-    generarInterfazAdminKMLRuta(unidadesUnicas, osAsignadas);
+    // 5️⃣ GENERAR INTERFAZ SEGÚN ROL (CORREGIDO)
+const rolesAdmin = ['Administrador', 'Despacho', 'Supervisor'];
+
+if (rolesAdmin.includes(currentUser.rol)) {
+    // ✅ CORRECTO: Interfaz Admin para Mapa de Rutas
+    generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
 } else {
-    cargarInterfazKMLRuta(); // ← esta sí existe y maneja el rol Contratista/Consulta
+    // ✅ CORRECTO: Interfaz Unidad para Mapa de Rutas (no KML)
+    generarInterfazUnidadMapaRutas(filtros, osAsignadas);
 }
  
     } catch (err) {
@@ -15816,6 +15825,45 @@ function limpiarMarcadoresPorContexto(contexto) {
     console.log(`🧹 ${removidos} marcadores del contexto "${contexto}" removidos`);
 }
 
+
+// ===================================================================
+// 🧹 LIMPIAR ESTADO ENTRE MÓDULOS (EVITAR CRUCES DE DATOS)
+// ===================================================================
+function limpiarEstadoModulo(moduloOrigen, moduloDestino) {
+    console.log(`🧹 Limpiando estado: ${moduloOrigen || 'ninguno'} → ${moduloDestino}`);
+    
+    // ✅ Limpiar variables globales compartidas que causan cruces
+    if (moduloDestino !== 'kml_ruta') {
+        // Si vamos a Mapa de Rutas, limpiar datos de KML
+        window.osParaMapaActual = null;
+        window.unidadSeleccionadaKML = null;
+        window.cascadaFuenteActual = null;
+        window.datosRutaKML = null;
+        window.puntoPartidaKML = null;
+    }
+    
+    if (moduloDestino !== 'mapa_rutas') {
+        // Si vamos a KML Ruta, limpiar datos de Mapa de Rutas
+        window.osCentroActual = null;
+        window.unidadFiltroActual = null;
+        window.tipologiaFiltrada = null;
+        window.estadoFiltrado = null;
+        window.filtrosAplicados = null;
+    }
+    
+    // ✅ Limpiar marcadores del contexto anterior (usa tu función existente)
+    if (window.contextoMapaActual && window.contextoMapaActual !== moduloDestino) {
+        if (typeof limpiarMarcadoresPorContexto === 'function') {
+            limpiarMarcadoresPorContexto(window.contextoMapaActual);
+        }
+    }
+    
+    // ✅ Actualizar contexto actual
+    window.contextoMapaActual = moduloDestino;
+    
+    console.log(`✅ Estado limpio para: ${moduloDestino}`);
+}
+
 // ===================================================================
 // 🔄 RESTAURAR VISTA COMPLETA DEL MAPA (CON CONTEXTO)
 // ===================================================================
@@ -16210,6 +16258,10 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
 // 🚀 CARGAR INTERFAZ KML RUTA (VERSIÓN VALIDADA - SIN ERRORES)
 // ========================================
 async function cargarInterfazKMLRuta() {
+// ✅ LIMPIAR ESTADO ANTERIOR para evitar cruces
+    limpiarEstadoModulo(window.contextoMapaActual, 'kml_ruta');
+    
+    console.group('👷 [CONTRATISTA] Cargando interfaz KML Ruta');
     console.log('🚀 EJECUTANDO: cargarInterfazKMLRuta (Modo Carga Total + Comentarios)');
 
     // ✅ VERIFICAR SI DEBE FORZAR RECARGA DE DATOS
@@ -21987,6 +22039,8 @@ window.verDetalleTX = verDetalleTX;
 
 function debugEstadoMapa() {
     console.group('🗺️ DEBUG ESTADO MAPA');
+    
+    // Estado de variables globales
     console.log('Contexto actual:', window.contextoMapaActual);
     console.log('OS en memoria:', window.osParaMapaActual?.length || 0);
     console.log('Marcadores por estado:', Object.keys(window.markersPorEstado || {}));
@@ -21996,6 +22050,21 @@ function debugEstadoMapa() {
     console.log('Fecha seleccionada:', window.fechaSeleccionadaKML);
     console.log('Unidad seleccionada:', window.unidadSeleccionadaKML);
     console.log('Punto de partida:', window.osPartidaSeleccionada);
+
+    // Verificar funciones cargadas
+    console.group('📋 Funciones');
+    console.log('cargarInterfazMapaRutas:', cargarInterfazMapaRutas?.toString()?.substring(0, 200));
+    console.log('cargarInterfazKMLRuta:', cargarInterfazKMLRuta?.toString()?.substring(0, 200));
+    console.groupEnd();
+
+    // Referencias cruzadas en el código
+    console.group('🔍 Referencias en HTML/Scripts');
+    const codigo = document.documentElement.outerHTML + 
+                   Array.from(document.scripts).map(s => s.textContent).join('\n');
+    const refs = (codigo.match(/mapa_rutas[\s\S]{0,500}generarInterfazAdminKMLRuta/g) || []).length;
+    console.log('Referencias a generarInterfazAdminKMLRuta en mapa_rutas:', refs);
+    console.groupEnd();
+
     console.groupEnd();
 }
 
