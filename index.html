@@ -12563,18 +12563,15 @@ function iniciarHeartbeatSesion(intervaloMs = 25000) {
 // 🗺️ FUNCIÓN PRINCIPAL: cargarYMostrarMapa (VERSIÓN UNIFICADA Y ROBUSTA)
 // ========================================
 async function cargarYMostrarMapa(osCentro, unidadFiltro) {
-    // ✅ GUARDAR REFERENCIAS GLOBALES PARA RECARGA
     window.osCentroActual = osCentro;
     window.unidadFiltroActual = unidadFiltro;
 
-// ✅ AGREGAR AQUÍ (justo después del try):
-    try {
-        // ✅ Validación de dependencia crítica
-        if (typeof normalizarUnidad !== 'function') {
-            console.error('❌ normalizarUnidad no está definida');
-            window.normalizarUnidad = (unidad) => String(unidad || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-        }
-    // ✅ 1. INICIAR HEARTBEAT PARA MANTENER SESIÓN ACTIVA
+    // ✅ Validación de dependencia crítica (SIN try extra)
+    if (typeof normalizarUnidad !== 'function') {
+        console.error('❌ normalizarUnidad no está definida');
+        window.normalizarUnidad = (unidad) => String(unidad || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    }
+
     const detenerHeartbeat = iniciarHeartbeatSesion(25000);
     const resultsContainer = document.getElementById('searchResults');
     
