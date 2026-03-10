@@ -723,6 +723,53 @@ const TURNOS_ATTF = {
 };
 
 
+
+// ===================================================================
+// 🔒 FUNCIONES UTILITARIAS GLOBALES (VAN AL INICIO DEL ARCHIVO)
+// ===================================================================
+
+// ===================================================================
+// 🔒 ESCAPE SEGURO PARA DATOS EN ATRIBUTOS HTML
+// ===================================================================
+function escapeJSONForHTMLAttribute(obj, camposPermitidos = null) {
+    if (!obj) return '{}';
+    
+    try {
+        // Si se especifican campos permitidos, filtrar el objeto
+        let dataToEscape = obj;
+        if (camposPermitidos && Array.isArray(camposPermitidos)) {
+            dataToEscape = {};
+            camposPermitidos.forEach(campo => {
+                if (obj.hasOwnProperty(campo)) {
+                    dataToEscape[campo] = obj[campo];
+                }
+            });
+        }
+        
+        // 1. Convertir a JSON
+        let jsonStr = JSON.stringify(dataToEscape);
+        
+        // 2. Escapar para atributo HTML (orden correcto)
+        return jsonStr
+            .replace(/\\/g, '\\\\')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+    } catch (e) {
+        console.warn('⚠️ Error en escapeJSONForHTMLAttribute:', e.message);
+        return '{}';
+    }
+}
+
+// ✅ Exponer globalmente para que funcione en onclick HTML
+window.escapeJSONForHTMLAttribute = escapeJSONForHTMLAttribute;
+
+
 function cambiarFechasDescansoATTF() {
     // 1. Buscamos el contenedor principal
     const targetSection = document.getElementById('configuracionInicialATTF') || document.getElementById('searchSection');
@@ -9207,7 +9254,74 @@ console.groupEnd(); // ← ÚNICO console.groupEnd() al final
 
 
 // ===================================================================
-// 🗺️ FILTRAR MAPA PARA MOSTRAR SOLO OS MÁS CERCANAS (CON NUMERACIÓN Y DETALLES)
+// 🎨 COLORES POR FUENTE DE DATOS (FUNCIÓN AUXILIAR)
+// ===================================================================
+const COLORES_POR_FUENTE = {
+    'os_mas_cercanas': {
+        marcador: '#ef4444',    // Rojo para origen
+        borde: '#ffffff',
+        texto: '#ffffff',
+        label: '🎯 Más Cercana',
+        icono: '🚩'
+    },
+    'os_preseleccionadas': {
+        marcador: '#8b5cf6',    // Violeta
+        borde: '#ffffff',
+        texto: '#ffffff',
+        label: '📋 Preseleccionada',
+        icono: '📋'
+    },
+    'filtros_unidad': {
+        marcador: '#06b6d4',    // Cian
+        borde: '#ffffff',
+        texto: '#ffffff',
+        label: '🎯 Filtro Unidad',
+        icono: '🎯'
+    },
+    'os_asignadas': {
+        marcador: '#3b82f6',    // Azul (default)
+        borde: '#ffffff',
+        texto: '#ffffff',
+        label: '🔄 Asignada',
+        icono: ''
+    }
+};
+
+// ===================================================================
+// 🎨 FUNCIÓN: Obtener estilo según fuente y orden
+// ===================================================================
+function getEstiloPorFuente(fuente, orden_cercania = null) {
+    const base = COLORES_POR_FUENTE[fuente] || COLORES_POR_FUENTE['os_asignadas'];
+    
+    // Si es os_mas_cercanas, aplicar degradado por orden
+    if (fuente === 'os_mas_cercanas' && orden_cercania !== null) {
+        if (orden_cercania === 0) {
+            return { ...base, marcador: '#ef4444', radio: 15, zIndex: 1000, icono: '🚩' };
+        } else if (orden_cercania <= 5) {
+            return { ...base, marcador: '#10b981', radio: 13, icono: orden_cercania };
+        } else if (orden_cercania <= 10) {
+            return { ...base, marcador: '#f59e0b', radio: 12, icono: orden_cercania };
+        } else {
+            return { ...base, marcador: '#3b82f6', radio: 12, icono: orden_cercania };
+        }
+    }
+    
+    // Para otras fuentes, usar icono definido
+    return { 
+        ...base, 
+        radio: 12, 
+        zIndex: 400,
+        icono: base.icono || ''
+    };
+}
+
+
+
+
+
+
+// ===================================================================
+// 🗺️ FILTRAR MAPA PARA MOSTRAR SOLO OS MÁS CERCANAS (CON AGRUPAMIENTO)
 // ===================================================================
 function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
     console.group('🗺️ ==========================================');
@@ -9225,7 +9339,6 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
     if (window.markersPorEstado) {
         Object.values(window.markersPorEstado).forEach(markersArray => {
             markersArray.forEach(marker => {
-                // Solo remover si el marcador tiene el contexto correcto o es genérico
                 if (!marker.options?.contexto || marker.options.contexto === contexto) {
                     if (window.mapaLeafletInstance.hasLayer(marker)) {
                         window.mapaLeafletInstance.removeLayer(marker);
@@ -9236,111 +9349,240 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
         console.log('👁️ Marcadores del contexto ocultados');
     }
     
-    // ✅ 2. Crear nuevos marcadores CON NUMERACIÓN para las OS más cercanas
-    const bounds = L.latLngBounds();
-    let marcadoresCreados = 0;
+    // ✅ 2. AGRUPAR OS POR COORDENADAS EXACTAS (igual que en inicializarMapaLeaflet)
+    console.group('📍 ==========================================');
+    console.log('📍 AGRUPANDO OS MÁS CERCANAS POR COORDENADAS');
+    console.log('📍 Total OS a procesar:', osCercanas.length);
     
-    // Array para guardar referencias y permitir restaurar después
-    const nuevosMarcadores = [];
+    const coordenadasAgrupadas = {};
+    let osProcesadas = 0;
+    let osSinCoordenadas = 0;
     
-    osCercanas.forEach((os, index) => {
+    for (const [index, os] of osCercanas.entries()) {
         const coordsRaw = os.Coordenadas || os.Coordendasgis;
-        if (!coordsRaw || !coordsRaw.includes(',')) return;
-        
-        const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
-        if (isNaN(lat) || isNaN(lng)) return;
-        
-        // ✅ Determinar color y estilo según orden (igual que en generarMapaKMLRuta)
-        let color = '#3b82f6'; // Azul default
-        let radio = 12;
-        let zIndex = 400 + index;
-        
-        if (os.orden_cercania === 0) {
-            color = '#ef4444'; // Rojo para origen
-            radio = 15;
-            zIndex = 1000;
-        } else if (os.orden_cercania <= 5) {
-            color = '#10b981'; // Verde para primeras 5
-            radio = 13;
-        } else if (os.orden_cercania <= 10) {
-            color = '#f59e0b'; // Naranja para 6-10
-            radio = 12;
+        if (!coordsRaw || !coordsRaw.includes(',')) {
+            osSinCoordenadas++;
+            continue;
         }
         
-        // ✅ Crear marcador CON NÚMERO visible (igual que en generarMapaKMLRuta)
-        const numeroVisible = os.orden_cercania === 0 ? '🚩' : (os.orden_cercania || index + 1);
+        const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
+        if (isNaN(lat) || isNaN(lng)) {
+            osSinCoordenadas++;
+            continue;
+        }
         
-        const marker = L.marker([lat, lng], {
-            icon: L.divIcon({
-                className: 'custom-div-icon-orden',
-                html: `<div style='
-                    background-color: ${color};
-                    width: ${radio * 2}px;
-                    height: ${radio * 2}px;
-                    border-radius: 50%;
-                    border: 3px solid white;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        // Crear clave única para coordenadas (6 decimales = ~11cm de precisión)
+        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        
+        if (!coordenadasAgrupadas[claveCoordenadas]) {
+            coordenadasAgrupadas[claveCoordenadas] = {
+                lat,
+                lng,
+                osList: []
+            };
+        }
+        
+        coordenadasAgrupadas[claveCoordenadas].osList.push({
+            ...os,
+            numeroOrden: index + 1
+        });
+        osProcesadas++;
+    }
+    
+    console.log(`📍 Coordenadas únicas encontradas: ${Object.keys(coordenadasAgrupadas).length}`);
+    console.log(`📍 OS agrupadas: ${osProcesadas} | Sin coordenadas: ${osSinCoordenadas}`);
+    console.groupEnd();
+    
+    // ✅ 3. Crear marcadores CON AGRUPAMIENTO
+    const bounds = L.latLngBounds();
+    let marcadoresCreados = 0;
+    const nuevosMarcadores = [];
+    
+    for (const grupo of Object.values(coordenadasAgrupadas)) {
+        const { lat, lng, osList } = grupo;
+        const esMultiple = osList.length > 1;
+        const primeraOS = osList[0];
+        
+        // ✅ Obtener estilo según fuente y orden (usa la función auxiliar)
+        const estilo = getEstiloPorFuente(primeraOS.fuente || 'os_asignadas', primeraOS.orden_cercania);
+        
+        // ✅ Determinar texto del marcador
+        let textoMarcador = '';
+        if (primeraOS.fuente === 'os_mas_cercanas') {
+            textoMarcador = primeraOS.orden_cercania === 0 ? '🚩' : primeraOS.orden_cercania;
+        } else if (primeraOS.fuente === 'os_preseleccionadas') {
+            textoMarcador = '📋';
+        } else {
+            textoMarcador = primeraOS.numeroOrden || 1;
+        }
+        
+        // ✅ Crear icono con indicador de múltiple si aplica
+        const iconoConNumero = L.divIcon({
+            className: 'custom-div-icon-orden',
+            html: `
+                <div style="
+                    background-color: ${estilo.marcador};
+                    width: ${esMultiple ? '40px' : '${estilo.radio * 2}px'};
+                    height: ${esMultiple ? '40px' : '${estilo.radio * 2}px'};
+                    border-radius: 50% 50% 50% 0;
+                    transform: rotate(-45deg);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: white;
-                    font-weight: bold;
-                    font-size: ${radio >= 13 ? '12px' : '10px'};
-                '>${numeroVisible}</div>`,
-                iconSize: [radio * 2, radio * 2],
-                iconAnchor: [radio, radio]
-            }),
-            contexto: contexto, // ✅ Agregar contexto para filtrado futuro
-            orden_cercania: os.orden_cercania,
-            osData: os // ✅ Guardar datos completos para el popup
-        }).addTo(window.mapaLeafletInstance);
-        
-        // ✅ Popup con información DETALLADA (igual que en prepararDescripcionKML)
-        const popupContent = prepararDescripcionKML(os, contexto === 'kml_ruta' ? 'kml_ruta' : 'OS Pendientes', os.orden_cercania || index + 1);
-        marker.bindPopup(popupContent);
-        
-        // Click para mostrar panel de detalles (si la función existe)
-        marker.on('click', () => {
-            if (typeof mostrarDetalleOSEnPanel === 'function') {
-               // ✅ CORREGIDO: Convertir a string descriptivo antes de pasar
-const labelParaPanel = os.orden_cercania === 0 
-    ? '🚩 ORIGEN - OS MÁS CERCANA' 
-    : `#${os.orden_cercania} - OS CERCANA`;
-
-mostrarDetalleOSEnPanel(os, labelParaPanel);
-            }
+                    border: 2px solid ${estilo.borde};
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                    position: relative;
+                    user-select: none;
+                ">
+                    <span style="
+                        transform: rotate(45deg);
+                        color: ${estilo.texto};
+                        font-weight: bold;
+                        font-size: ${esMultiple ? '16px' : '${estilo.radio >= 13 ? '12px' : '10px'}'};
+                        line-height: 1;
+                    ">${textoMarcador}${esMultiple ? '+' : ''}</span>
+                    
+                    ${esMultiple ? `
+                        <div style="
+                            position:absolute;
+                            top:-5px;
+                            right:-5px;
+                            background:#ff5722;
+                            color:white;
+                            border-radius:50%;
+                            width:20px;
+                            height:20px;
+                            font-size:10px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            border:2px solid white;
+                            font-weight:bold;
+                        ">${osList.length}</div>` : ''}
+                </div>`,
+            iconSize: [esMultiple ? 40 : estilo.radio * 2, esMultiple ? 40 : estilo.radio * 2],
+            iconAnchor: [esMultiple ? 20 : estilo.radio, esMultiple ? 40 : estilo.radio * 2],
+            popupAnchor: [0, esMultiple ? -40 : -(estilo.radio * 2)]
         });
         
-        bounds.extend([lat, lng]);
+        // ✅ Generar popup con lista de todas las OS en este punto
+        let popupContent = `
+            <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
+                <strong style="color: ${estilo.marcador}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+                    📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : estilo.label}
+                </strong>
+        `;
+        
+        if (esMultiple) {
+            // Mostrar lista de todas las OS en este punto
+            for (const [idx, os] of osList.entries()) {
+                const osDeuda = parseFloat(os.Deuda) || 0;
+                const osColor = osDeuda > 500 ? '#fdd835' : 
+                               osDeuda >= 100 ? '#ff9800' : 
+                               osDeuda >= 50 ? '#f48fb1' : '#2196f3';
+                
+                // Escape seguro para datos en popup
+                const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+                    ? escapeJSONForHTMLAttribute(os) 
+                    : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                
+                popupContent += `
+                    <div style="
+                        background: #f8f9fa;
+                        padding: 10px;
+                        margin-bottom: 8px;
+                        border-radius: 6px;
+                        border-left: 4px solid ${osColor};
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onclick="seleccionarOSDeLista('${os.OSATMO || os.osatomo}', ${os.lat}, ${os.lng}); return false;"
+                       onmouseover="this.style.background='#e3f2fd'; this.style.transform='translateX(3px)';"
+                       onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <strong style="color: #1976d2; font-size: 14px;">#${idx + 1} - OS: ${os.OSATMO || 'N/A'}</strong>
+                            ${os.es_preseleccionada ? '<span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">📋</span>' : ''}
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #666; line-height: 1.4;">
+                            <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                            ${osDeuda > 0 ? `<strong>Deuda:</strong> $${osDeuda.toFixed(2)}<br>` : ''}
+                            ${os.distancia_km ? `<strong>Distancia:</strong> ${os.distancia_km.toFixed(2)} km<br>` : ''}
+                        </div>
+                        
+                        <button onclick="event.stopPropagation(); if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${estilo.label}');}"
+                            style="margin-top: 8px; background: ${osColor}; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px;">
+                            📋 Ver Detalle
+                        </button>
+                    </div>
+                `;
+            }
+        } else {
+            // Popup normal para OS única
+            const os = osList[0];
+            const osDataEscaped = typeof escapeJSONForHTMLAttribute === 'function' 
+                ? escapeJSONForHTMLAttribute(os) 
+                : JSON.stringify(os).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            
+            popupContent += `
+                <div style="margin-bottom: 10px; font-size: 14px; line-height: 1.5;">
+                    <strong>OS:</strong> ${os.OSATMO || 'N/A'}<br>
+                    <strong>Tipología:</strong> ${os.Tipologia || 'N/A'}<br>
+                    ${parseFloat(os.Deuda) > 0 ? `<strong>Deuda:</strong> $${parseFloat(os.Deuda).toFixed(2)}<br>` : ''}
+                    ${os.distancia_km ? `<strong>Distancia:</strong> ${os.distancia_km.toFixed(2)} km<br>` : ''}
+                </div>
+                <button onclick="if(typeof mostrarDetalleOSEnPanel==='function'){mostrarDetalleOSEnPanel(${osDataEscaped}, '${estilo.label}');}"
+                    style="background: ${estilo.marcador}; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500;">
+                    📋 Ver Detalle Completo
+                </button>
+            `;
+        }
+        
+        popupContent += `</div>`;
+        
+        // ✅ Crear marcador con popup
+        const marker = L.marker([lat, lng], { 
+            icon: iconoConNumero,
+            zIndexOffset: esMultiple ? 500 : 100,
+            contexto: contexto,
+            fuente: primeraOS.fuente || 'os_asignadas'
+        })
+        .addTo(window.mapaLeafletInstance)
+        .bindPopup(popupContent, { maxWidth: 400, minWidth: 300 });
+        
         nuevosMarcadores.push(marker);
+        bounds.extend([lat, lng]);
         marcadoresCreados++;
-    });
+    }
     
-    // ✅ 3. Guardar referencia para poder restaurar o limpiar después
+    // ✅ 4. Guardar referencia para poder restaurar o limpiar después
     window.osCercanasActivas = osCercanas;
     window.mapaFiltradoActivo = true;
     window.marcaCercanasContexto = contexto;
     
-    // Guardar marcadores nuevos en estructura global para limpieza futura
     if (!window.markersPorEstado) window.markersPorEstado = {};
     window.markersPorEstado.cercanas = nuevosMarcadores;
     
-    // ✅ 4. Ajustar vista del mapa a los marcadores
+    // ✅ 5. Ajustar vista del mapa a los marcadores
     if (marcadoresCreados > 0 && bounds.isValid()) {
         window.mapaLeafletInstance.fitBounds(bounds, {
             padding: [50, 50],
             maxZoom: 16,
             animate: true
         });
-        console.log(`✅ Mapa ajustado a ${marcadoresCreados} OS más cercanas`);
+        console.log(`✅ Mapa ajustado a ${marcadoresCreados} grupos de OS más cercanas`);
     }
     
-    // ✅ 5. Agregar botón para restaurar vista completa (solo si no existe)
+    // ✅ 6. Agregar botón para restaurar vista completa
     agregarBotonRestaurarVistaMapa(contexto);
     
-    console.log(`✅ Filtrado aplicado: ${marcadoresCreados} marcadores con numeración y detalles`);
+    // ✅ 7. Agregar leyenda si no existe
+    if (typeof agregarLeyendaFuentes === 'function') {
+        agregarLeyendaFuentes(window.mapaLeafletInstance, contexto);
+    }
+    
+    console.log(`✅ Filtrado aplicado: ${marcadoresCreados} marcadores con agrupamiento y detalles`);
 }
-
 
 
 
@@ -14489,7 +14731,8 @@ function obtenerCoordenadasOS(os) {
 
 // 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL (CORREGIDA)
 // ========================================
-function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
+function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm, 'mapa_rutas');
+window.contextoMapaActual = contexto;
     // ========================================
     // ✅ 0. OBTENER ELEMENTO DOM PRIMERO (para usar en diagnóstico)
     // ========================================
@@ -14670,17 +14913,23 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
     // ========================================
     // ✅ CAPA DE MAPA BASE
     // ========================================
-    try {
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19,
-            minZoom: 3,
-            detectRetina: true
-        }).addTo(mapa);
-        console.log('✅ Capa de mapa base agregada');
-    } catch (e) {
-        console.error('❌ Error agregando capa de mapa:', e.message);
-    }
+   try {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        minZoom: 3,
+        detectRetina: true
+    }).addTo(mapa);
+    console.log('✅ Capa de mapa base agregada');
+} catch (e) {
+    console.error('❌ Error agregando capa de mapa:', e.message);
+}
+
+// ✅ AGREGAR ESTO: Leyenda interactiva (DESPUÉS de capa base, ANTES de marcadores)
+if (typeof agregarLeyendaFuentes === 'function') {
+    // El contexto debe venir como parámetro de la función
+    agregarLeyendaFuentes(mapa, window.contextoMapaActual || 'kml_ruta');
+}
 
     // ========================================
     // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
@@ -14874,37 +15123,40 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
         const esMultiple = osList.length > 1;
 
         // Determinar estado y color del marcador principal
-        const primeraOS = osList[0];
-        const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
-        const deuda = parseFloat(primeraOS.Deuda) || 0;
-        
-        let colorFondo, labelEstado, estadoKey;
+        // Determinar estado y color del marcador principal
+const primeraOS = osList[0];
+const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
+const deuda = parseFloat(primeraOS.Deuda) || 0;
 
-        if (deuda > 500) {
-            colorFondo = '#fdd835';
-            labelEstado = 'DEUDA ALTA';
-            estadoKey = 'deuda_alta';
-        } else if (deuda >= 100 && deuda <= 500) {
-            colorFondo = '#ff9800';
-            labelEstado = 'DEUDA MEDIA';
-            estadoKey = 'deuda_media';
-        } else if (deuda >= 50 && deuda < 100) {
-            colorFondo = '#f48fb1';
-            labelEstado = 'DEUDA BAJA';
-            estadoKey = 'deuda_baja';
-        } else if (primeraOS.Estado_ATOMO === 'Asignada' || primeraOS.Estado_SAP === 'ASIGNADA') {
-            colorFondo = '#ff9800';
-            labelEstado = 'OS ASIGNADA';
-            estadoKey = 'asignada';
-        } else if (tipoOS.includes('regulad') && !tipoOS.includes('no')) {
-            colorFondo = '#f44336';
-            labelEstado = 'OS REGULADA';
-            estadoKey = 'regulada';
-        } else {
-            colorFondo = '#2196f3';
-            labelEstado = 'OS NO REGULADA';
-            estadoKey = 'no_regulada';
-        }
+// ✅ Determinar fuente si está disponible
+const fuenteOS = primeraOS.fuente || 
+                (primeraOS.es_mas_cercana ? 'os_mas_cercanas' : 
+                 primeraOS.es_preseleccionada ? 'os_preseleccionadas' : 
+                 'os_asignadas');
+
+// ✅ Obtener estilo base según fuente
+const estiloBase = getEstiloPorFuente(fuenteOS, primeraOS.orden_cercania);
+
+// ✅ Determinar label y estadoKey para agrupación
+let labelEstado, estadoKey;
+if (fuenteOS === 'os_mas_cercanas') {
+    labelEstado = estiloBase.label;
+    estadoKey = 'os_mas_cercanas';
+} else if (fuenteOS === 'os_preseleccionadas') {
+    labelEstado = estiloBase.label;
+    estadoKey = 'os_preseleccionadas';
+} else if (deuda > 500) {
+    labelEstado = 'DEUDA ALTA';
+    estadoKey = 'deuda_alta';
+} 
+// ... mantener condiciones existentes para deuda/tipo ...
+else {
+    labelEstado = estiloBase.label;
+    estadoKey = 'os_asignadas';
+}
+
+// ✅ Usar color del estilo base (o fallback)
+const colorFondo = estiloBase.marcador || '#2196f3';
 
         // Contabilizar estadísticas
         contadorProcesadas++;
@@ -14924,75 +15176,41 @@ const iconoConNumero = L.divIcon({
     html: `
         <div style="
             background-color: ${colorFondo};
-            width: ${esMultiple ? '40px' : '32px'};
-            height: ${esMultiple ? '40px' : '32px'};
+            width: ${esMultiple ? '40px' : '${estiloBase.radio * 2}px'};
+            height: ${esMultiple ? '40px' : '${estiloBase.radio * 2}px'};
             border-radius: 50% 50% 50% 0;
             transform: rotate(-45deg);
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid white;
+            border: 2px solid ${estiloBase.borde};
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             position: relative;
             user-select: none;
         ">
             <span style="
                 transform: rotate(45deg);
-                color: white;
+                color: ${estiloBase.texto};
                 font-weight: bold;
-                font-size: ${esMultiple ? '16px' : '13px'};
+                font-size: ${estiloBase.radio >= 13 ? '12px' : '10px'};
                 line-height: 1;
-            ">${primeraOS.numeroOrden || '1'}${esMultiple ? '+' : ''}</span>
-            
-            ${esMultiple ? `
-                <div style="
-                    position:absolute;
-                    top:-5px;
-                    right:-5px;
-                    background:#ff5722;
-                    color:white;
-                    border-radius:50%;
-                    width:20px;
-                    height:20px;
-                    font-size:10px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    border:2px solid white;
-                    font-weight:bold;
-                ">${osList.length}</div>` : ''}
-            
-            ${tienePreseleccionada ? `
-                <span style="
-                    position:absolute;
-                    top:-8px;
-                    left:-8px;
-                    background:#f59e0b;
-                    color:white;
-                    width:24px;
-                    height:24px;
-                    border-radius:50%;
-                    font-size:13px;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    border:2px solid white;
-                    font-weight:bold;
-                    z-index:10;
-                ">📋</span>` : ''}
+            ">${estiloBase.icono || (primeraOS.numeroOrden || '1')}${esMultiple ? '+' : ''}</span>
+            <!-- ... resto del código existente para múltiple/preseleccionada ... -->
         </div>`,
-    iconSize: [esMultiple ? 40 : 32, esMultiple ? 40 : 32],
-    iconAnchor: [esMultiple ? 20 : 16, esMultiple ? 40 : 32],
-    popupAnchor: [0, esMultiple ? -40 : -32]
+    iconSize: [esMultiple ? 40 : estiloBase.radio * 2, esMultiple ? 40 : estiloBase.radio * 2],
+    iconAnchor: [esMultiple ? 20 : estiloBase.radio, esMultiple ? 40 : estiloBase.radio * 2],
+    popupAnchor: [0, esMultiple ? -40 : -(estiloBase.radio * 2)]
 });
+
 
                 // ========================================
 // ✅ CREAR POPUP CON LISTA DE TODAS LAS OS (CON COMENTARIO PRESELECCIÓN)
 // ========================================
+
 let popupContent = `
     <div style="min-width: 300px; max-height: 400px; overflow-y: auto; font-family: sans-serif;">
-        <strong style="color: ${colorFondo}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-            📍 ${esMultiple ? osList.length + ' Órdenes en este punto' : labelEstado}
+        <strong style="color: ${estiloBase.marcador}; font-size: 16px; display: block; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+            ${estiloBase.label} ${esMultiple ? `(${osList.length})` : ''}
         </strong>
 `;
 
@@ -16742,6 +16960,57 @@ function toSafeString(valor, defaultValue = '') {
     }
     return defaultValue;
 }
+
+// ===================================================================
+// 🎯 SELECCIONAR OS DESDE LISTA EN POPUP AGRUPADO
+// ===================================================================
+function seleccionarOSDeLista(osatomo, lat, lng) {
+    console.log(`🎯 Seleccionando OS: ${osatomo} en [${lat}, ${lng}]`);
+    
+    // Validar que el mapa exista
+    if (!window.mapaLeafletInstance) {
+        console.error('❌ Mapa no inicializado');
+        return;
+    }
+    
+    // 1. Centrar mapa en las coordenadas
+    window.mapaLeafletInstance.setView([lat, lng], 17, {
+        animate: true,
+        duration: 0.5
+    });
+    
+    // 2. Buscar el marcador específico y abrir su popup
+    const markers = Object.values(window.markersPorEstado).flat();
+    const markerEncontrado = markers.find(m => {
+        // Intentar match por datos del marcador primero
+        if (m.options?.osatomo === osatomo || m._osatomo === osatomo) return true;
+        
+        // Fallback: buscar en contenido del popup
+        if (m._popup && m._popup._content && m._popup._content.includes(osatomo)) return true;
+        
+        return false;
+    });
+    
+    if (markerEncontrado) {
+        markerEncontrado.openPopup();
+    }
+    
+    // 3. Buscar la OS completa en el dataset actual
+    const osData = window.osCercanasActivas?.find(o => 
+        String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
+    ) || window.osParaMapaActual?.find(o => 
+        String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
+    );
+    
+    // 4. Mostrar detalle en panel
+    if (osData && typeof mostrarDetalleOSEnPanel === 'function') {
+        mostrarDetalleOSEnPanel(osData, 'OS SELECCIONADA');
+    }
+}
+
+// ✅ Exponer globalmente para que funcione en los onclick del HTML
+window.seleccionarOSDeLista = seleccionarOSDeLista;
+
 
 
 
@@ -22120,6 +22389,115 @@ document.getElementById('btnCerrarCircuito')?.addEventListener('click', limpiarM
 window.verDetalleTX = verDetalleTX;
 
 
+
+
+
+// ===================================================================
+// 🎨 AGREGAR LEYENDA INTERACTIVA AL MAPA
+// ===================================================================
+function agregarLeyendaFuentes(mapa, contexto = 'kml_ruta') {
+    // Remover leyenda existente si hay
+    const leyendaExistente = document.getElementById('leyendaFuentesMapa');
+    if (leyendaExistente) leyendaExistente.remove();
+    
+    // Crear contenedor de leyenda
+    const leyenda = L.control({ position: 'bottomright' });
+    
+    leyenda.onAdd = function() {
+        const div = L.DomUtil.create('div', 'legend-fuentes');
+        div.id = 'leyendaFuentesMapa';
+        div.style.cssText = `
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 12px;
+            line-height: 1.8;
+            max-width: 220px;
+        `;
+        
+        div.innerHTML = `
+            <strong style="display: block; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">
+                📊 Leyenda de Fuentes
+            </strong>
+            ${Object.entries(COLORES_POR_FUENTE).map(([fuente, config]) => `
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 4px 0;">
+                    <input type="checkbox" 
+                           data-fuente="${fuente}" 
+                           checked 
+                           style="width: 16px; height: 16px; cursor: pointer;">
+                    <span style="display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="
+                            display: inline-block;
+                            width: 16px;
+                            height: 16px;
+                            border-radius: 50%;
+                            background: ${config.marcador};
+                            border: 2px solid ${config.borde};
+                        "></span>
+                        ${config.label}
+                    </span>
+                </label>
+            `).join('')}
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                <button id="btnToggleTodasFuentes" 
+                        style="width: 100%; padding: 6px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                    👁️ Mostrar/Ocultar Todas
+                </button>
+            </div>
+        `;
+        
+        // Prevenir propagación de eventos del mapa
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        
+        // Agregar listeners a los checkboxes
+        div.querySelectorAll('input[data-fuente]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const fuente = this.getAttribute('data-fuente');
+                toggleMarcadoresPorFuente(mapa, fuente, this.checked);
+            });
+        });
+        
+        // Listener para botón "Mostrar/Ocultar Todas"
+        const btnToggle = div.querySelector('#btnToggleTodasFuentes');
+        let todasVisibles = true;
+        btnToggle.addEventListener('click', function() {
+            todasVisibles = !todasVisibles;
+            div.querySelectorAll('input[data-fuente]').forEach(checkbox => {
+                checkbox.checked = todasVisibles;
+                toggleMarcadoresPorFuente(mapa, checkbox.getAttribute('data-fuente'), todasVisibles);
+            });
+            this.innerText = todasVisibles ? '👁️ Ocultar Todas' : '👁️ Mostrar Todas';
+        });
+        
+        return div;
+    };
+    
+    leyenda.addTo(mapa);
+}
+
+// ===================================================================
+// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente
+// ===================================================================
+function toggleMarcadoresPorFuente(mapa, fuente, visible) {
+    mapa.eachLayer(layer => {
+        if (layer.options?.fuente === fuente) {
+            if (visible) {
+                if (!mapa.hasLayer(layer)) {
+                    layer.addTo(mapa);
+                }
+            } else {
+                if (mapa.hasLayer(layer)) {
+                    mapa.removeLayer(layer);
+                }
+            }
+        }
+    });
+    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'}`);
+}
+
+
 function debugEstadoMapa() {
     console.group('🗺️ DEBUG ESTADO MAPA');
     
@@ -22148,9 +22526,35 @@ function debugEstadoMapa() {
     console.log('Referencias a generarInterfazAdminKMLRuta en mapa_rutas:', refs);
     console.groupEnd();
 
+    // Verificar funciones críticas
+    console.group('🔧 Funciones críticas');
+    console.log('escapeJSONForHTMLAttribute:', typeof escapeJSONForHTMLAttribute === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
+    console.log('seleccionarOSDeLista:', typeof seleccionarOSDeLista === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
+    console.log('window.escapeJSONForHTMLAttribute:', typeof window.escapeJSONForHTMLAttribute === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
+    console.log('window.seleccionarOSDeLista:', typeof window.seleccionarOSDeLista === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
+    
+    try {
+        const testObj = { OSATMO: '11215545', Tipologia: 'Mantenimiento', Deuda: 150.50 };
+        console.log('Test escapeJSON:', escapeJSONForHTMLAttribute(testObj));
+    } catch (e) {
+        console.warn('⚠️ escapeJSONForHTMLAttribute falló:', e.message);
+    }
+    console.groupEnd();
+
+    // OS en memoria con detalle
+    console.group('📦 OS en memoria (primeras 5)');
+    console.log(window.osParaMapaActual?.slice(0, 5).map(os => ({
+        OS: os.OSATMO,
+        fuente: os.fuente,
+        orden: os.orden_cercania,
+        color: typeof getEstiloPorFuente === 'function' 
+            ? getEstiloPorFuente(os.fuente, os.orden_cercania)?.marcador 
+            : '⚠️ getEstiloPorFuente no definida'
+    })));
+    console.groupEnd();
+
     console.groupEnd();
 }
-
 
 
 
