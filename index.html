@@ -12566,6 +12566,14 @@ async function cargarYMostrarMapa(osCentro, unidadFiltro) {
     // ✅ GUARDAR REFERENCIAS GLOBALES PARA RECARGA
     window.osCentroActual = osCentro;
     window.unidadFiltroActual = unidadFiltro;
+
+// ✅ AGREGAR AQUÍ (justo después del try):
+    try {
+        // ✅ Validación de dependencia crítica
+        if (typeof normalizarUnidad !== 'function') {
+            console.error('❌ normalizarUnidad no está definida');
+            window.normalizarUnidad = (unidad) => String(unidad || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
     // ✅ 1. INICIAR HEARTBEAT PARA MANTENER SESIÓN ACTIVA
     const detenerHeartbeat = iniciarHeartbeatSesion(25000);
     const resultsContainer = document.getElementById('searchResults');
@@ -14124,8 +14132,12 @@ function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) 
     setTimeout(() => {
         if (document.getElementById('mapaLeaflet')) {
             try {
-                // ✅ PASAR ARRAY DIRECTAMENTE
-                inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
+                 // ✅ Validar que la función existe antes de llamarla
+            if (typeof inicializarMapaLeaflet !== 'function') {
+                throw new Error('inicializarMapaLeaflet no está definida');
+            }
+            
+            inicializarMapaLeaflet(osCentro, osValidadasParaMapa, latCentro, lngCentro, radioActual);
                 
                 if(window.mapaLeafletInstance) window.mapaLeafletInstance.invalidateSize();
             } catch (error) {
@@ -14739,8 +14751,9 @@ function obtenerCoordenadasOS(os) {
 
 // 🗺️ INICIALIZAR MAPA LEAFLET - VERSIÓN ROBUSTA Y PROFESIONAL (CORREGIDA)
 // ========================================
-function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm, mapa_rutas);
-window.contextoMapaActual = contexto;
+function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm, contexto = 'kml_ruta') {
+    // ✅ Guardar contexto en variable global para usar en leyenda
+    window.contextoMapaActual = contexto;
     // ========================================
     // ✅ 0. OBTENER ELEMENTO DOM PRIMERO (para usar en diagnóstico)
     // ========================================
