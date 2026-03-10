@@ -9588,6 +9588,16 @@ const iconoConNumero = L.divIcon({
     if (typeof agregarLeyendaFuentes === 'function') {
         agregarLeyendaFuentes(window.mapaLeafletInstance, contexto);
     }
+
+
+    // ✅ RESTAURAR MARCADOR CENTRO si existe
+    if (window.markersPorEstado?.centro?.[0]) {
+        const markerCentro = window.markersPorEstado.centro[0];
+        if (!window.mapaLeafletInstance.hasLayer(markerCentro)) {
+            window.mapaLeafletInstance.addLayer(markerCentro);
+            console.log('🔄 Marcador centro restaurado');
+        }
+    }
     
     console.log(`✅ Filtrado aplicado: ${marcadoresCreados} marcadores con agrupamiento y detalles`);
 }
@@ -14399,7 +14409,7 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
 
 
 // ===================================================================
-// 🎯 FILTRAR MARCADORES POR ESTADO (CORREGIDA)
+// 🎯 FILTRAR MARCADORES POR ESTADO (CORREGIDA PARA CENTRO)
 // ===================================================================
 function filtrarPorEstado(estado) {
     console.log(`🎯 Filtrando por estado: ${estado}`);
@@ -14409,16 +14419,40 @@ function filtrarPorEstado(estado) {
         return;
     }
     
-    // Iterar sobre todas las agrupaciones de marcadores
-    Object.values(window.markersPorEstado).forEach(markersArray => {
+    // ✅ CASO ESPECIAL: 'todas' = mostrar todo
+    if (estado === 'todas') {
+        Object.values(window.markersPorEstado).forEach(markersArray => {
+            if (!Array.isArray(markersArray)) return;
+            markersArray.forEach(marker => {
+                if (!window.mapaLeafletInstance.hasLayer(marker)) {
+                    window.mapaLeafletInstance.addLayer(marker);
+                }
+            });
+        });
+        console.log('✅ Filtro "todas" aplicado');
+        return;
+    }
+    
+    // ✅ Iterar sobre todas las agrupaciones
+    Object.entries(window.markersPorEstado).forEach(([estadoKey, markersArray]) => {
         if (!Array.isArray(markersArray)) return;
         
         markersArray.forEach(marker => {
-            // ✅ Buscar por marker.options.estado (no por estadoKey interno)
             const markerEstado = marker.options?.estado;
+            const markerFuente = marker.options?.fuente;
             
-            // Determinar si debe estar visible
-            const debeMostrar = (estado === 'todas' || markerEstado === estado);
+            // ✅ Lógica de visibilidad:
+            // - Si estado === 'centro': mostrar solo marcadores con estado/fuente 'centro'
+            // - Si estado === otro: mostrar marcadores que coincidan O sean 'centro' (siempre visible)
+            let debeMostrar = false;
+            
+            if (estado === 'centro') {
+                // Solo mostrar el marcador centro
+                debeMostrar = (markerEstado === 'centro' || markerFuente === 'centro');
+            } else {
+                // Mostrar marcadores del estado seleccionado + siempre mostrar centro
+                debeMostrar = (markerEstado === estado) || (markerEstado === 'centro') || (markerFuente === 'centro');
+            }
             
             // Aplicar visibilidad
             if (debeMostrar) {
@@ -14435,7 +14469,6 @@ function filtrarPorEstado(estado) {
     
     console.log(`✅ Filtro aplicado: ${estado}`);
 }
-
 
 
  	// ========================================
@@ -15041,10 +15074,13 @@ if (typeof agregarLeyendaFuentes === 'function') {
             popupAnchor: [0, -50]
         });
 
-        markerCentro = L.marker([latCentro, lngCentro], { 
-            icon: iconoVerde,
-            zIndexOffset: 1000
-        })
+       markerCentro = L.marker([latCentro, lngCentro], { 
+    icon: iconoVerde,
+    zIndexOffset: 1000,
+    estado: 'centro',
+    fuente: 'centro',
+    osData: osCentro
+})
         .addTo(mapa)
         .bindPopup(`
             <div style="min-width: 200px; font-family: sans-serif;">
@@ -22534,14 +22570,23 @@ function agregarLeyendaFuentes(mapa, contexto = 'kml_ruta') {
 }
 
 // ===================================================================
-// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente
+// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente (CON CENTRO)
 // ===================================================================
 function toggleMarcadoresPorFuente(mapa, fuente, visible) {
     mapa.eachLayer(layer => {
+        // ✅ Siempre mantener visible el marcador centro
+        if (layer.options?.estado === 'centro' || layer.options?.fuente === 'centro') {
+            if (!mapa.hasLayer(layer)) {
+                mapa.addLayer(layer);
+            }
+            return; // Saltar este marcador, no aplicar toggle
+        }
+        
+        // Aplicar toggle normal a otros marcadores
         if (layer.options?.fuente === fuente) {
             if (visible) {
                 if (!mapa.hasLayer(layer)) {
-                    layer.addTo(mapa);
+                    mapa.addLayer(layer);
                 }
             } else {
                 if (mapa.hasLayer(layer)) {
@@ -22550,9 +22595,8 @@ function toggleMarcadoresPorFuente(mapa, fuente, visible) {
             }
         }
     });
-    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'}`);
+    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'} (centro siempre visible)`);
 }
-
 
 async function diagnosticarOS(osId) {
     console.group(`🔍 Diagnóstico OS: ${osId}`);
@@ -22648,7 +22692,7 @@ function debugEstadoMapa() {
     })));
     console.groupEnd();
 
-    // Diagnóstico de marcadores
+    
     // Diagnóstico de marcadores
     console.group('📍 Diagnóstico de marcadores');
     console.log('Claves en markersPorEstado:', Object.keys(window.markersPorEstado || {}));
@@ -22671,6 +22715,29 @@ function debugEstadoMapa() {
     } catch (e) {
         console.warn('⚠️ Error leyendo marcadores:', e.message);
     }
+
+
+    // Diagnóstico de marcador centro
+    const centro = window.markersPorEstado?.centro?.[0];
+    console.log('📍 Marcador centro:', {
+        existe: !!centro,
+        estado: centro?.options?.estado,
+        fuente: centro?.options?.fuente,
+        visible: centro ? window.mapaLeafletInstance?.hasLayer(centro) : null
+    });
+
+    // Probar filtros
+    console.log('🔄 Probando filtro "centro"...');
+    if (typeof filtrarPorEstado === 'function') {
+        filtrarPorEstado('centro');
+        setTimeout(() => {
+            console.log('🔄 Probando filtro "todas"...');
+            filtrarPorEstado('todas');
+        }, 1000);
+    } else {
+        console.warn('⚠️ filtrarPorEstado no está definida');
+    }
+
     console.groupEnd();
 
     console.groupEnd();
