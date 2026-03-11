@@ -8110,7 +8110,7 @@ osPendientes.forEach(os => {
             // 🕵️ DEBUG ESPECÍFICO PARA OS 11195544
             // ========================================
             if (String(os.OSATMO || os.osatomo).trim() === '11195544') {
-                const coordsPrueba = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+                const coordsPrueba = parsearCoordenadas(os.Coordendasgis || os.Coordenadas);
                 const uOS_Prueba = (os.Unidad || "").trim();
                 const uOS_Limpia_Prueba = uOS_Prueba.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
                 const miUnidadLimpia_Prueba = miUnidadNorm.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -8136,7 +8136,7 @@ osPendientes.forEach(os => {
             contadorTotal++;
 
             // --- A. FILTROS BASE (Coordenadas y Radio) ---
-            const coords = parsearCoordenadas(os.Coordenadas || os.Coordendasgis);
+            const coords = parsearCoordenadas(os.Coordendasgis || os.Coordenadas);
             if (!coords) { contadorSinCoordenadas++; return; }
 
             const dist = calcularDistancia(latCentro, lngCentro, coords.lat, coords.lng);
@@ -8400,7 +8400,7 @@ function actualizarResumenUnidadKML() {
         // Solo mostramos en la lista las que tienen coordenadas (para que sirvan de centro)
         const osParaLista = osUnidad.filter(os => {
             const num = os.OSATMO || os.osatomo;
-            const coords = (os.Coordenadas || os.Coordendasgis || "");
+            const coords = (os.Coordendasgis || os.Coordenadas || "");
             return num && coords.includes(',');
         });
  
@@ -10085,7 +10085,7 @@ function descargarKMLRutaNumerada() {
             return {
                 // ✅ ETIQUETA: Solo el número de OS (sin "14 - ")
                 etiqueta: idOS,
-                coordenadas: os.Coordenadas || os.Coordendasgis,
+                coordenadas: os.Coordendasgis || os.Coordenadas,
                 descripcion: descripcion,  // ✅ Descripción HTML completa
                 numeroOrden: numero,
                 datosOriginales: os
@@ -11655,7 +11655,7 @@ async function cargarInterfazMapaRutas() {
                 }
                 
                 // Limpiar duplicados y nulos
-                osAsignadas = osCompletas.filter(os => os.OSATMO && (os.Coordenadas || os.Coordendasgis));
+                osAsignadas = osCompletas.filter(os => os.OSATMO && (os.Coordendasgis || os.Coordenadas));
             }
         }
  
@@ -15631,7 +15631,7 @@ async function generarMapaKMLRuta(osAsignadas, unidad) {
     const osNormalizadas = osAsignadas
         .map(os => {
             const id = String(os.osatomo || os.OSATMO || os.OSATOMO || '').trim();
-            const coords = os.Coordenadas || os.Coordendasgis || null;
+            const coords = os.Coordendasgis || os.Coordenadas || null;
             const comentarioOriginal = os.Comentario || os.ComentarioGeneral || os.comentario || '';
             
             // ✅ DESPUÉS:
@@ -16053,7 +16053,7 @@ if (!osData || osData.length === 0) {
         
         // ✅ 7. Normalizar campos para compatibilidad con generarMapaKMLRuta
         const osNormalizadas = osConCoordenadas.map(os => {
-            const coordsRaw = os.Coordenadas || os.Coordendasgis || '';
+            const coordsRaw = os.Coordendasgis || os.Coordenadas || '';
             const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
             
             return {
