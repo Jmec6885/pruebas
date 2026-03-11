@@ -8892,24 +8892,40 @@ function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
                 es_origen: false
             });
             
-            // Actualizar punto actual para la siguiente iteración
-            const coordsSiguiente = osMasCercana.Coordenadas || osMasCercana.Coordendasgis;
+            const coordsSiguiente = osMasCercana.Coordendasgis || osMasCercana.Coordenadas;
             const [latSiguiente, lngSiguiente] = coordsSiguiente.split(',').map(c => parseFloat(c.trim()));
             puntoActual = { lat: latSiguiente, lng: lngSiguiente };
             
             // Remover de disponibles para no repetir
             disponibles.splice(indexMasCercano, 1);
-            
-            console.log(`✅ Orden ${orden}: ${osMasCercana.OSATMO || osMasCercana.osatomo} (${distanciaMinima.toFixed(2)} km)`);
+
+            // ✅ Incluir todas las OS del mismo punto
+            const coordsSel = osMasCercana.Coordendasgis || osMasCercana.Coordenadas || '';
+            const [latSel, lngSel] = coordsSel.split(',').map(c => parseFloat(c.trim()));
+
+            for (let i = disponibles.length - 1; i >= 0; i--) {
+                const coordsOtra = disponibles[i].Coordendasgis || disponibles[i].Coordenadas || '';
+                const [latOtra, lngOtra] = coordsOtra.split(',').map(c => parseFloat(c.trim()));
+                
+                if (Math.abs(latOtra - latSel) < 0.0001 && Math.abs(lngOtra - lngSel) < 0.0001) {
+                    resultado.push({
+                        ...disponibles[i],
+                        orden_cercania: orden,
+                        distancia_km: parseFloat(distanciaMinima.toFixed(2)),
+                        es_origen: false
+                    });
+                    disponibles.splice(i, 1);
+                }
+            }
         } else {
             console.warn(`⚠️ No se encontró OS válida para orden ${orden}`);
             break;
         }
-    }
-    
+    } // ← cierra el for
+
     console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
     return resultado;
-}
+} // ← cierra la función
 
 
 
