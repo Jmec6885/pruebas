@@ -16541,33 +16541,50 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
     }
     
     // ========================================
-    // 🔹 PRIORIDAD 3: FILTROS POR UNIDAD
-    // ========================================
-    console.log('🔍 [PRIORIDAD 3] Buscando filtros_por_unidad...');
-    try {
-        let { data: filtroFecha } = await supabaseClient
+// 🔹 PRIORIDAD 3: FILTROS POR UNIDAD
+// ========================================
+console.log('🔍 [PRIORIDAD 3] Buscando filtros_por_unidad...');
+try {
+    let filtro = null;
+    
+    let { data: filtroFecha } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidad)
+        .eq('fecha_programada', fechaProgramada)
+        .maybeSingle();
+    
+    if (filtroFecha) {
+        filtro = filtroFecha;
+        console.log('✅ Filtros por fecha encontrados');
+    } else {
+        let { data: filtroBase } = await supabaseClient
             .from('filtros_por_unidad')
             .select('*')
             .eq('Unidad', unidad)
-            .eq('fecha_programada', fechaProgramada)
+            .is('fecha_programada', null)
             .maybeSingle();
-        
-        if (!filtroFecha) {
-            let { data: filtroBase } = await supabaseClient
-                .from('filtros_por_unidad')
-                .select('*')
-                .eq('Unidad', unidad)
-                .is('fecha_programada', null)
-                .maybeSingle();
-            if (filtroBase) {
-                console.log('✅ Filtros base encontrados');
-            }
-        } else {
-            console.log('✅ Filtros por fecha encontrados');
+        if (filtroBase) {
+            filtro = filtroBase;
+            console.log('✅ Filtros base encontrados');
         }
-    } catch (err) {
-        console.warn('⚠️ Error cargando filtros por unidad:', err.message);
     }
+
+    // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
+    if (filtro) {
+        const osFiltradas = aplicarFiltrosAlDataset(osBase, filtro, unidad);
+        osFiltradas.forEach(os => {
+            const osId = normalizarOSID(os.OSATMO || os.osatomo);
+            if (!osIdsYaIncluidas.has(osId)) {
+                osFinales.push({ ...os, fuente: 'filtros_unidad' });
+                osIdsYaIncluidas.add(osId);
+            }
+        });
+        console.log(`✅ ${osFiltradas.length} OS agregadas desde filtros_por_unidad`);
+    }
+} catch (err) {
+    console.warn('⚠️ Error cargando filtros por unidad:', err.message);
+}
     
     // ========================================
     // 🔹 PRIORIDAD 4: OS ASIGNADAS AUTOMÁTICAMENTE
@@ -16888,11 +16905,12 @@ async function cargarInterfazKMLRuta() {
                         console.warn('⚠️ Error obteniendo detalles:', errorDetalles.message);
                     } else if (detalles) {
                         osPreseleccionadas = detalles.map(os => ({
-                            ...os,
-                            esPreseleccionada: true,
-                            comentarioPreseleccion: osPreseleccionadas.find(p => p.osatomo === os.OSATMO)?.comentarios,
-                            fechaPreseleccion: HOY
-                        }));
+    ...os,
+    esPreseleccionada: true,
+    fuente: 'os_preseleccionadas',  // ← AGREGAR
+    comentarioPreseleccion: osPreseleccionadas.find(p => p.osatomo === os.OSATMO)?.comentarios,
+    fechaPreseleccion: HOY
+}));
                         console.log(`✅ Detalles obtenidos para ${osPreseleccionadas.length} OS preseleccionadas`);
                     }
                 }
@@ -16974,58 +16992,6 @@ async function inicializarUnidadesMapaRutas() {
 }
 
 
-/**
- * Selecciona una OS específica de un grupo de coordenadas y centra el mapa
- * @param {string} osatomo - ID de la OS a seleccionar
- * @param {number} lat - Latitud del punto
- * @param {number} lng - Longitud del punto
- */
-function seleccionarOSDeLista(osatomo, lat, lng) {
-    if (!window.mapaLeafletInstance) {
-        console.error('❌ Mapa no inicializado');
-        return;
-    }
-    
-    // Centrar mapa en las coordenadas
-    window.mapaLeafletInstance.setView([lat, lng], 17, {
-        animate: true,
-        duration: 0.5
-    });
-    
-    // Buscar el marcador específico y abrir su popup
-    const markers = Object.values(window.markersPorEstado).flat();
-    const markerEncontrado = markers.find(m => {
-    // Intentar match por datos del marcador primero
-    if (m.options?.osatomo === osatomo || m._osatomo === osatomo) return true;
-    
-    // Fallback: buscar en contenido del popup
-    const popupContent = m.getPopup()?.getContent();
-    return popupContent && popupContent.includes(`OS: ${osatomo}`);
-});
-    
-    if (markerEncontrado) {
-        markerEncontrado.openPopup();
-        
-        // Animación visual
-        const iconEl = markerEncontrado.getElement();
-        if (iconEl) {
-            iconEl.style.transition = 'transform 0.3s ease';
-            iconEl.style.transform = 'scale(1.3)';
-            setTimeout(() => {
-                iconEl.style.transform = 'scale(1)';
-            }, 500);
-        }
-    }
-    
-    // Mostrar detalle en panel lateral
-    const osData = window.datosMapaExportar?.find(o => o.OSATMO === osatomo);
-    if (osData) {
-        mostrarDetalleOSEnPanel(osData, 'OS SELECCIONADA');
-    }
-}
-
-// ✅ Exponer globalmente para que funcione en los onclick del HTML
-window.seleccionarOSDeLista = seleccionarOSDeLista;
 
 
 // ===================================================================
@@ -17055,52 +17021,50 @@ function toSafeString(valor, defaultValue = '') {
 function seleccionarOSDeLista(osatomo, lat, lng) {
     console.log(`🎯 Seleccionando OS: ${osatomo} en [${lat}, ${lng}]`);
     
-    // Validar que el mapa exista
     if (!window.mapaLeafletInstance) {
         console.error('❌ Mapa no inicializado');
         return;
     }
     
-    // 1. Centrar mapa en las coordenadas
+    // 1. Centrar mapa
     window.mapaLeafletInstance.setView([lat, lng], 17, {
         animate: true,
         duration: 0.5
     });
     
-    // 2. Buscar el marcador específico y abrir su popup
+    // 2. Buscar marcador y abrir popup
     const markers = Object.values(window.markersPorEstado).flat();
     const markerEncontrado = markers.find(m => {
-        // Intentar match por datos del marcador primero
         if (m.options?.osatomo === osatomo || m._osatomo === osatomo) return true;
-        
-        // Fallback: buscar en contenido del popup
         if (m._popup && m._popup._content && m._popup._content.includes(osatomo)) return true;
-        
-        return false;
+        const popupContent = m.getPopup()?.getContent();
+        return popupContent && popupContent.includes(`OS: ${osatomo}`);
     });
     
     if (markerEncontrado) {
         markerEncontrado.openPopup();
+        // Animación visual
+        const iconEl = markerEncontrado.getElement();
+        if (iconEl) {
+            iconEl.style.transition = 'transform 0.3s ease';
+            iconEl.style.transform = 'scale(1.3)';
+            setTimeout(() => { iconEl.style.transform = 'scale(1)'; }, 500);
+        }
     }
     
-    // 3. Buscar la OS completa en el dataset actual
+    // 3. Buscar OS en datasets disponibles
     const osData = window.osCercanasActivas?.find(o => 
         String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
     ) || window.osParaMapaActual?.find(o => 
         String(o.OSATMO || o.osatomo).trim() === String(osatomo).trim()
-    );
+    ) || window.datosMapaExportar?.find(o => o.OSATMO === osatomo);
     
     // 4. Mostrar detalle en panel
     if (osData && typeof mostrarDetalleOSEnPanel === 'function') {
         mostrarDetalleOSEnPanel(osData, 'OS SELECCIONADA');
     }
 }
-
-// ✅ Exponer globalmente para que funcione en los onclick del HTML
 window.seleccionarOSDeLista = seleccionarOSDeLista;
-
-
-
 
  	// ========================================
 // 📋 MOSTRAR DETALLE DE OS EN PANEL (VERSIÓN COMPLETA)
