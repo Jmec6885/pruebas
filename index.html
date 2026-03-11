@@ -16572,7 +16572,8 @@ try {
 
     // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
     if (filtro) {
-        const osFiltradas = aplicarFiltrosAlDataset(osBase, filtro, unidad);
+        const universo = window.todasLasPendientesKML || osBase;
+const osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
         osFiltradas.forEach(os => {
             const osId = normalizarOSID(os.OSATMO || os.osatomo);
             if (!osIdsYaIncluidas.has(osId)) {
