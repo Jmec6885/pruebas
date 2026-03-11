@@ -22575,64 +22575,72 @@ diagnosticarOS('11196024');
 function debugEstadoMapa() {
     console.group('🗺️ DEBUG ESTADO MAPA');
     
-    // Estado de variables globales
+    // --- ESTADO DE VARIABLES GLOBALES ---
     console.log('Contexto actual:', window.contextoMapaActual);
     console.log('OS en memoria:', window.osParaMapaActual?.length || 0);
     console.log('Marcadores por estado:', Object.keys(window.markersPorEstado || {}));
     console.log('Marcadores por tipología:', Object.keys(window.markersPorTipologia || {}));
-    console.log('Filtros aplicados:', window.filtrosAplicados);
+    console.log('Filtros aplicados:', window.filtrosApplied);
     console.log('OS Asignadas KML:', window.osAsignadasKML?.length || 0);
     console.log('Fecha seleccionada:', window.fechaSeleccionadaKML);
     console.log('Unidad seleccionada:', window.unidadSeleccionadaKML);
     console.log('Punto de partida:', window.osPartidaSeleccionada);
 
-    // Verificar funciones cargadas
+    // --- VERIFICAR FUNCIONES CARGADAS ---
     console.group('📋 Funciones');
-    console.log('cargarInterfazMapaRutas:', cargarInterfazMapaRutas?.toString()?.substring(0, 200));
-    console.log('cargarInterfazKMLRuta:', cargarInterfazKMLRuta?.toString()?.substring(0, 200));
+    console.log('cargarInterfazMapaRutas:', typeof cargarInterfazMapaRutas !== 'undefined' ? cargarInterfazMapaRutas.toString().substring(0, 200) : '❌ NO DEFINIDA');
+    console.log('cargarInterfazKMLRuta:', typeof cargarInterfazKMLRuta !== 'undefined' ? cargarInterfazKMLRuta.toString().substring(0, 200) : '❌ NO DEFINIDA');
     console.groupEnd();
 
-    // Referencias cruzadas en el código
+    // --- REFERENCIAS CRUZADAS ---
     console.group('🔍 Referencias en HTML/Scripts');
-    const codigo = document.documentElement.outerHTML + 
-                   Array.from(document.scripts).map(s => s.textContent).join('\n');
-    const refs = (codigo.match(/mapa_rutas[\s\S]{0,500}generarInterfazAdminKMLRuta/g) || []).length;
-    console.log('Referencias a generarInterfazAdminKMLRuta en mapa_rutas:', refs);
+    try {
+        const codigo = document.documentElement.outerHTML + 
+                       Array.from(document.scripts).map(s => s.textContent).join('\n');
+        const refs = (codigo.match(/mapa_rutas[\s\S]{0,500}generarInterfazAdminKMLRuta/g) || []).length;
+        console.log('Referencias a generarInterfazAdminKMLRuta en mapa_rutas:', refs);
+    } catch (e) {
+        console.warn('⚠️ Error al buscar referencias:', e.message);
+    }
     console.groupEnd();
 
-    // Verificar funciones críticas
+    // --- FUNCIONES CRÍTICAS ---
     console.group('🔧 Funciones críticas');
     console.log('escapeJSONForHTMLAttribute:', typeof escapeJSONForHTMLAttribute === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
     console.log('seleccionarOSDeLista:', typeof seleccionarOSDeLista === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
-    console.log('window.escapeJSONForHTMLAttribute:', typeof window.escapeJSONForHTMLAttribute === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
-    console.log('window.seleccionarOSDeLista:', typeof window.seleccionarOSDeLista === 'function' ? '✅ DISPONIBLE' : '❌ NO DEFINIDA');
     
     try {
-        const testObj = { OSATMO: '11215545', Tipologia: 'Mantenimiento', Deuda: 150.50 };
-        console.log('Test escapeJSON:', escapeJSONForHTMLAttribute(testObj));
+        if (typeof escapeJSONForHTMLAttribute === 'function') {
+            const testObj = { OSATMO: '11215545', Tipologia: 'Mantenimiento', Deuda: 150.50 };
+            console.log('Test escapeJSON:', escapeJSONForHTMLAttribute(testObj));
+        }
     } catch (e) {
         console.warn('⚠️ escapeJSONForHTMLAttribute falló:', e.message);
     }
     console.groupEnd();
 
-    // OS en memoria con detalle
+    // --- OS EN MEMORIA ---
     console.group('📦 OS en memoria (primeras 5)');
-    console.log(window.osParaMapaActual?.slice(0, 5).map(os => ({
-        OS: os.OSATMO,
-        fuente: os.fuente,
-        orden: os.orden_cercania,
-        color: typeof getEstiloPorFuente === 'function' 
-            ? getEstiloPorFuente(os.fuente, os.orden_cercania)?.marcador 
-            : '⚠️ getEstiloPorFuente no definida'
-    })));
+    if (window.osParaMapaActual) {
+        console.log(window.osParaMapaActual.slice(0, 5).map(os => ({
+            OS: os.OSATMO,
+            fuente: os.fuente,
+            orden: os.orden_cercania,
+            color: typeof getEstiloPorFuente === 'function' 
+                ? getEstiloPorFuente(os.fuente, os.orden_cercania)?.marcador 
+                : '⚠️ getEstiloPorFuente no definida'
+        })));
+    }
     console.groupEnd();
 
-    
-    // Diagnóstico de marcadores
+    // --- DIAGNÓSTICO DE MARCADORES ---
     console.group('📍 Diagnóstico de marcadores');
     console.log('Claves en markersPorEstado:', Object.keys(window.markersPorEstado || {}));
+    
     try {
-        const primerMarker = Object.values(window.markersPorEstado || {}).flat()[0];
+        const marcadores = Object.values(window.markersPorEstado || {}).flat();
+        const primerMarker = marcadores[0];
+        
         if (primerMarker) {
             console.log('Estado del primer marcador:', primerMarker?.options?.estado);
             console.log('Icon size:', primerMarker?.options?.icon?.options?.iconSize);
@@ -22640,13 +22648,11 @@ function debugEstadoMapa() {
             console.warn('⚠️ No hay marcadores en markersPorEstado');
         }
 
-        // Verificar fuente en marcadores
-        const marcadores = Object.values(window.markersPorEstado || {}).flat();
         console.log('📊 Marcadores con fuente definida:', 
             marcadores.filter(m => m.options?.fuente).length, 
             'de', marcadores.length);
 
-        // Probar toggle de leyenda
+        // Probar toggle
         if (typeof toggleMarcadoresPorFuente === 'function') {
             console.log('🔄 Probando toggle de "os_mas_cercanas"...');
             toggleMarcadoresPorFuente(window.mapaLeafletInstance, 'os_mas_cercanas', false);
@@ -22658,41 +22664,45 @@ function debugEstadoMapa() {
             console.warn('⚠️ toggleMarcadoresPorFuente no está definida');
         }
 
-if (os.Coordendasgis && typeof os.Coordendasgis === 'string' && os.Coordendasgis.includes(',')) {
-    const partes = os.Coordendasgis.split(',').map(c => parseFloat(c.trim()));
-    if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
-        Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
-        
-        const lat = partes[0];
-        const lng = partes[1];
-        
-        // ✅ LOG TEMPORAL - borrar después de validar
-        console.log(`OS ${os.OSATMO} → raw: ${os.Coordendasgis} → lat:${lat} lng:${lng}`);
-        
-        console.log(`✅ Coordenadas encontradas en "Coordendasgis": ${os.Coordendasgis}`);
+        // --- VALIDACIÓN DE COORDENADAS (Dentro del bucle de marcadores o datos) ---
+        if (window.osParaMapaActual && window.osParaMapaActual.length > 0) {
+            window.osParaMapaActual.slice(0, 3).forEach(os => { // Validamos los primeros 3
+                if (os.Coordendasgis && typeof os.Coordendasgis === 'string' && os.Coordendasgis.includes(',')) {
+                    const partes = os.Coordendasgis.split(',').map(c => parseFloat(c.trim()));
+                    if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1])) {
+                        const lat = partes[0];
+                        const lng = partes[1];
+                        console.log(`OS ${os.OSATMO} → raw: ${os.Coordendasgis} → lat:${lat} lng:${lng}`);
+                        console.log(`✅ Coordenadas encontradas en "Coordendasgis": ${os.Coordendasgis}`);
+                    }
+                }
+            });
+        }
 
-
-       // Probar filtrarPorEstado
+        // Probar filtrarPorEstado
         if (typeof filtrarPorEstado === 'function') {
             filtrarPorEstado('os_mas_cercanas');
             console.log('✅ filtrarPorEstado ejecutada con os_mas_cercanas');
         } else {
             console.warn('⚠️ filtrarPorEstado no está definida');
         }
+
     } catch (e) {
         console.warn('⚠️ Error leyendo marcadores:', e.message);
     }
+    console.groupEnd();
 
-    // Diagnóstico de marcador centro
+    // --- DIAGNÓSTICO MARCADOR CENTRO ---
+    console.group('📍 Marcador centro');
     const centro = window.markersPorEstado?.centro?.[0];
     console.log('📍 Marcador centro:', {
         existe: !!centro,
         estado: centro?.options?.estado,
         fuente: centro?.options?.fuente,
-        visible: centro ? window.mapaLeafletInstance?.hasLayer(centro) : null
+        visible: (centro && window.mapaLeafletInstance) ? window.mapaLeafletInstance.hasLayer(centro) : null
     });
 
-    // Probar filtros
+    // Probar filtros finales
     console.log('🔄 Probando filtro "centro"...');
     if (typeof filtrarPorEstado === 'function') {
         filtrarPorEstado('centro');
@@ -22700,13 +22710,11 @@ if (os.Coordendasgis && typeof os.Coordendasgis === 'string' && os.Coordendasgis
             console.log('🔄 Probando filtro "todas"...');
             filtrarPorEstado('todas');
         }, 1000);
-    } else {
-        console.warn('⚠️ filtrarPorEstado no está definida');
     }
     console.groupEnd();
-    console.groupEnd();
-}
 
+    console.groupEnd(); // Cierre de DEBUG ESTADO MAPA
+}
 
 
 </script>
