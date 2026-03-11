@@ -14062,9 +14062,10 @@ function inicializarVariablesGlobalesMapa() {
 }
  
 
-window.osParaMapaActual = aprobadas;
+
 
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
+window.osParaMapaActual = osEnRadio || [];
     // ✅ Inicializar variables globales primero
     inicializarVariablesGlobalesMapa();
     console.log('🗺️ ==========================================');
