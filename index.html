@@ -16619,18 +16619,23 @@ try {
     }
 
     // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
-    if (filtro) {
-        const universo = window.todasLasPendientesKML || osBase;
-const osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
-        osFiltradas.forEach(os => {
-            const osId = normalizarOSID(os.OSATMO || os.osatomo);
-            if (!osIdsYaIncluidas.has(osId)) {
-                osFinales.push({ ...os, fuente: 'filtros_unidad' });
-                osIdsYaIncluidas.add(osId);
-            }
-        });
-        console.log(`✅ ${osFiltradas.length} OS agregadas desde filtros_por_unidad`);
-    }
+   if (filtro) {
+    const universo = window.todasLasPendientesKML || osBase;
+    const osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
+    
+    console.log('🔍 Universo para filtrar:', universo.length);
+    console.log('🔍 Filtro aplicado:', JSON.stringify(filtro));
+    console.log('🔍 OS filtradas resultado:', osFiltradas.length);
+    
+    osFiltradas.forEach(os => {
+        const osId = normalizarOSID(os.OSATMO || os.osatomo);
+        if (!osIdsYaIncluidas.has(osId)) {
+            osFinales.push({ ...os, fuente: 'filtros_unidad' });
+            osIdsYaIncluidas.add(osId);
+        }
+    });
+    console.log(`✅ ${osFiltradas.length} OS agregadas desde filtros_por_unidad`);
+}
 } catch (err) {
     console.warn('⚠️ Error cargando filtros por unidad:', err.message);
 }
@@ -16666,7 +16671,7 @@ const osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
         total: osFinales.length,
         mas_cercanas: osFinales.filter(o => o.fuente === 'os_mas_cercanas').length,
         preseleccionadas: osFinales.filter(o => o.fuente === 'os_preseleccionadas').length,
-        filtros_unidad: osFinales.filter(o => o.filtros_unidad).length,
+        filtros_unidad: osFinales.filter(o => o.fuente === 'filtros_unidad').length,
         asignadas_automaticas: osFinales.filter(o => o.fuente === 'os_asignadas').length
     };
     
@@ -16966,15 +16971,50 @@ async function cargarInterfazKMLRuta() {
             } catch (err) {
                 console.warn('⚠️ Error cargando preseleccionadas:', err.message);
             }
+
+// ✅ Cargar OS de filtros_por_unidad
+let osFiltrosUnidad = [];
+try {
+    let { data: filtro } = await supabaseClient
+        .from('filtros_por_unidad')
+        .select('*')
+        .eq('Unidad', unidadUsuario)
+        .eq('fecha_programada', HOY)
+        .maybeSingle();
+    
+    if (!filtro) {
+        const { data: filtroBase } = await supabaseClient
+            .from('filtros_por_unidad')
+            .select('*')
+            .eq('Unidad', unidadUsuario)
+            .is('fecha_programada', null)
+            .maybeSingle();
+        if (filtroBase) filtro = filtroBase;
+    }
+    
+    if (filtro) {
+        const universo = todasLasPendientes;
+        osFiltrosUnidad = aplicarFiltrosAlDataset(universo, filtro, unidadUsuario)
+            .map(os => ({ ...os, fuente: 'filtros_unidad' }))
+            .filter(os => !osParaDropdown.some(asig => 
+                String(asig.OSATMO).trim() === String(os.OSATMO).trim()
+            ));
+        console.log(`✅ ${osFiltrosUnidad.length} OS desde filtros_por_unidad`);
+    }
+} catch (err) {
+    console.warn('⚠️ Error cargando filtros_por_unidad:', err.message);
+}
             
-            const osParaMapa = [
-                ...osParaDropdown,
-                ...osPreseleccionadas.filter(osPre => 
-                    !osParaDropdown.some(osAsig => 
-                        String(osAsig.OSATMO || osAsig.osatomo).trim() === String(osPre.OSATMO || osPre.osatomo).trim()
-                    )
-                )
-            ];
+           const osParaMapa = [
+    ...osParaDropdown,
+    ...osPreseleccionadas.filter(osPre => 
+        !osParaDropdown.some(osAsig => 
+            String(osAsig.OSATMO || osAsig.osatomo).trim() === String(osPre.OSATMO || osPre.osatomo).trim()
+        )
+    ),
+    ...osFiltrosUnidad  // ← AGREGAR ESTA LÍNEA
+];
+
             console.log(`📊 Dataset combinado: ${osParaDropdown.length} asignadas + ${osPreseleccionadas.length} preseleccionadas = ${osParaMapa.length} totales`);
             
             const opcionesDropdown = osParaDropdown.map(os => `<option value="${os.OSATMO || os.osatomo}">${os.OSATMO || os.osatomo} - ${os.Tipologia || 'N/A'}</option>`).join('');
