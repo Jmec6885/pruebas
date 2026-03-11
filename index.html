@@ -9586,10 +9586,7 @@ const iconoConNumero = L.divIcon({
     // ✅ 6. Agregar botón para restaurar vista completa
     agregarBotonRestaurarVistaMapa(contexto);
     
-    // ✅ 7. Agregar leyenda si no existe
-    if (typeof agregarLeyendaFuentes === 'function') {
-        agregarLeyendaFuentes(window.mapaLeafletInstance, contexto);
-    }
+   
 
 
     // ✅ RESTAURAR MARCADOR CENTRO si existe
@@ -9986,8 +9983,23 @@ window.datosRutaKML = todosLosPuntos;
 // 2️⃣ Renderizar el mapa
 // Nota: El radioKm se pone alto o se ignora en la lógica interna para mostrar todos los puntos
 const radioVisual = 10;
-// ✅ PASAR DATOS COMPLETOS CON COMENTARIOS
 generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
+
+// ✅ Ocultar filtros por defecto y detectar si hay para mostrar el botón
+window.filtrosKMLActivos = false;
+setTimeout(() => {
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa) return;
+    const claveFiltros = ['os_mas_cercanas', 'os_preseleccionadas', 'filtros_unidad'];
+    let hayFiltros = false;
+    claveFiltros.forEach(key => {
+        const arr = window.markersPorEstado?.[key] || [];
+        if (arr.length > 0) hayFiltros = true;
+        arr.forEach(m => { if (mapa.hasLayer(m)) mapa.removeLayer(m); });
+    });
+    const btn = document.getElementById('btnToggleFiltrosKML');
+    if (btn) btn.style.display = hayFiltros ? 'inline-block' : 'none';
+}, 900);
 
     // 3️⃣ Gestionar el contenedor de resultados y botón de descarga
     const resultsContainer = document.getElementById('searchResults');
@@ -9998,20 +10010,26 @@ generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
     if (botonExistente) botonExistente.remove();
 
     const descargaHTML = `
-        <div id="contenedorDescargaKML" style="text-align: center; margin-top: 25px; padding: 25px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px;">
-            <h4 style="margin-bottom: 15px; color: #1e293b;">📌 Ruta Optimizada Lista</h4>
-            <button class="btn" onclick="descargarKMLRutaNumerada()"
-                    style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); 
-                           color: white; font-size: 18px; padding: 15px 35px; 
-                           border-radius: 10px; border: none; cursor: pointer;
-                           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
-            </button>
-            <p style="margin-top: 10px; font-size: 12px; color: #64748b;">
-                * El archivo incluirá la secuencia del 1 al ${todosLosPuntos.length}
-            </p>
-        </div>
-    `;
+    <div id="contenedorDescargaKML" style="text-align: center; margin-top: 25px; padding: 25px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 16px;">
+        <h4 style="margin-bottom: 15px; color: #1e293b;">📌 Ruta Optimizada Lista</h4>
+        <button id="btnToggleFiltrosKML" onclick="toggleFiltrosKMLRuta()"
+                style="display:none; background:#10b981; color:white; font-size:15px; padding:10px 24px;
+                       border-radius:8px; border:none; cursor:pointer; font-weight:700; margin-bottom:12px;">
+            🎯 Aplicar Filtros
+        </button>
+        <br>
+        <button class="btn" onclick="descargarKMLRutaNumerada()"
+                style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); 
+                       color: white; font-size: 18px; padding: 15px 35px; 
+                       border-radius: 10px; border: none; cursor: pointer;
+                       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            📥 Descargar KML Numerado (${todosLosPuntos.length} puntos)
+        </button>
+        <p style="margin-top: 10px; font-size: 12px; color: #64748b;">
+            * El archivo incluirá la secuencia del 1 al ${todosLosPuntos.length}
+        </p>
+    </div>
+`;
 
     // Insertar después del mapa (no sobreescribir todo el contenedor si hay más info)
     resultsContainer.insertAdjacentHTML('beforeend', descargaHTML);
@@ -11631,7 +11649,7 @@ if (rolesAdmin.includes(currentUser.rol)) {
     generarInterfazAdminMapaRutas(filtros, tipologiasUnicas, unidadesUnicas);
 } else {
     // ✅ CORRECTO: Interfaz Unidad para Mapa de Rutas (no KML)
-    generarInterfazUnidadMapaRutas(filtros, osAsignadas);
+    cargarInterfazKMLRuta();
 }
  
     } catch (err) {
@@ -14410,9 +14428,6 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
 }
 
 
-// ===================================================================
-// 🎯 FILTRAR MARCADORES POR ESTADO (SINCRONIZADA CON LEYENDA)
-// ===================================================================
 function filtrarPorEstado(estado) {
     console.log(`🎯 Filtrando por estado: ${estado}`);
     
@@ -14423,60 +14438,46 @@ function filtrarPorEstado(estado) {
     
     const mapa = window.mapaLeafletInstance;
     
-    // ✅ CASO ESPECIAL: 'todas' = mostrar todo
+    // ✅ 'todas' - mostrar TODOS los marcadores usando markersPorEstado (no eachLayer)
     if (estado === 'todas') {
-        mapa.eachLayer(layer => {
-            if (!mapa.hasLayer(layer)) {
-                mapa.addLayer(layer);
-            }
+        Object.values(window.markersPorEstado || {}).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+            });
         });
         console.log('✅ Filtro "todas" aplicado');
         return;
     }
     
-    // ✅ Iterar sobre todos los marcadores del mapa
-    mapa.eachLayer(layer => {
-        const markerEstado = layer.options?.estado;
-        const markerFuente = layer.options?.fuente;
-        
-        // ✅ Siempre mantener visible el marcador centro
-        if (markerEstado === 'centro' || markerFuente === 'centro') {
-            if (!mapa.hasLayer(layer)) {
-                mapa.addLayer(layer);
+    // ✅ Iterar SOLO sobre window.markersPorEstado (nunca mapa.eachLayer)
+    Object.entries(window.markersPorEstado || {}).forEach(([key, markersArray]) => {
+        markersArray.forEach(marker => {
+            // Centro siempre visible
+            if (key === 'centro') {
+                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+                return;
             }
-            return;
-        }
-        
-        // ✅ Lógica de visibilidad:
-        let debeMostrar = false;
-        
-        if (estado === 'centro') {
-            // Solo mostrar el marcador centro (ya manejado arriba)
-            debeMostrar = false;
-        } else if (estado === 'regulada' || estado === 'no_regulada' || 
-                   estado === 'deuda_alta' || estado === 'deuda_media' || estado === 'deuda_baja') {
-            // Filtros por estado tradicional
-            debeMostrar = (markerEstado === estado);
-        } else if (estado === 'asignada') {
-            // ✅ Si usas 'asignada', mapear a 'os_asignadas'
-            debeMostrar = (markerEstado === 'asignada' || markerFuente === 'os_asignadas');
-        }
-        
-        // Aplicar visibilidad
-        if (debeMostrar) {
-            if (!mapa.hasLayer(layer)) {
-                mapa.addLayer(layer);
+            
+            let debeMostrar = false;
+            
+            if (estado === 'centro') {
+                debeMostrar = false;
+            } else if (estado === 'asignada') {
+                debeMostrar = (key === 'asignada' || key === 'os_asignadas');
+            } else {
+                debeMostrar = (key === estado);
             }
-        } else {
-            if (mapa.hasLayer(layer)) {
-                mapa.removeLayer(layer);
+            
+            if (debeMostrar) {
+                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+            } else {
+                if (mapa.hasLayer(marker)) mapa.removeLayer(marker);
             }
-        }
+        });
     });
     
     console.log(`✅ Filtro aplicado: ${estado}`);
 }
-
 
 
  	// ========================================
@@ -14964,12 +14965,12 @@ function inicializarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radio
 window.markersPorTipologia = {};
 window.markersPorEstado = {
     'centro': [],
-       'regulada': [],
+    'asignada': [],
+    'regulada': [],
     'no_regulada': [],
     'deuda_alta': [],
     'deuda_media': [],
     'deuda_baja': [],
-    // ✅ Claves para fuentes de prioridad (para evitar error de push en undefined)
     'os_mas_cercanas': [],
     'os_preseleccionadas': [],
     'os_asignadas': [],
@@ -15014,11 +15015,7 @@ window.markersPorEstado = {
     console.error('❌ Error agregando capa de mapa:', e.message);
 }
 
-// ✅ AGREGAR ESTO: Leyenda interactiva (DESPUÉS de capa base, ANTES de marcadores)
-if (typeof agregarLeyendaFuentes === 'function') {
-    // El contexto debe venir como parámetro de la función
-    agregarLeyendaFuentes(mapa, window.contextoMapaActual || 'kml_ruta');
-}
+
 
     // ========================================
     // ✅ DIBUJAR CÍRCULO DEL RADIO DE BÚSQUEDA
@@ -15620,7 +15617,33 @@ if (osList.some(o => o.esPreseleccionada)) {
     console.log('🗺️ ==========================================');
 }
 
+function toggleFiltrosKMLRuta() {
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa) return;
 
+    const btn = document.getElementById('btnToggleFiltrosKML');
+    const claveFiltros = ['os_mas_cercanas', 'os_preseleccionadas', 'filtros_unidad'];
+
+    if (!window.filtrosKMLActivos) {
+        // Mostrar marcadores de filtros
+        claveFiltros.forEach(key => {
+            (window.markersPorEstado?.[key] || []).forEach(m => {
+                if (!mapa.hasLayer(m)) mapa.addLayer(m);
+            });
+        });
+        window.filtrosKMLActivos = true;
+        if (btn) { btn.textContent = '🧹 Limpiar Filtros'; btn.style.background = '#ef4444'; }
+    } else {
+        // Ocultar marcadores de filtros
+        claveFiltros.forEach(key => {
+            (window.markersPorEstado?.[key] || []).forEach(m => {
+                if (mapa.hasLayer(m)) mapa.removeLayer(m);
+            });
+        });
+        window.filtrosKMLActivos = false;
+        if (btn) { btn.textContent = '🎯 Aplicar Filtros'; btn.style.background = '#10b981'; }
+    }
+}
 
 // ========================================
 // 🗺️ GENERAR MAPA KML RUTA (VERSIÓN OPTIMIZADA Y ROBUSTA)
@@ -22498,130 +22521,6 @@ window.verDetalleTX = verDetalleTX;
 
 
 
-
-
-// ===================================================================
-// 🎨 AGREGAR LEYENDA INTERACTIVA AL MAPA
-// ===================================================================
-function agregarLeyendaFuentes(mapa, contexto = 'kml_ruta') {
-    // Remover leyenda existente si hay
-    const leyendaExistente = document.getElementById('leyendaFuentesMapa');
-    if (leyendaExistente) leyendaExistente.remove();
-    
-    // Crear contenedor de leyenda
-    const leyenda = L.control({ position: 'bottomright' });
-    
-    leyenda.onAdd = function() {
-        const div = L.DomUtil.create('div', 'legend-fuentes');
-        div.id = 'leyendaFuentesMapa';
-        div.style.cssText = `
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            font-size: 12px;
-            line-height: 1.8;
-            max-width: 220px;
-        `;
-        
-        div.innerHTML = `
-            <strong style="display: block; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">
-                📊 Leyenda de Fuentes
-            </strong>
-            ${Object.entries(COLORES_POR_FUENTE).map(([fuente, config]) => `
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 4px 0;">
-                    <input type="checkbox" 
-                           data-fuente="${fuente}" 
-                           checked 
-                           style="width: 16px; height: 16px; cursor: pointer;">
-                    <span style="display: inline-flex; align-items: center; gap: 6px;">
-                        <span style="
-                            display: inline-block;
-                            width: 16px;
-                            height: 16px;
-                            border-radius: 50%;
-                            background: ${config.marcador};
-                            border: 2px solid ${config.borde};
-                        "></span>
-                        ${config.label}
-                    </span>
-                </label>
-            `).join('')}
-            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-                <button id="btnToggleTodasFuentes" 
-                        style="width: 100%; padding: 6px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                    👁️ Mostrar/Ocultar Todas
-                </button>
-            </div>
-        `;
-        
-        // Prevenir propagación de eventos del mapa
-        L.DomEvent.disableClickPropagation(div);
-        L.DomEvent.disableScrollPropagation(div);
-        
-        // Agregar listeners a los checkboxes
-        div.querySelectorAll('input[data-fuente]').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const fuente = this.getAttribute('data-fuente');
-                toggleMarcadoresPorFuente(mapa, fuente, this.checked);
-            });
-        });
-        
-        // Listener para botón "Mostrar/Ocultar Todas"
-        const btnToggle = div.querySelector('#btnToggleTodasFuentes');
-        let todasVisibles = true;
-        btnToggle.addEventListener('click', function() {
-            todasVisibles = !todasVisibles;
-            div.querySelectorAll('input[data-fuente]').forEach(checkbox => {
-                checkbox.checked = todasVisibles;
-                toggleMarcadoresPorFuente(mapa, checkbox.getAttribute('data-fuente'), todasVisibles);
-            });
-            this.innerText = todasVisibles ? '👁️ Ocultar Todas' : '👁️ Mostrar Todas';
-        });
-        
-        return div;
-    };
-    
-    leyenda.addTo(mapa);
-}
-
-// ===================================================================
-// 🎨 TOGGLER: Mostrar/Ocultar marcadores por fuente (CORREGIDA)
-// ===================================================================
-function toggleMarcadoresPorFuente(mapa, fuente, visible) {
-    console.log(`🎨 ${visible ? '✅' : '❌'} Fuente "${fuente}": ${visible ? 'visible' : 'oculta'} (centro siempre visible)`);
-    
-    mapa.eachLayer(layer => {
-        // ✅ Siempre mantener visible el marcador centro
-        if (layer.options?.estado === 'centro' || layer.options?.fuente === 'centro') {
-            if (!mapa.hasLayer(layer)) {
-                mapa.addLayer(layer);
-            }
-            return; // Saltar este marcador
-        }
-        
-        // ✅ Manejar marcadores SIN propiedad 'fuente' (compatibilidad con inicializarMapaLeaflet)
-        const layerFuente = layer.options?.fuente;
-        const layerEstado = layer.options?.estado;
-        
-        // Si el marcador no tiene 'fuente', intentar inferirla de 'estado'
-        const fuenteCoincide = layerFuente === fuente || 
-                              (layerEstado && layerEstado === fuente) ||
-                              (!layerFuente && !layerEstado && fuente === 'os_asignadas'); // Fallback
-        
-        if (fuenteCoincide) {
-            if (visible) {
-                if (!mapa.hasLayer(layer)) {
-                    mapa.addLayer(layer);
-                }
-            } else {
-                if (mapa.hasLayer(layer)) {
-                    mapa.removeLayer(layer);
-                }
-            }
-        }
-    });
-}
 
 
 
