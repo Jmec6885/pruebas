@@ -9368,7 +9368,7 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
     const lng = coords.lng;
         
         // Crear clave única para coordenadas (6 decimales = ~11cm de precisión)
-        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        const claveCoordenadas = `${lat.toFixed(4)},${lng.toFixed(4)}`;
         
         if (!coordenadasAgrupadas[claveCoordenadas]) {
             coordenadasAgrupadas[claveCoordenadas] = {
@@ -14065,7 +14065,6 @@ function inicializarVariablesGlobalesMapa() {
 
 
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
-window.osParaMapaActual = osEnRadio || [];
     // ✅ Inicializar variables globales primero
     inicializarVariablesGlobalesMapa();
     console.log('🗺️ ==========================================');
