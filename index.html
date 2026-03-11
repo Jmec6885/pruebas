@@ -15146,13 +15146,16 @@ window.markersPorEstado = {
     // ========================================
     let contadorProcesadas = 0;
     let estadisticas = {
-        regulada: 0,
-        no_regulada: 0,
-        deuda_alta: 0,
-        deuda_media: 0,
-        deuda_baja: 0,
-        asignadas: 0
-    };
+    regulada: 0,
+    no_regulada: 0,
+    deuda_alta: 0,
+    deuda_media: 0,
+    deuda_baja: 0,
+    asignadas: 0,
+    os_mas_cercanas: 0,
+    os_preseleccionadas: 0,
+    filtros_unidad: 0
+};
     let erroresMarcadores = 0;
 
     for (const grupo of Object.values(coordenadasAgrupadas)) {
@@ -15183,6 +15186,9 @@ if (fuenteOS === 'os_mas_cercanas') {
 } else if (fuenteOS === 'os_preseleccionadas') {
     labelEstado = estiloBase.label;
     estadoKey = 'os_preseleccionadas';
+} else if (fuenteOS === 'filtros_unidad') {   // ← AGREGAR ESTO
+    labelEstado = estiloBase.label || 'OS FILTRO UNIDAD';
+    estadoKey = 'filtros_unidad';
 } else if (deuda > 500) {
     labelEstado = 'DEUDA ALTA';
     estadoKey = 'deuda_alta';
