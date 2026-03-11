@@ -7921,7 +7921,7 @@ if (window.osPartidaSeleccionada) {
 
 if (!osCentro) {
     osCentro = osAsignadasUnidad.find(os => {
-        const coords = os.Coordenadas || os.Coordendasgis;
+        const coords = os.Coordendasgis || os.Coordenadas;
         return coords && coords.includes(',');
     });
 }
@@ -8718,7 +8718,7 @@ function optimizarRutaVecinoCercano(osData, osPartidaId, puntoPartidaCoordenadas
     const puntosNoVisitados = osData
         .filter(os => getOSId(os) !== getOSId(osPartida)) 
         .map(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
+            const coords = os.Coordendasgis || os.Coordenadas;
             const [lat, lng] = (coords && coords.split(',').map(c => parseFloat(c.trim()))) || [null, null];
             if (lat === null || isNaN(lat)) return null;
             return { ...os, lat, lng };
@@ -8830,7 +8830,7 @@ function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
     }
     
     // Validar que la OS origen tenga coordenadas
-    const coordsOrigen = osOrigen.Coordenadas || osOrigen.Coordendasgis;
+    const coordsOrigen = osOrigen.Coordendasgis || osOrigen.Coordenadas;
     if (!coordsOrigen || !coordsOrigen.includes(',')) {
         console.error('❌ OS origen sin coordenadas válidas');
         return [];
@@ -8844,6 +8844,13 @@ function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
     
     // Clonar array para no modificar el original
     const disponibles = [...osDisponibles];
+
+// ✅ Remover OS origen de disponibles para evitar duplicado
+const disponiblesSinOrigen = disponibles.filter(os => 
+    String(os.OSATMO || os.osatomo).trim() !== String(osOrigen.OSATMO || osOrigen.osatomo).trim()
+);
+disponibles.length = 0;
+disponiblesSinOrigen.forEach(os => disponibles.push(os));
     const resultado = [];
     
     // La OS origen es el punto 0
@@ -8866,7 +8873,7 @@ function calcularOSMasCercanas(osOrigen, osDisponibles, cantidad) {
         // Buscar la OS más cercana al punto actual
         for (let i = 0; i < disponibles.length; i++) {
             const os = disponibles[i];
-            const coords = os.Coordenadas || os.Coordendasgis;
+            const coords = os.Coordendasgis || os.Coordenadas;
             
             if (!coords || !coords.includes(',')) continue;
             
@@ -9827,7 +9834,7 @@ function generarRutaDesdePuntoFijo(puntoNombre, puntoLat, puntoLng) {
 
         // 5️⃣ FILTRAR SOLO OS CON COORDENADAS VÁLIDAS
         const osConCoordenadas = osData.filter(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
+            const coords = os.Coordendasgis || os.Coordenadas;
             // Verificación robusta: que sea string y contenga coma
             return coords && typeof coords === 'string' && coords.includes(',');
         });
@@ -9936,7 +9943,7 @@ const osDataOriginal = [...asignadas, ...extras];
         osatomo: String(os.osatomo || os.OSATMO || os.OSATOMO || '').trim()
     })).filter(os => {
         // Solo puntos con coordenadas válidas
-        const coords = os.Coordenadas || os.Coordendasgis;
+        const coords = os.Coordendasgis || os.Coordenadas;
         return coords && String(coords).includes(',');
     });
 
@@ -16022,7 +16029,7 @@ if (!osData || osData.length === 0) {
         
         // ✅ 6. Validar que haya OS con coordenadas válidas
         const osConCoordenadas = osFiltradas.filter(os => {
-            const coords = os.Coordenadas || os.Coordendasgis;
+            const coords = os.Coordendasgis || os.Coordenadas;
             return coords && String(coords).includes(',') && !String(coords).toLowerCase().includes('sin');
         });
         
