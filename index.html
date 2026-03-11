@@ -12746,7 +12746,7 @@ todasOSRegistradas.forEach(os => {
             if (osatmoActual === String(osCentro.OSATMO).trim()) continue;
             if (osAsignadasSet.has(osatmoActual)) { stats.asignadasOcultas++; continue; }
             
-            const cStr = os.Coordenadas || os.Coordendasgis;
+            const cStr = os.Coordendasgis || os.Coordenadas;
             if (!cStr || !cStr.includes(',')) { stats.sinCoords++; continue; }
             
             const [lat, lng] = cStr.split(',').map(c => parseFloat(c.trim()));
