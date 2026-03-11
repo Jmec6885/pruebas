@@ -7214,11 +7214,14 @@ async function determinarOSParaUnidad(unidad, fechaProgramada, datasetCompleto =
                 .in('OSATMO', osIds);
             
             return {
-                os: (detalles || []).map(os => ({ ...os, esPreseleccionada: true })),
-                fuente: 'preseleccionadas',
-                mensaje: `📋 ${detalles?.length || 0} OS asignadas manualmente`,
-                filtrosAplicados: null
-            };
+    os: (detalles || []).map(os => ({ 
+        ...os, 
+        esPreseleccionada: true,
+        fuente: 'os_preseleccionadas'  // ← AGREGAR ESTA LÍNEA
+    })),
+    fuente: 'preseleccionadas',
+    mensaje: `📋 ${detalles?.length || 0} OS asignadas manualmente`
+};
         }
     } catch (err) {
         console.warn('⚠️ Error cargando preseleccionadas:', err.message);
@@ -7294,11 +7297,12 @@ async function cargarOSPreseleccionadasParaUnidad(unidad, fechaProgramada) {
         }
         
         return (detalles || []).map(os => ({
-            ...os,
-            esPreseleccionada: true,
-            comentarioPreseleccion: data.find(p => p.osatomo === os.OSATMO)?.comentarios,
-            fechaPreseleccion: fechaProgramada
-        }));
+    ...os,
+    esPreseleccionada: true,
+    fuente: 'os_preseleccionadas',  // ← AGREGAR ESTA LÍNEA
+    comentarioPreseleccion: data.find(p => p.osatomo === os.OSATMO)?.comentarios,
+    fechaPreseleccion: fechaProgramada
+}));
         
     } catch (err) {
         console.error('❌ Error en cargarOSPreseleccionadasParaUnidad:', err);
