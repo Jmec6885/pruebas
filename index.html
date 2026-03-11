@@ -9358,18 +9358,14 @@ function mostrarSoloOSCercanasEnMapa(osCercanas, contexto = 'mapa_rutas') {
     let osProcesadas = 0;
     let osSinCoordenadas = 0;
     
-    for (const [index, os] of osCercanas.entries()) {
-        const coordsRaw = os.Coordenadas || os.Coordendasgis;
-        if (!coordsRaw || !coordsRaw.includes(',')) {
-            osSinCoordenadas++;
-            continue;
-        }
-        
-        const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
-        if (isNaN(lat) || isNaN(lng)) {
-            osSinCoordenadas++;
-            continue;
-        }
+   for (const [index, os] of osCercanas.entries()) {
+    const coords = extraerCoordenadas(os);
+    if (!coords) { 
+        osSinCoordenadas++; 
+        continue; 
+    }
+    const lat = coords.lat;
+    const lng = coords.lng;
         
         // Crear clave única para coordenadas (6 decimales = ~11cm de precisión)
         const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
@@ -9571,7 +9567,7 @@ const iconoConNumero = L.divIcon({
     window.marcaCercanasContexto = contexto;
     
     if (!window.markersPorEstado) window.markersPorEstado = {};
-    window.markersPorEstado.cercanas = nuevosMarcadores;
+    window.markersPorEstado['os_mas_cercanas'] = nuevosMarcadores;
     
     // ✅ 5. Ajustar vista del mapa a los marcadores
     if (marcadoresCreados > 0 && bounds.isValid()) {
@@ -14066,6 +14062,8 @@ function inicializarVariablesGlobalesMapa() {
 }
  
 
+window.osParaMapaActual = aprobadas;
+
 function generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioKm) {
     // ✅ Inicializar variables globales primero
     inicializarVariablesGlobalesMapa();
@@ -15214,7 +15212,7 @@ window.markersPorEstado = {
         // Determinar estado y color del marcador principal
         // Determinar estado y color del marcador principal
 const primeraOS = osList[0];
-const tipoOS = (primeraOS.Tipo_de_OS || '').toLowerCase();
+const tipoOS = (primeraOS.Tipo_de_OS || primeraOS.Tipologia || '').toLowerCase();
 const deuda = parseFloat(primeraOS.Deuda) || 0;
 
 // ✅ Determinar fuente si está disponible
@@ -15254,7 +15252,15 @@ if (fuenteOS === 'os_mas_cercanas') {
 }
 
 // ✅ Usar color del estilo base (o fallback)
-const colorFondo = estiloBase.marcador || '#2196f3';
+let colorFondo;
+if (estadoKey === 'os_mas_cercanas' || estadoKey === 'os_preseleccionadas' || estadoKey === 'filtros_unidad') {
+    colorFondo = estiloBase.marcador; // Estas sí usan color por fuente
+} else if (estadoKey === 'regulada')    colorFondo = '#f44336';  // Rojo
+else if (estadoKey === 'deuda_alta')    colorFondo = '#795548';  // Café
+else if (estadoKey === 'deuda_media')   colorFondo = '#ff9800';  // Naranja
+else if (estadoKey === 'deuda_baja')    colorFondo = '#f48fb1';  // Rosado
+else if (estadoKey === 'no_regulada')   colorFondo = '#06b6d4';  // Celeste
+else colorFondo = estiloBase.marcador || '#2196f3';
 
 // Contabilizar estadísticas
 contadorProcesadas++;
@@ -15323,7 +15329,7 @@ if (esMultiple) {
         const osTipo = (os.Tipo_de_OS || '').toLowerCase();
         let osColor = '#2196f3';
 
-        if (osDeuda > 500) osColor = '#fdd835';
+        if (osDeuda > 500) osColor = '#795548';
         else if (osDeuda >= 100) osColor = '#ff9800';
         else if (osDeuda >= 50) osColor = '#f48fb1';
         else if (osTipo.includes('regulad') && !osTipo.includes('no')) osColor = '#f44336';
@@ -16114,7 +16120,8 @@ if (!osData || osData.length === 0) {
                 ComentarioGeneral: os.Comentario || os.ComentarioGeneral || '',
                 ComentarioKML: os.Comentario || os.ComentarioGeneral || '',
                 lat: isNaN(lat) ? null : lat,
-                lng: isNaN(lng) ? null : lng
+                lng: isNaN(lng) ? null : lng,
+		fuente: os.fuente || 'os_asignadas'
             };
         });
         
@@ -22650,6 +22657,19 @@ function debugEstadoMapa() {
         } else {
             console.warn('⚠️ toggleMarcadoresPorFuente no está definida');
         }
+
+if (os.Coordendasgis && typeof os.Coordendasgis === 'string' && os.Coordendasgis.includes(',')) {
+    const partes = os.Coordendasgis.split(',').map(c => parseFloat(c.trim()));
+    if (partes.length === 2 && !isNaN(partes[0]) && !isNaN(partes[1]) && 
+        Math.abs(partes[0]) <= 90 && Math.abs(partes[1]) <= 180) {
+        
+        const lat = partes[0];
+        const lng = partes[1];
+        
+        // ✅ LOG TEMPORAL - borrar después de validar
+        console.log(`OS ${os.OSATMO} → raw: ${os.Coordendasgis} → lat:${lat} lng:${lng}`);
+        
+        console.log(`✅ Coordenadas encontradas en "Coordendasgis": ${os.Coordendasgis}`);
 
         // Probar filtrarPorEstado
         if (typeof filtrarPorEstado === 'function') {
