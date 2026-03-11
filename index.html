@@ -15104,7 +15104,7 @@ window.markersPorEstado = {
         }
 
         // Crear clave única para coordenadas (6 decimales para precisión ~11cm)
-        const claveCoordenadas = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        const claveCoordenadas = `${lat.toFixed(4)},${lng.toFixed(4)}`;
 
         // Agrupar OS por coordenadas
         if (!coordenadasAgrupadas[claveCoordenadas]) {
