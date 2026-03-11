@@ -7238,12 +7238,15 @@ async function determinarOSParaUnidad(unidad, fechaProgramada, datasetCompleto =
         
         if (filtros && (filtros.tipologias?.length > 0 || filtros.rangos?.length > 0 || filtros.radio_km)) {
             const osFiltradas = aplicarFiltrosAlDataset(osBase, filtros, unidad);
-            return {
-                os: osFiltradas,
-                fuente: 'filtros_unidad',
-                mensaje: `🎯 OS filtradas por configuración`,
-                filtrosAplicados: filtros
-            };
+return {
+    os: osFiltradas.map(os => ({
+        ...os,
+        fuente: 'filtros_unidad'  // ← AGREGAR
+    })),
+    fuente: 'filtros_unidad',
+    mensaje: `🎯 OS filtradas por configuración`,
+    filtrosAplicados: filtros
+};
         }
     } catch (err) {
         console.warn('⚠️ Error cargando filtros:', err.message);
