@@ -7358,6 +7358,48 @@ async function cargarFiltrosPorUnidad(unidad, fechaProgramada) {
 }
 
 
+// ========================================
+// 🔍 APLICAR FILTROS AL DATASET
+// ========================================
+function aplicarFiltrosAlDataset(dataset, filtros, unidad) { 
+    if (!dataset || dataset.length === 0) return [];
+
+    const tipologias = filtros.tipologias || [];
+    const rangos = filtros.rangos || [];
+
+    return dataset.filter(os => {
+        // Filtrar por unidad
+        if (unidad && normalizarUnidad(os.Unidad) !== normalizarUnidad(unidad)) return false;
+
+        // Filtrar por tipología si hay definidas
+        if (tipologias.length > 0) {
+            const tipOS = (os.Tipologia || '').trim();
+            if (!tipologias.includes(tipOS)) return false;
+        }
+
+        // Filtrar por rango de días si hay definidos
+        if (rangos.length > 0) {
+            const fechaGen = os['Fecha Gen.'] || os.FechaGen || os.fecha_gen;
+            if (!fechaGen) return false;
+
+            const hoy = new Date();
+            const fechaOS = new Date(fechaGen);
+            const diasTranscurridos = Math.floor((hoy - fechaOS) / (1000 * 60 * 60 * 24));
+
+            const dentroDeRango = rangos.some(rango => {
+                if (rango === '>180') return diasTranscurridos > 180;
+                const [min, max] = rango.split('-').map(Number);
+                return diasTranscurridos >= min && diasTranscurridos <= max;
+            });
+
+            if (!dentroDeRango) return false;
+        }
+
+        return true;
+    });
+}
+
+
 
 // ========================================
 // 🔄 DETERMINAR OS PARA UNIDAD (LÓGICA DE CASCADA)
