@@ -16741,23 +16741,27 @@ try {
     }
 
     // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
-  if (filtro) {
+if (filtro) {
     const universo = window.todasLasPendientesKML || osBase;
-    let osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad, coordsCentro?.latitud, coordsCentro?.longitud);
-
-    // ✅ NUEVO: Aplicar filtro de radio
+    
+    // ✅ Calcular coordsCentro PRIMERO
     const radioKm = filtro.radio_km || 3;
     const osPartidaId = window.osPartidaSeleccionada;
     const osPartidaData = universo.find(os => 
         String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
     );
     const coordsCentro = osPartidaData ? extraerCoordenadas(osPartidaData) : null;
-console.log('🔍 DEBUG RADIO - osPartidaId:', osPartidaId);
-console.log('🔍 DEBUG RADIO - osPartidaData:', osPartidaData?.OSATMO);
-console.log('🔍 DEBUG RADIO - coordsCentro:', coordsCentro);
-console.log('🔍 DEBUG RADIO - radioKm:', radioKm);
-console.log('🔍 DEBUG RADIO - osFiltradas antes radio:', osFiltradas.length);
 
+    console.log('🔍 DEBUG RADIO - osPartidaId:', osPartidaId);
+    console.log('🔍 DEBUG RADIO - osPartidaData:', osPartidaData?.OSATMO);
+    console.log('🔍 DEBUG RADIO - coordsCentro:', coordsCentro);
+    console.log('🔍 DEBUG RADIO - radioKm:', radioKm);
+
+    // ✅ Luego aplicar filtros pasando coordenadas
+    let osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad, coordsCentro?.latitud, coordsCentro?.longitud);
+    console.log('🔍 DEBUG RADIO - osFiltradas antes radio:', osFiltradas.length);
+
+    // ✅ Aplicar filtro de radio adicional
     if (coordsCentro) {
         osFiltradas = osFiltradas.filter(os => {
             const coords = extraerCoordenadas(os);
