@@ -7369,7 +7369,10 @@ function aplicarFiltrosAlDataset(dataset, filtros, unidad) {
 
     return dataset.filter(os => {
         // Filtrar por unidad
-        if (unidad && normalizarUnidad(os.Unidad) !== normalizarUnidad(unidad)) return false;
+        const unidadOS = (os.Unidad || '').trim();
+const sinUnidad = !unidadOS || unidadOS.replace(/-/g, '').trim() === '';
+const esDeUnidad = normalizarUnidad(unidadOS) === normalizarUnidad(unidad);
+if (unidad && !sinUnidad && !esDeUnidad) return false;
 
         // Filtrar por tipología si hay definidas
         if (tipologias.length > 0) {
