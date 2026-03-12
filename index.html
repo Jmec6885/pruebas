@@ -13716,7 +13716,7 @@ function extraerCoordenadas(os) {
             const lat = partes[0];
             const lng = partes[1];
             
-           
+          
             return {
                 // ✅ Compatibilidad con Leaflet y código moderno
                 lat: lat,
@@ -13742,7 +13742,7 @@ function extraerCoordenadas(os) {
             const lat = partes[0];
             const lng = partes[1];
             
-            
+           
             return {
                 lat: lat,
                 lng: lng,
@@ -16743,7 +16743,7 @@ try {
     // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
   if (filtro) {
     const universo = window.todasLasPendientesKML || osBase;
-    let osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
+    let osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad, coordsCentro?.latitud, coordsCentro?.longitud);
 
     // ✅ NUEVO: Aplicar filtro de radio
     const radioKm = filtro.radio_km || 3;
