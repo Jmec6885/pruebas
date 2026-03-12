@@ -16624,7 +16624,9 @@ async function obtenerOSParaMapa(unidad, fechaProgramada, datasetCompleto = null
         return null;
     }
     
-    // 🔹 FUNCIÓN AUXILIAR: Normalizar ID de OS para comparación robusta
+    
+
+// 🔹 FUNCIÓN AUXILIAR: Normalizar ID de OS para comparación robusta
     function normalizarOSID(valor) {
         if (!valor) return '';
         return String(valor).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -16739,14 +16741,28 @@ try {
     }
 
     // ✅ APLICAR FILTROS Y AGREGAR AL MAPA
-   if (filtro) {
+  if (filtro) {
     const universo = window.todasLasPendientesKML || osBase;
-    const osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
-    
-    console.log('🔍 Universo para filtrar:', universo.length);
-    console.log('🔍 Filtro aplicado:', JSON.stringify(filtro));
-    console.log('🔍 OS filtradas resultado:', osFiltradas.length);
-    
+    let osFiltradas = aplicarFiltrosAlDataset(universo, filtro, unidad);
+
+    // ✅ NUEVO: Aplicar filtro de radio
+    const radioKm = filtro.radio_km || 3;
+    const osPartidaId = window.osPartidaSeleccionada;
+    const osPartidaData = universo.find(os => 
+        String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
+    );
+    const coordsCentro = osPartidaData ? extraerCoordenadas(osPartidaData) : null;
+
+    if (coordsCentro) {
+        osFiltradas = osFiltradas.filter(os => {
+            const coords = extraerCoordenadas(os);
+            if (!coords) return false;
+            const dist = calcularDistanciaKm(coordsCentro.latitud, coordsCentro.longitud, coords.latitud, coords.longitud);
+            return dist <= radioKm;
+        });
+        console.log(`📍 OS dentro del radio ${radioKm}km: ${osFiltradas.length}`);
+    }
+
     osFiltradas.forEach(os => {
         const osId = normalizarOSID(os.OSATMO || os.osatomo);
         if (!osIdsYaIncluidas.has(osId)) {
