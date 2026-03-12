@@ -16891,19 +16891,21 @@ async function cargarInterfazKMLRuta() {
             }
         });
         console.log(`✅ Comentarios inyectados: ${comentariosInyectados} de ${misAsignacionesPropias.length} OS`);
+console.log('🧪 CHECKPOINT 1'); // ← AGREGAR AQUÍ
 
         // ========================================
-        // 5️⃣ ASIGNAR A VARIABLES GLOBALES
-        // ========================================
-        window.osAsignadasKML = misAsignacionesPropias;
-        window.todasLasPendientesKML = todasLasPendientes;
-        console.log(`✅ Sesión: ${unidadObjetivo}`);
-        console.log(`📋 Mis OS (con comentarios): ${misAsignacionesPropias.length}`);
-        console.log(`🔍 Universo Pendientes: ${todasLasPendientes.length}`);
+// 5️⃣ ASIGNAR A VARIABLES GLOBALES
+// ========================================
+window.osAsignadasKML = misAsignacionesPropias;
+window.todasLasPendientesKML = todasLasPendientes;
+console.log(`✅ Sesión: ${unidadObjetivo}`);
+console.log(`📋 Mis OS (con comentarios): ${misAsignacionesPropias.length}`);
+console.log(`🔍 Universo Pendientes: ${todasLasPendientes.length}`);
+console.log('🧪 [DEBUG] Llegando a paso 6 - rol:', rol);
 
-        // ========================================
-        // 6️⃣ RENDERIZADO SEGÚN ROL
-        // ========================================
+// ========================================
+// 6️⃣ RENDERIZADO SEGÚN ROL
+// ========================================
         if (rol === 'Administrador' || rol === 'Supervisor' || rol === 'Despacho') {
             const unidadesUnicas = [...new Set(asignaciones.map(a => a.Unidad).filter(u => u))].sort();
             generarInterfazAdminKMLRuta(unidadesUnicas, misAsignacionesPropias);
@@ -16982,7 +16984,6 @@ async function cargarInterfazKMLRuta() {
             }
 
 // ✅ Cargar OS de filtros_por_unidad
-// ✅ Cargar OS de filtros_por_unidad
 let osFiltrosUnidad = [];
 try {
     console.log('🧪 [DEBUG] Iniciando carga filtros_por_unidad');
@@ -17015,12 +17016,23 @@ try {
         const universo = todasLasPendientes;
         const sinFiltrar = aplicarFiltrosAlDataset(universo, filtro, unidadUsuario);
         console.log('🧪 [DEBUG] OS antes de excluir dropdown:', sinFiltrar.length);
+        
+        const idsDelFiltro = new Set(sinFiltrar.map(os => String(os.OSATMO).trim()));
+        
+        osParaDropdown.forEach(os => {
+            if (idsDelFiltro.has(String(os.OSATMO).trim())) {
+                os.fuente = 'filtros_unidad';
+            }
+        });
+        
         osFiltrosUnidad = sinFiltrar
             .map(os => ({ ...os, fuente: 'filtros_unidad' }))
             .filter(os => !osParaDropdown.some(asig => 
                 String(asig.OSATMO).trim() === String(os.OSATMO).trim()
             ));
-        console.log(`✅ ${osFiltrosUnidad.length} OS desde filtros_por_unidad`);
+        
+        console.log(`✅ ${osFiltrosUnidad.length} OS nuevas desde filtros_por_unidad`);
+        console.log(`✅ ${idsDelFiltro.size} OS en dropdown actualizadas a fuente filtros_unidad`);
     }
 } catch (err) {
     console.warn('⚠️ Error cargando filtros_por_unidad:', err.message);
