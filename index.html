@@ -16084,10 +16084,7 @@ ${osNormalizadas.map(os =>
 // 🗺️ GENERAR MAPA KML RUTA - FUNCIÓN GLOBAL PARA ADMIN/DESPACHO/SUPERVISOR (CORREGIDA)
 // ========================================
 async function generarMapaAdminKMLRuta() {
-// ✅ LIMPIAR contexto anterior para evitar cruces
     limpiarMarcadoresPorContexto('mapa_rutas');
-    
-    // ✅ Establecer contexto actual
     window.contextoMapaActual = 'mapa_rutas';
     console.log('🗺️ ==========================================');
     console.log('🗺️ GENERANDO MAPA KML - MODO ADMIN/DESPACHO/SUPERVISOR');
@@ -16099,11 +16096,9 @@ async function generarMapaAdminKMLRuta() {
         return;
     }
     
-    // ✅ 1. Obtener unidad seleccionada PRIMERO (antes de usarla)
     const selectUnidad = document.getElementById('selectUnidadKML');
     const unidadSeleccionada = selectUnidad?.value;
     
-    // ✅ 2. Validar que haya unidad seleccionada
     if (!unidadSeleccionada) {
         resultsContainer.innerHTML = `
             <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
@@ -16117,39 +16112,30 @@ async function generarMapaAdminKMLRuta() {
     resultsContainer.innerHTML = '<div class="loading" style="display: block; margin: 20px auto;"></div>';
     
     try {
-        // ✅ 3. Normalizar unidad (USA LA FUNCIÓN GLOBAL normalizarUnidad)
-        // ⚠️ NO redefinir normalizarUnidad aquí - debe estar en scope global del archivo
         const unidadNorm = normalizarUnidad(unidadSeleccionada);
         console.log(`🔍 Unidad normalizada: "${unidadSeleccionada}" → "${unidadNorm}"`);
         
-       // ✅ 4. Obtener OS desde memoria global (dataset completo para Admin)
-// ⚠️ NO usar osKMLDataTemporal aquí - ese es solo para la ejecución actual del mapa
-let osData = window.osAsignadasKML || [];
+        let osData = window.osAsignadasKML || [];
 
-// Si está vacío (primer carga), recargar desde Supabase
-if (!osData || osData.length === 0) {
-    console.log('📥 Recargando OS asignadas desde Supabase...');
-    const {  asignaciones, error } = await supabaseClient
-        .from('os_asignadas')
-        .select('*');
-    
-    if (error) throw error;
-    osData = asignaciones || [];
-    // ✅ Guardar dataset completo en memoria global
-    window.osAsignadasKML = osData;
-    console.log(`✅ ${osData.length} OS recargadas y guardadas`);
-}
+        if (!osData || osData.length === 0) {
+            console.log('📥 Recargando OS asignadas desde Supabase...');
+            const { asignaciones, error } = await supabaseClient
+                .from('os_asignadas')
+                .select('*');
+            if (error) throw error;
+            osData = asignaciones || [];
+            window.osAsignadasKML = osData;
+            console.log(`✅ ${osData.length} OS recargadas y guardadas`);
+        }
         
-        // ✅ 5. Filtrar OS por unidad con normalización CONSISTENTE (usa función global)
         const osFiltradas = osData.filter(os => {
             const osUnidadRaw = os.Unidad || os.unidad || '';
-            const osUnidadNorm = normalizarUnidad(osUnidadRaw);  // ← Usa función global
+            const osUnidadNorm = normalizarUnidad(osUnidadRaw);
             return osUnidadNorm === unidadNorm;
         });
         
         console.log(`🔍 OS filtradas para "${unidadSeleccionada}": ${osFiltradas.length} de ${osData.length} totales`);
         
-        // ✅ 6. Validar que haya OS con coordenadas válidas
         const osConCoordenadas = osFiltradas.filter(os => {
             const coords = os.Coordendasgis || os.Coordenadas;
             return coords && String(coords).includes(',') && !String(coords).toLowerCase().includes('sin');
@@ -16164,8 +16150,8 @@ if (!osData || osData.length === 0) {
                     <div class="result-header">${tieneOS ? '⚠️ Sin coordenadas' : '❌ Sin OS asignadas'}</div>
                     <p style="text-align: center; color: #666;">
                         ${tieneOS 
-                            ? `Se encontraron <b>${osFiltradas.length} OS</b> para <b>${unidadSeleccionada}</b>, pero ninguna tiene coordenadas válidas.<br><small>Verifique los campos "Coordenadas" o "Coordendasgis" en OS Pendientes.</small>`
-                            : `No se encontraron OS asignadas para la unidad <b>${unidadSeleccionada}</b>.<br><small>Verifique que la unidad tenga asignaciones en la tabla "os_asignadas".</small>`
+                            ? `Se encontraron <b>${osFiltradas.length} OS</b> para <b>${unidadSeleccionada}</b>, pero ninguna tiene coordenadas válidas.`
+                            : `No se encontraron OS asignadas para la unidad <b>${unidadSeleccionada}</b>.`
                         }
                     </p>
                     ${tieneOS ? `<button class="btn" onclick="generarMapaAdminKMLRuta()" style="margin-top:10px;background:#64748b;color:white;padding:8px 16px;border-radius:6px;border:none;cursor:pointer">🔄 Reintentar</button>` : ''}
@@ -16173,11 +16159,9 @@ if (!osData || osData.length === 0) {
             return;
         }
         
-        // ✅ 7. Normalizar campos para compatibilidad con generarMapaKMLRuta
         const osNormalizadas = osConCoordenadas.map(os => {
             const coordsRaw = os.Coordendasgis || os.Coordenadas || '';
             const [lat, lng] = coordsRaw.split(',').map(c => parseFloat(c.trim()));
-            
             return {
                 ...os,
                 OSATMO: String(os.osatomo || os.OSATMO || os.OSATOMO || '').trim(),
@@ -16186,36 +16170,105 @@ if (!osData || osData.length === 0) {
                 ComentarioKML: os.Comentario || os.ComentarioGeneral || '',
                 lat: isNaN(lat) ? null : lat,
                 lng: isNaN(lng) ? null : lng,
-		fuente: os.fuente || 'os_asignadas'
+                fuente: os.fuente || 'os_asignadas'
             };
         });
-        
-        // ✅ 8. Generar el mapa usando la función principal
+
+        // ✅ 8. Cargar preseleccionadas y filtros para el admin
+        const HOY = getFechaHoyElSalvador();
+        let osPreseleccionadasAdmin = [];
+        let osFiltrosUnidadAdmin = [];
+
+        try {
+            const { data: pre } = await supabaseClient
+                .from('os_preseleccionadas')
+                .select('osatomo, comentarios')
+                .eq('unidad_destino', unidadSeleccionada)
+                .eq('fecha_programada', HOY)
+                .eq('estado', 'pendiente');
+
+            if (pre?.length > 0) {
+                const osIds = pre.map(p => p.osatomo);
+                const { data: detalles } = await supabaseClient
+                    .from('OS Pendientes')
+                    .select('*')
+                    .in('OSATMO', osIds);
+                if (detalles) {
+                    osPreseleccionadasAdmin = detalles
+                        .filter(os => !osNormalizadas.some(a => a.OSATMO === os.OSATMO))
+                        .map(os => ({
+                            ...os,
+                            fuente: 'os_preseleccionadas',
+                            esPreseleccionada: true
+                        }));
+                }
+            }
+        } catch (err) {
+            console.warn('⚠️ Error cargando preseleccionadas admin:', err.message);
+        }
+
+        try {
+            const todasPendientes = window.todasLasPendientesKML || [];
+            let { data: filtro } = await supabaseClient
+                .from('filtros_por_unidad')
+                .select('*')
+                .eq('Unidad', unidadSeleccionada)
+                .eq('fecha_programada', HOY)
+                .maybeSingle();
+
+            if (!filtro) {
+                const { data: filtroBase } = await supabaseClient
+                    .from('filtros_por_unidad')
+                    .select('*')
+                    .eq('Unidad', unidadSeleccionada)
+                    .is('fecha_programada', null)
+                    .maybeSingle();
+                if (filtroBase) filtro = filtroBase;
+            }
+
+            if (filtro && todasPendientes.length > 0) {
+                const sinFiltrar = aplicarFiltrosAlDataset(todasPendientes, filtro, unidadSeleccionada);
+                osFiltrosUnidadAdmin = sinFiltrar
+                    .filter(os => !osNormalizadas.some(a => a.OSATMO === os.OSATMO))
+                    .filter(os => !osPreseleccionadasAdmin.some(p => p.OSATMO === os.OSATMO))
+                    .map(os => ({ ...os, fuente: 'filtros_unidad' }));
+                console.log(`✅ ${osFiltrosUnidadAdmin.length} OS desde filtros_unidad`);
+            }
+        } catch (err) {
+            console.warn('⚠️ Error cargando filtros_unidad admin:', err.message);
+        }
+
+        window.osParaMapaActual = [
+            ...osNormalizadas,
+            ...osPreseleccionadasAdmin,
+            ...osFiltrosUnidadAdmin
+        ];
+
+        console.log(`📊 osParaMapaActual Admin: ${osNormalizadas.length} asignadas + ${osPreseleccionadasAdmin.length} preseleccionadas + ${osFiltrosUnidadAdmin.length} filtros = ${window.osParaMapaActual.length} totales`);
+
         if (typeof generarMapaKMLRuta === 'function') {
             await generarMapaKMLRuta(osNormalizadas, unidadSeleccionada);
         } else {
             throw new Error('generarMapaKMLRuta no está definida');
         }
-        
+
     } catch (err) {
         console.error('❌ Error generando mapa:', err);
         resultsContainer.innerHTML = `<div class="result-card">❌ Error: ${err.message}</div>`;
     }
-    
-    // ✅ AGREGAR ESTO: Marcar marcadores con contexto mapa_rutas
+
     if (window.markersPorEstado) {
         Object.values(window.markersPorEstado).forEach(markersArray => {
             markersArray.forEach(marker => {
                 if (marker.options) {
-                    marker.options.contexto = 'mapa_rutas';
+                    marker.options.contexto = 'kml_ruta';
                 }
             });
         });
     }
-    
-} // ← Este es el cierre de generarMapaAdminKMLRuta
 
-// ✅ EXPOSICIÓN GLOBAL CRÍTICA: Hacer la función disponible para onclick HTML
+} // ← cierre de generarMapaAdminKMLRuta
+
 window.generarMapaAdminKMLRuta = generarMapaAdminKMLRuta;
 console.log('✅ generarMapaAdminKMLRuta expuesta globalmente');
 
