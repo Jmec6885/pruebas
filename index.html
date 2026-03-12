@@ -8946,16 +8946,22 @@ disponiblesSinOrigen.forEach(os => disponibles.push(os));
                 distancia_km: parseFloat(distanciaMinima.toFixed(2)),
                 es_origen: false
             });
+            
             const coordsSiguiente = osMasCercana.Coordendasgis || osMasCercana.Coordenadas;
             const [latSiguiente, lngSiguiente] = coordsSiguiente.split(',').map(c => parseFloat(c.trim()));
             puntoActual = { lat: latSiguiente, lng: lngSiguiente };
+            
+            // Remover de disponibles para no repetir
             disponibles.splice(indexMasCercano, 1);
 
+            // ✅ Incluir todas las OS del mismo punto
             const coordsSel = osMasCercana.Coordendasgis || osMasCercana.Coordenadas || '';
             const [latSel, lngSel] = coordsSel.split(',').map(c => parseFloat(c.trim()));
+
             for (let i = disponibles.length - 1; i >= 0; i--) {
                 const coordsOtra = disponibles[i].Coordendasgis || disponibles[i].Coordenadas || '';
                 const [latOtra, lngOtra] = coordsOtra.split(',').map(c => parseFloat(c.trim()));
+                
                 if (Math.abs(latOtra - latSel) < 0.0001 && Math.abs(lngOtra - lngSel) < 0.0001) {
                     resultado.push({
                         ...disponibles[i],
@@ -8966,34 +8972,15 @@ disponiblesSinOrigen.forEach(os => disponibles.push(os));
                     disponibles.splice(i, 1);
                 }
             }
-
-            const ccSeleccionada = osMasCercana.CuentaContrato;
-            if (ccSeleccionada) {
-                for (let i = disponibles.length - 1; i >= 0; i--) {
-                    const otraOS = disponibles[i];
-                    const yaAgregada = resultado.some(r => 
-                        String(r.OSATMO || r.osatomo).trim() === String(otraOS.OSATMO || otraOS.osatomo).trim()
-                    );
-                    if (yaAgregada) continue;
-                    if (otraOS.CuentaContrato === ccSeleccionada) {
-                        resultado.push({
-                            ...otraOS,
-                            orden_cercania: orden,
-                            distancia_km: parseFloat(distanciaMinima.toFixed(2)),
-                            es_origen: false,
-                            agrupada_por_suministro: true
-                        });
-                        disponibles.splice(i, 1);
-                        console.log(`📌 Mismo suministro (${ccSeleccionada}): ${otraOS.OSATMO}`);
-                    }
-                }
-            }
-
         } else {
             console.warn(`⚠️ No se encontró OS válida para orden ${orden}`);
             break;
         }
-    } // cierra el for
+    } // ← cierra el for
+
+    console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
+    return resultado;
+} // ← cierra la función
 
 
 
@@ -9107,43 +9094,15 @@ async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
             console.error('❌ Error obteniendo OS más cercanas:', error);
             return [];
         }
-
-        if (!data || data.length === 0) return [];
-
-        // ✅ NUEVO: Obtener datos completos desde OS Pendientes (incluye CuentaContrato)
-        const osIds = data.map(r => r.os_destino).filter(Boolean);
-        const { data: detalles, error: errorDetalles } = await supabaseClient
-            .from('OS Pendientes')
-            .select('*')
-            .in('OSATMO', osIds);
-
-        if (errorDetalles) {
-            console.warn('⚠️ Error obteniendo detalles de OS Pendientes:', errorDetalles.message);
-            return data; // fallback: devolver sin detalles
-        }
-
-        // ✅ Combinar: datos de os_mas_cercanas + campos completos de OS Pendientes
-        const resultado = data.map(registro => {
-            const detalle = detalles?.find(d => d.OSATMO === registro.os_destino) || {};
-            return {
-                ...detalle,           // CuentaContrato, Tipologia, Coordenadas, etc.
-                ...registro,          // orden_cercania, distancia_km, unidad_destino, etc.
-                OSATMO: registro.os_destino,
-                fuente: 'os_mas_cercanas',
-                es_mas_cercana: true
-            };
-        });
-
-        console.log(`📥 ${resultado.length} OS más cercanas con datos completos`);
-        return resultado;
+        
+        console.log(`📥 ${data?.length || 0} OS más cercanas encontradas`);
+        return data || [];
         
     } catch (err) {
         console.error('❌ Error crítico obteniendo OS más cercanas:', err);
         return [];
     }
 }
-
-
 
 // ===================================================================
 // 🎯 CALCULAR Y MOSTRAR OS MÁS CERCANAS (UI) - VERSIÓN CORREGIDA
