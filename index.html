@@ -12722,7 +12722,7 @@ todasOSRegistradas.forEach(os => {
     // ✅ PRIORIDAD: Usar Comentario de OS Pendientes directamente
     if (os.Comentario && os.Comentario.trim() !== '' && os.Comentario !== 'N/A' && os.Comentario !== 'Sin comentario disponible') {
         os.ComentarioGeneral = os.Comentario;
-        console.log(`💬 OS ${os.OSATMO}: Usa comentario directo de OS Pendientes`);
+        
     } else {
         // Fallback solo si está vacío
         os.Comentario = 'Sin comentario disponible';
