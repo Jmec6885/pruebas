@@ -16752,6 +16752,11 @@ try {
         String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
     );
     const coordsCentro = osPartidaData ? extraerCoordenadas(osPartidaData) : null;
+console.log('🔍 DEBUG RADIO - osPartidaId:', osPartidaId);
+console.log('🔍 DEBUG RADIO - osPartidaData:', osPartidaData?.OSATMO);
+console.log('🔍 DEBUG RADIO - coordsCentro:', coordsCentro);
+console.log('🔍 DEBUG RADIO - radioKm:', radioKm);
+console.log('🔍 DEBUG RADIO - osFiltradas antes radio:', osFiltradas.length);
 
     if (coordsCentro) {
         osFiltradas = osFiltradas.filter(os => {
