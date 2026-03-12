@@ -9957,14 +9957,15 @@ console.group('🗺️ ==========================================');
     // ✅ SIEMPRE incluir asignadas + agregar las extras sin duplicar
 const asignadas = osParaGenerarMapa || window.osParaMapaActual || window.osAsignadasKML || [];
 
-const extras = osParaMapa.filter(os => 
-    !asignadas.some(asig => 
-        String(asig.OSATMO || asig.osatomo || '').trim() === 
-        String(os.OSATMO || os.osatomo || '').trim()
+// osParaMapa ya tiene fuentes correctas. Agregar solo las asignadas que no estén en osParaMapa
+const asignadasExtra = asignadas.filter(asig =>
+    !osParaMapa.some(os =>
+        String(os.OSATMO || os.osatomo || '').trim() ===
+        String(asig.OSATMO || asig.osatomo || '').trim()
     )
 );
 
-const osDataOriginal = [...asignadas, ...extras];
+const osDataOriginal = [...osParaMapa, ...asignadasExtra];
     
     if (!osDataOriginal || !Array.isArray(osDataOriginal)) {
         console.error('❌ No hay datos disponibles para generar el mapa');
@@ -14018,16 +14019,20 @@ function inicializarVariablesGlobalesMapa() {
     }
     
     if (!window.markersPorEstado) {
-        window.markersPorEstado = {
-            'centro': [],
-            'asignada': [],
-            'regulada': [],
-            'no_regulada': [],
-            'deuda_alta': [],
-            'deuda_media': [],
-            'deuda_baja': []
-        };
-    }
+    window.markersPorEstado = {
+        'centro': [],
+        'asignada': [],
+        'regulada': [],
+        'no_regulada': [],
+        'deuda_alta': [],
+        'deuda_media': [],
+        'deuda_baja': [],
+        'os_mas_cercanas': [],
+        'os_preseleccionadas': [],
+        'os_asignadas': [],
+        'filtros_unidad': []
+    };
+}
     
     if (!window.filtrosAplicados) {
         window.filtrosAplicados = { 
@@ -14286,14 +14291,18 @@ function actualizarRadioMapa(nuevoRadio, actualizarAutomatico = true) {
             // ✅ RE-INICIALIZAR CONTENEDORES (Crucial para que el filtro no falle)
             window.markersPorTipologia = {};
             window.markersPorEstado = { 
-                'centro': [window.markerCentro],
-                'asignada': [], 
-                'regulada': [], 
-                'no_regulada': [], 
-                'deuda_alta': [],
-                'deuda_media': [],
-                'deuda_baja': []
-            };
+    'centro': [window.markerCentro],
+    'asignada': [], 
+    'regulada': [], 
+    'no_regulada': [], 
+    'deuda_alta': [],
+    'deuda_media': [],
+    'deuda_baja': [],
+    'os_mas_cercanas': [],
+    'os_preseleccionadas': [],
+    'os_asignadas': [],
+    'filtros_unidad': []
+};
 
             // ✅ 3. Agregar nuevos marcadores
             osEnRadio.forEach(os => {
