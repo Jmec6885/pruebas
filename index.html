@@ -8946,22 +8946,16 @@ disponiblesSinOrigen.forEach(os => disponibles.push(os));
                 distancia_km: parseFloat(distanciaMinima.toFixed(2)),
                 es_origen: false
             });
-            
             const coordsSiguiente = osMasCercana.Coordendasgis || osMasCercana.Coordenadas;
             const [latSiguiente, lngSiguiente] = coordsSiguiente.split(',').map(c => parseFloat(c.trim()));
             puntoActual = { lat: latSiguiente, lng: lngSiguiente };
-            
-            // Remover de disponibles para no repetir
             disponibles.splice(indexMasCercano, 1);
 
-            // ✅ Incluir todas las OS del mismo punto
             const coordsSel = osMasCercana.Coordendasgis || osMasCercana.Coordenadas || '';
             const [latSel, lngSel] = coordsSel.split(',').map(c => parseFloat(c.trim()));
-
             for (let i = disponibles.length - 1; i >= 0; i--) {
                 const coordsOtra = disponibles[i].Coordendasgis || disponibles[i].Coordenadas || '';
                 const [latOtra, lngOtra] = coordsOtra.split(',').map(c => parseFloat(c.trim()));
-                
                 if (Math.abs(latOtra - latSel) < 0.0001 && Math.abs(lngOtra - lngSel) < 0.0001) {
                     resultado.push({
                         ...disponibles[i],
@@ -8972,15 +8966,34 @@ disponiblesSinOrigen.forEach(os => disponibles.push(os));
                     disponibles.splice(i, 1);
                 }
             }
+
+            const ccSeleccionada = osMasCercana.CuentaContrato;
+            if (ccSeleccionada) {
+                for (let i = disponibles.length - 1; i >= 0; i--) {
+                    const otraOS = disponibles[i];
+                    const yaAgregada = resultado.some(r => 
+                        String(r.OSATMO || r.osatomo).trim() === String(otraOS.OSATMO || otraOS.osatomo).trim()
+                    );
+                    if (yaAgregada) continue;
+                    if (otraOS.CuentaContrato === ccSeleccionada) {
+                        resultado.push({
+                            ...otraOS,
+                            orden_cercania: orden,
+                            distancia_km: parseFloat(distanciaMinima.toFixed(2)),
+                            es_origen: false,
+                            agrupada_por_suministro: true
+                        });
+                        disponibles.splice(i, 1);
+                        console.log(`📌 Mismo suministro (${ccSeleccionada}): ${otraOS.OSATMO}`);
+                    }
+                }
+            }
+
         } else {
             console.warn(`⚠️ No se encontró OS válida para orden ${orden}`);
             break;
         }
-    } // ← cierra el for
-
-    console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
-    return resultado;
-} // ← cierra la función
+    } // cierra el for
 
 
 
@@ -9094,15 +9107,42 @@ async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
             console.error('❌ Error obteniendo OS más cercanas:', error);
             return [];
         }
-        
-        console.log(`📥 ${data?.length || 0} OS más cercanas encontradas`);
-        return data || [];
+
+        if (!data || data.length === 0) return [];
+
+        // ✅ NUEVO: Obtener datos completos desde OS Pendientes (incluye CuentaContrato)
+        const osIds = data.map(r => r.os_destino).filter(Boolean);
+        const { data: detalles, error: errorDetalles } = await supabaseClient
+            .from('OS Pendientes')
+            .select('*')
+            .in('OSATMO', osIds);
+
+        if (errorDetalles) {
+            console.warn('⚠️ Error obteniendo detalles de OS Pendientes:', errorDetalles.message);
+            return data; // fallback: devolver sin detalles
+        }
+
+        // ✅ Combinar: datos de os_mas_cercanas + campos completos de OS Pendientes
+        const resultado = data.map(registro => {
+            const detalle = detalles?.find(d => d.OSATMO === registro.os_destino) || {};
+            return {
+                ...detalle,           // CuentaContrato, Tipologia, Coordenadas, etc.
+                ...registro,          // orden_cercania, distancia_km, unidad_destino, etc.
+                OSATMO: registro.os_destino,
+                fuente: 'os_mas_cercanas',
+                es_mas_cercana: true
+            };
+        });
+
+        console.log(`📥 ${resultado.length} OS más cercanas con datos completos`);
+        return resultado;
         
     } catch (err) {
         console.error('❌ Error crítico obteniendo OS más cercanas:', err);
         return [];
     }
 }
+
 
 // ===================================================================
 // 🎯 CALCULAR Y MOSTRAR OS MÁS CERCANAS (UI) - VERSIÓN CORREGIDA
@@ -14508,7 +14548,6 @@ function filtrarPorEstado(estado) {
 }
 
 
-
  	// ========================================
 // 🔍 BUSCAR OS EN MAPA (Y MOSTRAR DETALLE)
 // ========================================
@@ -17450,132 +17489,125 @@ function cerrarDetalleOS() {
 // 🎨 RESALTAR TIPOLOGÍA EN MAPA (CON TOGGLE CORREGIDO)
 // ========================================
 function resaltarTipologiaEnMapa(tipologia) {
-    if (!window.markersPorTipologia || !window.markersPorTipologia[tipologia]) {
-        alert('No se encontraron markers para esta tipología');
-        return;
-    }
- 
-    const mapa = window.mapaLeafletInstance;
-    if (!mapa) {
-        alert('Mapa no inicializado');
-        return;
-    }
- 
-    // 🆕 Verificar si esta tipología ya está filtrada
-    const yaFiltrado = window.tipologiaFiltrada === tipologia;
- 
-    // 🆕 RESETEAR ESTILOS DE TODOS LOS DIVS
-    document.querySelectorAll('[id^="tipologia_"]').forEach(div => {
-        div.style.background = '#f8f9fa';
-        div.style.transform = 'translateX(0)';
-        div.style.boxShadow = 'none';
-    });
- 
-    if (yaFiltrado) {
-        // 🔄 DESACTIVAR FILTRO: Mostrar TODOS los markers
-        console.log('🔄 DESELECCIONANDO - Mostrando TODOS los markers');
- 
-        // ✅ MOSTRAR TODOS (sin importar tipología)
-        Object.values(window.markersPorTipologia).forEach(markersArray => {
-            markersArray.forEach(marker => {
-                if (!mapa.hasLayer(marker)) {
-                    mapa.addLayer(marker); // ✅ AGREGAR de vuelta al mapa
-                }
-                // Quitar animación
-                const icon = marker.getElement();
-                if (icon) {
-                    icon.style.animation = '';
-                    icon.style.transform = '';
-                }
-            });
-        });
- 
-        // Limpiar filtro activo
-        window.tipologiaFiltrada = null;
- 
-        // Reajustar vista a todos los markers
-        const allBounds = L.latLngBounds();
-        Object.values(window.markersPorTipologia).forEach(markersArray => {
-            markersArray.forEach(marker => {
-                allBounds.extend(marker.getLatLng());
-            });
-        });
- 
-        // ✅ Incluir marker central
-        if (window.osCentroActual) {
-            const coordsCentro = window.osCentroActual.Coordenadas || window.osCentroActual.Coordendasgis;
-            if (coordsCentro && coordsCentro.includes(',')) {
-                const [lat, lng] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
-                allBounds.extend([lat, lng]);
-            }
-        }
- 
-        mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
- 
-        console.log('✅ Filtro desactivado - Mostrando todo');
- 
-    } else {
-        // ✅ ACTIVAR FILTRO: Ocultar otros y resaltar seleccionados
-        console.log(`🔍 Filtrando por tipología: ${tipologia}`);
- 
-        const markersSeleccionados = window.markersPorTipologia[tipologia];
- 
-        // 1️⃣ Ocultar TODOS los markers (excepto los seleccionados)
-        Object.entries(window.markersPorTipologia).forEach(([tip, markersArray]) => {
-            markersArray.forEach(marker => {
-                if (tip !== tipologia) {
-                    mapa.removeLayer(marker); // ✅ REMOVER del mapa
-                }
-            });
-        });
- 
-        // 2️⃣ Mostrar y resaltar SOLO los seleccionados
-        const bounds = L.latLngBounds();
- 
-        markersSeleccionados.forEach(marker => {
-            if (!mapa.hasLayer(marker)) {
-                mapa.addLayer(marker); // ✅ AGREGAR de vuelta
-            }
- 
-            bounds.extend(marker.getLatLng());
- 
-            // Animación de rebote
-            const icon = marker.getElement();
-            if (icon) {
-                icon.style.animation = 'bounce 1s ease-in-out 3';
-                setTimeout(() => {
-                    icon.style.animation = '';
-                }, 3000);
-            }
- 
-            // Abrir popup temporalmente
-            marker.openPopup();
-            setTimeout(() => {
-                marker.closePopup();
-            }, 2000);
-        });
- 
-        // 3️⃣ Centrar mapa en los markers filtrados
-        mapa.fitBounds(bounds, {
-            padding: [50, 50],
-            maxZoom: 16
-        });
- 
-        // Guardar filtro activo
-        window.tipologiaFiltrada = tipologia;
- 
-        // ✅ Resaltar el div seleccionado
-        const divSeleccionado = document.getElementById(`tipologia\_${tipologia.replace(/\[^a-zA-Z0-9]/g, '\_')}`);
-        if (divSeleccionado) {
-            divSeleccionado.style.background = 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)';
-            divSeleccionado.style.transform = 'translateX(5px)';
-            divSeleccionado.style.boxShadow = '0 4px 12px rgba(33,150,243,0.3)';
-        }
- 
-        console.log(`✅ Mostrando ${markersSeleccionados.length} markers de: ${tipologia}`);
-    }
-}
+    if (!window.markersPorTipologia || !window.markersPorTipologia[tipologia]) {
+        alert('No se encontraron markers para esta tipología');
+        return;
+    }
 
+    const mapa = window.mapaLeafletInstance;
+    if (!mapa) {
+        alert('Mapa no inicializado');
+        return;
+    }
+
+    const yaFiltrado = window.tipologiaFiltrada === tipologia;
+
+    document.querySelectorAll('[id^="tipologia_"]').forEach(div => {
+        div.style.background = '#f8f9fa';
+        div.style.transform = 'translateX(0)';
+        div.style.boxShadow = 'none';
+    });
+
+    if (yaFiltrado) {
+        console.log('🔄 DESELECCIONANDO - Mostrando TODOS los markers');
+
+        Object.values(window.markersPorTipologia).forEach(markersArray => {
+            markersArray.forEach(marker => {
+                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+                const icon = marker.getElement();
+                if (icon) {
+                    icon.style.animation = '';
+                    icon.style.transform = '';
+                }
+            });
+        });
+
+        window.tipologiaFiltrada = null;
+
+        const allBounds = L.latLngBounds();
+        Object.values(window.markersPorTipologia).forEach(markersArray => {
+            markersArray.forEach(marker => allBounds.extend(marker.getLatLng()));
+        });
+
+        if (window.osCentroActual) {
+            const coordsCentro = window.osCentroActual.Coordenadas || window.osCentroActual.Coordendasgis;
+            if (coordsCentro && coordsCentro.includes(',')) {
+                const [lat, lng] = coordsCentro.split(',').map(c => parseFloat(c.trim()));
+                allBounds.extend([lat, lng]);
+            }
+        }
+
+        mapa.fitBounds(allBounds, { padding: [50, 50], maxZoom: 16 });
+        console.log('✅ Filtro desactivado - Mostrando todo');
+
+    } else {
+        console.log(`🔍 Filtrando por tipología: ${tipologia}`);
+
+        const markersSeleccionados = window.markersPorTipologia[tipologia];
+
+        // ✅ Recopilar CuentaContrato de las OS filtradas
+        const cuentasContrato = new Set();
+        markersSeleccionados.forEach(marker => {
+            const cc = marker.options?.osData?.CuentaContrato;
+            if (cc) cuentasContrato.add(cc);
+        });
+        console.log(`📋 CuentaContrato encontrados: ${cuentasContrato.size}`);
+
+        // ✅ Buscar marcadores de otras tipologías que compartan CuentaContrato
+        const markersCompartidos = [];
+        Object.entries(window.markersPorTipologia).forEach(([tip, markersArray]) => {
+            if (tip === tipologia) return;
+            markersArray.forEach(marker => {
+                const cc = marker.options?.osData?.CuentaContrato;
+                if (cc && cuentasContrato.has(cc)) {
+                    markersCompartidos.push(marker);
+                    console.log(`📌 OS del mismo suministro (${cc}): tipología "${tip}"`);
+                }
+            });
+        });
+
+        // Ocultar todos excepto seleccionados y compartidos
+        Object.entries(window.markersPorTipologia).forEach(([tip, markersArray]) => {
+            markersArray.forEach(marker => {
+                if (tip !== tipologia && !markersCompartidos.includes(marker)) {
+                    mapa.removeLayer(marker);
+                }
+            });
+        });
+
+        // Mostrar y resaltar los de la tipología seleccionada
+        const bounds = L.latLngBounds();
+        markersSeleccionados.forEach(marker => {
+            if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+            bounds.extend(marker.getLatLng());
+            const icon = marker.getElement();
+            if (icon) {
+                icon.style.animation = 'bounce 1s ease-in-out 3';
+                setTimeout(() => { icon.style.animation = ''; }, 3000);
+            }
+            marker.openPopup();
+            setTimeout(() => { marker.closePopup(); }, 2000);
+        });
+
+        // ✅ Mostrar compartidos sin animación
+        markersCompartidos.forEach(marker => {
+            if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+            bounds.extend(marker.getLatLng());
+        });
+
+        console.log(`✅ Mostrando ${markersSeleccionados.length} de "${tipologia}" + ${markersCompartidos.length} del mismo suministro`);
+
+        mapa.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        window.tipologiaFiltrada = tipologia;
+
+        const divSeleccionado = document.getElementById(`tipologia_${tipologia.replace(/[^a-zA-Z0-9]/g, '_')}`);
+        if (divSeleccionado) {
+            divSeleccionado.style.background = 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)';
+            divSeleccionado.style.transform = 'translateX(5px)';
+            divSeleccionado.style.boxShadow = '0 4px 12px rgba(33,150,243,0.3)';
+        }
+    }
+}
 
 
 
