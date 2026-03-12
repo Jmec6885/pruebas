@@ -9134,7 +9134,7 @@ async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
             };
         });
 
-        console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
+        console.log(`📥 ${resultado.length} OS más cercanas obtenidas con datos completos`);
     return resultado;
 } 
 
@@ -9142,7 +9142,7 @@ catch (err) {
         console.error('❌ Error crítico obteniendo OS más cercanas:', err);
         return [];
     }
-}
+
 
 
 // ===================================================================
