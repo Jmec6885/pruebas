@@ -16982,8 +16982,15 @@ async function cargarInterfazKMLRuta() {
             }
 
 // ✅ Cargar OS de filtros_por_unidad
+// ✅ Cargar OS de filtros_por_unidad
 let osFiltrosUnidad = [];
 try {
+    console.log('🧪 [DEBUG] Iniciando carga filtros_por_unidad');
+    console.log('🧪 [DEBUG] unidadUsuario:', unidadUsuario);
+    console.log('🧪 [DEBUG] HOY:', HOY);
+    console.log('🧪 [DEBUG] todasLasPendientes.length:', todasLasPendientes.length);
+    console.log('🧪 [DEBUG] aplicarFiltrosAlDataset definida:', typeof aplicarFiltrosAlDataset === 'function');
+
     let { data: filtro } = await supabaseClient
         .from('filtros_por_unidad')
         .select('*')
@@ -16991,6 +16998,8 @@ try {
         .eq('fecha_programada', HOY)
         .maybeSingle();
     
+    console.log('🧪 [DEBUG] filtro encontrado:', JSON.stringify(filtro));
+
     if (!filtro) {
         const { data: filtroBase } = await supabaseClient
             .from('filtros_por_unidad')
@@ -16999,11 +17008,14 @@ try {
             .is('fecha_programada', null)
             .maybeSingle();
         if (filtroBase) filtro = filtroBase;
+        console.log('🧪 [DEBUG] filtroBase encontrado:', JSON.stringify(filtroBase));
     }
     
     if (filtro) {
         const universo = todasLasPendientes;
-        osFiltrosUnidad = aplicarFiltrosAlDataset(universo, filtro, unidadUsuario)
+        const sinFiltrar = aplicarFiltrosAlDataset(universo, filtro, unidadUsuario);
+        console.log('🧪 [DEBUG] OS antes de excluir dropdown:', sinFiltrar.length);
+        osFiltrosUnidad = sinFiltrar
             .map(os => ({ ...os, fuente: 'filtros_unidad' }))
             .filter(os => !osParaDropdown.some(asig => 
                 String(asig.OSATMO).trim() === String(os.OSATMO).trim()
