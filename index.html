@@ -8910,7 +8910,7 @@ disponiblesSinOrigen.forEach(os => disponibles.push(os));
     });
     
     let puntoActual = { lat: latOrigen, lng: lngOrigen };
-    let osActualId = String(osOrigen.OSATMO || osOrigen.osatomo).trim();
+    
     
     // Algoritmo de cadena: cada siguiente es el más cercano al anterior
     for (let orden = 1; orden <= cantidad && disponibles.length > 0; orden++) {
@@ -9134,10 +9134,11 @@ async function obtenerOSMasCercanasGuardadas(unidad, fechaProgramada) {
             };
         });
 
-        console.log(`📥 ${resultado.length} OS más cercanas con datos completos`);
-        return resultado;
-        
-    } catch (err) {
+        console.log(`🎯 Total OS calculadas: ${resultado.length} (incluye origen)`);
+    return resultado;
+} 
+
+catch (err) {
         console.error('❌ Error crítico obteniendo OS más cercanas:', err);
         return [];
     }
