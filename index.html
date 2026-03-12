@@ -14447,7 +14447,6 @@ function filtrarPorEstado(estado) {
     
     const mapa = window.mapaLeafletInstance;
     
-    // ✅ 'todas' - mostrar TODOS los marcadores usando markersPorEstado (no eachLayer)
     if (estado === 'todas') {
         Object.values(window.markersPorEstado || {}).forEach(markersArray => {
             markersArray.forEach(marker => {
@@ -14455,38 +14454,59 @@ function filtrarPorEstado(estado) {
             });
         });
         console.log('✅ Filtro "todas" aplicado');
-        return;
-    }
-    
-    // ✅ Iterar SOLO sobre window.markersPorEstado (nunca mapa.eachLayer)
-    Object.entries(window.markersPorEstado || {}).forEach(([key, markersArray]) => {
-        markersArray.forEach(marker => {
-            // Centro siempre visible
-            if (key === 'centro') {
-                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
-                return;
-            }
-            
-            let debeMostrar = false;
-            
-            if (estado === 'centro') {
-                debeMostrar = false;
-            } else if (estado === 'asignada') {
-                debeMostrar = (key === 'asignada' || key === 'os_asignadas');
-            } else {
-                debeMostrar = (key === estado);
-            }
-            
-            if (debeMostrar) {
-                if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
-            } else {
-                if (mapa.hasLayer(marker)) mapa.removeLayer(marker);
-            }
+    } else {
+        Object.entries(window.markersPorEstado || {}).forEach(([key, markersArray]) => {
+            markersArray.forEach(marker => {
+                if (key === 'centro') {
+                    if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+                    return;
+                }
+                
+                let debeMostrar = false;
+                if (estado === 'asignada') {
+                    debeMostrar = (key === 'asignada' || key === 'os_asignadas');
+                } else {
+                    debeMostrar = (key === estado);
+                }
+                
+                if (debeMostrar) {
+                    if (!mapa.hasLayer(marker)) mapa.addLayer(marker);
+                } else {
+                    if (mapa.hasLayer(marker)) mapa.removeLayer(marker);
+                }
+            });
         });
-    });
-    
+    }
+
+    // ✅ NUEVO: Ocultar marcadores fuera del radio actual
+    const radioInput = document.getElementById('sliderRadioKm');
+    const radioKm = radioInput ? parseFloat(radioInput.value) : null;
+
+    if (radioKm && window.osCentroActual) {
+        const coordsCentro = extraerCoordenadas(window.osCentroActual);
+        if (coordsCentro) {
+            const { lat: latCentro, lng: lngCentro } = coordsCentro;
+
+            Object.entries(window.markersPorEstado || {}).forEach(([key, markersArray]) => {
+                if (key === 'centro') return; // El centro siempre visible
+
+                markersArray.forEach(marker => {
+                    if (!mapa.hasLayer(marker)) return; // Ya está oculto, no hacer nada
+
+                    const pos = marker.getLatLng();
+                    const distancia = calcularDistanciaKm(latCentro, lngCentro, pos.lat, pos.lng);
+
+                    if (distancia > radioKm) {
+                        mapa.removeLayer(marker);
+                    }
+                });
+            });
+        }
+    }
+
     console.log(`✅ Filtro aplicado: ${estado}`);
 }
+
 
 
  	// ========================================
@@ -22760,6 +22780,19 @@ function debugEstadoMapa() {
     console.groupEnd();
 
     console.groupEnd(); // Cierre de DEBUG ESTADO MAPA
+}
+
+function debugCuentaContrato() {
+    const marcadores = Object.values(window.markersPorEstado || {}).flat();
+    const primer = marcadores.find(m => m.options?.osData);
+    
+    if (!primer) {
+        console.warn('⚠️ No hay marcadores con osData. ¿Está el mapa cargado?');
+        return;
+    }
+    
+    console.log('CuentaContrato disponible:', primer.options.osData.CuentaContrato);
+    console.log('Todos los campos:', Object.keys(primer.options.osData));
 }
 
 
