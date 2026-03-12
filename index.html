@@ -7358,50 +7358,46 @@ async function cargarFiltrosPorUnidad(unidad, fechaProgramada) {
 }
 
 
-// ========================================
-// 🔍 APLICAR FILTROS AL DATASET
-// ========================================
-function aplicarFiltrosAlDataset(dataset, filtros, unidad) { 
+function aplicarFiltrosAlDataset(dataset, filtros, unidad, latCentro = null, lngCentro = null) { 
     if (!dataset || dataset.length === 0) return [];
-
     const tipologias = filtros.tipologias || [];
     const rangos = filtros.rangos || [];
+    const radioKm = filtros.radio_km || 3;
 
     return dataset.filter(os => {
-        // Filtrar por unidad
         const unidadOS = (os.Unidad || '').trim();
-const sinUnidad = !unidadOS || unidadOS.replace(/-/g, '').trim() === '';
-const esDeUnidad = normalizarUnidad(unidadOS) === normalizarUnidad(unidad);
-if (unidad && !sinUnidad && !esDeUnidad) return false;
+        const sinUnidad = !unidadOS || unidadOS.replace(/-/g, '').trim() === '';
+        const esDeUnidad = normalizarUnidad(unidadOS) === normalizarUnidad(unidad);
 
-        // Filtrar por tipología si hay definidas
-        if (tipologias.length > 0) {
-            const tipOS = (os.Tipologia || '').trim();
-            if (!tipologias.includes(tipOS)) return false;
+        if (sinUnidad && latCentro && lngCentro) {
+            // ✅ Sin unidad: solo incluir si está dentro del radio
+            const coords = extraerCoordenadas(os);
+            if (!coords) return false;
+            const dist = calcularDistanciaKm(latCentro, lngCentro, coords.latitud, coords.longitud);
+            if (dist > radioKm) return false;
+        } else if (unidad && !sinUnidad && !esDeUnidad) {
+            return false;
         }
 
-        // Filtrar por rango de días si hay definidos
+        if (tipologias.length > 0) {
+            if (!tipologias.includes((os.Tipologia || '').trim())) return false;
+        }
+
         if (rangos.length > 0) {
-            const fechaGen = os['Fecha Gen.'] || os.FechaGen || os.fecha_gen;
+            const fechaGen = os['Fecha Gen.'] || os.FechaGen;
             if (!fechaGen) return false;
-
-            const hoy = new Date();
-            const fechaOS = new Date(fechaGen);
-            const diasTranscurridos = Math.floor((hoy - fechaOS) / (1000 * 60 * 60 * 24));
-
-            const dentroDeRango = rangos.some(rango => {
-                if (rango === '>180') return diasTranscurridos > 180;
-                const [min, max] = rango.split('-').map(Number);
-                return diasTranscurridos >= min && diasTranscurridos <= max;
+            const dias = Math.floor((new Date() - new Date(fechaGen)) / 86400000);
+            const dentroDeRango = rangos.some(r => {
+                if (r === '>180') return dias > 180;
+                const [min, max] = r.split('-').map(Number);
+                return dias >= min && dias <= max;
             });
-
             if (!dentroDeRango) return false;
         }
 
         return true;
     });
 }
-
 
 
 // ========================================
@@ -10003,14 +9999,22 @@ const osDataOriginal = [...osParaMapa, ...asignadasExtra];
     console.log(`📊 Puntos normalizados y con coordenadas: ${osDataNormalizada.length}`);
 
     // 4️⃣ OPTIMIZACIÓN DE RUTA
-    // Usamos nuestra función optimizada (Vecino Cercano + 2-OPT)
-    const todosLosPuntos = optimizarRutaVecinoCercano(osDataNormalizada, osPartidaId);
+// ✅ Filtrar por radio primero
+const centroCoords = extraerCoordenadas(osDataNormalizada.find(os => 
+    String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()
+));
+const radioFiltro = window.filtrosAplicados?.radio_km || 3;
+const osEnRadio = osDataNormalizada.filter(os => {
+    if (String(os.OSATMO || os.osatomo).trim() === String(osPartidaId).trim()) return true;
+    if (!centroCoords) return true; // si no hay centro, no filtrar
+    const coords = extraerCoordenadas(os);
+    if (!coords) return false;
+    const dist = calcularDistanciaKm(centroCoords.latitud, centroCoords.longitud, coords.latitud, coords.longitud);
+    return dist <= radioFiltro;
+});
+console.log(`📍 OS dentro del radio ${radioFiltro}km: ${osEnRadio.length}`);
 
-    if (todosLosPuntos.length === 0) {
-        console.error('❌ No se pudieron generar puntos optimizados');
-        alert('❌ Error: No se encontraron puntos válidos para trazar la ruta.');
-        return;
-    }
+const todosLosPuntos = optimizarRutaVecinoCercano(osEnRadio, osPartidaId);  // ← usar osEnRadio en lugar de osDataNormalizada
 
     // 5️⃣ VALIDACIÓN DEL CENTRO (Primer punto de la ruta)
     const osCentro = todosLosPuntos[0];
