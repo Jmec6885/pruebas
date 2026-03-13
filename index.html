@@ -20230,93 +20230,92 @@ function mostrarResultadosKML(resultadosConCoordenadas, totalResultados) {
 // ===================================================================
 
 function mostrarResultados(resultados) {
-    const container = document.getElementById('searchResults');
-    const config = tableConfigs[selectedTable];
- 
-    consultasData = resultados;
+  const container = document.getElementById('searchResults');
+  const config = tableConfigs[selectedTable];
+  consultasData = resultados;
 
-// ✅ 🔐 APLICAR POLÍTICAS DE SEGURIDAD A CAMPOS
+  // ✅ 1. VALIDACIÓN INICIAL: Sin resultados
+  if (resultados.length === 0) {
+    container.innerHTML = '<div class="result-card">❌ No se encontraron resultados</div>';
+    return;
+  }
+
+  // ✅ 2. FILTRAR CAMPOS SEGÚN POLÍTICAS DE ROL (ANTES del renderizado)
   const camposVisibles = filtrarCamposPorRol(selectedTable, config.resultFields, currentUser);
 
-// Renderizar solo campos autorizados
-  camposVisibles.forEach(field => {
+  // ✅ 3. RENDERIZAR RESULTADOS
+  let html = `<div class="result-header">✅ Se encontraron ${resultados.length} resultado(s)</div>`;
 
-    if (resultados.length === 0) {
-        container.innerHTML = '<div class="result-card">❌ No se encontraron resultados</div>';
-        return;
-    }
+  resultados.forEach((item, index) => {
+    html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
 
-    let html = `<div class="result-header">✅ Se encontraron ${resultados.length} resultado(s)</div>`;
- 
-    resultados.forEach((item, index) => {
-        html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
+    // ✅ 4. RENDERIZAR SOLO CAMPOS AUTORIZADOS
+    camposVisibles.forEach(field => {
+      // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
+      if (field === 'NombreCliente' && selectedTable === 'consultas_servicios' && !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
+        return;
+      }
 
- 	// Buscar si tiene coordenada real guardada
-// Buscar si tiene coordenada real guardada
-if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas') {
-    verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
-}
-       config.resultFields.forEach(field => {
-    // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
-    if (field === 'NombreCliente' && selectedTable === 'consultas_servicios' && !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
-        return; // Saltar este campo
-    }
-    
-    let valor = String(item[field] || 'N/A');
-    
-    // ✅ FORMATEAR COMENTARIOS
-    if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
+      let valor = String(item[field] || 'N/A');
+
+      // ✅ SANITIZAR DIRECCIÓN SENSIBLE EN TEXTO LIBRE (ComentarioGeneral)
+      if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
+        // Aplicar sanitización según rol para ocultar direcciones en texto libre
+        valor = sanitizarTextoPorRol(valor, field, selectedTable, currentUser);
         valor = formatearComentario(valor);
         html += `<div class="result-item"><strong>${field}:</strong>
             <div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
-    
-    // ✅ AGREGAR ESTE BLOQUE PARA DEUDA (ANTES DEL ELSE FINAL)
-    } else if (field === 'Deuda' && item.Deuda !== null && item.Deuda !== undefined && item.Deuda !== '') {
+      
+      // ✅ FORMATEO ESPECIAL PARA DEUDA
+      } else if (field === 'Deuda' && item.Deuda !== null && item.Deuda !== undefined && item.Deuda !== '') {
         const montoDeuda = parseFloat(item.Deuda);
         if (!isNaN(montoDeuda)) {
-            // Colores según monto de deuda
-            const colorDeuda = montoDeuda > 500 ? '#f44336' :    // Rojo: alta
-                              montoDeuda >= 100 ? '#ff9800' :    // Naranja: media
-                              montoDeuda >= 50 ? '#f48fb1' :     // Rosado: baja
-                              '#4caf50';                          // Verde: mínima
-            
-            html += `<div class="result-item">
-                <strong>💰 Deuda:</strong> 
-                <span style="color: ${colorDeuda}; font-weight: 700; font-size: 16px;">
-                    $${montoDeuda.toFixed(2)}
-                </span>
-            </div>`;
+          const colorDeuda = montoDeuda > 500 ? '#f44336' :    // Rojo: alta
+                            montoDeuda >= 100 ? '#ff9800' :    // Naranja: media
+                            montoDeuda >= 50 ? '#f48fb1' :     // Rosado: baja
+                            '#4caf50';                          // Verde: mínima
+          
+          html += `<div class="result-item">
+              <strong>💰 Deuda:</strong> 
+              <span style="color: ${colorDeuda}; font-weight: 700; font-size: 16px;">
+                  $${montoDeuda.toFixed(2)}
+              </span>
+          </div>`;
         }
-    
-    // ✅ ELSE FINAL para campos normales
-    } else {
+      
+      // ✅ RENDERIZADO NORMAL PARA OTROS CAMPOS
+      } else {
         html += `<div class="result-item"><strong>${field}:</strong> ${valor}</div>`;
+      }
+    });
+
+    // ✅ BOTONES DE ACCIÓN
+    html += generarBotonesAccion(item, index, config);
+
+    // ✅ COORDENADAS REALES (solo para tablas específicas)
+    if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas') {
+      verificarCoordenadaReal(item.CuentaContrato, item.Medidor, index);
+      html += `<div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
+          <button class="btn btn-secondary" onclick="capturarCoordenadaReal('${item.CuentaContrato}', '${item.Medidor}', ${index})" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+              📍 Capturar Coordenada Real
+          </button>
+          <div id="coordRealDisplay_${index}" style="margin-top: 10px;"></div>
+      </div>`;
     }
-});
- 
-        html += generarBotonesAccion(item, index, config);
 
-// Botón Coordenadas Reales (consultas_servicios, OS Pendientes, OS Cerradas)
-if (selectedTable === 'consultas_servicios' || selectedTable === 'OS Pendientes' || selectedTable === 'OSCerradas') {
-    html += `<div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e2e8f0;">
-        <button class="btn btn-secondary" onclick="capturarCoordenadaReal('${item.CuentaContrato}', '${item.Medidor}', ${index})" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
-            📍 Capturar Coordenada Real
-        </button>
-        <div id="coordRealDisplay\_${index}" style="margin-top: 10px;"></div>
-    </div>`;
-}
-        html += '</div>'; // Cierre result-card
-    });
+    html += '</div>'; // Cierre result-card
+  });
 
-    // Botón KML si hay coordenadas
-    if (tieneCoordenadasValidas(resultados)) {
-        html += `<div style="margin-top: 20px; text-align: center; padding: 0 10px;">
-                    <button class="btn btn-secondary" onclick="descargarKML()" style="width: 100%; max-width: 280px;">📥 Descargar KML</button>
-                 </div>`;
-    }
- 
-    container.innerHTML = html;
+  // ✅ BOTÓN KML SI HAY COORDENADAS VÁLIDAS
+  if (tieneCoordenadasValidas(resultados)) {
+    html += `<div style="margin-top: 20px; text-align: center; padding: 0 10px;">
+                <button class="btn btn-secondary" onclick="descargarKML()" style="width: 100%; max-width: 280px;">📥 Descargar KML</button>
+             </div>`;
+  }
+
+  container.innerHTML = html;
 }
+
 
  	// ========================================
 // 🔍 VERIFICAR COORDENADA REAL EXISTENTE
