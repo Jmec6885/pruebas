@@ -4472,63 +4472,45 @@ const tableConfigs = {
 
 
 
-/**
- * 🛡️ POLÍTICAS DE ACCESO A CAMPOS POR ROL
- * Formato: 
- *   tabla: {
- *     rol: ['campo1', 'campo2', ...]  // Campos a OCULTAR para este rol
- *   }
- * 
- * ✅ Case-insensitive (maneja "Dirección", "direccion", "DIRECCION")
- * ✅ Soporta múltiples variantes del mismo campo
- * ✅ Fácil de extender sin tocar lógica de renderizado
- */
+// ===================================================================
+// 🔒 POLÍTICA DE CAMPOS RESTRINGIDOS POR ROL
+// ===================================================================
 const CAMPOS_RESTRINGIDOS_POR_ROL = {
   'consultas_servicios': {
-    'Consulta': ['Direccion', 'dirección', 'Dirección', 'direccion'],
-    'Contratista': ['Direccion', 'dirección', 'Dirección', 'direccion'] // Ej: ocultar también comentario si contiene dirección
+    'Consulta': ['Direccion', 'dirección', 'Dirección'],
+    'Contratista': ['Direccion', 'dirección', 'Dirección']
   }
-  // ✅ AGREGA MÁS TABLAS/ROLES AQUÍ SIN TOCAR OTRAS FUNCIONES
 };
 
 /**
- * 🔍 Filtra campos según políticas de acceso del usuario actual
- * @param {string} tabla - Nombre de la tabla (ej: 'consultas_servicios')
- * @param {Array<string>} camposOriginales - Lista de campos a renderizar
- * @param {Object} usuario - Objeto currentUser con propiedad 'rol'
- * @returns {Array<string>} Campos filtrados según políticas
+ * 🔍 Filtra campos según políticas del rol actual (case-insensitive)
  */
 function filtrarCamposPorRol(tabla, camposOriginales, usuario) {
   if (!tabla || !camposOriginales || !Array.isArray(camposOriginales) || !usuario?.rol) {
-    return [...camposOriginales]; // Sin cambios si no hay datos válidos
-  }
-
-  const rol = usuario.rol;
-  const politicaTabla = CAMPOS_RESTRINGIDOS_POR_ROL[tabla];
-  
-  // ✅ Sin política definida = mostrar todos los campos
-  if (!politicaTabla || !politicaTabla[rol]) {
     return [...camposOriginales];
   }
 
-  // ✅ Filtrar campos restringidos (case-insensitive)
-  const camposRestringidos = politicaTabla[rol].map(c => c.toLowerCase());
-  const camposFiltrados = camposOriginales.filter(campo => 
-    !camposRestringidos.some(restringido => 
-      campo.toLowerCase().includes(restringido)
-    )
+  const rol = usuario.rol;
+  const politica = CAMPOS_RESTRINGIDOS_POR_ROL[tabla];
+  
+  if (!politica || !politica[rol]) {
+    return [...camposOriginales]; // Sin restricciones
+  }
+
+  const restringidos = politica[rol].map(c => c.toLowerCase());
+  const filtrados = camposOriginales.filter(campo => 
+    !restringidos.some(r => campo.toLowerCase().includes(r))
   );
 
-  // 📝 Log de auditoría (solo en desarrollo)
-  if (camposFiltrados.length < camposOriginales.length) {
-    console.log(`🛡️ [POLÍTICA] Rol '${rol}' en tabla '${tabla}': Campos ocultos:`, 
-      camposOriginales.filter(c => !camposFiltrados.includes(c))
+  // 📝 Log de auditoría
+  if (filtrados.length < camposOriginales.length) {
+    console.log(`🛡️ [POLÍTICA] Rol '${rol}' en '${tabla}': Campos ocultos:`, 
+      camposOriginales.filter(c => !filtrados.includes(c))
     );
   }
 
-  return camposFiltrados;
+  return filtrados;
 }
-
 
 	// ✅ Función para traer todos los datos de una tabla (Paginación automática)
 async function fetchAllFromTable(tableName, columns = '*') {
@@ -20240,7 +20222,7 @@ function mostrarResultados(resultados) {
     return;
   }
 
-  // ✅ 2. FILTRAR CAMPOS SEGÚN POLÍTICAS DE ROL (ANTES del renderizado)
+  // ✅ 2. FILTRAR CAMPOS SEGÚN POLÍTICAS DE ROL (OCULTAR SOLO columna "Direccion")
   const camposVisibles = filtrarCamposPorRol(selectedTable, config.resultFields, currentUser);
 
   // ✅ 3. RENDERIZAR RESULTADOS
@@ -20249,7 +20231,7 @@ function mostrarResultados(resultados) {
   resultados.forEach((item, index) => {
     html += `<div class="result-card"><div class="result-header">Resultado ${index + 1}</div>`;
 
-    // ✅ 4. RENDERIZAR SOLO CAMPOS AUTORIZADOS
+    // ✅ 4. RENDERIZAR SOLO CAMPOS AUTORIZADOS (incluyendo ComentarioGeneral SIN MODIFICAR)
     camposVisibles.forEach(field => {
       // 🚫 Ocultar NombreCliente solo en consultas_servicios para roles no autorizados
       if (field === 'NombreCliente' && selectedTable === 'consultas_servicios' && !ROLES_CON_ACCESO_TOTAL_NOMBRE.includes(currentUser?.rol)) {
@@ -20258,11 +20240,9 @@ function mostrarResultados(resultados) {
 
       let valor = String(item[field] || 'N/A');
 
-      // ✅ SANITIZAR DIRECCIÓN SENSIBLE EN TEXTO LIBRE (ComentarioGeneral)
+      // ✅ FORMATEAR COMENTARIOS (solo formato visual, SIN ocultar "Dirección")
       if ((field === 'Comentario' || field === 'ComentarioGeneral') && valor !== 'N/A') {
-        // Aplicar sanitización según rol para ocultar direcciones en texto libre
-        valor = sanitizarTextoPorRol(valor, field, selectedTable, currentUser);
-        valor = formatearComentario(valor);
+        valor = formatearComentario(valor); // ← Solo formato, NO sanitización
         html += `<div class="result-item"><strong>${field}:</strong>
             <div style="margin-left: 10px; line-height: 1.6;">${valor}</div></div>`;
       
@@ -20315,7 +20295,6 @@ function mostrarResultados(resultados) {
 
   container.innerHTML = html;
 }
-
 
  	// ========================================
 // 🔍 VERIFICAR COORDENADA REAL EXISTENTE
