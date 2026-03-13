@@ -4472,6 +4472,64 @@ const tableConfigs = {
 
 
 
+/**
+ * 🛡️ POLÍTICAS DE ACCESO A CAMPOS POR ROL
+ * Formato: 
+ *   tabla: {
+ *     rol: ['campo1', 'campo2', ...]  // Campos a OCULTAR para este rol
+ *   }
+ * 
+ * ✅ Case-insensitive (maneja "Dirección", "direccion", "DIRECCION")
+ * ✅ Soporta múltiples variantes del mismo campo
+ * ✅ Fácil de extender sin tocar lógica de renderizado
+ */
+const CAMPOS_RESTRINGIDOS_POR_ROL = {
+  'consultas_servicios': {
+    'Consulta': ['Direccion', 'dirección', 'Dirección', 'direccion'],
+    'Contratista': ['Direccion', 'dirección', 'Dirección', 'direccion'] // Ej: ocultar también comentario si contiene dirección
+  }
+  // ✅ AGREGA MÁS TABLAS/ROLES AQUÍ SIN TOCAR OTRAS FUNCIONES
+};
+
+/**
+ * 🔍 Filtra campos según políticas de acceso del usuario actual
+ * @param {string} tabla - Nombre de la tabla (ej: 'consultas_servicios')
+ * @param {Array<string>} camposOriginales - Lista de campos a renderizar
+ * @param {Object} usuario - Objeto currentUser con propiedad 'rol'
+ * @returns {Array<string>} Campos filtrados según políticas
+ */
+function filtrarCamposPorRol(tabla, camposOriginales, usuario) {
+  if (!tabla || !camposOriginales || !Array.isArray(camposOriginales) || !usuario?.rol) {
+    return [...camposOriginales]; // Sin cambios si no hay datos válidos
+  }
+
+  const rol = usuario.rol;
+  const politicaTabla = CAMPOS_RESTRINGIDOS_POR_ROL[tabla];
+  
+  // ✅ Sin política definida = mostrar todos los campos
+  if (!politicaTabla || !politicaTabla[rol]) {
+    return [...camposOriginales];
+  }
+
+  // ✅ Filtrar campos restringidos (case-insensitive)
+  const camposRestringidos = politicaTabla[rol].map(c => c.toLowerCase());
+  const camposFiltrados = camposOriginales.filter(campo => 
+    !camposRestringidos.some(restringido => 
+      campo.toLowerCase().includes(restringido)
+    )
+  );
+
+  // 📝 Log de auditoría (solo en desarrollo)
+  if (camposFiltrados.length < camposOriginales.length) {
+    console.log(`🛡️ [POLÍTICA] Rol '${rol}' en tabla '${tabla}': Campos ocultos:`, 
+      camposOriginales.filter(c => !camposFiltrados.includes(c))
+    );
+  }
+
+  return camposFiltrados;
+}
+
+
 	// ✅ Función para traer todos los datos de una tabla (Paginación automática)
 async function fetchAllFromTable(tableName, columns = '*') {
     const batchSize = 1000;
@@ -20176,6 +20234,12 @@ function mostrarResultados(resultados) {
     const config = tableConfigs[selectedTable];
  
     consultasData = resultados;
+
+// ✅ 🔐 APLICAR POLÍTICAS DE SEGURIDAD A CAMPOS
+  const camposVisibles = filtrarCamposPorRol(selectedTable, config.resultFields, currentUser);
+
+// Renderizar solo campos autorizados
+  camposVisibles.forEach(field => {
 
     if (resultados.length === 0) {
         container.innerHTML = '<div class="result-card">❌ No se encontraron resultados</div>';
