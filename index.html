@@ -21535,7 +21535,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
 
         // Evento clic para panel lateral
         marker.on('click', (e) => {
-          e.target.openPopup();
+          
           const distanciaReal = tx.distancia !== undefined 
             ? Math.round(tx.distancia) 
             : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
