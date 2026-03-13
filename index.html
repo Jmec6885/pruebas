@@ -21354,128 +21354,315 @@ function inicializarMapaTX(idContenedor, lat, lng) {
 
 
 function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioMetros) {
-    const resultsContainer = document.getElementById('searchResults');
-    if (!resultsContainer) return;
-    
-    if (typeof L === 'undefined') {
-        resultsContainer.innerHTML = `<div class="result-card">❌ Error: El mapa no está disponible.</div>`;
-        return;
-    }
-    
-    resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
-            <div class="result-header" style="display: flex; justify-content: space-between;">
-                <span>🗺️ TX/Cortes Cercanos</span>
-                <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 15px; font-size: 13px;">
-                    ${resultados.length} hallados
-                </span>
-            </div>
-            <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; margin: 15px 0; border: 1px solid #ccc;"></div>
-            <div id="panelDetalleTX">
-                <div style="text-align: center; padding: 20px; color: #999;">
-                    📍 Haz clic en un marcador para ver detalles
-                </div>
-            </div>
+  const resultsContainer = document.getElementById('searchResults');
+  if (!resultsContainer) return;
+  
+  if (typeof L === 'undefined') {
+    resultsContainer.innerHTML = `<div class="result-card">❌ Error: El mapa no está disponible.</div>`;
+    return;
+  }
+
+  resultsContainer.innerHTML = `
+    <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
+      <div class="result-header" style="display: flex; justify-content: space-between;">
+        <span>🗺️ TX/Cortes Cercanos</span>
+        <span style="background: #3b82f6; color: white; padding: 2px 10px; border-radius: 15px; font-size: 13px;">
+          ${resultados.length} hallados
+        </span>
+      </div>
+      <div id="mapaTXCoordenadas" style="height: 500px; border-radius: 8px; margin: 15px 0; border: 1px solid #ccc;"></div>
+      <div id="panelDetalleTX">
+        <div style="text-align: center; padding: 20px; color: #999;">
+          📍 Haz clic en un marcador para ver detalles
         </div>
-    `;
-    
-    setTimeout(async () => {
-        try {
-            const mapa = await inicializarMapaTX('mapaTXCoordenadas', latCentro, lngCentro);
-            if (!mapa) return;
-            
-            // ✅ FIX 1: Marcador del punto buscado
-            L.marker([latCentro, lngCentro], {
-                icon: L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<div style="background-color: #3b82f6; width: 26px; height: 26px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 14px;">📍</div>`,
-                    iconSize: [26, 26],
-                    iconAnchor: [13, 13]
-                })
-            }).addTo(mapa).bindPopup('<strong>📍 Tu ubicación buscada</strong>').openPopup();
+      </div>
+    </div>
+  `;
 
-            L.circle([latCentro, lngCentro], {
-                radius: radioMetros,
-                color: '#3b82f6',
-                fillOpacity: 0.1
-            }).addTo(mapa);
+  setTimeout(async () => {
+    try {
+      const mapa = await inicializarMapaTX('mapaTXCoordenadas', latCentro, lngCentro);
+      if (!mapa) return;
 
-            const markersGroup = L.featureGroup();
-            const bounds = [[latCentro, lngCentro]];
-
-            resultados.forEach((tx, index) => {
-                const coords = parsearCoordenadasSeguras(tx.Coordenadas);
-                if (!coords) return;
-                const { lat: latTX, lng: lngTX } = coords;
-                const distancia = tx.distancia || 0;
-                const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
-
-                const marker = L.marker([latTX, lngTX], {
-                    icon: L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 11px;">${index + 1}</div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                    })
-                }).addTo(mapa);
-
-                marker.txData = { ...tx, distancia };
-
-                marker.bindPopup(`
-                    <div style="min-width: 200px;">
-                        <strong>#${index + 1} - TX/Corte: ${escapeHtml(tx.TXCortes || 'N/A')}</strong><br>
-                        <span style="color: #666;">Circuito: ${escapeHtml(tx.Circuitos || 'N/A')}</span><br>
-                        <span style="color: ${color}; font-weight: bold;">📏 ${Math.round(distancia)} metros</span>
-                    </div>
-                `);
-
-                marker.on('click', () => {
-                    const distanciaReal = tx.distancia !== undefined
-                        ? Math.round(tx.distancia)
-                        : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
-                    actualizarDetallePanel(tx, index, color, distanciaReal);
-                });
-
-                markersGroup.addLayer(marker);
-                bounds.push([latTX, lngTX]);
-            });
-
-            markersGroup.addTo(mapa);
-            mapa.fitBounds(bounds, { padding: [30, 30] });
-            mapa.invalidateSize();
-
-        } catch (err) {
-            console.error('❌ Error inicializando mapa:', err);
-        }
-    }, 100);
-
-    // ✅ FIX 2: Solo UNA definición, usando formatearComentario
-    function actualizarDetallePanel(tx, index, color, distancia) {
-        const panel = document.getElementById('panelDetalleTX');
-        panel.innerHTML = `
-            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 5px solid ${color}; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                <h3 style="margin: 0 0 10px 0;">#${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}</h3>
-                <p><strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}</p>
-                <p><strong>📏 Distancia:</strong> ${distancia} metros</p>
-                <div style="background: #f8fafc; padding: 10px; border-radius: 5px; font-size: 13px; line-height: 1.7;">
-                    ${tx.Comentario ? formatearComentario(tx.Comentario) : '<em>Sin comentario</em>'}
-                </div>
-                <button id="btnCerrarDetalleTX" style="margin-top: 10px; width: 100%; padding: 8px; background: #64748b; color: white; border: none; border-radius: 4px; cursor: pointer;">✕ Cerrar detalles</button>
+      // ========================================
+      // ✅ FIX 1: MARCADOR CENTRAL VISIBLE (SIN EMOJI)
+      // ========================================
+      const markerCentro = L.marker([latCentro, lngCentro], {
+        icon: L.divIcon({
+          className: 'custom-div-icon',
+          html: `
+            <div style="
+              background: radial-gradient(circle, #ef4444 0%, #b91c1c 70%);
+              width: 32px; 
+              height: 32px; 
+              border-radius: 50%; 
+              border: 3px solid white; 
+              box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3), 0 4px 12px rgba(0,0,0,0.25);
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              font-size: 20px;
+              font-weight: bold;
+              color: white;
+              position: relative;
+            ">
+              <div style="
+                position: absolute;
+                bottom: -8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 12px;
+                height: 12px;
+                background: #b91c1c;
+                border-radius: 50%;
+                border: 2px solid white;
+              "></div>
             </div>
-        `;
+          `,
+          iconSize: [32, 42],  // Altura incluye el "pin" inferior
+          iconAnchor: [16, 42]  // Anclar en la punta del pin
+        }),
+        zIndexOffset: 1000  // Asegurar que esté siempre encima
+      }).addTo(mapa);
 
-        setTimeout(() => {
-            const btnCerrar = document.getElementById('btnCerrarDetalleTX');
-            if (btnCerrar) {
-                btnCerrar.addEventListener('click', () => {
-                    panel.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">📍 Haz clic en un marcador para ver detalles</div>';
-                });
-            }
-        }, 10);
+      // Popup informativo con coordenadas exactas
+      markerCentro.bindPopup(`
+        <div style="font-weight: 600; color: #dc2626; text-align: center;">
+          📍 TU UBICACIÓN<br>
+          <span style="font-size: 13px; color: #666; display: block; margin-top: 4px;">
+            Lat: ${latCentro.toFixed(6)}<br>
+            Lng: ${lngCentro.toFixed(6)}<br>
+            Radio: ${radioMetros}m
+          </span>
+        </div>
+      `);
+
+      // ========================================
+      // ✅ FIX 2: CÍRCULO DE RADIO VISIBLE (con fillColor)
+      // ========================================
+      const circleRadio = L.circle([latCentro, lngCentro], {
+        radius: radioMetros,
+        color: '#3b82f6',
+        fillColor: '#3b82f6',  // ✅ CLAVE: sin esto es transparente
+        fillOpacity: 0.15,
+        weight: 2,
+        dashArray: '5,5',
+        interactive: true
+      }).addTo(mapa);
+
+      circleRadio.bindPopup(`
+        <div style="font-weight: 600; text-align: center;">
+          🔍 RADIO DE BÚSQUEDA<br>
+          <span style="font-size: 14px; color: #3b82f6;">
+            ${radioMetros} metros
+          </span>
+        </div>
+      `);
+
+      // ========================================
+      // ✅ FIX 3: MARCADORES DE TX/CORTES
+      // ========================================
+      const markersGroup = L.featureGroup();
+      const bounds = L.latLngBounds([[latCentro, lngCentro]]); // Incluir centro en bounds
+
+      resultados.forEach((tx, index) => {
+        const coords = parsearCoordenadasSeguras(tx.Coordenadas);
+        if (!coords) return;
+        
+        const { lat: latTX, lng: lngTX } = coords;
+        const distancia = tx.distancia || calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
+        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+
+        const marker = L.marker([latTX, lngTX], {
+          icon: L.divIcon({
+            className: 'custom-div-icon',
+            html: `
+              <div style="
+                background-color: ${color}; 
+                width: 24px; 
+                height: 24px; 
+                border-radius: 50%; 
+                border: 2px solid white; 
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                font-size: 12px;
+                font-weight: bold;
+                color: white;
+              ">${index + 1}</div>
+            `,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          })
+        });
+
+        // Popup con información detallada
+        marker.bindPopup(`
+          <div style="min-width: 220px; font-family: Arial, sans-serif;">
+            <h4 style="margin: 0 0 8px 0; color: #1e3a8a; font-size: 16px;">
+              ⚡ #${index + 1} ${escapeHtml(tx.TXCortes || 'N/A')}
+            </h4>
+            <p style="margin: 5px 0; font-size: 13px;">
+              <strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}
+            </p>
+            <p style="margin: 5px 0; font-size: 14px; color: ${color}; font-weight: bold;">
+              📏 ${Math.round(distancia)} metros del centro
+            </p>
+            <p style="margin: 5px 0; font-size: 12px; color: #666;">
+              📍 ${latTX.toFixed(5)}, ${lngTX.toFixed(5)}
+            </p>
+          </div>
+        `);
+
+        // Evento clic para panel lateral
+        marker.on('click', (e) => {
+          e.target.openPopup();
+          const distanciaReal = tx.distancia !== undefined 
+            ? Math.round(tx.distancia) 
+            : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
+          actualizarDetallePanel(tx, index, color, distanciaReal);
+        });
+
+        markersGroup.addLayer(marker);
+        bounds.extend([latTX, lngTX]);
+      });
+
+      markersGroup.addTo(mapa);
+
+      // ========================================
+      // ✅ FIX 4: AJUSTAR VISTA CON RETRASO (evita bounds vacío)
+      // ========================================
+      setTimeout(() => {
+        if (bounds.isValid()) {
+          mapa.fitBounds(bounds, { 
+            padding: [40, 40],
+            maxZoom: 18
+          });
+          
+          // Abrir popup del centro después de ajustar vista
+          setTimeout(() => {
+            markerCentro.openPopup();
+          }, 300);
+        } else {
+          mapa.setView([latCentro, lngCentro], 16);
+          markerCentro.openPopup();
+        }
+        
+        // Forzar recálculo de tamaño (solución Leaflet en contenedores dinámicos)
+        mapa.invalidateSize();
+        console.log('✅ Mapa TX/Cortes renderizado con marcador central y radio visible');
+      }, 200);
+
+    } catch (err) {
+      console.error('❌ Error inicializando mapa TX/Cortes:', err);
+      resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+          <div class="result-header">❌ Error de Mapa</div>
+          <p>${err.message || 'No se pudo cargar el mapa con el punto de búsqueda'}</p>
+          <p style="font-size: 12px; color: #999; margin-top: 10px;">
+            💡 Coordenadas buscadas: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)} | Radio: ${radioMetros}m
+          </p>
+        </div>
+      `;
     }
-}
-   
+  }, 100);
 
+  // ========================================
+  // ✅ PANEL LATERAL DE DETALLES (con cierre)
+  // ========================================
+  function actualizarDetallePanel(tx, index, color, distancia) {
+    const panel = document.getElementById('panelDetalleTX');
+    if (!panel) return;
+
+    panel.innerHTML = `
+      <div style="
+        background: white; 
+        padding: 15px; 
+        border-radius: 8px; 
+        border-left: 5px solid ${color}; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      ">
+        <h3 style="margin: 0 0 10px 0; color: #1e3a8a;">
+          #${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}
+        </h3>
+        <p style="margin: 8px 0; font-size: 14px;">
+          <strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}
+        </p>
+        <p style="margin: 8px 0; font-size: 14px; color: ${color}; font-weight: bold;">
+          📏 Distancia: ${Math.round(distancia)} metros del punto buscado
+        </p>
+        <div style="
+          background: #f8fafc; 
+          padding: 10px; 
+          border-radius: 5px; 
+          line-height: 1.7; 
+          font-size: 13px;
+          margin-top: 10px;
+        ">
+          ${tx.Comentario ? formatearComentario(tx.Comentario) : '<em>Sin comentario</em>'}
+        </div>
+        ${tx.Coordenadas ? `
+          <button 
+            onclick="abrirCoordenadas('${tx.Coordenadas}')"
+            style="
+              margin-top: 12px; 
+              padding: 8px 15px; 
+              background: #10b981; 
+              color: white; 
+              border: none; 
+              border-radius: 4px; 
+              cursor: pointer;
+              font-weight: 600;
+              width: 100%;
+            "
+          >
+            🗺️ Ver en Google Maps
+          </button>
+        ` : ''}
+        <button id="btnCerrarDetalleTX" style="
+          margin-top: 8px; 
+          width: 100%; 
+          padding: 8px; 
+          background: #64748b; 
+          color: white; 
+          border: none; 
+          border-radius: 4px; 
+          cursor: pointer;
+        ">
+          ✕ Cerrar detalles
+        </button>
+      </div>
+    `;
+
+    // Evento de cierre
+    setTimeout(() => {
+      const btnCerrar = document.getElementById('btnCerrarDetalleTX');
+      if (btnCerrar) {
+        btnCerrar.addEventListener('click', () => {
+          panel.innerHTML = `
+            <div style="text-align:center;padding:20px;color:#999;">
+              📍 Haz clic en un marcador para ver detalles
+            </div>
+          `;
+        });
+      }
+    }, 10);
+  }
+}
+
+// ========================================
+// ✅ FUNCIÓN AUXILIAR: escapeHtml (seguridad)
+// ========================================
+function escapeHtml(texto) {
+  if (!texto || typeof texto !== 'string') return texto || '';
+  return texto
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 
     // Función interna para evitar conflictos de comillas en HTML
