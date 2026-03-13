@@ -21473,80 +21473,57 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
       `);
 
       // ========================================
-      // ✅ MARCADORES DE TX/CORTES CERCANOS
-      // ========================================
-      const markersGroup = L.featureGroup();
-      const bounds = L.latLngBounds([[latCentro, lngCentro]]); // Incluir centro en bounds
+// ✅ MARCADORES DE TX/CORTES CERCANOS (SIN POPUP EN MAPA)
+// ========================================
+const markersGroup = L.featureGroup();
+const bounds = L.latLngBounds([[latCentro, lngCentro]]); // Incluir centro en bounds
 
-      resultados.forEach((tx, index) => {
-        const coords = parsearCoordenadasSeguras(tx.Coordenadas);
-        if (!coords) return;
-        
-        const { lat: latTX, lng: lngTX } = coords;
-        const distancia = tx.distancia || calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
-        const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
+resultados.forEach((tx, index) => {
+  const coords = parsearCoordenadasSeguras(tx.Coordenadas);
+  if (!coords) return;
+  
+  const { lat: latTX, lng: lngTX } = coords;
+  const distancia = tx.distancia || calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
+  const color = distancia <= 50 ? '#10b981' : (distancia <= 100 ? '#f59e0b' : '#ef4444');
 
-        const marker = L.marker([latTX, lngTX], {
-          icon: L.divIcon({
-            className: 'custom-div-icon',
-            html: `
-              <div style="
-                background-color: ${color}; 
-                width: 24px; 
-                height: 24px; 
-                border-radius: 50%; 
-                border: 2px solid white; 
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                display: flex; 
-                align-items: center; 
-                justify-content: center; 
-                font-size: 12px;
-                font-weight: bold;
-                color: white;
-              ">${index + 1}</div>
-            `,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-          })
-        });
+  const marker = L.marker([latTX, lngTX], {
+    icon: L.divIcon({
+      className: 'custom-div-icon',
+      html: `
+        <div style="
+          background-color: ${color}; 
+          width: 24px; 
+          height: 24px; 
+          border-radius: 50%; 
+          border: 2px solid white; 
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          font-size: 12px;
+          font-weight: bold;
+          color: white;
+        ">${index + 1}</div>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    })
+  });
+  // ✅ POPUP ELIMINADO: marker.bindPopup(...) → BORRADO para evitar doble detalle
 
-        // Popup con información detallada
-        marker.bindPopup(`
-          <div style="min-width: 220px; font-family: Arial, sans-serif;">
-            <h4 style="margin: 0 0 8px 0; color: #1e3a8a; font-size: 16px;">
-              ⚡ #${index + 1} ${escapeHtml(tx.TXCortes || 'N/A')}
-            </h4>
-            <p style="margin: 5px 0; font-size: 13px;">
-              <strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}
-            </p>
-            <p style="margin: 5px 0; font-size: 14px; color: ${color}; font-weight: bold;">
-              📏 ${Math.round(distancia)} metros del centro
-            </p>
-            <p style="margin: 5px 0; font-size: 12px; color: #666;">
-              📍 ${latTX.toFixed(5)}, ${lngTX.toFixed(5)}
-            </p>
-            ${tx.Comentario ? `
-              <div style="background: #f8fafc; padding: 8px; border-radius: 5px; font-size: 12px; line-height: 1.5; margin-top: 8px;">
-                ${formatearComentario(tx.Comentario)}
-              </div>
-            ` : ''}
-          </div>
-        `);
+  // Evento clic para panel lateral (MANTENER)
+  marker.on('click', (e) => {
+    const distanciaReal = tx.distancia !== undefined 
+      ? Math.round(tx.distancia) 
+      : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
+    actualizarDetallePanelTX(tx, index, color, distanciaReal);
+  });
 
-        // Evento clic para panel lateral
-        marker.on('click', (e) => {
-          
-          const distanciaReal = tx.distancia !== undefined 
-            ? Math.round(tx.distancia) 
-            : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
-          actualizarDetallePanelTX(tx, index, color, distanciaReal);
-        });
+  markersGroup.addLayer(marker);
+  bounds.extend([latTX, lngTX]);
+});
 
-        markersGroup.addLayer(marker);
-        bounds.extend([latTX, lngTX]);
-      });
-
-      markersGroup.addTo(mapa);
+markersGroup.addTo(mapa);
 
       // ========================================
       // ✅ AJUSTAR VISTA DEL MAPA (CON RETRASO PARA GARANTIZAR RENDERIZADO)
@@ -21682,7 +21659,7 @@ function escapeHtml(texto) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
+}}
 
 
     // Función interna para evitar conflictos de comillas en HTML
