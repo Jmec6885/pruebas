@@ -652,7 +652,28 @@ async function cargarTipologias() {
     }
 }
 
-
+/**
+ * ✅ INICIALIZAR ESTRUCTURA DE MARCADORES POR ESTADO (USADA POR AMBOS MÓDULOS)
+ * Llamar ANTES de generar cualquier mapa
+ */
+function inicializarMarkersPorEstado() {
+  // Limpiar estado previo para evitar cruces entre módulos
+  window.markersPorEstado = {
+    'centro': [],
+    'asignada': [],
+    'regulada': [],
+    'no_regulada': [],
+    'deuda_alta': [],
+    'deuda_media': [],
+    'deuda_baja': [],
+    'os_mas_cercanas': [],
+    'os_preseleccionadas': [],
+    'os_asignadas': [],
+    'filtros_unidad': [],
+    'kml_ruta': [] // ✅ Grupo especial para KML Ruta
+  };
+  console.log('✅ markersPorEstado inicializado para:', window.contextoMapaActual || 'desconocido');
+}
 
 
 // ========================================
@@ -10111,16 +10132,35 @@ const todosLosPuntos = optimizarRutaVecinoCercano(osEnRadio, osPartidaId);  // �
 // 🔄 MOSTRAR MAPA KML CON NUMERACIÓN (MEJORADO)
 // ========================================
 function mostrarMapaKMLConNumeracion(todosLosPuntos, unidad, latCentro, lngCentro) {
-console.log(`🎨 Renderizando mapa para ${unidad} con ${todosLosPuntos.length} puntos.`);
-// 1️⃣ Preparar datos para Leaflet
-const osCentro = todosLosPuntos[0]; // El punto de partida (Origen)
-const osEnRadio = todosLosPuntos.slice(1); // El resto de la secuencia optimizada
-// Guardar para la función de descarga
-window.datosRutaKML = todosLosPuntos;
-// 2️⃣ Renderizar el mapa
-// Nota: El radioKm se pone alto o se ignora en la lógica interna para mostrar todos los puntos
-const radioVisual = 10;
-generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
+  console.log(`🎨 Renderizando mapa para ${unidad} con ${todosLosPuntos.length} puntos.`);
+  
+  // ✅ 1. INICIALIZAR ESTRUCTURA DE MARCADORES POR ESTADO (CLAVE PARA FILTROS)
+  window.markersPorEstado = {
+    'centro': [],
+    'asignada': [],
+    'regulada': [],
+    'no_regulada': [],
+    'deuda_alta': [],
+    'deuda_media': [],
+    'deuda_baja': [],
+    'os_mas_cercanas': [],
+    'os_preseleccionadas': [],
+    'os_asignadas': [],
+    'filtros_unidad': []
+  };
+  window.markersPorTipologia = {};
+  window.contextoMapaActual = 'kml_ruta'; // ✅ Identificar contexto
+  
+  // 2️⃣ Preparar datos para Leaflet
+  const osCentro = todosLosPuntos[0]; // El punto de partida (Origen)
+  const osEnRadio = todosLosPuntos.slice(1); // El resto de la secuencia optimizada
+  
+  // Guardar para la función de descarga
+  window.datosRutaKML = todosLosPuntos;
+  
+  // 3️⃣ Renderizar el mapa
+  const radioVisual = 10;
+  generarMapaLeaflet(osCentro, osEnRadio, latCentro, lngCentro, radioVisual);
 
 // ✅ Ocultar filtros por defecto y detectar si hay para mostrar el botón
 window.filtrosKMLActivos = false;
