@@ -5382,6 +5382,9 @@ async function logout() {
      
 // ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + GPS) - ÚNICO
 // ========================================
+// ========================================
+// ✅ CAMPO ESPECIAL PARA TX Y CORTES (COORDENADAS + GPS + RADIO EN METROS)
+// ========================================
 if (selectedTable === 'tx_y_cortes') {
   // ✅ OCULTAR búsqueda por coordenadas para roles "Consulta" y "Contratista"
   const rolUsuario = currentUser?.rol;
@@ -5399,7 +5402,18 @@ if (selectedTable === 'tx_y_cortes') {
           </button>
         </div>
         <div id="gpsStatusTX" style="margin-top: 10px; padding: 8px; border-radius: 6px; font-size: 13px; display: none;"></div>
-        <button onclick="buscarTXPorCoordenadas()" style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+        
+        <!-- ✅ CAMPO DE RADIO EN METROS (RESTAURADO) -->
+        <div style="margin-top: 15px;">
+          <label style="font-weight: 600; color: #2d3748; font-size: 13px;">📏 Radio de búsqueda (metros):</label>
+          <input type="number" id="radioMetrosTX" value="50" min="10" max="1000" step="10" 
+                 style="width: 100%; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-top: 4px;">
+          <small style="color: #64748b; display: block; margin-top: 4px; font-size: 12px;">
+            Default: 50 metros (mín: 10m, máx: 1000m)
+          </small>
+        </div>
+        
+        <button onclick="buscarTXPorCoordenadas()" style="margin-top: 18px; width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
           🔍 Buscar TX/Cortes Cercanos
         </button>
       </div>
@@ -21385,7 +21399,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
       if (!mapa) return;
 
       // ========================================
-      // ✅ FIX 1: MARCADOR CENTRAL VISIBLE (SIN EMOJI)
+      // ✅ MARCADOR CENTRAL VISIBLE (SIN EMOJI - CSS PURO)
       // ========================================
       const markerCentro = L.marker([latCentro, lngCentro], {
         icon: L.divIcon({
@@ -21422,23 +21436,23 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
           iconSize: [32, 42],  // Altura incluye el "pin" inferior
           iconAnchor: [16, 42]  // Anclar en la punta del pin
         }),
-        zIndexOffset: 1000  // Asegurar que esté siempre encima
+        zIndexOffset: 1000  // Siempre encima de otros marcadores
       }).addTo(mapa);
 
       // Popup informativo con coordenadas exactas
       markerCentro.bindPopup(`
-        <div style="font-weight: 600; color: #dc2626; text-align: center;">
+        <div style="font-weight: 600; color: #dc2626; text-align: center; min-width: 200px;">
           📍 TU UBICACIÓN<br>
           <span style="font-size: 13px; color: #666; display: block; margin-top: 4px;">
             Lat: ${latCentro.toFixed(6)}<br>
             Lng: ${lngCentro.toFixed(6)}<br>
-            Radio: ${radioMetros}m
+            Radio: ${radioMetros} metros
           </span>
         </div>
       `);
 
       // ========================================
-      // ✅ FIX 2: CÍRCULO DE RADIO VISIBLE (con fillColor)
+      // ✅ CÍRCULO DE RADIO VISIBLE (CON FILL COLOR)
       // ========================================
       const circleRadio = L.circle([latCentro, lngCentro], {
         radius: radioMetros,
@@ -21446,8 +21460,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
         fillColor: '#3b82f6',  // ✅ CLAVE: sin esto es transparente
         fillOpacity: 0.15,
         weight: 2,
-        dashArray: '5,5',
-        interactive: true
+        dashArray: '5,5'
       }).addTo(mapa);
 
       circleRadio.bindPopup(`
@@ -21460,7 +21473,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
       `);
 
       // ========================================
-      // ✅ FIX 3: MARCADORES DE TX/CORTES
+      // ✅ MARCADORES DE TX/CORTES CERCANOS
       // ========================================
       const markersGroup = L.featureGroup();
       const bounds = L.latLngBounds([[latCentro, lngCentro]]); // Incluir centro en bounds
@@ -21512,6 +21525,11 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
             <p style="margin: 5px 0; font-size: 12px; color: #666;">
               📍 ${latTX.toFixed(5)}, ${lngTX.toFixed(5)}
             </p>
+            ${tx.Comentario ? `
+              <div style="background: #f8fafc; padding: 8px; border-radius: 5px; font-size: 12px; line-height: 1.5; margin-top: 8px;">
+                ${formatearComentario(tx.Comentario)}
+              </div>
+            ` : ''}
           </div>
         `);
 
@@ -21521,7 +21539,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
           const distanciaReal = tx.distancia !== undefined 
             ? Math.round(tx.distancia) 
             : calcularDistanciaMetros(latCentro, lngCentro, latTX, lngTX);
-          actualizarDetallePanel(tx, index, color, distanciaReal);
+          actualizarDetallePanelTX(tx, index, color, distanciaReal);
         });
 
         markersGroup.addLayer(marker);
@@ -21531,7 +21549,7 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
       markersGroup.addTo(mapa);
 
       // ========================================
-      // ✅ FIX 4: AJUSTAR VISTA CON RETRASO (evita bounds vacío)
+      // ✅ AJUSTAR VISTA DEL MAPA (CON RETRASO PARA GARANTIZAR RENDERIZADO)
       // ========================================
       setTimeout(() => {
         if (bounds.isValid()) {
@@ -21567,31 +21585,33 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
       `;
     }
   }, 100);
+}
 
-  // ========================================
-  // ✅ PANEL LATERAL DE DETALLES (con cierre)
-  // ========================================
-  function actualizarDetallePanel(tx, index, color, distancia) {
-    const panel = document.getElementById('panelDetalleTX');
-    if (!panel) return;
+// ========================================
+// ✅ PANEL LATERAL DE DETALLES (CON CIERRE)
+// ========================================
+function actualizarDetallePanelTX(tx, index, color, distancia) {
+  const panel = document.getElementById('panelDetalleTX');
+  if (!panel) return;
 
-    panel.innerHTML = `
-      <div style="
-        background: white; 
-        padding: 15px; 
-        border-radius: 8px; 
-        border-left: 5px solid ${color}; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      ">
-        <h3 style="margin: 0 0 10px 0; color: #1e3a8a;">
-          #${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}
-        </h3>
-        <p style="margin: 8px 0; font-size: 14px;">
-          <strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}
-        </p>
-        <p style="margin: 8px 0; font-size: 14px; color: ${color}; font-weight: bold;">
-          📏 Distancia: ${Math.round(distancia)} metros del punto buscado
-        </p>
+  panel.innerHTML = `
+    <div style="
+      background: white; 
+      padding: 15px; 
+      border-radius: 8px; 
+      border-left: 5px solid ${color}; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    ">
+      <h3 style="margin: 0 0 10px 0; color: #1e3a8a;">
+        #${index + 1} - ${escapeHtml(tx.TXCortes || 'N/A')}
+      </h3>
+      <p style="margin: 8px 0; font-size: 14px;">
+        <strong>🔌 Circuito:</strong> ${escapeHtml(tx.Circuitos || 'N/A')}
+      </p>
+      <p style="margin: 8px 0; font-size: 14px; color: ${color}; font-weight: bold;">
+        📏 Distancia: ${Math.round(distancia)} metros del punto buscado
+      </p>
+      ${tx.Comentario ? `
         <div style="
           background: #f8fafc; 
           padding: 10px; 
@@ -21600,55 +21620,55 @@ function mostrarResultadosTXCoordenadas(resultados, latCentro, lngCentro, radioM
           font-size: 13px;
           margin-top: 10px;
         ">
-          ${tx.Comentario ? formatearComentario(tx.Comentario) : '<em>Sin comentario</em>'}
+          ${formatearComentario(tx.Comentario)}
         </div>
-        ${tx.Coordenadas ? `
-          <button 
-            onclick="abrirCoordenadas('${tx.Coordenadas}')"
-            style="
-              margin-top: 12px; 
-              padding: 8px 15px; 
-              background: #10b981; 
-              color: white; 
-              border: none; 
-              border-radius: 4px; 
-              cursor: pointer;
-              font-weight: 600;
-              width: 100%;
-            "
-          >
-            🗺️ Ver en Google Maps
-          </button>
-        ` : ''}
-        <button id="btnCerrarDetalleTX" style="
-          margin-top: 8px; 
-          width: 100%; 
-          padding: 8px; 
-          background: #64748b; 
-          color: white; 
-          border: none; 
-          border-radius: 4px; 
-          cursor: pointer;
-        ">
-          ✕ Cerrar detalles
+      ` : `<em style="color: #666; display: block; margin-top: 10px;">Sin comentario</em>`}
+      ${tx.Coordenadas ? `
+        <button 
+          onclick="abrirCoordenadas('${tx.Coordenadas}')"
+          style="
+            margin-top: 12px; 
+            padding: 8px 15px; 
+            background: #10b981; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+          "
+        >
+          🗺️ Ver en Google Maps
         </button>
-      </div>
-    `;
+      ` : ''}
+      <button id="btnCerrarDetalleTX" style="
+        margin-top: 8px; 
+        width: 100%; 
+        padding: 8px; 
+        background: #64748b; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+      ">
+        ✕ Cerrar detalles
+      </button>
+    </div>
+  `;
 
-    // Evento de cierre
-    setTimeout(() => {
-      const btnCerrar = document.getElementById('btnCerrarDetalleTX');
-      if (btnCerrar) {
-        btnCerrar.addEventListener('click', () => {
-          panel.innerHTML = `
-            <div style="text-align:center;padding:20px;color:#999;">
-              📍 Haz clic en un marcador para ver detalles
-            </div>
-          `;
-        });
-      }
-    }, 10);
-  }
+  // Evento de cierre
+  setTimeout(() => {
+    const btnCerrar = document.getElementById('btnCerrarDetalleTX');
+    if (btnCerrar) {
+      btnCerrar.addEventListener('click', () => {
+        panel.innerHTML = `
+          <div style="text-align:center;padding:20px;color:#999;">
+            📍 Haz clic en un marcador para ver detalles
+          </div>
+        `;
+      });
+    }
+  }, 10);
 }
 
 // ========================================
@@ -21662,7 +21682,7 @@ function escapeHtml(texto) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
+}}
 
 
     // Función interna para evitar conflictos de comillas en HTML
