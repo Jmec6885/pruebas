@@ -11068,14 +11068,20 @@ async function cargarInterfazDetalleOS() {
                 ${htmlTablasOriginales}
 
                 <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
-                    📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
-                </h2>
-                ${generarTablaTipologiasEspecificasPorDia(osPendientes)}
-                
-                <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
-                    📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
-                </h2>
-                ${generarTablaTipologiasEspecificasPorEstado(osPendientes)}
+      📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
+    </h2>
+    ${generarTablaTipologiasEspecificasPorDia(osPendientes)}
+    
+    <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
+      📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
+    </h2>
+    ${generarTablaTipologiasEspecificasPorEstado(osPendientes)}
+    
+    <!-- ✅ NUEVA TABLA: ESTADOS ATOMO vs DÍAS INDIVIDUALES -->
+    <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+      📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
+    </h2>
+    ${generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes)}
                 
                 </div>
         `;
@@ -24464,6 +24470,185 @@ function generarTablaTipologiasEspecificasPorEstado(osPendientes) {
   
   return html;
 }
+
+// ===================================================================
+// 📊 TABLA 3: ESTADOS ATOMO vs DÍAS INDIVIDUALES (Solo Tipologías Específicas)
+// ===================================================================
+function generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes) {
+  // ✅ Las 5 tipologías específicas a filtrar (case-insensitive)
+  const tipologiasEspecificas = [
+    'INSP. E INST. MED/ACOMETIDA Y TAB INTEGRAL BT',
+    'INSPECCION E INST. MED/ACOMETIDA BT',
+    'INSPECCION PREVIA (SOLICITUD DE SUMINISTRO)',
+    'INSPECCION PREVIA (SOLICITUD/ACTUALIZACION SUMINISTRO/DATOS FINCA',
+    'INST. DE MEDIDOR/ACOMETIDA B.T.'
+  ];
+  
+  // ✅ Filtrar SOLO las OS que pertenecen a las tipologías específicas
+  const osFiltradas = osPendientes.filter(os => {
+    const tipologia = (os.Tipologia || '').trim();
+    return tipologiasEspecificas.some(tipEspecifica => 
+      tipologia.toUpperCase().includes(tipEspecifica.toUpperCase())
+    );
+  });
+  
+  // ✅ Obtener estados únicos de Estado_ATOMO (solo de las tipologías filtradas)
+  const estadosSet = new Set();
+  osFiltradas.forEach(os => {
+    if (os.Estado_ATOMO) {
+      const estado = os.Estado_ATOMO.trim();
+      if (estado) estadosSet.add(estado);
+    }
+  });
+  
+  // ✅ Ordenar estados (priorizar los más comunes)
+  const estados = Array.from(estadosSet).sort((a, b) => {
+    const prioridad = ['REGISTRADA', 'ASIGNADA', 'EJECUTADA', 'CERRADA', 'ANULADA'];
+    return prioridad.indexOf(a) - prioridad.indexOf(b) || a.localeCompare(b);
+  });
+  
+  // ✅ Calcular días individuales (máximo 30 días para evitar tabla muy ancha)
+  const maxDias = 30; // Mostrar solo primeros 30 días (más allá es rango ">30")
+  const diasIndividuales = Array.from({ length: maxDias }, (_, i) => i + 1);
+  
+  // ✅ Inicializar matriz de conteos
+  const matriz = {};
+  estados.forEach(estado => {
+    matriz[estado] = {};
+    diasIndividuales.forEach(d => matriz[estado][d] = 0);
+    matriz[estado]['>30'] = 0; // Bucket para días >30
+    matriz[estado].total = 0;
+  });
+  
+  // ✅ Totales por día (para la fila final)
+  const totalesPorDia = {};
+  diasIndividuales.forEach(d => totalesPorDia[d] = 0);
+  totalesPorDia['>30'] = 0;
+  let granTotal = 0;
+  
+  // ✅ Procesar OS filtradas y llenar matriz
+  osFiltradas.forEach(os => {
+    const estado = (os.Estado_ATOMO || '').trim();
+    if (!estado || !estados.includes(estado)) return;
+    
+    // Calcular días exactos
+    const dias = calcularDias(os["Fecha Gen."]);
+    if (dias <= 0) return;
+    
+    // Determinar bucket de día
+    const bucket = dias <= maxDias ? dias : '>30';
+    
+    // Incrementar conteos
+    matriz[estado][bucket]++;
+    matriz[estado].total++;
+    totalesPorDia[bucket]++;
+    granTotal++;
+  });
+  
+  // ✅ Generar HTML de la tabla
+  const columnas = [...diasIndividuales.map(d => d.toString()), '>30'];
+  
+  let html = `
+    <div style="overflow-x: auto; margin: 25px 0; border: 2px solid #8b5cf6; border-radius: 12px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);">
+      <table style="width: 100%; border-collapse: collapse; background: white; font-size: 13px;">
+        <thead>
+          <tr style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white;">
+            <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; position: sticky; left: 0; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); z-index: 10;">Estado ATOMO</th>
+            ${columnas.map(col => `
+              <th style="padding: 14px 8px; text-align: center; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); min-width: 40px; font-size: 12px;">${col}</th>
+            `).join('')}
+            <th style="padding: 14px 16px; text-align: center; font-weight: 700; background: rgba(0,0,0,0.2); min-width: 90px; position: sticky; right: 0; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); z-index: 10;">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+  
+  // ✅ Filas de estados
+  estados.forEach((estado, idx) => {
+    const esPar = idx % 2 === 0;
+    const bgColor = esPar ? '#f9f7ff' : '#ffffff';
+    const totalEstado = matriz[estado].total;
+    
+    // ✅ Colores por estado
+    const coloresEstado = {
+      'REGISTRADA': '#3b82f6',
+      'ASIGNADA': '#f59e0b',
+      'EJECUTADA': '#10b981',
+      'CERRADA': '#6b7280',
+      'ANULADA': '#ef4444'
+    };
+    const colorEstado = coloresEstado[estado] || '#64748b';
+    
+    html += `
+      <tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 12px 16px; font-weight: 600; color: ${colorEstado}; border-right: 1px solid #e2e8f0; font-size: 13px; line-height: 1.4; position: sticky; left: 0; background: ${bgColor}; z-index: 5;">
+          ${estado}
+        </td>
+        ${columnas.map(col => {
+          const count = matriz[estado][col] || 0;
+          const hasData = count > 0;
+          const esCritico = col === '>30' && hasData; // Resaltar días >30
+          
+          return `
+            <td style="
+              padding: 12px 8px; 
+              text-align: center; 
+              font-weight: ${hasData ? '700' : '400'}; 
+              color: ${hasData ? (esCritico ? '#ef4444' : colorEstado) : '#94a3b8'}; 
+              background: ${hasData ? (esCritico ? 'rgba(239, 68, 68, 0.1)' : `rgba(${colorEstado === '#3b82f6' ? '59,130,246' : colorEstado === '#f59e0b' ? '245,158,11' : colorEstado === '#10b981' ? '16,185,129' : colorEstado === '#6b7280' ? '107,114,128' : '239,68,68'}, 0.08)`): 'transparent'};
+              border-right: 1px solid #e2e8f0;
+              min-width: 40px;
+              font-size: 12px;
+            ">
+              ${count > 0 ? count.toLocaleString() : '-'}
+            </td>
+          `;
+        }).join('')}
+        <td style="
+          padding: 12px 16px; 
+          text-align: center; 
+          font-weight: 700; 
+          color: ${colorEstado}; 
+          background: rgba(${colorEstado === '#3b82f6' ? '59,130,246' : colorEstado === '#f59e0b' ? '245,158,11' : colorEstado === '#10b981' ? '16,185,129' : colorEstado === '#6b7280' ? '107,114,128' : '239,68,68'}, 0.1); 
+          font-size: 15px;
+          min-width: 90px;
+          position: sticky;
+          right: 0;
+          background: ${bgColor};
+          z-index: 5;
+        ">
+          ${totalEstado.toLocaleString()}
+        </td>
+      </tr>
+    `;
+  });
+  
+  // ✅ Fila de totales
+  html += `
+      <tr style="background: #ede9fe; font-weight: 700; border-top: 2px solid #8b5cf6;">
+        <td style="padding: 14px 16px; border-right: 1px solid #a78bfa; color: #4c1d95; position: sticky; left: 0; background: #ede9fe; z-index: 10;">TOTALES POR DÍA</td>
+        ${columnas.map(col => `
+          <td style="padding: 14px 8px; text-align: center; color: #4c1d95; border-right: 1px solid #a78bfa; font-size: 13px;">
+            ${totalesPorDia[col].toLocaleString()}
+          </td>
+        `).join('')}
+        <td style="padding: 14px 16px; text-align: center; color: #dc2626; background: rgba(220, 38, 38, 0.1); font-size: 17px; position: sticky; right: 0; background: #ede9fe; z-index: 10;">
+          ${granTotal.toLocaleString()}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div style="background: #ede9fe; padding: 12px 16px; border-top: 1px solid #a78bfa; font-size: 13px; color: #4c1d95; display: flex; justify-content: space-between; align-items: center;">
+    <strong>📊 Resumen:</strong> 
+    <span>${granTotal.toLocaleString()} OS en ${estados.length} estados × ${maxDias}+ días (solo tipologías específicas)</span>
+  </div>
+</div>
+  `;
+  
+  return html;
+}
+
 
 
 </script>
