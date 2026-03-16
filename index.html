@@ -5842,7 +5842,7 @@ async function ejecutarActualizacionDeuda(actualizaciones, soloCoincidencias, ce
 
     let actualizadas = 0;
     let errores = 0;
-    const BATCH_SIZE = 100; // Tamaño seguro para Supabase
+    const BATCH_SIZE = 500; // Tamaño seguro para Supabase
     
     // ========================================
     // ✅ PASO 1: ACTUALIZAR OS DEL ARCHIVO (SIN UPSERT - USAR .update().eq())
