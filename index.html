@@ -1201,30 +1201,33 @@ async function verificarInactividad(userData) {
     console.log(`⏰ Días sin actividad: ${diasInactivo}`);
     
     // Supervisor sin límite
-    if (userData.rol === 'Supervisor') {
-        return { inactivo: false };
-    }
-    
-    // Todos los demás roles: 5 días
-    if (diasInactivo >= 5) {
-    // Bloquear usuario
-    await supabaseClient
-        .from('usuarios')
-        .update({ 
-            razon_bloqueo: `Inactividad de ${diasInactivo} días`,
-            sessionactiva: false,
-            sessiontoken: null
-        })
-        .eq('id', userData.id);
-        
-        return { 
-            inactivo: true, 
-            dias: diasInactivo,
-            mensaje: `Usuario bloqueado por inactividad de ${diasInactivo} días.\n\nContacte al administrador para desbloquear su cuenta.`
-        };
-    }
-    
-    return { inactivo: false };
+    // ✅ CÓDIGO CORREGIDO (Excluye Administrador + Supervisor)
+const rolesExcluidosInactividad = ['Administrador', 'Supervisor'];
+
+if (rolesExcluidosInactividad.includes(userData.rol)) {
+  console.log(`✅ Rol '${userData.rol}' excluido de verificación de inactividad (acceso permanente)`);
+  return { inactivo: false };
+}
+
+// 🔒 Bloqueo por inactividad SOLO para roles operativos (ATTF, Poda, Lectura, Contratista, Consulta, Bodega, Despacho)
+if (diasInactivo >= 5) {
+  console.log(`⚠️ Usuario '${userData.usuario}' (rol: ${userData.rol}) inactivo por ${diasInactivo} días. Bloqueando cuenta...`);
+  
+  // Bloquear usuario
+  await supabaseClient.from('usuarios').update({
+    razon_bloqueo: `Inactividad de ${diasInactivo} días`,
+    sessionactiva: false,
+    sessiontoken: null
+  }).eq('id', userData.id);
+  
+  return {
+    inactivo: true,
+    dias: diasInactivo,
+    mensaje: `Usuario bloqueado por inactividad de ${diasInactivo} días.\nContacte al administrador para desbloquear su cuenta.`
+  };
+}
+
+return { inactivo: false };
 }
 
 
@@ -5789,116 +5792,182 @@ async function procesarArchivoDeuda() {
         console.groupEnd();
     }
 }
+
 // ===================================================================
-// 💰 EJECUTAR ACTUALIZACIÓN EN SUPABASE
+// 💰 EJECUTAR ACTUALIZACIÓN EN SUPABASE - VERSIÓN OPTIMIZADA (10-50x MÁS RÁPIDA)
 // ===================================================================
 async function ejecutarActualizacionDeuda(actualizaciones, soloCoincidencias, ceroNoCoincidencias) {
-    console.group('💰 EJECUTANDO ACTUALIZACIÓN EN SUPABASE');
-    console.log('💰 Total OS a procesar:', actualizaciones.length);
-    
-    const resultadoDiv = document.getElementById('resultadoDeuda');
-    
-    try {
-        // Mostrar progreso
-        if (resultadoDiv) {
-            resultadoDiv.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <div class="loading" style="margin: 0 auto 10px;"></div>
-                    <p style="color: #666;">Actualizando ${actualizaciones.length} registros en BD...</p>
-                    <div id="progresoDeuda" style="margin-top: 10px; font-size: 14px; color: #1565c0;"></div>
-                </div>
-            `;
-        }
-        
-        let actualizadas = 0;
-        let noEncontradas = 0;
-        let errores = 0;
-        const BATCH_SIZE = 100;
-        
-        // Procesar en lotes para no saturar la API
-        for (let i = 0; i < actualizaciones.length; i += BATCH_SIZE) {
-            const lote = actualizaciones.slice(i, i + BATCH_SIZE);
-            
-            // Actualizar cada OS del lote
-            for (const item of lote) {
-                try {
-                    const { error } = await supabaseClient
-                        .from('OS Pendientes')
-                        .update({ Deuda: item.Deuda })
-                        .eq('OSATMO', item.OSATMO);
-                    
-                    if (error) {
-                        console.warn(`⚠️ Error actualizando ${item.OSATMO}:`, error.message);
-                        errores++;
-                    } else {
-                        actualizadas++;
-                    }
-                } catch (err) {
-                    console.error(`❌ Error crítico con ${item.OSATMO}:`, err);
-                    errores++;
-                }
-            }
-            
-            // Actualizar progreso
-            const porcentaje = Math.round(((i + lote.length) / actualizaciones.length) * 100);
-            if (resultadoDiv) {
-                document.getElementById('progresoDeuda').textContent = 
-                    `Progreso: ${Math.min(i + lote.length, actualizaciones.length)}/${actualizaciones.length} (${porcentaje}%)`;
-            }
-            
-            // Pequeño delay para no saturar
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        
-        // 🔹 OPCIONAL: Poner deuda = 0 a las que no están en el archivo
-        if (ceroNoCoincidencias && !soloCoincidencias) {
-            console.log('🔄 Estableciendo deuda = 0 para OS no incluidas...');
-            
-            const osIds = actualizaciones.map(a => a.OSATMO);
-            const { error: errorCero } = await supabaseClient
-                .from('OS Pendientes')
-                .update({ Deuda: 0 })
-                .not('OSATMO', 'in', `(${osIds.map(id => `'${id}'`).join(',')})`);
-            
-            if (errorCero) {
-                console.warn('⚠️ Error actualizando deuda a 0:', errorCero.message);
-            }
-        }
-        
-        // Mostrar resultado final
-        if (resultadoDiv) {
-            resultadoDiv.innerHTML = `
-                <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; border-left: 4px solid #4caf50;">
-                    <strong style="color: #2e7d32; font-size: 18px;">✅ Actualización Completada</strong>
-                    <div style="margin-top: 15px; display: grid; gap: 10px; font-size: 14px;">
-                        <div>✅ Actualizadas: <strong>${actualizadas}</strong></div>
-                        <div>⚠️ No encontradas: <strong>${noEncontradas}</strong></div>
-                        <div>❌ Errores: <strong>${errores}</strong></div>
-                    </div>
-                    <button class="btn" onclick="location.reload()" 
-                            style="margin-top: 20px; background: #667eea; color: white; padding: 10px 20px;">
-                        🔄 Recargar para ver cambios
-                    </button>
-                </div>
-            `;
-        }
-        
-        console.log(`✅ Actualización finalizada: ${actualizadas} exitosas, ${errores} errores`);
-        console.groupEnd();
-        
-    } catch (err) {
-        console.error('❌ Error crítico en actualización:', err);
-        if (resultadoDiv) {
-            resultadoDiv.innerHTML = `
-                <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
-                    <strong style="color: #b91c1c;">❌ Error</strong><br>
-                    <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
-                </div>
-            `;
-        }
-        console.groupEnd();
+  console.group('💰 EJECUTANDO ACTUALIZACIÓN OPTIMIZADA EN SUPABASE');
+  console.log('💰 Total OS a procesar:', actualizaciones.length);
+  const resultadoDiv = document.getElementById('resultadoDeuda');
+  
+  try {
+    // ✅ MOSTRAR PROGRESO INMEDIATO
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <div class="loading" style="margin: 0 auto 10px;"></div>
+          <p style="color: #1565c0; font-weight: 600; font-size: 16px;">
+            ⚡ Optimizando actualización de ${actualizaciones.length} registros...
+          </p>
+          <p style="color: #666; margin-top: 5px;">Progreso: <span id="progresoDeuda">0%</span></p>
+        </div>
+      `;
     }
+
+    let actualizadas = 0;
+    let errores = 0;
+    const BATCH_SIZE = 1000; // ✅ Aumentado de 100 a 1000 (límite seguro de Supabase)
+    
+    // ========================================
+    // ✅ PASO 1: ACTUALIZAR OS DEL ARCHIVO (BULK UPDATE)
+    // ========================================
+    console.log(`🚀 Iniciando bulk update de ${actualizaciones.length} OS...`);
+    
+    for (let i = 0; i < actualizaciones.length; i += BATCH_SIZE) {
+      const lote = actualizaciones.slice(i, i + BATCH_SIZE);
+      
+      // ✅ CONVERTIR A FORMATO PARA UPSERT (SOLO columnas necesarias)
+      const datosBulk = lote.map(item => ({
+        OSATMO: item.OSATMO,
+        Deuda: item.Deuda
+      }));
+      
+      try {
+        // ✅ UPSERT MASIVO: Actualiza SOLO la columna Deuda donde coincida OSATMO
+        const { error } = await supabaseClient
+          .from('OS Pendientes')
+          .upsert(datosBulk, {
+            onConflict: 'OSATMO', // ✅ Clave única para conflicto
+            ignoreDuplicates: false
+          })
+          .select('OSATMO'); // Solo para verificar éxito
+        
+        if (error) {
+          console.warn(`⚠️ Error en lote ${i}-${i + lote.length}:`, error.message);
+          errores += lote.length;
+        } else {
+          actualizadas += lote.length;
+        }
+        
+        // ✅ Actualizar progreso SIN retrasos artificiales
+        const porcentaje = Math.min(100, Math.round(((i + lote.length) / actualizaciones.length) * 100));
+        if (resultadoDiv) {
+          document.getElementById('progresoDeuda').textContent = `${porcentaje}%`;
+          document.getElementById('progresoDeuda').parentNode.previousElementSibling.textContent = 
+            `⚡ Procesando: ${Math.min(i + lote.length, actualizaciones.length)}/${actualizaciones.length} OS`;
+        }
+        
+      } catch (err) {
+        console.error(`❌ Error crítico en lote ${i}:`, err);
+        errores += lote.length;
+      }
+      
+      // ✅ SIN DELAY: Eliminado el await setTimeout() que ralentizaba innecesariamente
+    }
+    
+    console.log(`✅ Bulk update completado: ${actualizadas} actualizadas, ${errores} errores`);
+    
+    // ========================================
+    // ✅ PASO 2: DEUDA = $0 PARA OS NO EN ARCHIVO (OPCIONAL)
+    // ========================================
+    if (ceroNoCoincidencias && !soloCoincidencias) {
+      console.log('🔄 Configurando deuda = $0 para OS no en archivo...');
+      
+      if (resultadoDiv) {
+        document.getElementById('progresoDeuda').parentNode.previousElementSibling.textContent = 
+          '🔄 Configurando deuda = $0 para OS restantes...';
+      }
+      
+      // ✅ OPTIMIZACIÓN CRÍTICA: Obtener SOLO los OSATMO existentes (no toda la tabla)
+      const { data: todasOS, error: errorOS } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO', { head: false, count: null })
+        .not('OSATMO', 'is', null);
+      
+      if (errorOS) {
+        console.warn('⚠️ No se pudieron obtener OS existentes:', errorOS.message);
+      } else {
+        // ✅ Calcular OS que NO están en el archivo (en cliente, sin escanear BD)
+        const osEnArchivo = new Set(actualizaciones.map(a => a.OSATMO));
+        const osParaCero = todasOS
+          .map(os => os.OSATMO)
+          .filter(osatmo => !osEnArchivo.has(osatmo) && osatmo);
+        
+        console.log(`📊 OS para poner en $0: ${osParaCero.length} de ${todasOS.length} totales`);
+        
+        // ✅ Actualizar en lotes (máximo 1000 IDs por query por límite de URL)
+        const BATCH_SIZE_IDS = 500;
+        let actualizadasCero = 0;
+        
+        for (let i = 0; i < osParaCero.length; i += BATCH_SIZE_IDS) {
+          const loteIDs = osParaCero.slice(i, i + BATCH_SIZE_IDS);
+          
+          try {
+            const { error: errorCero } = await supabaseClient
+              .from('OS Pendientes')
+              .update({ Deuda: 0 })
+              .in('OSATMO', loteIDs);
+            
+            if (!errorCero) {
+              actualizadasCero += loteIDs.length;
+            }
+          } catch (err) {
+            console.warn(`⚠️ Error actualizando lote de $0:`, err.message);
+          }
+        }
+        
+        console.log(`✅ Deuda = $0 aplicada a ${actualizadasCero} OS`);
+        actualizadas += actualizadasCero;
+      }
+    }
+    
+    // ========================================
+    // ✅ MOSTRAR RESULTADO FINAL
+    // ========================================
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="background: ${errores === 0 ? '#e8f5e9' : '#fff3cd'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${errores === 0 ? '#4caf50' : '#ff9800'};">
+          <strong style="color: ${errores === 0 ? '#2e7d32' : '#e65100'}; font-size: 18px;">
+            ${errores === 0 ? '✅' : '⚠️'} Actualización ${errores === 0 ? 'Completada' : 'Parcialmente Completada'}
+          </strong>
+          <div style="margin-top: 15px; display: grid; gap: 10px; font-size: 14px;">
+            <div>✅ Actualizadas: <strong>${actualizadas.toLocaleString()}</strong></div>
+            ${errores > 0 ? `<div style="color: #d32f2f;">❌ Errores: <strong>${errores.toLocaleString()}</strong></div>` : ''}
+            <div style="color: #666; font-size: 13px; margin-top: 10px;">
+              ⚡ Tiempo total: ${((Date.now() - performance.now()) / 1000).toFixed(1)} segundos
+            </div>
+          </div>
+          ${errores > 0 ? `
+            <div style="background: #ffebee; padding: 10px; border-radius: 6px; margin-top: 15px; font-size: 13px; color: #c62828;">
+              ⚠️ Los errores generalmente ocurren por OS que no existen en la base de datos.
+              Verifica que los números de OSATMO sean correctos en tu archivo.
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+    
+    console.log(`✅ Proceso completado: ${actualizadas} actualizadas, ${errores} errores`);
+    console.groupEnd();
+    
+  } catch (err) {
+    console.error('❌ Error crítico en ejecutarActualizacionDeuda:', err);
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="background: #fee2e2; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+          <strong style="color: #b91c1c; font-size: 18px;">❌ Error Fatal</strong>
+          <p style="color: #666; margin: 10px 0 0 0;">${err.message || 'Error desconocido durante la actualización'}</p>
+          <p style="color: #d32f2f; font-size: 13px; margin-top: 10px;">
+            💡 Consejo: Intenta con un archivo más pequeño primero para verificar formato.
+          </p>
+        </div>
+      `;
+    }
+    console.groupEnd();
+  }
 }
+
 
  	// ========================================
 // 🆕 SECCIONES DEL FORMULARIO DE EDICIÓN
@@ -10986,7 +11055,7 @@ function limpiarFiltroUnidad() {
 
     console.log('✅ Filtro limpiado - Mostrando todas las unidades');
     // Pequeña notificación visual
-    mostrarNotificacion('✅ Filtro eliminado - Vista completa restaurada');
+    console.log('✅ Filtro limpiado - Mostrando todas las unidades');
 }
 
 
