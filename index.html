@@ -11172,9 +11172,7 @@ function generarTablaTipologiaVsRango(osFiltradas) {
 }
 
 
- 	// ========================================
-// 🔍 APLICAR FILTRO POR UNIDAD
-// ========================================
+
 // ========================================
 // 🔍 APLICAR FILTRO POR UNIDAD (CORREGIDO)
 // ========================================
@@ -11237,7 +11235,7 @@ function aplicarFiltroUnidad() {
 
 
  	// ========================================
-// 🔄 REGENERAR TABLAS CON FILTRO
+// 🔄 REGENERAR TABLAS CON FILTRO (INCLUYE TODAS LAS TABLAS Y NUEVAS ESPECIALES)
 // ========================================
 function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad, unidadesSeleccionadas) {
     const resultsContainer = document.getElementById('searchResults');
@@ -11255,14 +11253,13 @@ function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad, unidadesS
         <div class="result-card" style="background: white; padding: 30px;">
     `;
 
-    // 🆕 0. TABLA DE TIPOLOGÍA (Filtrada por Unidad y Ordenada de Mayor a Menor)
+    // 🆕 0. TABLA DE TIPOLOGÍA
     html += `
         <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
             📋 TABLA: Tipología de OS vs Rangos de Días (${unidad})
         </h2>
         ${generarTablaTipologiaVsRango(osFiltradas)}`;
 
-    // --- SEPARADOR ---
     html += `<hr style="margin: 40px 0; border: none; border-top: 1px solid #eee;">`;
 
     // 1. UNICOM por Condición
@@ -11341,20 +11338,25 @@ function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad, unidadesS
         </h2>
         ${generarTablaBloqueados(datosFiltrados)}`;
 
-    // ✅ NUEVAS TABLAS ESPECIALES
+    // ✅ AGREGAR AL FINAL: LAS 3 NUEVAS TABLAS DE TIPOLOGÍAS ESPECIALES
     html += `
         <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
-          📋 TABLA ESPECIAL: Tipologías Específicas vs Rangos de Días
+            📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
         </h2>
-        ${generarTablaTipologiasEspecificasPorRango(osFiltradas)}
+        ${generarTablaTipologiasEspecificasPorDia(osFiltradas)}
         
         <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
-          📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
+            📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
         </h2>
         ${generarTablaTipologiasEspecificasPorEstado(osFiltradas)}
+        
+        <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+            📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
+        </h2>
+        ${generarTablaEstadosPorDiaTipologiasEspecificas(osFiltradas)}
     `;
 
-    // Resumen del filtro final
+    // Resumen del filtro final corregido
     html += `
         <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-top: 30px; text-align: center; border: 2px solid #4caf50;">
           <strong style="color: #1e40af; font-size: 18px; display: block; margin-bottom: 10px;">
@@ -11362,23 +11364,23 @@ function regenerarTablasFiltradas(datosFiltrados, osFiltradas, unidad, unidadesS
           </strong>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
             <div>• <strong>Total de OS:</strong> <span style="color: #1e40af; font-weight: 700;">${osFiltradas.length.toLocaleString()}</span></div>
-            <div>• <strong>Unidades:</strong> <span style="color: #10b981; font-weight: 700;">${unidadesSeleccionadas ? unidadesSeleccionadas.size : 1}</span></div>
+            <div>• <strong>Unidad:</strong> <span style="color: #10b981; font-weight: 700;">${unidad}</span></div>
           </div>
-          <button class="btn" onclick="limpiarSeleccionUnidades()" 
+          <button class="btn" onclick="limpiarFiltroUnidad()" 
                   style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); margin-top: 15px; padding: 10px 25px;">
-            🗑️ Restaurar Vista Completa (Todas las Unidades)
+            🗑️ Restaurar Vista Completa
           </button>
         </div>
     `;
 
-    // Fechamento do container principal
+    // Cierre del contenedor principal
     html += `</div>`;
 
-    // Renderização final
+    // Renderización final
     resultsContainer.innerHTML = html;
-
     console.log(`✅ Tablas regeneradas exitosamente para unidad: ${unidad}`);
 }
+
 
 
 
@@ -11393,13 +11395,16 @@ function limpiarFiltroUnidad() {
     if (filtroInput) filtroInput.value = '';
 
     // 2. Restaurar los datos desde la copia de seguridad global
-    // Usamos JSON.parse para asegurar que recuperamos una copia limpia
-    window.datosDetalleOS = JSON.parse(JSON.stringify(window.datosDetalleOS_Original));
+    if (!window.osPendientes_Original || !window.datosDetalleOS_Original) {
+        console.error('❌ No hay datos originales para restaurar');
+        return;
+    }
 
+    window.datosDetalleOS = JSON.parse(JSON.stringify(window.datosDetalleOS_Original));
     const osPendientes = window.osPendientes_Original;
     const datosAgrupados = window.datosDetalleOS;
 
-    // 3. Recalcular los totales generales para la consola (opcional)
+    // 3. Recalcular totales para consistencia
     const totalReguladas = Object.values(datosAgrupados.reguladas)
         .reduce((sum, unidad) => sum + Object.values(unidad.porRango).flat().length, 0);
 
@@ -11412,14 +11417,14 @@ function limpiarFiltroUnidad() {
     resultsContainer.innerHTML = `
         <div class="result-card" style="background: white; padding: 30px;">
                 
-                <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
-                    📋 RESUMEN INICIAL: Tipología de OS vs Rangos de Días
-                </h2>
-                ${generarTablaTipologiaVsRango(osPendientes)}
+            <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
+                📋 RESUMEN INICIAL: Tipología de OS vs Rangos de Días
+            </h2>
+            ${generarTablaTipologiaVsRango(osPendientes)}
 
-                <h2 style="color: #26c6da; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
-                    📡 UNICOM - Por Condición
-                </h2>
+            <h2 style="color: #26c6da; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+                📡 UNICOM - Por Condición
+            </h2>
             ${generarTablaUnicomPorCondicion(osPendientes)}
 
             <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
@@ -11462,12 +11467,29 @@ function limpiarFiltroUnidad() {
             </h2>
             ${generarTablaPorRango(datosAgrupados.noReguladas, 'noReguladas')}
 
+            <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+                📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
+            </h2>
+            ${generarTablaTipologiasEspecificasPorDia(osPendientes)}
+            
+            <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
+                📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
+            </h2>
+            ${generarTablaTipologiasEspecificasPorEstado(osPendientes)}
+            
+            <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+                📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
+            </h2>
+            ${generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes)}
+
         </div>
     `;
 
-    console.log('✅ Filtro limpiado - Mostrando todas las unidades');
-    // Pequeña notificación visual
-    console.log('✅ Filtro limpiado - Mostrando todas las unidades');
+    console.log('✅ Filtro limpiado - Vista completa restaurada');
+    
+    if (typeof mostrarNotificacion === 'function') {
+        mostrarNotificacion('✅ Filtro eliminado - Vista completa restaurada', 'success');
+    }
 }
 
 
@@ -23729,7 +23751,7 @@ function limpiarSeleccionUnidades() {
 }
 
 // ===================================================================
-// 🎯 APLICAR FILTRO DE MÚLTIPLES UNIDADES (CLAVE PARA TABLAS COMBINADAS)
+// 🎯 APLICAR FILTRO DE MÚLTIPLES UNIDADES - VERSIÓN CORREGIDA (INCLUYE TODAS LAS TABLAS)
 // ===================================================================
 function aplicarFiltroUnidadesMultiples() {
   const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
@@ -23748,6 +23770,9 @@ function aplicarFiltroUnidadesMultiples() {
       <div class="loading" style="margin: 0 auto 20px;"></div>
       <p style="color: #1565c0; font-weight: 600; font-size: 16px;">
         📊 Procesando datos de ${unidadesSeleccionadas.size} unidad${unidadesSeleccionadas.size !== 1 ? 'es' : ''}...
+      </p>
+      <p style="color: #666; margin-top: 5px;">
+        Unidades: ${Array.from(unidadesSeleccionadas).join(', ')}
       </p>
     </div>
   `;
@@ -23779,8 +23804,99 @@ function aplicarFiltroUnidadesMultiples() {
     // ✅ Procesar datos filtrados (reguladas + no reguladas)
     const datosFiltrados = procesarOSPendientes(osFiltradas);
     
-    // ✅ Generar HTML con tablas COMBINADAS
-    resultsContainer.innerHTML = generarHTMLTablasCompletas(osFiltradas, datosFiltrados);
+    // ✅ GENERAR HTML CON TODAS LAS TABLAS (INCLUYENDO LAS 3 NUEVAS DE TIPOLOGÍAS ESPECIALES)
+    let html = `
+      <div class="result-card" style="background: white; padding: 30px;">
+        <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 22px; border-bottom: 3px solid #ff9800; padding-bottom: 10px;">
+          📋 TABLA 1: Tipología de OS vs Rangos de Días
+        </h2>
+        ${generarTablaTipologiaVsRango(osFiltradas)}
+
+        <h2 style="color: #26c6da; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #26c6da; padding-bottom: 10px;">
+          📡 UNICOM - Por Condición
+        </h2>
+        ${generarTablaUnicomPorCondicion(osFiltradas)}
+
+        <h2 style="color: #00acc1; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00acc1; padding-bottom: 10px;">
+          📡 UNICOM - Por Rango de Días
+        </h2>
+        ${generarTablaUnicomPorRango(osFiltradas)}
+
+        <h2 style="color: #f44336; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f44336; padding-bottom: 10px;">
+          🚫 TABLA 4: OS Bloqueadas por Rango de Días
+        </h2>
+        ${generarTablaBloqueados(datosFiltrados)}
+
+        <h2 style="color: #0097a7; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #0097a7; padding-bottom: 10px;">
+          🔄 TABLA 3: Estado SAP vs Estado ATOMO
+        </h2>
+        ${generarTablaEstadoSapVsAtomo(datosFiltrados)}
+
+        <h2 style="color: #00bcd4; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #00bcd4; padding-bottom: 10px;">
+          📊 TABLA 2: Estado ATOMO vs Rangos de Días
+        </h2>
+        ${generarTablaEstadoAtomoPorRango(datosFiltrados)}
+
+        <h2 style="color: #f093fb; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f093fb; padding-bottom: 10px;">
+          ⚠️ REGULADAS - Por Condición
+        </h2>
+        ${generarTablaPorCondicion(datosFiltrados.reguladas, 'reguladas')}
+
+        <h2 style="color: #667eea; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #667eea; padding-bottom: 10px;">
+          📊 REGULADAS - Por Rango de Días
+        </h2>
+        ${generarTablaPorRango(datosFiltrados.reguladas, 'reguladas')}
+
+        <h2 style="color: #f5576c; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #f5576c; padding-bottom: 10px;">
+          ⚠️ NO REGULADAS - Por Condición
+        </h2>
+        ${generarTablaPorCondicion(datosFiltrados.noReguladas, 'no_reguladas')}
+
+        <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
+          📊 NO REGULADAS - Por Rango de Días
+        </h2>
+        ${generarTablaPorRango(datosFiltrados.noReguladas, 'no_reguladas')}
+
+        <!-- ✅ TABLA 1: TIPOLOGÍAS ESPECÍFICAS vs DÍAS INDIVIDUALES -->
+        <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+          📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
+        </h2>
+        ${generarTablaTipologiasEspecificasPorDia(osFiltradas)}
+
+        <!-- ✅ TABLA 2: TIPOLOGÍAS ESPECÍFICAS vs ESTADO ATOMO -->
+        <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
+          📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
+        </h2>
+        ${generarTablaTipologiasEspecificasPorEstado(osFiltradas)}
+
+        <!-- ✅ TABLA 3: ESTADOS ATOMO vs DÍAS INDIVIDUALES (Solo Tipologías Específicas) -->
+        <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+          📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
+        </h2>
+        ${generarTablaEstadosPorDiaTipologiasEspecificas(osFiltradas)}
+        
+        <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-top: 30px; text-align: center; border: 2px solid #4caf50;">
+          <strong style="color: #1e40af; font-size: 18px; display: block; margin-bottom: 10px;">
+            📊 Resumen del Filtro Actual
+          </strong>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
+            <div>• <strong>Total de OS:</strong> <span style="color: #1e40af; font-weight: 700;">${osFiltradas.length.toLocaleString()}</span></div>
+            <div>• <strong>Unidades:</strong> <span style="color: #10b981; font-weight: 700;">${unidadesSeleccionadas.size}</span></div>
+          </div>
+          <button class="btn" onclick="limpiarSeleccionUnidades()" 
+                  style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); margin-top: 15px; padding: 10px 25px;">
+            🗑️ Restaurar Vista Completa (Todas las Unidades)
+          </button>
+        </div>
+      </div>
+    `;
+    
+    // ✅ Renderizar resultados COMPLETOS (con las 3 tablas nuevas)
+    resultsContainer.innerHTML = html;
+    
+    // ✅ Guardar datos para funciones de detalle
+    window.datosDetalleOS = datosFiltrados;
+    window.unidadesSeleccionadasActuales = unidadesSeleccionadas;
     
     console.log(`✅ Filtro aplicado: ${osFiltradas.length} OS de ${unidadesSeleccionadas.size} unidades`);
     
@@ -23794,6 +23910,7 @@ function aplicarFiltroUnidadesMultiples() {
     `;
   }
 }
+
 
 // ===================================================================
 // 📊 GENERAR HTML DE TODAS LAS TABLAS (REUTILIZABLE PARA VISTA COMPLETA Y FILTRADA)
