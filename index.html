@@ -25313,24 +25313,24 @@ OSATMO,Estado_ATOMO
 }
 
 // ===================================================================
-// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS (CON PAGINACIÓN)
+// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS (CON LOGS DE DEPURACIÓN)
 // ===================================================================
 async function cargarInterfazSuministrosMultiples() {
-  console.log('📋 Cargando interfaz de Suministros con Múltiples OS...');
+  console.log('='.repeat(60));
+  console.log('📋 INICIANDO CARGA DE SUMINISTROS MÚLTIPLES OS');
+  console.log('='.repeat(60));
   
   const searchGrid = document.getElementById('searchGrid');
   const resultsContainer = document.getElementById('searchResults');
   
-  // ✅ Validación de rol (seguridad adicional)
+  // ✅ Validación de rol
   if (!['Administrador', 'Despacho'].includes(currentUser?.rol)) {
-    resultsContainer.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-        <div class="result-header">❌ Acceso Denegado</div>
-        <p style="text-align: center; color: #666;">
-          Esta funcionalidad solo está disponible para roles Administrador y Despacho.
-        </p>
-      </div>
-    `;
+    resultsContainer.innerHTML = `<div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+      <div class="result-header">❌ Acceso Denegado</div>
+      <p style="text-align: center; color: #666;">
+        Esta funcionalidad solo está disponible para roles Administrador y Despacho.
+      </p>
+    </div>`;
     return;
   }
   
@@ -25351,97 +25351,121 @@ async function cargarInterfazSuministrosMultiples() {
   resultsContainer.innerHTML = '';
   
   try {
-    // ✅ CARGAR TODOS LOS REGISTROS CON PAGINACIÓN (1000 por lote)
+    // ===================================================================
+    // 🔍 PASO 1: OBTENER CONTEO TOTAL (PARA SABER CUÁNTOS REGISTROS HAY)
+    // ===================================================================
+    console.log('\n🔍 [PASO 1] Obteniendo conteo total de registros...');
+    const { count: totalDB, error: countError } = await supabaseClient
+      .from('OS Pendientes')
+      .select('CuentaContrato', { count: 'exact', head: true })
+      .not('CuentaContrato', 'is', null)
+      .not('CuentaContrato', 'eq', '')
+      .not('CuentaContrato', 'eq', '0')
+      .not('CuentaContrato', 'eq', '200000000000');
+    
+    if (countError) {
+      console.error('❌ ERROR al obtener conteo total:', countError);
+      throw new Error(`Error al obtener conteo: ${countError.message}`);
+    }
+    
+    console.log(`✅ CONTEO TOTAL EN BD: ${totalDB.toLocaleString()} registros`);
+    document.getElementById('totalRegistros').textContent = totalDB.toLocaleString();
+    
+    // ===================================================================
+    // 📥 PASO 2: CARGAR REGISTROS POR LOTES (PAGINACIÓN REAL)
+    // ===================================================================
+    console.log('\n📥 [PASO 2] Iniciando carga paginada por lotes de 1000...');
     const BATCH_SIZE = 1000;
     let allRecords = [];
     let start = 0;
-    let totalRegistros = 0;
-    let hasMore = true;
+    let loteActual = 1;
+    let registrosCargados = 0;
     
-    console.log('📥 Iniciando carga paginada de OS Pendientes...');
-    
-    while (hasMore) {
-      // ✅ Cargar un lote de registros
-      const { data, error, count } = await supabaseClient
+    while (start < totalDB) {
+      console.log(`\n📤 CARGANDO LOTE #${loteActual} (registros ${start} a ${start + BATCH_SIZE - 1})...`);
+      
+      const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."', { count: 'exact' })
+        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."')
         .not('CuentaContrato', 'is', null)
         .not('CuentaContrato', 'eq', '')
         .not('CuentaContrato', 'eq', '0')
         .not('CuentaContrato', 'eq', '200000000000')
-        .range(start, start + BATCH_SIZE - 1); // Paginación: 0-999, 1000-1999, etc.
+        .range(start, start + BATCH_SIZE - 1);
       
-      if (error) throw error;
-      
-      // ✅ Actualizar total de registros (solo la primera vez)
-      if (totalRegistros === 0 && count) {
-        totalRegistros = count;
-        document.getElementById('totalRegistros').textContent = totalRegistros.toLocaleString();
+      if (error) {
+        console.error(`❌ ERROR en lote #${loteActual}:`, error);
+        throw new Error(`Error en lote ${loteActual}: ${error.message}`);
       }
       
-      // ✅ Verificar si hay datos
-      if (!data || data.length === 0) {
-        hasMore = false;
+      // ✅ Verificar datos recibidos
+      const registrosEnLote = data?.length || 0;
+      console.log(`✅ Lote #${loteActual} recibido: ${registrosEnLote} registros`);
+      
+      if (registrosEnLote === 0) {
+        console.warn(`⚠️ Lote #${loteActual} vacío. Terminando carga.`);
         break;
       }
       
       // ✅ Acumular registros
       allRecords = allRecords.concat(data);
+      registrosCargados += registrosEnLote;
       
       // ✅ Actualizar progreso visual
-      const progreso = Math.min(100, Math.round((allRecords.length / totalRegistros) * 100));
+      const progreso = Math.min(100, Math.round((registrosCargados / totalDB) * 100));
       document.getElementById('progresoCarga').textContent = `${progreso}%`;
-      document.getElementById('contadorRegistros').textContent = allRecords.length.toLocaleString();
+      document.getElementById('contadorRegistros').textContent = registrosCargados.toLocaleString();
       
-      console.log(`✅ Cargados ${allRecords.length} de ${totalRegistros} registros (${progreso}%)`);
+      console.log(`📊 Progreso: ${registrosCargados.toLocaleString()}/${totalDB.toLocaleString()} (${progreso}%)`);
       
-      // ✅ Verificar si es el último lote
-      if (data.length < BATCH_SIZE) {
-        hasMore = false;
-      } else {
-        start += BATCH_SIZE;
-        
-        // ✅ Pequeña pausa para no saturar la UI (opcional pero recomendado)
-        await new Promise(resolve => setTimeout(resolve, 50));
+      // ✅ Preparar siguiente lote
+      start += BATCH_SIZE;
+      loteActual++;
+      
+      // ✅ Pequeña pausa para no saturar (opcional)
+      if (start < totalDB) {
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
     }
     
-    console.log(`✅ Total cargado: ${allRecords.length} de ${totalRegistros} registros`);
+    console.log('\n' + '='.repeat(60));
+    console.log(`✅ CARGA COMPLETADA: ${registrosCargados.toLocaleString()} de ${totalDB.toLocaleString()} registros`);
+    console.log('='.repeat(60));
     
+    // ===================================================================
+    // 📊 PASO 3: ANALIZAR DATOS Y MOSTRAR RESULTADOS
+    // ===================================================================
     if (!allRecords || allRecords.length === 0) {
       searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con CuentaContrato válida</div>';
       return;
     }
     
-    // ✅ Analizar duplicados de CuentaContrato
+    console.log('\n🔍 [PASO 3] Analizando duplicados de CuentaContrato...');
     const analisis = analizarSuministrosMultiples(allRecords);
     
-    // ✅ Mostrar resumen + interfaz de filtros
+    console.log('✅ Análisis completado. Generando interfaz...');
     searchGrid.innerHTML = generarHTMLResumenSuministros(analisis);
-    
-    // ✅ Mostrar tabla de resultados
     resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
-    
-    // ✅ Guardar datos para exportación y filtros
     window.datosSuministrosMultiples = analisis;
     
-    console.log('✅ Análisis completado exitosamente');
+    console.log('\n✅ INTERFAZ CARGADA EXITOSAMENTE');
+    console.log('='.repeat(60));
     
   } catch (err) {
-    console.error('❌ Error cargando Suministros Múltiples OS:', err);
+    console.error('\n❌ ERROR CRÍTICO EN CARGA:', err);
+    console.error('Stack:', err.stack);
+    
     searchGrid.innerHTML = `
       <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
         <div class="result-header">❌ Error de Análisis</div>
         <p style="color: #666;">${err.message || 'Error desconocido al analizar suministros'}</p>
         <p style="color: #999; font-size: 13px; margin-top: 10px;">
-          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
+          💡 Verifica la consola para logs detallados de depuración
         </p>
       </div>
     `;
   }
 }
-
-
 
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
