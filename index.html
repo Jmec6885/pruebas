@@ -25467,6 +25467,7 @@ async function cargarInterfazSuministrosMultiples() {
   }
 }
 
+
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
 // ===================================================================
@@ -25828,85 +25829,6 @@ function exportarSuministrosMultiplesExcel() {
   }
 }
 
-// ===================================================================
-// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS
-// ===================================================================
-async function cargarInterfazSuministrosMultiples() {
-  console.log('📋 Cargando interfaz de Suministros con Múltiples OS...');
-  
-  const searchGrid = document.getElementById('searchGrid');
-  const resultsContainer = document.getElementById('searchResults');
-  
-  // ✅ Validación de rol (seguridad adicional)
-  if (!['Administrador', 'Despacho'].includes(currentUser?.rol)) {
-    resultsContainer.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-        <div class="result-header">❌ Acceso Denegado</div>
-        <p style="text-align: center; color: #666;">
-          Esta funcionalidad solo está disponible para roles Administrador y Despacho.
-        </p>
-      </div>
-    `;
-    return;
-  }
-  
-  // Pantalla de carga
-  searchGrid.innerHTML = `
-    <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
-      <h3 style="margin: 0 0 10px 0; color: #1565c0;">📋 Analizando Suministros con Múltiples OS</h3>
-      <p style="margin: 0; color: #666;">Escaneando base de datos para detectar suministros duplicados...</p>
-      <div class="loading" style="display: block; margin: 20px auto;"></div>
-      <p style="color: #666; font-size: 13px; margin-top: 10px;">
-        ⚠️ Este análisis puede tardar 10-20 segundos con 10k+ registros
-      </p>
-    </div>
-  `;
-  resultsContainer.innerHTML = '';
-  
-  try {
-    // ✅ Cargar TODAS las OS Pendientes (solo campos necesarios para optimizar)
-    const { data: osPendientes, error, count } = await supabaseClient
-      .from('OS Pendientes')
-      .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."', { count: 'exact' })
-      .not('CuentaContrato', 'is', null)
-      .not('CuentaContrato', 'eq', '')
-      .not('CuentaContrato', 'eq', '0')
-      .not('CuentaContrato', 'eq', '200000000000');
-    
-    if (error) throw error;
-    
-    console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
-    
-    if (!osPendientes || osPendientes.length === 0) {
-      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con CuentaContrato válida</div>';
-      return;
-    }
-    
-    // ✅ Analizar duplicados de CuentaContrato
-    const analisis = analizarSuministrosMultiples(osPendientes);
-    
-    // ✅ Mostrar resumen + interfaz de filtros
-    searchGrid.innerHTML = generarHTMLResumenSuministros(analisis);
-    
-    // ✅ Mostrar tabla de resultados
-    resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
-    
-    // ✅ Guardar datos para exportación y filtros
-    window.datosSuministrosMultiples = analisis;
-    
-  } catch (err) {
-    console.error('❌ Error cargando Suministros Múltiples OS:', err);
-    searchGrid.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-        <div class="result-header">❌ Error de Análisis</div>
-        <p style="color: #666;">${err.message || 'Error desconocido al analizar suministros'}</p>
-        <p style="color: #999; font-size: 13px; margin-top: 10px;">
-          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
-        </p>
-      </div>
-    `;
-  }
-}
 
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
