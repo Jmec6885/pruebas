@@ -21791,6 +21791,25 @@ function verificarDatosOffline() {
 
 
 /**
+ * CONFIGURACIÓN MAESTRA DE ACCESOS
+ * Define qué roles pueden entrar a qué módulos.
+ */
+const PERMISOS_MODULOS = {
+    'cargar_asignaciones': ['Administrador', 'Despacho'],
+    'mapa_rutas':          ['Administrador', 'Despacho'],
+    'usuarios':            ['Administrador'],
+    'detalle_os':          ['Administrador', 'Supervisor'],
+    'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'],
+    'kml_ruta':            ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
+    'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
+    'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura', 'Poda'],
+    'tx_y_cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda', 'Despacho'],
+    'suministros_multiples': ['Administrador', 'Despacho']  // ✅ CORREGIDO: nombre simple + coma anterior
+};
+
+
+/**
  * Selecciona y valida el acceso a las tablas/módulos
  * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración + Verificación robusta de contenedores
  */
