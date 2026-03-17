@@ -5330,12 +5330,20 @@ async function logout() {
     </button>
   </div>
         ${currentUser.rol === 'Administrador' ? `
-        <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
-            <label style="font-weight: 600; color: #2d3748;">💰 Gestión de Deuda:</label>
-            <button onclick="mostrarActualizacionDeuda()" 
-                    style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
-                💰 Actualizar Deuda Masiva
-            </button>
+    <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0;">
+      <label style="font-weight: 600; color: #2d3748;">🔄 Gestión de Estados:</label>
+      <button onclick="mostrarActualizacionEstados()" 
+              style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+        🔄 Actualizar Estados ATOMO Masivo
+      </button>
+    </div>
+    
+    <div class="form-group" style="margin-top: 15px;">
+      <label style="font-weight: 600; color: #2d3748;">💰 Gestión de Deuda:</label>
+      <button onclick="mostrarActualizacionDeuda()" 
+              style="margin-top: 10px; width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+        💰 Actualizar Deuda Masiva
+      </button>
         </div>` : ''}
     `;
     return;
@@ -6115,8 +6123,173 @@ async function procesarArchivoDeuda() {
 
 
 // ===================================================================
-// 💰 EJECUTAR ACTUALIZACIÓN EN SUPABASE - VERSIÓN OPTIMIZADA (10-50x MÁS RÁPIDA)
+// 📊 PROCESAR ARCHIVO DE ESTADOS Y VALIDAR FORMATO
 // ===================================================================
+function parsearEstado(valor) {
+  if (valor === null || valor === undefined || valor === '') return 'REGISTRADA';
+  let str = String(valor).trim().toUpperCase();
+  
+  // Normalizar estados comunes
+  if (['REGISTRADA', 'REGISTRADO', 'REGISTRO'].some(v => str.includes(v))) return 'REGISTRADA';
+  if (['ASIGNADA', 'ASIGNADO', 'ASIGNACION'].some(v => str.includes(v))) return 'ASIGNADA';
+  if (['EJECUTADA', 'EJECUTADO', 'EJECUCION', 'REALIZADA'].some(v => str.includes(v))) return 'EJECUTADA';
+  if (['CERRADA', 'CERRADO', 'FINALIZADA', 'COMPLETADA'].some(v => str.includes(v))) return 'CERRADA';
+  if (['ANULADA', 'CANCELADA', 'ELIMINADA'].some(v => str.includes(v))) return 'ANULADA';
+  
+  return str; // Retornar valor original si no coincide con patrones conocidos
+}
+
+async function procesarArchivoEstados() {
+  console.group('🔄 ==========================================');
+  console.log('🔄 PROCESAR ACTUALIZACIÓN DE ESTADOS - INICIANDO');
+  
+  const fileInput = document.getElementById('archivoEstados');
+  const resultadoDiv = document.getElementById('resultadoEstados');
+  
+  if (!fileInput?.files?.[0]) {
+    alert('⚠️ Por favor selecciona un archivo Excel o CSV');
+    console.groupEnd();
+    return;
+  }
+  
+  const file = fileInput.files[0];
+  const soloCoincidencias = document.getElementById('soloActualizarCoincidenciasEstados')?.checked ?? true;
+  const registrarNoCoincidencias = document.getElementById('establecerRegistradaNoCoincidencias')?.checked ?? false;
+  
+  if (resultadoDiv) {
+    resultadoDiv.innerHTML = `
+      <div style="text-align: center; padding: 20px;">
+        <div class="loading" style="margin: 0 auto 10px;"></div>
+        <p style="color: #1565c0; font-weight: 600;">Leyendo archivo: <strong>${file.name}</strong>...</p>
+      </div>
+    `;
+  }
+  
+  try {
+    // ✅ Leer archivo Excel/CSV
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const datos = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+    
+    console.log(`📊 Filas leídas del archivo: ${datos.length}`);
+    
+    // ✅ Validar encabezados
+    const encabezados = datos[0]?.map(h => String(h).trim().toLowerCase()) || [];
+    const tieneOSATMO = encabezados.some(h => h.includes('osatmo') || h.includes('os') || h.includes('orden'));
+    const tieneEstado = encabezados.some(h => h.includes('estado') && h.includes('atomo'));
+    
+    if (!tieneOSATMO || !tieneEstado) {
+      throw new Error(
+        `El archivo debe tener columnas "OSATMO" y "Estado_ATOMO".\n` +
+        `Columnas detectadas: ${encabezados.join(', ')}\n\n` +
+        `💡 Consejo: Usa exactamente estas columnas en la primera fila:\n` +
+        `OSATMO | Estado_ATOMO`
+      );
+    }
+    
+    // ✅ Procesar datos válidos
+    const actualizaciones = [];
+    const erroresParseo = [];
+    
+    // Encontrar índices dinámicamente
+    const idxOSATMO = encabezados.findIndex(h => h.includes('osatmo') || h.includes('os') || h.includes('orden'));
+    const idxEstado = encabezados.findIndex(h => h.includes('estado') && h.includes('atomo'));
+    
+    for (let i = 1; i < datos.length; i++) {
+      const fila = datos[i];
+      if (!fila || fila.length < 2) continue;
+      
+      const osatomoRaw = fila[idxOSATMO];
+      const estadoRaw = fila[idxEstado];
+      
+      if (!osatomoRaw || String(osatomoRaw).trim() === '') {
+        erroresParseo.push({ fila: i + 1, osatomo_raw: osatomoRaw, estado_raw: estadoRaw, motivo: 'OSATMO vacío' });
+        continue;
+      }
+      
+      const osatomo = String(osatomoRaw).trim().replace(/[^A-Z0-9\-]/gi, '').toUpperCase();
+      const estado = parsearEstado(estadoRaw);
+      
+      actualizaciones.push({ OSATMO: osatomo, Estado_ATOMO: estado });
+    }
+    
+    console.log(`✅ Datos válidos: ${actualizaciones.length} | Errores: ${erroresParseo.length}`);
+    
+    if (actualizaciones.length === 0) {
+      throw new Error('No se encontraron datos válidos para actualizar');
+    }
+    
+    // ✅ Mostrar preview con estadísticas de estados
+    const conteoEstados = {};
+    actualizaciones.forEach(item => {
+      conteoEstados[item.Estado_ATOMO] = (conteoEstados[item.Estado_ATOMO] || 0) + 1;
+    });
+    
+    let html = `
+      <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 4px solid #2196f3;">
+        <strong style="color: #1565c0;">📊 Resumen del archivo:</strong><br>
+        • Filas totales: ${datos.length - 1}<br>
+        • Datos válidos: ${actualizaciones.length}<br>
+        • Errores de parseo: ${erroresParseo.length}<br>
+        • Estados a actualizar:<br>
+        ${Object.entries(conteoEstados).map(([estado, count]) => 
+          `  - <strong>${estado}</strong>: ${count.toLocaleString()} OS`
+        ).join('<br>')}
+      </div>
+    `;
+    
+    // ✅ Mostrar errores si existen
+    if (erroresParseo.length > 0) {
+      html += `
+        <div style="margin-top: 15px; background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #ff9800; font-size: 13px;">
+          <strong>⚠️ Errores detectados:</strong><br>
+          ${erroresParseo.slice(0, 5).map(e => `Fila ${e.fila}: ${e.motivo}`).join('<br>')}
+          ${erroresParseo.length > 5 ? `<br>+ ${erroresParseo.length - 5} errores más` : ''}
+        </div>
+      `;
+    }
+    
+    // ✅ Botón de confirmación
+    html += `
+      <div style="margin-top: 20px; text-align: center;">
+        <button class="btn" 
+                onclick="ejecutarActualizacionEstados(${JSON.stringify(actualizaciones).replace(/"/g, '&quot;')}, ${soloCoincidencias}, ${registrarNoCoincidencias})"
+                style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); padding: 12px 24px; font-size: 16px;">
+          ✅ Confirmar y Actualizar (${actualizaciones.length} registros)
+        </button>
+      </div>
+    `;
+    
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = html;
+    }
+    
+    console.groupEnd();
+    
+  } catch (err) {
+    console.error('❌ Error procesando archivo:', err);
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="background: #fee2e2; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444;">
+          <strong style="color: #b91c1c;">❌ Error de formato</strong><br>
+          <p style="color: #666; margin: 5px 0 0 0;">${err.message || 'Error desconocido'}</p>
+          <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; font-size: 13px;">
+            <strong>📋 Formato correcto:</strong><br>
+            • Columna 1: <code>OSATMO</code> (número de OS)<br>
+            • Columna 2: <code>Estado_ATOMO</code> (REGISTRADA, ASIGNADA, EJECUTADA, CERRADA)<br><br>
+            <strong>Ejemplo:</strong><br>
+            <code>OSATMO,Estado_ATOMO<br>11070321,ASIGNADA<br>11196541,REGISTRADA</code>
+          </div>
+        </div>
+      `;
+    }
+    console.groupEnd();
+  }
+}
+
+
+
 // ===================================================================
 // 💰 EJECUTAR ACTUALIZACIÓN DE DEUDA - VERSIÓN CORREGIDA (SIN UPSERT)
 // ===================================================================
@@ -6280,6 +6453,174 @@ async function ejecutarActualizacionDeuda(actualizaciones, soloCoincidencias, ce
           <p style="color: #666; margin: 10px 0 0 0;">${err.message || 'Error desconocido durante la actualización'}</p>
           <p style="color: #d32f2f; font-size: 13px; margin-top: 10px;">
             💡 Consejo: Verifica que tu archivo tenga columnas "OSATMO" y "Deuda" exactamente así.
+          </p>
+        </div>
+      `;
+    }
+    console.groupEnd();
+  }
+}
+
+
+// ===================================================================
+// ⚡ EJECUTAR ACTUALIZACIÓN MASIVA DE ESTADOS (OPTIMIZADA PARA 30K+ REGISTROS)
+// ===================================================================
+async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, registrarNoCoincidencias) {
+  console.group('🔄 EJECUTANDO ACTUALIZACIÓN DE ESTADOS EN SUPABASE');
+  console.log('🔄 Total OS a procesar:', actualizaciones.length);
+  
+  const resultadoDiv = document.getElementById('resultadoEstados');
+  try {
+    // ✅ Mostrar progreso
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <div class="loading" style="margin: 0 auto 10px;"></div>
+          <p style="color: #1565c0; font-weight: 600; font-size: 16px;">
+            ⚡ Actualizando ${actualizaciones.length} registros...
+          </p>
+          <p style="color: #666; margin-top: 5px;">Progreso: <span id="progresoEstados">0%</span></p>
+        </div>
+      `;
+    }
+    
+    let actualizadas = 0;
+    let errores = 0;
+    const BATCH_SIZE = 100; // Tamaño óptimo para evitar timeouts
+    
+    // ✅ Procesar en lotes con paralelismo controlado
+    for (let i = 0; i < actualizaciones.length; i += BATCH_SIZE) {
+      const lote = actualizaciones.slice(i, i + BATCH_SIZE);
+      
+      // ✅ Ejecutar actualizaciones en paralelo (máx 5 concurrentes)
+      const promesas = lote.map(item => 
+        supabaseClient
+          .from('OS Pendientes')
+          .update({ Estado_ATOMO: item.Estado_ATOMO })
+          .eq('OSATMO', item.OSATMO)
+          .then(res => ({ success: !res.error }))
+          .catch(() => ({ success: false }))
+      );
+      
+      // ✅ Ejecutar en lotes de 5 para evitar sobrecarga
+      for (let j = 0; j < promesas.length; j += 5) {
+        const lotePromesas = promesas.slice(j, j + 5);
+        const resultados = await Promise.all(lotePromesas);
+        
+        resultados.forEach(resultado => {
+          if (resultado.success) actualizadas++;
+          else errores++;
+        });
+      }
+      
+      // ✅ Actualizar progreso SIN retrasos artificiales
+      const porcentaje = Math.min(100, Math.round(((i + lote.length) / actualizaciones.length) * 100));
+      if (resultadoDiv) {
+        document.getElementById('progresoEstados').textContent = `${porcentaje}%`;
+      }
+    }
+    
+    // ✅ Opción: Poner estado "REGISTRADA" a OS no coincidentes
+    if (registrarNoCoincidencias && !soloCoincidencias) {
+      console.log('🔄 Estableciendo estado = REGISTRADA para OS no incluidas...');
+      
+      if (resultadoDiv) {
+        resultadoDiv.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div class="loading" style="margin: 0 auto 10px;"></div>
+            <p style="color: #1565c0; font-weight: 600;">Configurando estado REGISTRADA para OS restantes...</p>
+          </div>
+        `;
+      }
+      
+      // ✅ Obtener OSATMOs del archivo
+      const osIdsEnArchivo = actualizaciones.map(a => a.OSATMO);
+      
+      // ✅ Actualizar en lotes de 500 IDs (límite de URL de Supabase)
+      const BATCH_SIZE_IDS = 500;
+      let actualizadasCero = 0;
+      
+      // ✅ Obtener todos los OSATMO existentes (solo IDs)
+      const {  todasOS, error: errorOS } = await supabaseClient
+        .from('OS Pendientes')
+        .select('OSATMO', { head: false, count: null })
+        .not('OSATMO', 'is', null);
+      
+      if (!errorOS && todasOS) {
+        // ✅ Filtrar OS que NO están en el archivo
+        const osParaRegistrar = todasOS
+          .map(os => os.OSATMO)
+          .filter(osatmo => osatmo && !osIdsEnArchivo.includes(osatmo));
+        
+        console.log(`📊 OS para poner en REGISTRADA: ${osParaRegistrar.length} de ${todasOS.length} totales`);
+        
+        // ✅ Actualizar en lotes
+        for (let i = 0; i < osParaRegistrar.length; i += BATCH_SIZE_IDS) {
+          const loteIDs = osParaRegistrar.slice(i, i + BATCH_SIZE_IDS);
+          
+          try {
+            const { error: errorRegistro } = await supabaseClient
+              .from('OS Pendientes')
+              .update({ Estado_ATOMO: 'REGISTRADA' })
+              .in('OSATMO', loteIDs);
+            
+            if (!errorRegistro) {
+              actualizadasCero += loteIDs.length;
+            } else {
+              console.warn(`⚠️ Error actualizando lote de REGISTRADA:`, errorRegistro.message);
+            }
+          } catch (err) {
+            console.warn(`⚠️ Error crítico en lote de REGISTRADA:`, err.message);
+          }
+        }
+        
+        console.log(`✅ Estado REGISTRADA aplicado a ${actualizadasCero} OS`);
+        actualizadas += actualizadasCero;
+      }
+    }
+    
+    console.log(`✅ Actualización completada: ${actualizadas} actualizadas, ${errores} errores`);
+    console.groupEnd();
+    
+    // ✅ Mostrar resultado final
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="background: ${errores === 0 ? '#e3f2fd' : '#fff3cd'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${errores === 0 ? '#2196f3' : '#ff9800'};">
+          <strong style="color: ${errores === 0 ? '#1565c0' : '#e65100'}; font-size: 18px;">
+            ${errores === 0 ? '✅' : '⚠️'} Actualización ${errores === 0 ? 'Completada' : 'Parcialmente Completada'}
+          </strong>
+          <div style="margin-top: 15px; display: grid; gap: 10px; font-size: 14px;">
+            <div>✅ Actualizadas: <strong>${actualizadas.toLocaleString()}</strong></div>
+            ${errores > 0 ? `<div style="color: #d32f2f;">❌ Errores: <strong>${errores.toLocaleString()}</strong></div>` : ''}
+            <div style="color: #666; font-size: 13px; margin-top: 10px;">
+              ⚡ Tiempo total: ${((Date.now() - performance.now()) / 1000).toFixed(1)} segundos
+            </div>
+          </div>
+          ${errores > 0 ? `
+            <div style="background: #ffebee; padding: 10px; border-radius: 6px; margin-top: 15px; font-size: 13px; color: #c62828;">
+              ⚠️ Los errores generalmente ocurren por OS que no existen en la base de datos.
+              Verifica que los números de OSATMO sean correctos en tu archivo.
+            </div>
+          ` : ''}
+          <div style="text-align: center; margin-top: 20px;">
+            <button class="btn" onclick="mostrarActualizacionEstados()" 
+                    style="background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%); padding: 10px 20px;">
+              ➕ Nueva Actualización
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+  } catch (err) {
+    console.error('❌ Error crítico en ejecutarActualizacionEstados:', err);
+    if (resultadoDiv) {
+      resultadoDiv.innerHTML = `
+        <div style="background: #fee2e2; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444;">
+          <strong style="color: #b91c1c; font-size: 18px;">❌ Error Fatal</strong>
+          <p style="color: #666; margin: 10px 0 0 0;">${err.message || 'Error desconocido durante la actualización'}</p>
+          <p style="color: #d32f2f; font-size: 13px; margin-top: 10px;">
+            💡 Consejo: Intenta con un archivo más pequeño primero para verificar formato.
           </p>
         </div>
       `;
@@ -24769,6 +25110,88 @@ function generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes) {
   `;
   
   return html;
+}
+
+// ===================================================================
+// 🔄 MOSTRAR INTERFAZ DE ACTUALIZACIÓN MASIVA DE ESTADOS ATOMO
+// ===================================================================
+function mostrarActualizacionEstados() {
+  console.log('🔄 Mostrando interfaz de Actualización de Estados ATOMO...');
+  
+  const resultsContainer = document.getElementById('searchResults');
+  resultsContainer.innerHTML = `
+    <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3;">
+      <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
+      
+      <div class="result-header">🔄 Actualizar Estados ATOMO - OS Pendientes</div>
+      
+      <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 15px 0; border-left: 4px solid #ffc107;">
+        <strong>⚠️ ADVERTENCIA:</strong><br>
+        <span style="color: #666; font-size: 14px;">
+          Esta operación <strong>REEMPLAZARÁ</strong> todos los valores de la columna "Estado_ATOMO"<br>
+          en la tabla "OS Pendientes" para las OS que coincidan con el archivo.<br><br>
+          • Los OS que NO estén en el archivo mantendrán su estado actual<br>
+          • Los OS que SÍ estén en el archivo tendrán su estado actualizado<br>
+          • Se recomienda hacer backup antes de ejecutar
+        </span>
+      </div>
+      
+      <div style="background: #f3e5f5; padding: 15px; border-radius: 10px; margin: 15px 0;">
+        <strong>📋 Formato del archivo Excel:</strong><br>
+        <div style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.8;">
+          • <strong>Archivo:</strong> Excel (.xlsx) o CSV<br>
+          • <strong>Columna A:</strong> <code>OSATMO</code> (número de OS, texto)<br>
+          • <strong>Columna B:</strong> <code>Estado_ATOMO</code> (texto: REGISTRADA, ASIGNADA, EJECUTADA, CERRADA)<br><br>
+          <strong>Ejemplo:</strong><br>
+          <code style="background: #fff; padding: 8px; display: block; border-radius: 4px; font-family: monospace;">
+OSATMO,Estado_ATOMO
+11070321,ASIGNADA
+11196541,REGISTRADA
+11079036,EJECUTADA
+          </code>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label style="font-weight: 600; display: block; margin-bottom: 10px;">📁 Seleccionar archivo de estados:</label>
+        <input type="file" id="archivoEstados" accept=".xlsx,.xls,.csv"
+               style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e1e5e9; background: white;">
+        <div style="color: #666; font-size: 13px; margin-top: 5px;">
+          Sin archivos seleccionados
+        </div>
+      </div>
+      
+      <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin: 15px 0;">
+        <strong>💡 Opciones:</strong><br>
+        <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer;">
+          <input type="checkbox" id="soloActualizarCoincidenciasEstados" checked style="width: 18px; height: 18px;">
+          <span style="font-size: 14px;">Actualizar SOLO las OS que estén en el archivo (recomendado)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer;">
+          <input type="checkbox" id="establecerRegistradaNoCoincidencias" style="width: 18px; height: 18px;">
+          <span style="font-size: 14px;">Poner estado = "REGISTRADA" a las OS que NO estén en el archivo</span>
+        </label>
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px;">
+        <button class="btn" onclick="procesarArchivoEstados()"
+                style="font-size: 16px; padding: 15px 30px; background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);">
+          💾 Actualizar Estados en BD
+        </button>
+      </div>
+      
+      <div id="resultadoEstados" style="margin-top: 20px;"></div>
+    </div>
+  `;
+  
+  // Evento para mostrar nombre del archivo seleccionado
+  const fileInput = document.getElementById('archivoEstados');
+  if (fileInput) {
+    fileInput.addEventListener('change', function(e) {
+      const fileName = e.target.files[0]?.name || 'Sin archivos seleccionados';
+      this.nextElementSibling.textContent = fileName;
+    });
+  }
 }
 
 
