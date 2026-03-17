@@ -21880,35 +21880,31 @@ function seleccionarTabla(tableName, retryCount = 0) {
     // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
         case 'cargar_asignaciones':
-            const tableSel = document.getElementById('tableSelectionSection');
-            const searchSec = document.getElementById('searchSection');
-            if (tableSel) tableSel.style.display = 'none';
-            if (searchSec) {
-                searchSec.style.display = 'block';
-                searchSec.classList.remove('hidden');
-            }
+            // ✅ Ocultar menú y mostrar sección de búsqueda
+            document.getElementById('tableSelectionSection')?.style.display = 'none';
+            document.getElementById('searchSection')?.style.display = 'block';
+            document.getElementById('searchSection')?.classList.remove('hidden');
             if (searchGrid) searchGrid.innerHTML = '';
             cargarInterfazAsignaciones();
-            return;
+            return;  // ✅ Detener ejecución aquí
+            
         case 'mapa_rutas':
             console.log("📍 Inicializando Mapa de Rutas...");
             break;
-// ✅ NUEVO CASO: Suministros Múltiples OS (AGREGAR ESTE BLOQUE)
-    case 'suministros_multiples':
-        console.log("📋 Inicializando Suministros Múltiples OS...");
-        const tableSel = document.getElementById('tableSelectionSection');
-        const searchSec = document.getElementById('searchSection');
-        if (tableSel) tableSel.style.display = 'none';
-        if (searchSec) {
-            searchSec.style.display = 'block';
-            searchSec.classList.remove('hidden');
-        }
-        if (searchGrid) searchGrid.innerHTML = '';
-        cargarInterfazSuministrosMultiples();
-        return;
-    }
+            
+        // ✅ NUEVO CASO: Suministros Múltiples OS
+        case 'suministros_multiples':
+            console.log("📋 Inicializando Suministros Múltiples OS...");
+            // ✅ Ocultar menú y mostrar sección de búsqueda
+            document.getElementById('tableSelectionSection')?.style.display = 'none';
+            document.getElementById('searchSection')?.style.display = 'block';
+            document.getElementById('searchSection')?.classList.remove('hidden');
+            if (searchGrid) searchGrid.innerHTML = '';
+            cargarInterfazSuministrosMultiples();
+            return;  // ✅ Detener ejecución aquí
+    } // ← ✅ ¡CRÍTICO! Cerrar el bloque switch aquí
 
-    // 3. ACTUALIZAR INTERFAZ VISUAL
+    // 3. ACTUALIZAR INTERFAZ VISUAL (solo para casos que NO tienen return)
     const config = tableConfigs[tableName];
     if (!config) {
         console.error("❌ Configuración no encontrada para:", tableName);
@@ -21917,7 +21913,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
     }
 
     selectedTable = tableName;
-    
+
     // Actualizar título
     const searchTitle = document.getElementById('searchTitle');
     if (searchTitle) {
@@ -21928,16 +21924,11 @@ function seleccionarTabla(tableName, retryCount = 0) {
     generarCamposBusqueda(config);
 
     // Mostrar sección de búsqueda y ocultar menú
-    const tableSelection = document.getElementById('tableSelectionSection');
-    const searchSection = document.getElementById('searchSection');
-    
-    if (tableSelection) tableSelection.style.display = 'none';
-    if (searchSection) {
-        searchSection.style.display = 'block';
-        searchSection.classList.remove('hidden');
-        console.log('✅ searchSection visible y activo');
-    }
-}
+    document.getElementById('tableSelectionSection')?.style.display = 'none';
+    document.getElementById('searchSection')?.style.display = 'block';
+    document.getElementById('searchSection')?.classList.remove('hidden');
+    console.log('✅ searchSection visible y activo');
+} // ← ✅ ¡CRÍTICO! Cerrar la función aquí
 
 
 
