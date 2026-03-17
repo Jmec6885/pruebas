@@ -5506,12 +5506,40 @@ if (selectedTable === 'tx_y_cortes') {
 
 
 
-    function volverATablas() {
-      document.getElementById('searchSection').style.display = 'none';
-      document.getElementById('tableSelectionSection').style.display = 'block';
-      document.getElementById('searchResults').innerHTML = '';
-      selectedTable = null;
-    }
+   // ===================================================================
+// 🔙 FUNCIÓN ÚNICA: VOLVER AL MENÚ PRINCIPAL (REVISADA)
+// ===================================================================
+function volverATablas() {
+    console.log("🔙 Restaurando interfaz y volviendo al menú principal...");
+
+    // 1. Ocultar la sección de búsqueda/resultados (donde están las tablas)
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) {
+        searchSection.style.display = 'none';
+    }
+
+    // 2. Mostrar el menú principal de selección de tablas
+    const menuPrincipal = document.getElementById('tableSelectionSection');
+    if (menuPrincipal) {
+        menuPrincipal.style.display = 'block';
+    }
+
+    // 3. Limpiar los contenedores de datos para que no se acumulen
+    // Limpia el resumen (searchGrid) y la tabla de resultados (searchResults)
+    const searchGrid = document.getElementById('searchGrid');
+    const searchResults = document.getElementById('searchResults');
+    
+    if (searchGrid) searchGrid.innerHTML = '';
+    if (searchResults) searchResults.innerHTML = '';
+
+    // 4. Resetear variables de control de estado
+    selectedTable = null; 
+    // Si usas datos de suministros múltiples, también los reseteamos aquí
+    window.datosSuministrosMultiples = null;
+
+    // Forzar el scroll hacia arriba para que el usuario vea el menú desde el inicio
+    window.scrollTo(0, 0);
+}
 
 
 
@@ -25201,42 +25229,56 @@ OSATMO,Estado_ATOMO
 }
 
 // ===================================================================
-// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS
+// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS (VERSIÓN FINAL INTEGRADA)
 // ===================================================================
 async function cargarInterfazSuministrosMultiples() {
   console.log('📋 Cargando interfaz de Suministros con Múltiples OS...');
   
+  // 1. Referencias a todos los contenedores necesarios
   const searchGrid = document.getElementById('searchGrid');
   const resultsContainer = document.getElementById('searchResults');
-  
-  // ✅ Validación de rol (seguridad adicional)
+  const tableSelectionSection = document.getElementById('tableSelectionSection');
+  const searchSection = document.getElementById('searchSection'); // <-- Contenedor padre de resultados
+
+  // ✅ 2. CAMBIO DE VISTA: Ocultar menú y mostrar sección de búsqueda
+  if (tableSelectionSection) {
+      tableSelectionSection.style.display = 'none';
+  }
+  if (searchSection) {
+      searchSection.style.display = 'block'; // Hacemos visible el área de trabajo
+  }
+
+  // ✅ 3. VALIDACIÓN DE ROL (Seguridad de acceso)
   if (!['Administrador', 'Despacho'].includes(currentUser?.rol)) {
-    resultsContainer.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-        <div class="result-header">❌ Acceso Denegado</div>
+    searchGrid.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 20px;">
+        <button class="btn btn-back" onclick="volverATablas()">← Volver al Menú</button>
+        <div class="result-header" style="color: #b91c1c; font-weight: bold; margin-top: 15px;">❌ Acceso Denegado</div>
         <p style="text-align: center; color: #666;">
-          Esta funcionalidad solo está disponible para roles Administrador y Despacho.
+          Esta funcionalidad solo está disponible para usuarios con rol Administrador o Despacho.
         </p>
       </div>
     `;
+    if (resultsContainer) resultsContainer.innerHTML = '';
     return;
   }
   
-  // Pantalla de carga
+  // ✅ 4. PANTALLA DE CARGA INICIAL
   searchGrid.innerHTML = `
-    <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
-      <h3 style="margin: 0 0 10px 0; color: #1565c0;">📋 Analizando Suministros con Múltiples OS</h3>
-      <p style="margin: 0; color: #666;">Escaneando base de datos para detectar suministros duplicados...</p>
-      <div class="loading" style="display: block; margin: 20px auto;"></div>
-      <p style="color: #666; font-size: 13px; margin-top: 10px;">
-        ⚠️ Este análisis puede tardar 10-20 segundos con 10k+ registros
+    <div style="background: #e3f2fd; padding: 25px; border-radius: 12px; text-align: center; border-left: 5px solid #2196f3; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+      <button class="btn btn-back" onclick="volverATablas()" style="float: left; background: #64748b; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer;">← Volver</button>
+      <h3 style="margin: 0 0 10px 0; color: #1565c0; font-size: 20px;">📊 Analizando Suministros con Múltiples OS</h3>
+      <p style="margin: 0; color: #475569;">Conectando con Supabase y escaneando registros...</p>
+      <div class="loading" style="display: block; margin: 20px auto; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite;"></div>
+      <p style="color: #64748b; font-size: 12px; font-style: italic;">
+        ⚠️ Procesando grandes volúmenes de datos, por favor espere...
       </p>
     </div>
   `;
-  resultsContainer.innerHTML = '';
+  if (resultsContainer) resultsContainer.innerHTML = '';
   
   try {
-    // ✅ Cargar TODAS las OS Pendientes (solo campos necesarios para optimizar)
+    // ✅ 5. CONSULTA OPTIMIZADA A SUPABASE
     const { data: osPendientes, error, count } = await supabaseClient
       .from('OS Pendientes')
       .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."', { count: 'exact' })
@@ -25247,38 +25289,52 @@ async function cargarInterfazSuministrosMultiples() {
     
     if (error) throw error;
     
-    console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
+    console.log(`✅ Datos obtenidos: ${osPendientes.length} registros analizados.`);
     
     if (!osPendientes || osPendientes.length === 0) {
-      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con CuentaContrato válida</div>';
+      searchGrid.innerHTML = `
+        <div class="result-card" style="padding: 20px; text-align: center;">
+            <button class="btn btn-back" onclick="volverATablas()" style="margin-bottom: 20px;">← Volver al Menú</button>
+            <p style="color: #ef4444; font-weight: bold;">⚠️ No se encontraron Órdenes Pendientes con Cuenta Contrato válida.</p>
+        </div>`;
       return;
     }
     
-    // ✅ Analizar duplicados de CuentaContrato
+    // ✅ 6. PROCESAMIENTO LOGICO DE DUPLICADOS
     const analisis = analizarSuministrosMultiples(osPendientes);
     
-    // ✅ Mostrar resumen + interfaz de filtros
+    // ✅ 7. ASEGURAR VISIBILIDAD DE CONTENEDORES INTERNOS
+    searchGrid.style.display = 'block';
+    if (resultsContainer) {
+        resultsContainer.style.display = 'block';
+        resultsContainer.classList.remove('hidden');
+    }
+    
+    // ✅ 8. INYECCIÓN DE HTML (RESUMEN Y TABLA)
     searchGrid.innerHTML = generarHTMLResumenSuministros(analisis);
+    if (resultsContainer) {
+        resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
+    }
     
-    // ✅ Mostrar tabla de resultados
-    resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
-    
-    // ✅ Guardar datos para exportación y filtros
+    // ✅ 9. PERSISTENCIA DE DATOS PARA FILTROS/EXPORTACIÓN
     window.datosSuministrosMultiples = analisis;
+    console.log('✅ Interfaz de Múltiples OS cargada exitosamente.');
     
   } catch (err) {
-    console.error('❌ Error cargando Suministros Múltiples OS:', err);
+    console.error('❌ Error Crítico en el Análisis:', err);
     searchGrid.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
-        <div class="result-header">❌ Error de Análisis</div>
-        <p style="color: #666;">${err.message || 'Error desconocido al analizar suministros'}</p>
-        <p style="color: #999; font-size: 13px; margin-top: 10px;">
-          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
-        </p>
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 20px;">
+        <button class="btn btn-back" onclick="volverATablas()">← Volver al Menú</button>
+        <div class="result-header" style="color: #b91c1c; font-weight: bold; margin-top: 15px;">❌ Error de Conexión / Análisis</div>
+        <p style="color: #666;">${err.message || 'Error desconocido al procesar los datos.'}</p>
+        <p style="font-size: 12px; color: #999; margin-top: 10px;">Verifique su conexión a internet o los permisos de la tabla en Supabase.</p>
       </div>
     `;
   }
 }
+
+
+
 
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
