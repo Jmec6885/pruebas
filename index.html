@@ -24037,7 +24037,13 @@ function debugCuentaContrato() {
 
 // ✅ Toggle de unidad individual
 function toggleUnidadMultiple(unidad) {
-  const checkbox = event.target;
+  // ✅ OBTENER CHECKBOX POR VALOR (NO POR event.target)
+  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
+  if (!checkbox) {
+    console.warn(`⚠️ Checkbox para unidad "${unidad}" no encontrado`);
+    return;
+  }
+  
   const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
   
   if (checkbox.checked) {
@@ -24051,16 +24057,7 @@ function toggleUnidadMultiple(unidad) {
   actualizarResumenUnidadesMultiple();
 }
 
-// ✅ Actualizar contador de unidades seleccionadas
-function actualizarContadorUnidadesMultiple() {
-  const contador = document.getElementById('contadorUnidadesSeleccionadas');
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
-  
-  if (contador) {
-    contador.textContent = `${unidadesSeleccionadas.size} seleccionada${unidadesSeleccionadas.size !== 1 ? 's' : ''}`;
-    contador.style.background = unidadesSeleccionadas.size > 0 ? '#10b981' : '#3b82f6';
-  }
-}
+
 
 // ✅ Actualizar resumen visual de unidades seleccionadas
 function actualizarResumenUnidadesMultiple() {
@@ -24158,18 +24155,18 @@ function seleccionarCoincidenciasBusqueda() {
     if (label.style.display !== 'none' && unidad.includes(busquedaLower)) {
       if (!checkbox.checked) {
         checkbox.checked = true;
-        toggleUnidadMultiple(checkbox.value);
+        toggleUnidadMultiple(checkbox.value); // ✅ Usa función corregida
         seleccionadas++;
       }
     }
   });
   
-  actualizarContadorUnidadesMultiple();
-  actualizarResumenUnidadesMultiple();
-  
-  alert(`✅ ${seleccionadas} unidades seleccionadas que coinciden con "${busqueda}"`);
+  if (seleccionadas === 0) {
+    alert(`⚠️ No se encontraron unidades que coincidan con "${busqueda}"`);
+  } else {
+    alert(`✅ ${seleccionadas} unidades seleccionadas que coinciden con "${busqueda}"`);
+  }
 }
-
 
 function limpiarSeleccionUnidades() {
   const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
@@ -25333,6 +25330,13 @@ async function cargarInterfazSuministrosMultiples() {
     </div>`;
     return;
   }
+
+// ✅ 🔑 CORRECCIÓN CRÍTICA: Establecer TÍTULO PRINCIPAL de la página
+  const searchTitle = document.getElementById('searchTitle');
+  if (searchTitle) {
+    searchTitle.innerHTML = '📋 Suministros con Múltiples OS'; // ← ¡ESTO RESUELVE EL PROBLEMA!
+    console.log('✅ Título principal actualizado a: Suministros con Múltiples OS');
+  }
   
   // Pantalla de carga con progreso
   searchGrid.innerHTML = `
@@ -25471,39 +25475,64 @@ async function cargarInterfazSuministrosMultiples() {
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
 // ===================================================================
+// ===================================================================
+// 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS (CORREGIDO: CuentaContrato + Medidor)
+// ===================================================================
 function analizarSuministrosMultiples(osPendientes) {
-  console.group('🔍 ANALIZANDO SUMINISTROS CON MÚLTIPLES OS');
+  console.group('🔍 ANALIZANDO SUMINISTROS CON MÚLTIPLES OS (Clave Única: CuentaContrato + Medidor)');
   
-  // ✅ Agrupar por CuentaContrato
+  // ✅ AGRUPAR POR CLAVE COMPUESTA ÚNICA: CuentaContrato + Medidor
   const agrupado = {};
+  
   osPendientes.forEach(os => {
-    const cc = String(os.CuentaContrato || '').trim();
-    if (!cc || cc === '0' || cc === '200000000000') return;
+    // ✅ Normalizar y validar CuentaContrato
+    const ccRaw = os.CuentaContrato;
+    const cc = String(ccRaw || '').trim().toUpperCase();
+    if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
     
-    if (!agrupado[cc]) agrupado[cc] = [];
-    agrupado[cc].push({
+    // ✅ Normalizar y validar Medidor (CLAVE PARA EVITAR FALSOS POSITIVOS)
+    const medidorRaw = os.Medidor;
+    const medidor = String(medidorRaw || '').trim().toUpperCase();
+    if (!medidor || medidor === '0' || medidor === 'N/A' || medidor === '') return;
+    
+    // ✅ CREAR CLAVE ÚNICA COMPUESTA (evita agrupar suministros diferentes con mismo NIC)
+    const claveUnica = `${cc}-${medidor}`;
+    
+    if (!agrupado[claveUnica]) {
+      agrupado[claveUnica] = {
+        CuentaContrato: cc,
+        Medidor: medidor,
+        lista: []
+      };
+    }
+    
+    // ✅ Almacenar datos completos del OS
+    agrupado[claveUnica].lista.push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
       Tipologia: os.Tipologia || 'N/A',
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
       Unidad: os.Unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      CuentaContrato: cc
+      CuentaContrato: cc,
+      Medidor: medidor
     });
   });
   
-  // ✅ Filtrar solo los que tienen 2+ OS
-  const multiples = Object.entries(agrupado)
-    .filter(([cc, osList]) => osList.length >= 2)
-    .map(([cc, osList]) => {
-      // Determinar color según unidades
-      const unidadesUnicas = [...new Set(osList.map(os => os.Unidad.trim()))];
+  console.log(`✅ Total de suministros únicos analizados (Cuenta+Medidor): ${Object.keys(agrupado).length}`);
+  
+  // ✅ FILTRAR SOLO SUMINISTROS CON 2+ OS (mismo CuentaContrato + mismo Medidor)
+  const multiples = Object.values(agrupado)
+    .filter(item => item.lista.length >= 2)
+    .map(item => {
+      const unidadesUnicas = [...new Set(item.lista.map(os => os.Unidad.trim()))];
       const mismoUnidad = unidadesUnicas.length === 1;
       
       return {
-        CuentaContrato: cc,
-        OS_Lista: osList.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
-        totalOS: osList.length,
+        CuentaContrato: item.CuentaContrato,
+        Medidor: item.Medidor, // ✅ INCLUIR Medidor en el resultado
+        OS_Lista: item.lista.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
+        totalOS: item.lista.length,
         unidadesUnicas: unidadesUnicas,
         mismoUnidad: mismoUnidad,
         color: mismoUnidad ? 'verde' : 'rojo',
@@ -25512,16 +25541,17 @@ function analizarSuministrosMultiples(osPendientes) {
     })
     .sort((a, b) => b.prioridad - a.prioridad || a.CuentaContrato.localeCompare(b.CuentaContrato));
   
-  // ✅ Estadísticas
+  // ✅ ESTADÍSTICAS
   const totalSuministros = multiples.length;
   const totalOSInvolucradas = multiples.reduce((sum, item) => sum + item.totalOS, 0);
   const suministrosRojos = multiples.filter(item => item.color === 'rojo').length;
   const suministrosVerdes = multiples.filter(item => item.color === 'verde').length;
   
-  console.log(`✅ Suministros con múltiples OS: ${totalSuministros}`);
+  console.log(`✅ Suministros con múltiples OS (clave única): ${totalSuministros}`);
   console.log(`✅ OS involucradas: ${totalOSInvolucradas}`);
   console.log(`✅ Rojos (unidades diferentes): ${suministrosRojos}`);
   console.log(`✅ Verdes (misma unidad): ${suministrosVerdes}`);
+  console.log(`⚠️ Suministros descartados por Medidor inválido: ${osPendientes.length - Object.keys(agrupado).length}`);
   console.groupEnd();
   
   return {
@@ -25534,6 +25564,7 @@ function analizarSuministrosMultiples(osPendientes) {
     }
   };
 }
+
 
 // ===================================================================
 // 📊 GENERAR HTML: RESUMEN + FILTROS
@@ -25631,7 +25662,7 @@ function generarHTMLTablaSuministros(analisis, filtroColor = 'todos') {
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <thead>
             <tr style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
-              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Cuenta Contrato</th>
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Suministro (Cuenta-Medidor)</th>
               <th style="padding: 14px 16px; text-align: center; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); min-width: 100px;">Total OS</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Unidades</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">OS Detalle</th>
@@ -25650,8 +25681,13 @@ function generarHTMLTablaSuministros(analisis, filtroColor = 'todos') {
     html += `
       <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
         <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-          ${suministro.CuentaContrato}
-        </td>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <span style="font-size: 13px; color: #4b5563;">NIC: ${suministro.CuentaContrato}</span>
+    <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px;">
+      Medidor: ${suministro.Medidor}
+    </span>
+  </div>
+</td>
         <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
           ${suministro.totalOS}
         </td>
@@ -25774,43 +25810,44 @@ function exportarSuministrosMultiplesExcel() {
   try {
     // ✅ Preparar datos para Excel
     const datos = [];
-    
-    window.datosSuministrosMultiples.suministros.forEach(suministro => {
-      suministro.OS_Lista.forEach((os, idx) => {
-        datos.push({
-          'Cuenta Contrato': suministro.CuentaContrato,
-          'Total OS en Suministro': suministro.totalOS,
-          'Unidades Únicas': suministro.unidadesUnicas.join(' | '),
-          'Misma Unidad': suministro.mismoUnidad ? 'SÍ' : 'NO',
-          'OS #': idx + 1,
-          'OSATMO': os.OSATMO,
-          'OSSAP': os.OSSAP,
-          'Tipología': os.Tipologia,
-          'Estado ATOMO': os.Estado_ATOMO,
-          'Unidad': os.Unidad,
-          'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
-        });
-      });
+window.datosSuministrosMultiples.suministros.forEach(suministro => {
+  suministro.OS_Lista.forEach((os, idx) => {
+    datos.push({
+      'Cuenta Contrato': suministro.CuentaContrato,
+      'Medidor': suministro.Medidor, // ✅ NUEVA COLUMNA CLAVE
+      'Total OS en Suministro': suministro.totalOS,
+      'Unidades Únicas': suministro.unidadesUnicas.join(' | '),
+      'Misma Unidad': suministro.mismoUnidad ? 'SÍ' : 'NO',
+      'OS #': idx + 1,
+      'OSATMO': os.OSATMO,
+      'OSSAP': os.OSSAP,
+      'Tipología': os.Tipologia,
+      'Estado ATOMO': os.Estado_ATOMO,
+      'Unidad': os.Unidad,
+      'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
     });
+  });
+});
     
     // ✅ Crear hoja de Excel
     const ws = XLSX.utils.json_to_sheet(datos);
     
     // ✅ Ajustar ancho de columnas
     const wscols = [
-      { wch: 18 }, // Cuenta Contrato
-      { wch: 10 }, // Total OS
-      { wch: 30 }, // Unidades Únicas
-      { wch: 12 }, // Misma Unidad
-      { wch: 8 },  // OS #
-      { wch: 15 }, // OSATMO
-      { wch: 15 }, // OSSAP
-      { wch: 35 }, // Tipología
-      { wch: 18 }, // Estado ATOMO
-      { wch: 15 }, // Unidad
-      { wch: 15 }  // Fecha
-    ];
-    ws['!cols'] = wscols;
+  { wch: 18 }, // Cuenta Contrato
+  { wch: 15 }, // Medidor ← NUEVA COLUMNA
+  { wch: 10 }, // Total OS
+  { wch: 30 }, // Unidades Únicas
+  { wch: 12 }, // Misma Unidad
+  { wch: 8 },  // OS #
+  { wch: 15 }, // OSATMO
+  { wch: 15 }, // OSSAP
+  { wch: 35 }, // Tipología
+  { wch: 18 }, // Estado ATOMO
+  { wch: 15 }, // Unidad
+  { wch: 15 }  // Fecha
+];
+ws['!cols'] = wscols;
     
     // ✅ Crear libro y descargar
     const wb = XLSX.utils.book_new();
@@ -26271,40 +26308,37 @@ function seleccionarTodasUnidades() {
   console.log('✅ Seleccionando TODAS las unidades...');
   
   const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  let count = 0;
   
   checkboxes.forEach(checkbox => {
-    checkbox.checked = true;
-    const unidad = checkbox.value;
-    if (!unidadesSeleccionadas.has(unidad)) {
-      unidadesSeleccionadas.add(unidad);
+    if (!checkbox.checked) {
+      checkbox.checked = true;
+      toggleUnidadMultiple(checkbox.value); // ✅ CLAVE: Actualiza el Set global
+      count++;
     }
   });
   
-  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
-  actualizarContadorUnidadesMultiple();
-  actualizarResumenUnidadesMultiple();
-  
-  console.log(`✅ ${unidadesSeleccionadas.size} unidades seleccionadas`);
+  console.log(`✅ ${count} unidades seleccionadas`);
+  alert(`✅ ${count} unidades seleccionadas exitosamente`);
 }
+
 
 function deseleccionarTodasUnidades() {
   console.log('❌ Deseleccionando TODAS las unidades...');
   
   const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  let count = 0;
   
   checkboxes.forEach(checkbox => {
-    checkbox.checked = false;
-    const unidad = checkbox.value;
-    unidadesSeleccionadas.delete(unidad);
+    if (checkbox.checked) {
+      checkbox.checked = false;
+      toggleUnidadMultiple(checkbox.value); // ✅ CLAVE: Actualiza el Set global
+      count++;
+    }
   });
   
-  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
-  actualizarContadorUnidadesMultiple();
-  actualizarResumenUnidadesMultiple();
-  
-  console.log('✅ Todas las unidades deseleccionadas');
+  console.log(`✅ ${count} unidades deseleccionadas`);
+  alert(`✅ ${count} unidades deseleccionadas`);
 }
 
 </script>
