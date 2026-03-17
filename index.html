@@ -1320,25 +1320,35 @@ function validarVentanaTurno(codigoTurno, horaActual) {
 
 
 async function login() {
-    console.log('🔐 Ejecutando login...');
+    console.log('🔐 1. Iniciando proceso de login...');
     
-    // Limpiar datos viejos antes de iniciar
-    await limpiarTurnosViejos();
-    await limpiarDiasDescansoViejos();
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
 
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value.trim();
+    if (!usernameInput || !passwordInput) {
+        console.error('❌ Error: No se encuentran los campos username/password en el DOM');
+        return;
+    }
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
 
     if (!username || !password) {
         alert('Por favor ingrese usuario y contraseña');
         return;
     }
 
-// ✅ 3. LIMPIAR CACHE ANTES DE CARGAR DATOS NUEVOS
-limpiarCacheSesion();  // ← AGREGAR ESTA LÍNEA
-
     try {
-        // 1. Autenticar usuario
+        // ✅ 2. Limpieza de mantenimiento (Dentro del try por seguridad)
+        console.log('🧹 2. Limpiando datos viejos y caché...');
+        await Promise.allSettled([
+            limpiarTurnosViejos(),
+            limpiarDiasDescansoViejos()
+        ]);
+        limpiarCacheSesion(); 
+
+        // ✅ 3. Autenticación
+        console.log('📡 3. Consultando Supabase...');
         const { data, error } = await supabaseClient
             .from('usuarios')
             .select('*')
@@ -1348,23 +1358,27 @@ limpiarCacheSesion();  // ← AGREGAR ESTA LÍNEA
             .single();
 
         if (error || !data) {
+            console.warn('❌ Credenciales inválidas o usuario inactivo');
             alert('Usuario o contraseña incorrectos');
             return;
         }
         
-        // 2. Verificar bloqueo manual
+        // ✅ 4. Validaciones de Seguridad
+        console.log('🛡️ 4. Validando restricciones de usuario...');
+        
+        // Bloqueo manual
         if (data.razon_bloqueo && data.razon_bloqueo.trim() !== '') {
             alert(`🚫 Usuario bloqueado\n\nMotivo: ${data.razon_bloqueo}`);
             return;
         }
         
-        // 3. Verificar inactividad
+        // Inactividad
         const checkInactividad = await verificarInactividad(data);
         if (checkInactividad.inactivo) {
             await supabaseClient
                 .from('usuarios')
                 .update({ 
-                    Bloqueado: true, // Según tu esquema es con B mayúscula
+                    Bloqueado: true, 
                     razon_bloqueo: checkInactividad.mensaje || 'Inactividad prolongada'
                 })
                 .eq('id', data.id);
@@ -1372,20 +1386,18 @@ limpiarCacheSesion();  // ← AGREGAR ESTA LÍNEA
             return;
         }
 
-        // 4. Verificar horario permitido
+        // Horario
         const verificacion = verificarHorarioPermitido(data.rol, data);
         if (!verificacion.permitido) {
             alert(verificacion.mensaje);
             return;
         }
 
-        // ==========================================================
-        // 5. GESTIÓN DE SESIÓN ÚNICA (CORREGIDO PARA TU TABLA)
-        // ==========================================================
+        // ✅ 5. Gestión de Token y Sesión Única
+        console.log('🔑 5. Generando token de sesión...');
         const newToken = Math.random().toString(36).substring(2); 
         const ahoraSV = formatearFechaCompletaElSalvador(getFechaElSalvador());
 
-        // Actualizamos Supabase (sessiontoken SIN guion bajo según tu esquema)
         const { error: updateError } = await supabaseClient
             .from('usuarios')
             .update({
@@ -1398,62 +1410,65 @@ limpiarCacheSesion();  // ← AGREGAR ESTA LÍNEA
 
         if (updateError) throw updateError;
 
-        // ACTUALIZAR LOCALMENTE
+        // Actualizar estado local
         data.sessiontoken = newToken; 
         currentUser = data;
-// ✅ NUEVO: Mostrar/Ocultar opción de Suministros Múltiples según rol (AGREGAR ESTAS 3 LÍNEAS)
-if (typeof mostrarOpcionSuministrosMultiples === 'function') {
-  mostrarOpcionSuministrosMultiples();
-}
 
-        // Guardar en Storage para que no te saque al refrescar
+        // ✅ 6. Persistencia
         localStorage.setItem('usuario_logueado', JSON.stringify(currentUser));
         sessionStorage.setItem('cleca_user_session', JSON.stringify({
             user: currentUser,
             timestamp: Date.now()
         }));
 
-        guardarDatosOffline(); 
+        if (typeof guardarDatosOffline === 'function') guardarDatosOffline();
+        
+        // Ejecutar visibilidad de suministros según rol
+        if (typeof mostrarOpcionSuministrosMultiples === 'function') {
+            mostrarOpcionSuministrosMultiples();
+        }
 
-        console.log(`👤 Rol detectado: ${data.rol}`);
+        console.log(`✅ 6. Login exitoso. Rol: ${data.rol}`);
 
-        // 6. Redirigir según rol
-        // ... (dentro de la función login, después de validar el usuario) ...
+        // ✅ 7. Redirección y Cambio de Interfaz
+        // Pre-configuración común
+        const loginSection = document.getElementById('loginSection');
+        const userInfo = document.getElementById('userInfo');
+        const currentUserLabel = document.getElementById('currentUser');
 
-       if (data.rol === 'ATTF') {
-            console.log("🛠️ Iniciando interfaz para ATTF...");
-            
-            // 1. Ocultar Login y mostrar Info de Usuario
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('userInfo').classList.remove('hidden');
-            document.getElementById('currentUser').textContent = `${data.usuario} (ATTF)`;
-
-            
-
-            // ✅ CORRECTO - Delegar toda la lógica a loginATTF
-loginATTF(data);
-return;
+        if (data.rol === 'ATTF') {
+            console.log("🛠️ Derivando a interfaz ATTF...");
+            if (loginSection) loginSection.style.display = 'none';
+            if (userInfo) userInfo.classList.remove('hidden');
+            if (currentUserLabel) currentUserLabel.textContent = `${data.usuario} (ATTF)`;
+            loginATTF(data);
+            return;
         }
 
         if (data.rol === 'Poda') {
+            console.log("🌳 Derivando a interfaz Poda...");
             loginPoda(data); 
             return;
         }
         
-        // Para otros roles (Admin, etc.)
-        document.getElementById('currentUser').textContent = `Bienvenido, ${data.usuario}`;
-        document.getElementById('userInfo').classList.remove('hidden');
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('tableSelectionSection').style.display = 'block';
+        // Interfaz Estándar / Admin
+        console.log("👨‍💼 Derivando a interfaz Estándar...");
+        if (currentUserLabel) currentUserLabel.textContent = `Bienvenido, ${data.usuario}`;
+        if (userInfo) userInfo.classList.remove('hidden');
+        if (loginSection) loginSection.style.display = 'none';
+        
+        const tableSection = document.getElementById('tableSelectionSection');
+        if (tableSection) tableSection.style.display = 'block';
 
         iniciarVerificacionSesion();
         mostrarTablasSegunRol();
 
     } catch (err) {
-        console.error('Error de login:', err);
-        alert('Error de conexión con la base de datos. Por favor intente nuevamente.');
+        console.error('❌ ERROR CRÍTICO EN LOGIN:', err);
+        alert('Error de sistema: ' + (err.message || 'Error desconocido'));
     }
 }
+
 
     // ========================================
 // 🆕 FUNCIÓN AUXILIAR: Validar fecha máxima de descanso
@@ -26087,6 +26102,24 @@ function mostrarOpcionSuministrosMultiples() {
     console.log('🔒 Opción "Suministros Múltiples OS" oculta para rol:', currentUser.rol);
   }
 }
+
+// ========================================
+// 🔑 VINCULACIÓN DEL BOTÓN DE INICIO DE SESIÓN
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const loginBtn = document.getElementById('loginButton');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', login); // Llama a la función login
+    }
+
+    // Permitir iniciar sesión al presionar "Enter" en la contraseña
+    const passwordInput = document.getElementById('password');
+    if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+    }
+});
 
 </script>
 </body>
