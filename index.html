@@ -5510,37 +5510,30 @@ if (selectedTable === 'tx_y_cortes') {
 // 🔙 FUNCIÓN ÚNICA: VOLVER AL MENÚ PRINCIPAL (REVISADA)
 // ===================================================================
 function volverATablas() {
-    console.log("🔙 Restaurando interfaz y volviendo al menú principal...");
+    console.log("🔙 Restaurando menú principal...");
 
-    // 1. Ocultar la sección de búsqueda/resultados (donde están las tablas)
     const searchSection = document.getElementById('searchSection');
-    if (searchSection) {
-        searchSection.style.display = 'none';
-    }
-
-    // 2. Mostrar el menú principal de selección de tablas
     const menuPrincipal = document.getElementById('tableSelectionSection');
-    if (menuPrincipal) {
-        menuPrincipal.style.display = 'block';
-    }
-
-    // 3. Limpiar los contenedores de datos para que no se acumulen
-    // Limpia el resumen (searchGrid) y la tabla de resultados (searchResults)
     const searchGrid = document.getElementById('searchGrid');
     const searchResults = document.getElementById('searchResults');
-    
+
+    // ✅ REVERTIR VISIBILIDAD
+    if (searchSection) {
+        searchSection.style.setProperty('display', 'none', 'important');
+    }
+    if (menuPrincipal) {
+        menuPrincipal.style.setProperty('display', 'block', 'important');
+    }
+
+    // ✅ LIMPIEZA TOTAL
     if (searchGrid) searchGrid.innerHTML = '';
     if (searchResults) searchResults.innerHTML = '';
 
-    // 4. Resetear variables de control de estado
     selectedTable = null; 
-    // Si usas datos de suministros múltiples, también los reseteamos aquí
     window.datosSuministrosMultiples = null;
 
-    // Forzar el scroll hacia arriba para que el usuario vea el menú desde el inicio
     window.scrollTo(0, 0);
 }
-
 
 
 
@@ -25245,7 +25238,8 @@ async function cargarInterfazSuministrosMultiples() {
       tableSelectionSection.style.display = 'none';
   }
   if (searchSection) {
-      searchSection.style.display = 'block'; // Hacemos visible el área de trabajo
+      searchSection.style.display = 'block';
+searchSection.classList.remove('hidden'); // Hacemos visible el área de trabajo
   }
 
   // ✅ 3. VALIDACIÓN DE ROL (Seguridad de acceso)
