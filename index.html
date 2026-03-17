@@ -21791,26 +21791,8 @@ function verificarDatosOffline() {
 
 
 /**
- * CONFIGURACIÓN MAESTRA DE ACCESOS
- * Define qué roles pueden entrar a qué módulos.
- */
-const PERMISOS_MODULOS = {
-    'cargar_asignaciones': ['Administrador', 'Despacho'],
-    'mapa_rutas':          ['Administrador', 'Despacho'],
-    'usuarios':            ['Administrador'],
-    'detalle_os':          ['Administrador', 'Supervisor'],
-    'retiro_medidores':    ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta'],
-    'kml_ruta':            ['Administrador', 'Contratista', 'Despacho', 'Supervisor', 'Consulta'], 
-    'OS Pendientes':       ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
-    'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
-    'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura', 'Poda'],
-    'tx_y_cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda', 'Despacho'],
-    'suministros_multiples': ['Administrador', 'Despacho']  // ✅ CORREGIDO: nombre simple + coma anterior
-};
-
-/**
  * Selecciona y valida el acceso a las tablas/módulos
- * Versión Corregida: Sin declaraciones duplicadas + Suministros Múltiples OS
+ * Versión Corregida: Evita bucle infinito + Bloquea acceso durante configuración + Verificación robusta de contenedores
  */
 function seleccionarTabla(tableName, retryCount = 0) {
     // ✅ VALIDACIÓN DE PERMISOS POR ROL (UNA SOLA VEZ)
@@ -21874,35 +21856,40 @@ function seleccionarTabla(tableName, retryCount = 0) {
     // ✅ FLUJO NORMAL: Continuar con validaciones y carga
     renovarSesion();
     
+    // ✅ Usar la variable ya declarada (NO volver a declarar con const)
     console.log(`🔍 Intento de acceso a: ${tableName} por usuario: ${currentUser?.usuario} (Rol: ${rolActual})`);
 
-    // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO (SIN declaraciones duplicadas)
+    // 2. EJECUCIONES ESPECIALES SEGÚN MÓDULO
     switch (tableName) {
-        case 'cargar_asignaciones':
-            // ✅ Usar directamente getElementById SIN declarar variables
-            document.getElementById('tableSelectionSection')?.style.display = 'none';
-            document.getElementById('searchSection')?.style.display = 'block';
-            document.getElementById('searchSection')?.classList.remove('hidden');
-            if (searchGrid) searchGrid.innerHTML = '';
-            cargarInterfazAsignaciones();
-            return; // ✅ Terminar aquí - no ejecutar el resto de la función
-            
-        case 'mapa_rutas':
-            console.log("📍 Inicializando Mapa de Rutas...");
-            break;
-            
-        // ✅ NUEVO CASO: Suministros Múltiples OS (SIN declaraciones duplicadas)
-        case 'suministros_multiples':
-            console.log("📋 Inicializando Suministros Múltiples OS...");
-            document.getElementById('tableSelectionSection')?.style.display = 'none';
-            document.getElementById('searchSection')?.style.display = 'block';
-            document.getElementById('searchSection')?.classList.remove('hidden');
-            if (searchGrid) searchGrid.innerHTML = '';
-            cargarInterfazSuministrosMultiples();
-            return; // ✅ Terminar aquí - no ejecutar el resto de la función
-    }
+    case 'cargar_asignaciones':
+        const tableSel = document.getElementById('tableSelectionSection');
+        const searchSec = document.getElementById('searchSection');
+        if (tableSel) tableSel.style.display = 'none';
+        if (searchSec) {
+            searchSec.style.display = 'block';
+            searchSec.classList.remove('hidden');
+        }
+        if (searchGrid) searchGrid.innerHTML = '';
+        cargarInterfazAsignaciones();
+        return;
+    case 'mapa_rutas':
+        console.log("📍 Inicializando Mapa de Rutas...");
+        break;
+    case 'suministros_multiples':
+        console.log("📋 Inicializando Suministros Múltiples OS...");
+        const tableSel2 = document.getElementById('tableSelectionSection');
+        const searchSec2 = document.getElementById('searchSection');
+        if (tableSel2) tableSel2.style.display = 'none';
+        if (searchSec2) {
+            searchSec2.style.display = 'block';
+            searchSec2.classList.remove('hidden');
+        }
+        if (searchGrid) searchGrid.innerHTML = '';
+        cargarInterfazSuministrosMultiples();
+        return;
+}
 
-    // 3. ACTUALIZAR INTERFAZ VISUAL (solo para casos que NO tienen return)
+    // 3. ACTUALIZAR INTERFAZ VISUAL
     const config = tableConfigs[tableName];
     if (!config) {
         console.error("❌ Configuración no encontrada para:", tableName);
@@ -21911,7 +21898,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
     }
 
     selectedTable = tableName;
-
+    
     // Actualizar título
     const searchTitle = document.getElementById('searchTitle');
     if (searchTitle) {
@@ -21921,54 +21908,17 @@ function seleccionarTabla(tableName, retryCount = 0) {
     // ✅ GENERAR CAMPOS
     generarCamposBusqueda(config);
 
-    // Mostrar sección de búsqueda y ocultar menú (SIN declaraciones duplicadas)
-    document.getElementById('tableSelectionSection')?.style.display = 'none';
-    document.getElementById('searchSection')?.style.display = 'block';
-    document.getElementById('searchSection')?.classList.remove('hidden');
-    console.log('✅ searchSection visible y activo');
+    // Mostrar sección de búsqueda y ocultar menú
+    const tableSelection = document.getElementById('tableSelectionSection');
+    const searchSection = document.getElementById('searchSection');
+    
+    if (tableSelection) tableSelection.style.display = 'none';
+    if (searchSection) {
+        searchSection.style.display = 'block';
+        searchSection.classList.remove('hidden');
+        console.log('✅ searchSection visible y activo');
+    }
 }
-
-
-function getCoordsCompat(os, legacyMode = false) {
-    if (legacyMode) {
-        // Comportamiento antiguo para código heredado
-       const coords = extraerCoordenadas(os);
-        if (!coordsStr || !coordsStr.includes(',')) return null;
-        const [lat, lng] = coordsStr.split(',').map(c => parseFloat(c.trim()));
-        return isNaN(lat) || isNaN(lng) ? null : { lat, lng };
-    }
-    // Nuevo comportamiento con prioridad de campos
-    return extraerCoordenadas(os); // ← Nota: usa extraerCoordenadas (ya existe en tu código)
-}
-
-// Alias para mantener compatibilidad con llamadas existentes
-window.getCoordsCompat = getCoordsCompat;
-
-
-
-// ==========================================================
-// 🚀 INICIALIZACIÓN Y EVENTOS
-// ==========================================================
-document.addEventListener('DOMContentLoaded', function() {
-
-    console.log('🚀 Sistema de Consultas Campo Inicializado');
-
-    // Validación de sesión
-    if (!verificarDatosOffline()) {
-        const loginSec = document.getElementById('loginSection');
-        if (loginSec) loginSec.style.display = 'block';
-    }
-
-    // Conector del botón de Login
-    const loginButton = document.getElementById('loginButton');
-    if (loginButton) {
-        loginButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            login();
-        });
-    }
-});
-
 
 // ========================================
 // 🧹 LIMPIAR FILTROS OBSOLETOS (Automático silencioso)
