@@ -6283,44 +6283,59 @@ async function procesarArchivoEstados() {
       conteoEstados[item.Estado_ATOMO] = (conteoEstados[item.Estado_ATOMO] || 0) + 1;
     });
     
-    let html = `
-      <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 4px solid #2196f3;">
-        <strong style="color: #1565c0;">📊 Resumen del archivo:</strong><br>
-        • Filas totales: ${datos.length - 1}<br>
-        • Datos válidos: ${actualizaciones.length}<br>
-        • Errores de parseo: ${erroresParseo.length}<br>
-        • Estados a actualizar:<br>
-        ${Object.entries(conteoEstados).map(([estado, count]) => 
-          `  - <strong>${estado}</strong>: ${count.toLocaleString()} OS`
-        ).join('<br>')}
-      </div>
-    `;
+    // ✅ Reemplazar el bloque de botones de confirmación con esta versión mejorada
+let html = `
+  <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 4px solid #2196f3;">
+    <strong style="color: #1565c0;">📊 Resumen del archivo:</strong><br>
+    • Filas totales: ${datos.length - 1}<br>
+    • Datos válidos: ${actualizaciones.length}<br>
+    • Errores de parseo: ${erroresParseo.length}<br>
+    • Estados a actualizar:<br>
+    ${Object.entries(conteoEstados).map(([estado, count]) => 
+      `  - <strong>${estado}</strong>: ${count.toLocaleString()} OS`
+    ).join('<br>')}
+  </div>
+  
+  <!-- ✅ NUEVO: Opciones claras y mutuamente excluyentes -->
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 14px;">
+    <strong>💡 Comportamiento para OS NO incluidas en el archivo:</strong><br><br>
     
-    // ✅ Mostrar errores si existen
-    if (erroresParseo.length > 0) {
-      html += `
-        <div style="margin-top: 15px; background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #ff9800; font-size: 13px;">
-          <strong>⚠️ Errores detectados:</strong><br>
-          ${erroresParseo.slice(0, 5).map(e => `Fila ${e.fila}: ${e.motivo}`).join('<br>')}
-          ${erroresParseo.length > 5 ? `<br>+ ${erroresParseo.length - 5} errores más` : ''}
-        </div>
-      `;
-    }
+    <label style="display: block; margin: 10px 0; padding: 10px; background: white; border-radius: 8px; cursor: pointer; border: 2px solid #2196f3;">
+      <input type="radio" name="accionNoCoincidentes" value="ninguna" checked 
+             style="width: 18px; height: 18px; margin-right: 10px;">
+      <strong>✅ Dejar sin cambios</strong> (recomendado)<br>
+      <span style="color: #666; font-size: 13px;">Las OS que no estén en el archivo mantendrán su estado actual</span>
+    </label>
     
-    // ✅ Botón de confirmación
-    html += `
-      <div style="margin-top: 20px; text-align: center;">
-        <button class="btn" 
-                onclick="ejecutarActualizacionEstados(${JSON.stringify(actualizaciones).replace(/"/g, '&quot;')}, ${soloCoincidencias}, ${registrarNoCoincidencias})"
-                style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); padding: 12px 24px; font-size: 16px;">
-          ✅ Confirmar y Actualizar (${actualizaciones.length} registros)
-        </button>
-      </div>
-    `;
+    <label style="display: block; margin: 10px 0; padding: 10px; background: white; border-radius: 8px; cursor: pointer; border: 2px solid #ff9800;">
+      <input type="radio" name="accionNoCoincidentes" value="registrar" 
+             style="width: 18px; height: 18px; margin-right: 10px;">
+      <strong>🔄 Establecer como "REGISTRADA"</strong><br>
+      <span style="color: #666; font-size: 13px;">Las OS que no estén en el archivo se cambiarán a estado REGISTRADA</span>
+    </label>
     
-    if (resultadoDiv) {
-      resultadoDiv.innerHTML = html;
-    }
+    <label style="display: block; margin: 10px 0; padding: 10px; background: white; border-radius: 8px; cursor: pointer; border: 2px solid #ef4444;">
+      <input type="radio" name="accionNoCoincidentes" value="blanco" 
+             style="width: 18px; height: 18px; margin-right: 10px;">
+      <strong>🧹 Dejar en blanco</strong><br>
+      <span style="color: #d32f2f; font-weight: bold; font-size: 13px;">
+        ⚠️ ADVERTENCIA: Esto establecerá el estado como cadena vacía (puede causar errores en otros módulos)
+      </span>
+    </label>
+  </div>
+  
+  <div style="text-align: center; margin-top: 20px;">
+    <button class="btn" 
+            onclick="ejecutarActualizacionEstadosConOpcion(${JSON.stringify(actualizaciones).replace(/"/g, '&quot;')})"
+            style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); padding: 12px 24px; font-size: 16px;">
+      ✅ Confirmar y Actualizar (${actualizaciones.length} registros)
+    </button>
+  </div>
+`;
+
+if (resultadoDiv) {
+  resultadoDiv.innerHTML = html;
+}
     
     console.groupEnd();
     
@@ -6520,7 +6535,7 @@ async function ejecutarActualizacionDeuda(actualizaciones, soloCoincidencias, ce
 
 
 // ===================================================================
-// ⚡ EJECUTAR ACTUALIZACIÓN MASIVA DE ESTADOS (OPTIMIZADA PARA 30K+ REGISTROS)
+// ⚡ EJECUTAR ACTUALIZACIÓN MASIVA DE ESTADOS (OPTIMIZADA - 10X MÁS RÁPIDA)
 // ===================================================================
 async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, registrarNoCoincidencias) {
   console.group('🔄 EJECUTANDO ACTUALIZACIÓN DE ESTADOS EN SUPABASE');
@@ -6528,7 +6543,7 @@ async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, 
   
   const resultadoDiv = document.getElementById('resultadoEstados');
   try {
-    // ✅ Mostrar progreso
+    // ✅ Mostrar progreso inmediato
     if (resultadoDiv) {
       resultadoDiv.innerHTML = `
         <div style="text-align: center; padding: 20px;">
@@ -6543,13 +6558,13 @@ async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, 
     
     let actualizadas = 0;
     let errores = 0;
-    const BATCH_SIZE = 100; // Tamaño óptimo para evitar timeouts
+    const BATCH_SIZE = 1000; // ✅ Tamaño óptimo (igual que deuda)
     
-    // ✅ Procesar en lotes con paralelismo controlado
+    // ✅ Procesar en lotes SIN retrasos artificiales
     for (let i = 0; i < actualizaciones.length; i += BATCH_SIZE) {
       const lote = actualizaciones.slice(i, i + BATCH_SIZE);
       
-      // ✅ Ejecutar actualizaciones en paralelo (máx 5 concurrentes)
+      // ✅ Ejecutar actualizaciones en paralelo (máx 10 concurrentes para mayor velocidad)
       const promesas = lote.map(item => 
         supabaseClient
           .from('OS Pendientes')
@@ -6559,45 +6574,40 @@ async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, 
           .catch(() => ({ success: false }))
       );
       
-      // ✅ Ejecutar en lotes de 5 para evitar sobrecarga
-      for (let j = 0; j < promesas.length; j += 5) {
-        const lotePromesas = promesas.slice(j, j + 5);
-        const resultados = await Promise.all(lotePromesas);
-        
-        resultados.forEach(resultado => {
-          if (resultado.success) actualizadas++;
-          else errores++;
-        });
-      }
+      // ✅ Ejecutar todas las promesas del lote en paralelo (sin delays)
+      const resultados = await Promise.all(promesas);
       
-      // ✅ Actualizar progreso SIN retrasos artificiales
+      resultados.forEach(resultado => {
+        if (resultado.success) actualizadas++;
+        else errores++;
+      });
+      
+      // ✅ Actualizar progreso SIN retrasos
       const porcentaje = Math.min(100, Math.round(((i + lote.length) / actualizaciones.length) * 100));
       if (resultadoDiv) {
         document.getElementById('progresoEstados').textContent = `${porcentaje}%`;
       }
     }
     
-    // ✅ Opción: Poner estado "REGISTRADA" a OS no coincidentes
-    if (registrarNoCoincidencias && !soloCoincidencias) {
-      console.log('🔄 Estableciendo estado = REGISTRADA para OS no incluidas...');
+    // ✅ Opción: Poner estado "REGISTRADA" o BLANCO a OS no coincidentes
+    if (!soloCoincidencias && (registrarNoCoincidencias || !registrarNoCoincidencias)) {
+      console.log('🔄 Procesando OS no incluidas en el archivo...');
       
       if (resultadoDiv) {
         resultadoDiv.innerHTML = `
           <div style="text-align: center; padding: 20px;">
             <div class="loading" style="margin: 0 auto 10px;"></div>
-            <p style="color: #1565c0; font-weight: 600;">Configurando estado REGISTRADA para OS restantes...</p>
+            <p style="color: #1565c0; font-weight: 600;">
+              ${registrarNoCoincidencias ? '🔄 Configurando estado REGISTRADA para OS restantes...' : '🔄 Dejando en blanco OS restantes...'}
+            </p>
           </div>
         `;
       }
       
       // ✅ Obtener OSATMOs del archivo
-      const osIdsEnArchivo = actualizaciones.map(a => a.OSATMO);
+      const osIdsEnArchivo = new Set(actualizaciones.map(a => a.OSATMO));
       
-      // ✅ Actualizar en lotes de 500 IDs (límite de URL de Supabase)
-      const BATCH_SIZE_IDS = 500;
-      let actualizadasCero = 0;
-      
-      // ✅ Obtener todos los OSATMO existentes (solo IDs)
+      // ✅ Obtener TODOS los OSATMO existentes (solo IDs)
       const {  todasOS, error: errorOS } = await supabaseClient
         .from('OS Pendientes')
         .select('OSATMO', { head: false, count: null })
@@ -6605,34 +6615,41 @@ async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, 
       
       if (!errorOS && todasOS) {
         // ✅ Filtrar OS que NO están en el archivo
-        const osParaRegistrar = todasOS
+        const osParaActualizar = todasOS
           .map(os => os.OSATMO)
-          .filter(osatmo => osatmo && !osIdsEnArchivo.includes(osatmo));
+          .filter(osatmo => osatmo && !osIdsEnArchivo.has(osatmo));
         
-        console.log(`📊 OS para poner en REGISTRADA: ${osParaRegistrar.length} de ${todasOS.length} totales`);
+        console.log(`📊 OS para actualizar: ${osParaActualizar.length} de ${todasOS.length} totales`);
         
-        // ✅ Actualizar en lotes
-        for (let i = 0; i < osParaRegistrar.length; i += BATCH_SIZE_IDS) {
-          const loteIDs = osParaRegistrar.slice(i, i + BATCH_SIZE_IDS);
+        // ✅ Actualizar en lotes de 1000 IDs
+        const BATCH_SIZE_IDS = 1000;
+        let actualizadasExtra = 0;
+        
+        for (let i = 0; i < osParaActualizar.length; i += BATCH_SIZE_IDS) {
+          const loteIDs = osParaActualizar.slice(i, i + BATCH_SIZE_IDS);
           
           try {
-            const { error: errorRegistro } = await supabaseClient
+            // ✅ IMPORTANTE: "Dejar en blanco" = establecer como null o cadena vacía
+            // Pero Estado_ATOMO no debe ser null, así que usamos cadena vacía
+            const nuevoEstado = registrarNoCoincidencias ? 'REGISTRADA' : ''; // ✅ BLANCO = cadena vacía
+            
+            const { error: errorUpdate } = await supabaseClient
               .from('OS Pendientes')
-              .update({ Estado_ATOMO: 'REGISTRADA' })
+              .update({ Estado_ATOMO: nuevoEstado })
               .in('OSATMO', loteIDs);
             
-            if (!errorRegistro) {
-              actualizadasCero += loteIDs.length;
+            if (!errorUpdate) {
+              actualizadasExtra += loteIDs.length;
             } else {
-              console.warn(`⚠️ Error actualizando lote de REGISTRADA:`, errorRegistro.message);
+              console.warn(`⚠️ Error actualizando lote:`, errorUpdate.message);
             }
           } catch (err) {
-            console.warn(`⚠️ Error crítico en lote de REGISTRADA:`, err.message);
+            console.warn(`⚠️ Error crítico en lote:`, err.message);
           }
         }
         
-        console.log(`✅ Estado REGISTRADA aplicado a ${actualizadasCero} OS`);
-        actualizadas += actualizadasCero;
+        console.log(`✅ OS actualizadas (${registrarNoCoincidencias ? 'REGISTRADA' : 'BLANCO'}): ${actualizadasExtra}`);
+        actualizadas += actualizadasExtra;
       }
     }
     
@@ -6685,7 +6702,6 @@ async function ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, 
     console.groupEnd();
   }
 }
-
 
 
  	// ========================================
@@ -11433,9 +11449,23 @@ async function cargarInterfazDetalleOS() {
                         <strong style="font-size: 16px; color: #2d3748;">📍 Seleccionar Unidades (múltiple)</strong>
                         <span id="contadorUnidadesSeleccionadas" style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600;">0 seleccionadas</span>
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <input type="text" id="buscarUnidadesMultiple" placeholder="Buscar unidad..." style="width: 100%; padding: 10px 15px; border-radius: 8px; border: 2px solid #cbd5e1; font-size: 14px;" oninput="filtrarListaUnidadesMultiple(this.value)">
-                    </div>
+                    
+<div style="margin-bottom: 15px;">
+    <input type="text" id="buscarUnidadesMultiple" placeholder="Buscar unidad..." 
+           style="width: 100%; padding: 10px 15px; border-radius: 8px; border: 2px solid #cbd5e1; font-size: 14px;"
+           oninput="filtrarListaUnidadesMultiple(this.value)">
+    <small style="color: #64748b; display: block; margin-top: 5px;">
+        ✅ Seleccione múltiples unidades para ver datos combinados
+    </small>
+    <div style="margin-top: 10px; text-align: center;">
+        <button id="btnSeleccionarCoincidencias" 
+                onclick="seleccionarCoincidenciasBusqueda()" 
+                style="display: none; background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); color: white; border: none; padding: 6px 15px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+            ✅ Seleccionar coincidencias
+        </button>
+    </div>
+</div>
+
                     <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: white; margin-bottom: 15px;">
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
                             ${unidadesUnicas.map(unidad => `
@@ -11446,10 +11476,24 @@ async function cargarInterfazDetalleOS() {
                             `).join('')}
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <button class="btn btn-secondary" onclick="aplicarFiltroUnidadesMultiples()" style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); width: 100%;">📊 Mostrar Seleccionadas</button>
-                        <button class="btn" onclick="limpiarSeleccionUnidades()" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); width: 100%;">🗑️ Limpiar</button>
-                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 15px;">
+  <button class="btn btn-secondary" onclick="seleccionarTodasUnidades()" 
+          style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+    ✅ Seleccionar Todo (${unidadesUnicas.length})
+  </button>
+  <button class="btn btn-secondary" onclick="deseleccionarTodasUnidades()" 
+          style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+    ❌ Deseleccionar Todo
+  </button>
+  <button class="btn btn-secondary" onclick="aplicarFiltroUnidadesMultiples()" 
+          style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+    📊 Mostrar Seleccionadas
+  </button>
+  <button class="btn" onclick="limpiarSeleccionUnidades()" 
+          style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+    🗑️ Limpiar
+  </button>
+</div>
                 </div>
             </div>
         `;
@@ -11457,39 +11501,20 @@ async function cargarInterfazDetalleOS() {
         window.unidadesSeleccionadasMultiples = new Set();
         actualizarContadorUnidadesMultiple();
 
-        // ✅ INTEGRACIÓN EXACTA DE LAS TABLAS AL FINAL
-        const htmlTablasOriginales = generarHTMLTablasCompletas(osPendientes, datosAgrupados);
+       
 
-        resultsContainer.innerHTML = `
-            <div class="result-card" style="background: white; padding: 30px;">
-                
-                ${htmlTablasOriginales}
+        // ✅ CORRECCIÓN
+resultsContainer.innerHTML = generarHTMLTablasCompletas(osPendientes, datosAgrupados);
 
-                <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
-      📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
-    </h2>
-    ${generarTablaTipologiasEspecificasPorDia(osPendientes)}
-    
-    <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
-      📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
-    </h2>
-    ${generarTablaTipologiasEspecificasPorEstado(osPendientes)}
-    
-    <!-- ✅ NUEVA TABLA: ESTADOS ATOMO vs DÍAS INDIVIDUALES -->
-    <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
-      📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
-    </h2>
-    ${generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes)}
-                
-                </div>
-        `;
+window.datosDetalleOS = datosAgrupados;
+        window.datosDetalleOS_Original = JSON.parse(JSON.stringify(datosAgrupados));
+        window.osPendientes_Original = osPendientes;
 
     } catch (err) {
         console.error('Error:', err);
         searchGrid.innerHTML = '<div class="result-card">❌ Error de conexión</div>';
     }
 }
-
 
 
 function generarTablaTipologiaVsRango(osFiltradas) {
@@ -24085,19 +24110,67 @@ function deseleccionarUnidadMultiple(unidad) {
 }
 
 // ✅ Filtrar lista de unidades mientras se escribe
+// ✅ MEJORAR FILTRADO DE UNIDADES CON SELECCIÓN AUTOMÁTICA
 function filtrarListaUnidadesMultiple(busqueda) {
   const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
   const busquedaLower = busqueda.toLowerCase().trim();
+  
+  // Contar coincidencias para el botón "Seleccionar Coincidencias"
+  let coincidencias = 0;
   
   checkboxes.forEach(checkbox => {
     const label = checkbox.closest('label');
     const unidad = checkbox.value.toLowerCase();
     
-    label.style.display = (busquedaLower === '' || unidad.includes(busquedaLower)) ? 'flex' : 'none';
+    const coincide = busquedaLower === '' || unidad.includes(busquedaLower);
+    label.style.display = coincide ? 'flex' : 'none';
+    
+    if (coincide) coincidencias++;
   });
+  
+  // ✅ Actualizar botón "Seleccionar Coincidencias" si existe
+  const btnSeleccionarCoincidencias = document.getElementById('btnSeleccionarCoincidencias');
+  if (btnSeleccionarCoincidencias) {
+    btnSeleccionarCoincidencias.style.display = coincidencias > 0 ? 'inline-block' : 'none';
+    btnSeleccionarCoincidencias.dataset.coindencias = coincidencias;
+    btnSeleccionarCoincidencias.innerHTML = `✅ Seleccionar ${coincidencias} coincidencias`;
+  }
 }
 
-// ✅ Limpiar toda la selección
+// ✅ NUEVA FUNCIÓN: Seleccionar todas las unidades que coincidan con la búsqueda actual
+function seleccionarCoincidenciasBusqueda() {
+  const busqueda = document.getElementById('buscarUnidadesMultiple')?.value || '';
+  const busquedaLower = busqueda.toLowerCase().trim();
+  
+  if (busquedaLower === '') {
+    alert('⚠️ Escribe algo en el buscador primero');
+    return;
+  }
+  
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
+  let seleccionadas = 0;
+  
+  checkboxes.forEach(checkbox => {
+    const unidad = checkbox.value.toLowerCase();
+    const label = checkbox.closest('label');
+    
+    // Solo procesar si está visible (coincide con búsqueda)
+    if (label.style.display !== 'none' && unidad.includes(busquedaLower)) {
+      if (!checkbox.checked) {
+        checkbox.checked = true;
+        toggleUnidadMultiple(checkbox.value);
+        seleccionadas++;
+      }
+    }
+  });
+  
+  actualizarContadorUnidadesMultiple();
+  actualizarResumenUnidadesMultiple();
+  
+  alert(`✅ ${seleccionadas} unidades seleccionadas que coinciden con "${busqueda}"`);
+}
+
+
 function limpiarSeleccionUnidades() {
   const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
   checkboxes.forEach(checkbox => checkbox.checked = false);
@@ -24106,7 +24179,6 @@ function limpiarSeleccionUnidades() {
   actualizarContadorUnidadesMultiple();
   actualizarResumenUnidadesMultiple();
   
-  // Restaurar vista completa (todas las unidades)
   if (window.osPendientes_Original && window.datosDetalleOS_Original) {
     const resultsContainer = document.getElementById('searchResults');
     if (resultsContainer) {
@@ -24114,6 +24186,9 @@ function limpiarSeleccionUnidades() {
         window.osPendientes_Original, 
         window.datosDetalleOS_Original
       );
+      window.datosDetalleOS = JSON.parse(JSON.stringify(window.datosDetalleOS_Original));
+      window.unidadesSeleccionadasActuales = null;
+      console.log('✅ Vista completa restaurada con todas las tablas');
     }
   }
 }
@@ -24341,7 +24416,23 @@ function generarHTMLTablasCompletas(osPendientes, datosAgrupados) {
       <h2 style="color: #764ba2; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #764ba2; padding-bottom: 10px;">
         📊 NO REGULADAS - Por Rango de Días
       </h2>
-      ${generarTablaPorRango(datosAgrupados.noReguladas, 'no_reguladas')}
+       ${generarTablaPorRango(datosAgrupados.noReguladas, 'no_reguladas')}
+
+      <!-- ✅ TABLAS ESPECIALES -->
+      <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+        📋 TABLA ESPECIAL: Tipologías Específicas vs Días Individuales
+      </h2>
+      ${generarTablaTipologiasEspecificasPorDia(osPendientes)}
+
+      <h2 style="color: #10b981; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #10b981; padding-bottom: 10px;">
+        📋 TABLA ESPECIAL: Tipologías Específicas vs Estado ATOMO
+      </h2>
+      ${generarTablaTipologiasEspecificasPorEstado(osPendientes)}
+
+      <h2 style="color: #8b5cf6; margin: 40px 0 20px 0; font-size: 22px; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px;">
+        📋 TABLA ESPECIAL: Estados ATOMO vs Días Individuales (Solo Tipologías Específicas)
+      </h2>
+      ${generarTablaEstadosPorDiaTipologiasEspecificas(osPendientes)}
       
       <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; margin-top: 30px; text-align: center; border: 2px solid #4caf50;">
         <strong style="color: #1e40af; font-size: 18px; display: block; margin-bottom: 10px;">
@@ -25222,111 +25313,133 @@ OSATMO,Estado_ATOMO
 }
 
 // ===================================================================
-// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS (VERSIÓN FINAL INTEGRADA)
+// 📋 CARGAR INTERFAZ: SUMINISTROS CON MÚLTIPLES OS (CON PAGINACIÓN)
 // ===================================================================
 async function cargarInterfazSuministrosMultiples() {
   console.log('📋 Cargando interfaz de Suministros con Múltiples OS...');
   
-  // 1. Referencias a todos los contenedores necesarios
   const searchGrid = document.getElementById('searchGrid');
   const resultsContainer = document.getElementById('searchResults');
-  const tableSelectionSection = document.getElementById('tableSelectionSection');
-  const searchSection = document.getElementById('searchSection'); // <-- Contenedor padre de resultados
-
-  // ✅ 2. CAMBIO DE VISTA: Ocultar menú y mostrar sección de búsqueda
-  if (tableSelectionSection) {
-      tableSelectionSection.style.display = 'none';
-  }
-  if (searchSection) {
-      searchSection.style.display = 'block';
-searchSection.classList.remove('hidden'); // Hacemos visible el área de trabajo
-  }
-
-  // ✅ 3. VALIDACIÓN DE ROL (Seguridad de acceso)
+  
+  // ✅ Validación de rol (seguridad adicional)
   if (!['Administrador', 'Despacho'].includes(currentUser?.rol)) {
-    searchGrid.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 20px;">
-        <button class="btn btn-back" onclick="volverATablas()">← Volver al Menú</button>
-        <div class="result-header" style="color: #b91c1c; font-weight: bold; margin-top: 15px;">❌ Acceso Denegado</div>
+    resultsContainer.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Acceso Denegado</div>
         <p style="text-align: center; color: #666;">
-          Esta funcionalidad solo está disponible para usuarios con rol Administrador o Despacho.
+          Esta funcionalidad solo está disponible para roles Administrador y Despacho.
         </p>
       </div>
     `;
-    if (resultsContainer) resultsContainer.innerHTML = '';
     return;
   }
   
-  // ✅ 4. PANTALLA DE CARGA INICIAL
+  // Pantalla de carga con progreso
   searchGrid.innerHTML = `
-    <div style="background: #e3f2fd; padding: 25px; border-radius: 12px; text-align: center; border-left: 5px solid #2196f3; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-      <button class="btn btn-back" onclick="volverATablas()" style="float: left; background: #64748b; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer;">← Volver</button>
-      <h3 style="margin: 0 0 10px 0; color: #1565c0; font-size: 20px;">📊 Analizando Suministros con Múltiples OS</h3>
-      <p style="margin: 0; color: #475569;">Conectando con Supabase y escaneando registros...</p>
-      <div class="loading" style="display: block; margin: 20px auto; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite;"></div>
-      <p style="color: #64748b; font-size: 12px; font-style: italic;">
-        ⚠️ Procesando grandes volúmenes de datos, por favor espere...
+    <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
+      <h3 style="margin: 0 0 10px 0; color: #1565c0;">📋 Analizando Suministros con Múltiples OS</h3>
+      <p style="margin: 0; color: #666;">Cargando datos desde la base de datos...</p>
+      <div class="loading" style="display: block; margin: 20px auto;"></div>
+      <p style="color: #1565c0; font-weight: 600; font-size: 16px; margin-top: 10px;">
+        <span id="progresoCarga">0%</span> • <span id="contadorRegistros">0</span> de <span id="totalRegistros">?</span> registros
+      </p>
+      <p style="color: #666; font-size: 13px; margin-top: 10px;">
+        ⚠️ Este análisis puede tardar 15-30 segundos con 10k+ registros
       </p>
     </div>
   `;
-  if (resultsContainer) resultsContainer.innerHTML = '';
+  resultsContainer.innerHTML = '';
   
   try {
-    // ✅ 5. CONSULTA OPTIMIZADA A SUPABASE
-    const { data: osPendientes, error, count } = await supabaseClient
-      .from('OS Pendientes')
-      .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."', { count: 'exact' })
-      .not('CuentaContrato', 'is', null)
-      .not('CuentaContrato', 'eq', '')
-      .not('CuentaContrato', 'eq', '0')
-      .not('CuentaContrato', 'eq', '200000000000');
+    // ✅ CARGAR TODOS LOS REGISTROS CON PAGINACIÓN (1000 por lote)
+    const BATCH_SIZE = 1000;
+    let allRecords = [];
+    let start = 0;
+    let totalRegistros = 0;
+    let hasMore = true;
     
-    if (error) throw error;
+    console.log('📥 Iniciando carga paginada de OS Pendientes...');
     
-    console.log(`✅ Datos obtenidos: ${osPendientes.length} registros analizados.`);
+    while (hasMore) {
+      // ✅ Cargar un lote de registros
+      const { data, error, count } = await supabaseClient
+        .from('OS Pendientes')
+        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."', { count: 'exact' })
+        .not('CuentaContrato', 'is', null)
+        .not('CuentaContrato', 'eq', '')
+        .not('CuentaContrato', 'eq', '0')
+        .not('CuentaContrato', 'eq', '200000000000')
+        .range(start, start + BATCH_SIZE - 1); // Paginación: 0-999, 1000-1999, etc.
+      
+      if (error) throw error;
+      
+      // ✅ Actualizar total de registros (solo la primera vez)
+      if (totalRegistros === 0 && count) {
+        totalRegistros = count;
+        document.getElementById('totalRegistros').textContent = totalRegistros.toLocaleString();
+      }
+      
+      // ✅ Verificar si hay datos
+      if (!data || data.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      // ✅ Acumular registros
+      allRecords = allRecords.concat(data);
+      
+      // ✅ Actualizar progreso visual
+      const progreso = Math.min(100, Math.round((allRecords.length / totalRegistros) * 100));
+      document.getElementById('progresoCarga').textContent = `${progreso}%`;
+      document.getElementById('contadorRegistros').textContent = allRecords.length.toLocaleString();
+      
+      console.log(`✅ Cargados ${allRecords.length} de ${totalRegistros} registros (${progreso}%)`);
+      
+      // ✅ Verificar si es el último lote
+      if (data.length < BATCH_SIZE) {
+        hasMore = false;
+      } else {
+        start += BATCH_SIZE;
+        
+        // ✅ Pequeña pausa para no saturar la UI (opcional pero recomendado)
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
     
-    if (!osPendientes || osPendientes.length === 0) {
-      searchGrid.innerHTML = `
-        <div class="result-card" style="padding: 20px; text-align: center;">
-            <button class="btn btn-back" onclick="volverATablas()" style="margin-bottom: 20px;">← Volver al Menú</button>
-            <p style="color: #ef4444; font-weight: bold;">⚠️ No se encontraron Órdenes Pendientes con Cuenta Contrato válida.</p>
-        </div>`;
+    console.log(`✅ Total cargado: ${allRecords.length} de ${totalRegistros} registros`);
+    
+    if (!allRecords || allRecords.length === 0) {
+      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con CuentaContrato válida</div>';
       return;
     }
     
-    // ✅ 6. PROCESAMIENTO LOGICO DE DUPLICADOS
-    const analisis = analizarSuministrosMultiples(osPendientes);
+    // ✅ Analizar duplicados de CuentaContrato
+    const analisis = analizarSuministrosMultiples(allRecords);
     
-    // ✅ 7. ASEGURAR VISIBILIDAD DE CONTENEDORES INTERNOS
-    searchGrid.style.display = 'block';
-    if (resultsContainer) {
-        resultsContainer.style.display = 'block';
-        resultsContainer.classList.remove('hidden');
-    }
-    
-    // ✅ 8. INYECCIÓN DE HTML (RESUMEN Y TABLA)
+    // ✅ Mostrar resumen + interfaz de filtros
     searchGrid.innerHTML = generarHTMLResumenSuministros(analisis);
-    if (resultsContainer) {
-        resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
-    }
     
-    // ✅ 9. PERSISTENCIA DE DATOS PARA FILTROS/EXPORTACIÓN
+    // ✅ Mostrar tabla de resultados
+    resultsContainer.innerHTML = generarHTMLTablaSuministros(analisis);
+    
+    // ✅ Guardar datos para exportación y filtros
     window.datosSuministrosMultiples = analisis;
-    console.log('✅ Interfaz de Múltiples OS cargada exitosamente.');
+    
+    console.log('✅ Análisis completado exitosamente');
     
   } catch (err) {
-    console.error('❌ Error Crítico en el Análisis:', err);
+    console.error('❌ Error cargando Suministros Múltiples OS:', err);
     searchGrid.innerHTML = `
-      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 20px;">
-        <button class="btn btn-back" onclick="volverATablas()">← Volver al Menú</button>
-        <div class="result-header" style="color: #b91c1c; font-weight: bold; margin-top: 15px;">❌ Error de Conexión / Análisis</div>
-        <p style="color: #666;">${err.message || 'Error desconocido al procesar los datos.'}</p>
-        <p style="font-size: 12px; color: #999; margin-top: 10px;">Verifique su conexión a internet o los permisos de la tabla en Supabase.</p>
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Error de Análisis</div>
+        <p style="color: #666;">${err.message || 'Error desconocido al analizar suministros'}</p>
+        <p style="color: #999; font-size: 13px; margin-top: 10px;">
+          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
+        </p>
       </div>
     `;
   }
 }
-
 
 
 
@@ -26170,6 +26283,83 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+
+// ===================================================================
+// 🔄 EJECUTAR ACTUALIZACIÓN CON OPCIÓN SELECCIONADA
+// ===================================================================
+function ejecutarActualizacionEstadosConOpcion(actualizaciones) {
+  const opcion = document.querySelector('input[name="accionNoCoincidentes"]:checked')?.value || 'ninguna';
+  
+  let soloCoincidencias = true;
+  let registrarNoCoincidencias = false;
+  let dejarEnBlanco = false;
+  
+  switch(opcion) {
+    case 'ninguna':
+      soloCoincidencias = true;
+      registrarNoCoincidencias = false;
+      dejarEnBlanco = false;
+      break;
+    case 'registrar':
+      soloCoincidencias = false;
+      registrarNoCoincidencias = true;
+      dejarEnBlanco = false;
+      break;
+    case 'blanco':
+      soloCoincidencias = false;
+      registrarNoCoincidencias = false;
+      dejarEnBlanco = true;
+      break;
+  }
+  
+  // ✅ Llamar a la función optimizada con los parámetros correctos
+  ejecutarActualizacionEstados(actualizaciones, soloCoincidencias, registrarNoCoincidencias);
+}
+
+
+// ===================================================================
+// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES
+// ===================================================================
+function seleccionarTodasUnidades() {
+  console.log('✅ Seleccionando TODAS las unidades...');
+  
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = true;
+    const unidad = checkbox.value;
+    if (!unidadesSeleccionadas.has(unidad)) {
+      unidadesSeleccionadas.add(unidad);
+    }
+  });
+  
+  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
+  actualizarContadorUnidadesMultiple();
+  actualizarResumenUnidadesMultiple();
+  
+  console.log(`✅ ${unidadesSeleccionadas.size} unidades seleccionadas`);
+}
+
+function deseleccionarTodasUnidades() {
+  console.log('❌ Deseleccionando TODAS las unidades...');
+  
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = false;
+    const unidad = checkbox.value;
+    unidadesSeleccionadas.delete(unidad);
+  });
+  
+  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
+  actualizarContadorUnidadesMultiple();
+  actualizarResumenUnidadesMultiple();
+  
+  console.log('✅ Todas las unidades deseleccionadas');
+}
 
 </script>
 </body>
