@@ -2407,6 +2407,139 @@ function mostrarProgramarTurnoManana(userData, mostrarOpcionDescanso = null) {
     console.log('✅ Interfaz renderizada exitosamente');
 }
 
+// ✅ Toggle de unidad individual
+function toggleUnidadMultiple(unidad) {
+  // ✅ OBTENER CHECKBOX POR VALOR (NO POR event.target)
+  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
+  if (!checkbox) {
+    console.warn(`⚠️ Checkbox para unidad "${unidad}" no encontrado`);
+    return;
+  }
+  
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  if (checkbox.checked) {
+    unidadesSeleccionadas.add(unidad);
+  } else {
+    unidadesSeleccionadas.delete(unidad);
+  }
+  
+  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
+  actualizarContadorUnidadesMultiple();
+  actualizarResumenUnidadesMultiple();
+}
+
+// ===================================================================
+// ✅ FUNCIÓN FALTANTE: ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
+// ===================================================================
+function actualizarContadorUnidadesMultiple() {
+    try {
+        // Busca todos los checkboxes de unidades que estén marcados
+        const seleccionados = document.querySelectorAll('.checkbox-unidad-multiple:checked').length;
+        const total = document.querySelectorAll('.checkbox-unidad-multiple').length;
+        
+        // Busca el elemento de texto donde se muestra el conteo (ajusta el ID si es diferente)
+        const contadorElemento = document.getElementById('contadorUnidadesSeleccionadas');
+        
+        if (contadorElemento) {
+            contadorElemento.innerText = `${seleccionados} de ${total} unidades seleccionadas`;
+            
+            // Opcional: Cambiar color si no hay nada seleccionado
+            contadorElemento.style.color = seleccionados > 0 ? '#2e7d32' : '#666';
+        }
+        
+        console.log(`✅ Contador actualizado: ${seleccionados} seleccionadas`);
+    } catch (e) {
+        console.warn('⚠️ No se pudo actualizar el contador de unidades:', e.message);
+    }
+}
+
+// También es recomendable asegurar que la función sea visible globalmente
+window.actualizarContadorUnidadesMultiple = actualizarContadorUnidadesMultiple;
+
+
+// ===================================================================
+// 📋 FUNCIONES DE SELECCIÓN MÚLTIPLE DE UNIDADES
+// ===================================================================
+
+
+
+// ✅ Actualizar resumen visual de unidades seleccionadas
+function actualizarResumenUnidadesMultiple() {
+  const resumenDiv = document.getElementById('resumenUnidadesSeleccionadas');
+  const listaDiv = document.getElementById('listaUnidadesSeleccionadas');
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  if (resumenDiv && listaDiv) {
+    if (unidadesSeleccionadas.size > 0) {
+      resumenDiv.style.display = 'block';
+      
+      // Generar badges para cada unidad
+      let badgesHTML = '';
+      Array.from(unidadesSeleccionadas).sort().forEach(unidad => {
+        badgesHTML += `
+          <span style="
+            background: #3b82f6; 
+            color: white; 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 6px;
+          ">
+            ${unidad}
+            <span onclick="event.stopPropagation(); deseleccionarUnidadMultiple('${unidad}')" 
+                  style="cursor: pointer; margin-left: 4px; font-weight: bold;">×</span>
+          </span>
+        `;
+      });
+      
+      listaDiv.innerHTML = badgesHTML;
+    } else {
+      resumenDiv.style.display = 'none';
+    }
+  }
+}
+
+// ✅ Deseleccionar unidad específica desde el badge
+function deseleccionarUnidadMultiple(unidad) {
+  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
+  if (checkbox) {
+    checkbox.checked = false;
+    toggleUnidadMultiple(unidad);
+  }
+}
+
+// ✅ Filtrar lista de unidades mientras se escribe
+// ✅ MEJORAR FILTRADO DE UNIDADES CON SELECCIÓN AUTOMÁTICA
+function filtrarListaUnidadesMultiple(busqueda) {
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
+  const busquedaLower = busqueda.toLowerCase().trim();
+  
+  // Contar coincidencias para el botón "Seleccionar Coincidencias"
+  let coincidencias = 0;
+  
+  checkboxes.forEach(checkbox => {
+    const label = checkbox.closest('label');
+    const unidad = checkbox.value.toLowerCase();
+    
+    const coincide = busquedaLower === '' || unidad.includes(busquedaLower);
+    label.style.display = coincide ? 'flex' : 'none';
+    
+    if (coincide) coincidencias++;
+  });
+  
+  // ✅ Actualizar botón "Seleccionar Coincidencias" si existe
+  const btnSeleccionarCoincidencias = document.getElementById('btnSeleccionarCoincidencias');
+  if (btnSeleccionarCoincidencias) {
+    btnSeleccionarCoincidencias.style.display = coincidencias > 0 ? 'inline-block' : 'none';
+    btnSeleccionarCoincidencias.dataset.coindencias = coincidencias;
+    btnSeleccionarCoincidencias.innerHTML = `✅ Seleccionar ${coincidencias} coincidencias`;
+  }
+}
+
+
 
 
 
@@ -11499,7 +11632,16 @@ async function cargarInterfazDetalleOS() {
         `;
 
         window.unidadesSeleccionadasMultiples = new Set();
-        actualizarContadorUnidadesMultiple();
+        // ✅ INICIALIZAR contadores (con verificación de existencia)
+window.unidadesSeleccionadasMultiples = new Set();
+if (typeof actualizarContadorUnidadesMultiple === 'function') {
+  actualizarContadorUnidadesMultiple();
+} else {
+  console.warn('⚠️ Función actualizarContadorUnidadesMultiple no definida. Selección múltiple desactivada.');
+  // Fallback: Inicializar contador manualmente si no existe la función
+  const contador = document.getElementById('contadorUnidadesSeleccionadas');
+  if (contador) contador.textContent = '0 seleccionadas';
+}
 
        
 
@@ -24031,108 +24173,8 @@ function debugCuentaContrato() {
     console.log('Todos los campos:', Object.keys(primer.options.osData));
 }
 
-// ===================================================================
-// 📋 FUNCIONES DE SELECCIÓN MÚLTIPLE DE UNIDADES
-// ===================================================================
-
-// ✅ Toggle de unidad individual
-function toggleUnidadMultiple(unidad) {
-  // ✅ OBTENER CHECKBOX POR VALOR (NO POR event.target)
-  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
-  if (!checkbox) {
-    console.warn(`⚠️ Checkbox para unidad "${unidad}" no encontrado`);
-    return;
-  }
-  
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
-  
-  if (checkbox.checked) {
-    unidadesSeleccionadas.add(unidad);
-  } else {
-    unidadesSeleccionadas.delete(unidad);
-  }
-  
-  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
-  actualizarContadorUnidadesMultiple();
-  actualizarResumenUnidadesMultiple();
-}
 
 
-
-// ✅ Actualizar resumen visual de unidades seleccionadas
-function actualizarResumenUnidadesMultiple() {
-  const resumenDiv = document.getElementById('resumenUnidadesSeleccionadas');
-  const listaDiv = document.getElementById('listaUnidadesSeleccionadas');
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
-  
-  if (resumenDiv && listaDiv) {
-    if (unidadesSeleccionadas.size > 0) {
-      resumenDiv.style.display = 'block';
-      
-      // Generar badges para cada unidad
-      let badgesHTML = '';
-      Array.from(unidadesSeleccionadas).sort().forEach(unidad => {
-        badgesHTML += `
-          <span style="
-            background: #3b82f6; 
-            color: white; 
-            padding: 4px 12px; 
-            border-radius: 20px; 
-            font-size: 12px; 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 6px;
-          ">
-            ${unidad}
-            <span onclick="event.stopPropagation(); deseleccionarUnidadMultiple('${unidad}')" 
-                  style="cursor: pointer; margin-left: 4px; font-weight: bold;">×</span>
-          </span>
-        `;
-      });
-      
-      listaDiv.innerHTML = badgesHTML;
-    } else {
-      resumenDiv.style.display = 'none';
-    }
-  }
-}
-
-// ✅ Deseleccionar unidad específica desde el badge
-function deseleccionarUnidadMultiple(unidad) {
-  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
-  if (checkbox) {
-    checkbox.checked = false;
-    toggleUnidadMultiple(unidad);
-  }
-}
-
-// ✅ Filtrar lista de unidades mientras se escribe
-// ✅ MEJORAR FILTRADO DE UNIDADES CON SELECCIÓN AUTOMÁTICA
-function filtrarListaUnidadesMultiple(busqueda) {
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
-  const busquedaLower = busqueda.toLowerCase().trim();
-  
-  // Contar coincidencias para el botón "Seleccionar Coincidencias"
-  let coincidencias = 0;
-  
-  checkboxes.forEach(checkbox => {
-    const label = checkbox.closest('label');
-    const unidad = checkbox.value.toLowerCase();
-    
-    const coincide = busquedaLower === '' || unidad.includes(busquedaLower);
-    label.style.display = coincide ? 'flex' : 'none';
-    
-    if (coincide) coincidencias++;
-  });
-  
-  // ✅ Actualizar botón "Seleccionar Coincidencias" si existe
-  const btnSeleccionarCoincidencias = document.getElementById('btnSeleccionarCoincidencias');
-  if (btnSeleccionarCoincidencias) {
-    btnSeleccionarCoincidencias.style.display = coincidencias > 0 ? 'inline-block' : 'none';
-    btnSeleccionarCoincidencias.dataset.coindencias = coincidencias;
-    btnSeleccionarCoincidencias.innerHTML = `✅ Seleccionar ${coincidencias} coincidencias`;
-  }
-}
 
 // ✅ NUEVA FUNCIÓN: Seleccionar todas las unidades que coincidan con la búsqueda actual
 function seleccionarCoincidenciasBusqueda() {
@@ -26273,33 +26315,6 @@ function deseleccionarTodasUnidades() {
   alert(`✅ ${count} unidades deseleccionadas`);
 }
 
-// ===================================================================
-// ✅ FUNCIÓN FALTANTE: ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
-// ===================================================================
-function actualizarContadorUnidadesMultiple() {
-    try {
-        // Busca todos los checkboxes de unidades que estén marcados
-        const seleccionados = document.querySelectorAll('.checkbox-unidad-multiple:checked').length;
-        const total = document.querySelectorAll('.checkbox-unidad-multiple').length;
-        
-        // Busca el elemento de texto donde se muestra el conteo (ajusta el ID si es diferente)
-        const contadorElemento = document.getElementById('contadorUnidadesSeleccionadas');
-        
-        if (contadorElemento) {
-            contadorElemento.innerText = `${seleccionados} de ${total} unidades seleccionadas`;
-            
-            // Opcional: Cambiar color si no hay nada seleccionado
-            contadorElemento.style.color = seleccionados > 0 ? '#2e7d32' : '#666';
-        }
-        
-        console.log(`✅ Contador actualizado: ${seleccionados} seleccionadas`);
-    } catch (e) {
-        console.warn('⚠️ No se pudo actualizar el contador de unidades:', e.message);
-    }
-}
-
-// También es recomendable asegurar que la función sea visible globalmente
-window.actualizarContadorUnidadesMultiple = actualizarContadorUnidadesMultiple;
 
 </script>
 </body>
