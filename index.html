@@ -20056,26 +20056,35 @@ function calcularDiasHabiles(fechaGen) {
  	// ===================================================================
 // 📅 CALCULAR DÍAS DESDE GENERACIÓN (Hoy = DÍA 0)
 // ===================================================================
+// ===================================================================
+// 📅 CALCULAR DÍAS DESDE GENERACIÓN (CORREGIDO PARA ZONA HORARIA)
+// ===================================================================
 function calcularDias(fechaGen) {
     if (!fechaGen) return 999;
     
     try {
-        // 1. Obtener HOY y normalizar a medianoche (00:00:00)
-        const hoy = getFechaElSalvador();
-        const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        // 1. Obtener la fecha exacta de El Salvador (evita el salto de UTC)
+        const hoySV = getFechaElSalvador();
+        
+        // 2. Normalizar HOY a medianoche usando los componentes locales de SV
+        const hoyMedianoche = new Date(hoySV.getFullYear(), hoySV.getMonth(), hoySV.getDate());
 
-        // 2. Convertir la fecha de generación y normalizar también a medianoche
+        // 3. Convertir la fecha de generación
         const fechaGeneracion = new Date(fechaGen);
-        const genMedianoche = new Date(fechaGeneracion.getFullYear(), fechaGeneracion.getMonth(), fechaGeneracion.getDate());
+        
+        // 4. Normalizar GENERACIÓN a medianoche (usando UTC para evitar desajustes de base de datos)
+        // Si fechaGen viene de Supabase/ISO string, getUTCDate es lo más preciso
+        const genMedianoche = new Date(
+            fechaGeneracion.getUTCFullYear(), 
+            fechaGeneracion.getUTCMonth(), 
+            fechaGeneracion.getUTCDate()
+        );
 
-        // 3. Calcular la diferencia en milisegundos
+        // 5. Calcular diferencia
         const diffMs = hoyMedianoche - genMedianoche;
+        let diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        // 4. Convertir a días (usando Math.round para evitar errores por cambios de horario)
-        let diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-        // 5. Si la fecha es de hoy, diffDias será 0. 
-        // Si es menor a 0 (fecha futura), lo dejamos en 0.
+        // 6. Retornar 0 si es hoy o fecha futura, de lo contrario la diferencia
         return diffDias < 0 ? 0 : diffDias;
 
     } catch (e) {
@@ -20083,6 +20092,8 @@ function calcularDias(fechaGen) {
         return 999;
     }
 }
+
+
 
 // ========================================
 // 📊 CLASIFICACIÓN DE RANGOS (MANTENIDO)
