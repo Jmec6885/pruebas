@@ -459,6 +459,14 @@
                 <div class="table-description">Detectar suministros con múltiples órdenes asignadas</div>
             </div>
 
+	     <!-- ✅ NUEVA OPCIÓN: Medidores Especiales (solo para Administrador y Despacho) -->
+<div class="table-option" id="opcionMedidoresEspeciales" style="display: none;" 
+     onclick="seleccionarTabla('medidores_especiales')">
+    <span class="table-icon">⚡</span>
+    <div class="table-title">Medidores Especiales</div>
+    <div class="table-description">Detectar medidores especiales asignados a unidades</div>
+</div>
+
             <div class="table-option" onclick="seleccionarTabla('mapa_rutas')">
                 <span class="table-icon">🗺️</span>
                 <div class="table-title">Mapa de Rutas</div>
@@ -1339,7 +1347,7 @@ async function login() {
     }
 
     try {
-        // ✅ 2. Limpieza de mantenimiento (Dentro del try por seguridad)
+        // ✅ 2. Limpieza de mantenimiento
         console.log('🧹 2. Limpiando datos viejos y caché...');
         await Promise.allSettled([
             limpiarTurnosViejos(),
@@ -1366,13 +1374,11 @@ async function login() {
         // ✅ 4. Validaciones de Seguridad
         console.log('🛡️ 4. Validando restricciones de usuario...');
         
-        // Bloqueo manual
         if (data.razon_bloqueo && data.razon_bloqueo.trim() !== '') {
             alert(`🚫 Usuario bloqueado\n\nMotivo: ${data.razon_bloqueo}`);
             return;
         }
         
-        // Inactividad
         const checkInactividad = await verificarInactividad(data);
         if (checkInactividad.inactivo) {
             await supabaseClient
@@ -1386,7 +1392,6 @@ async function login() {
             return;
         }
 
-        // Horario
         const verificacion = verificarHorarioPermitido(data.rol, data);
         if (!verificacion.permitido) {
             alert(verificacion.mensaje);
@@ -1410,7 +1415,6 @@ async function login() {
 
         if (updateError) throw updateError;
 
-        // Actualizar estado local
         data.sessiontoken = newToken; 
         currentUser = data;
 
@@ -1423,15 +1427,16 @@ async function login() {
 
         if (typeof guardarDatosOffline === 'function') guardarDatosOffline();
         
-        // Ejecutar visibilidad de suministros según rol
-        if (typeof mostrarOpcionSuministrosMultiples === 'function') {
-            mostrarOpcionSuministrosMultiples();
+        // ---------------------------------------------------------
+        // ✅ NUEVO: Ejecutar visibilidad de Medidores Especiales
+        // ---------------------------------------------------------
+        if (typeof mostrarOpcionMedidoresEspeciales === 'function') {
+            mostrarOpcionMedidoresEspeciales();
         }
 
         console.log(`✅ 6. Login exitoso. Rol: ${data.rol}`);
 
         // ✅ 7. Redirección y Cambio de Interfaz
-        // Pre-configuración común
         const loginSection = document.getElementById('loginSection');
         const userInfo = document.getElementById('userInfo');
         const currentUserLabel = document.getElementById('currentUser');
@@ -1459,6 +1464,13 @@ async function login() {
         
         const tableSection = document.getElementById('tableSelectionSection');
         if (tableSection) tableSection.style.display = 'block';
+
+        // ---------------------------------------------------------
+        // ✅ NUEVO: Asegurar que se muestre al activar el menú principal
+        // ---------------------------------------------------------
+        if (typeof mostrarOpcionMedidoresEspeciales === 'function') {
+            mostrarOpcionMedidoresEspeciales();
+        }
 
         iniciarVerificacionSesion();
         mostrarTablasSegunRol();
@@ -4660,7 +4672,17 @@ const tableConfigs = {
     actions: [],
     esSuministrosMultiples: true,
     rolesPermitidos: ['Administrador', 'Despacho']
-}
+},
+  'medidores_especiales': {
+        title: 'Medidores Especiales',
+        icon: '⚡',
+        fields: [],  // Sin campos de búsqueda (análisis automático)
+        resultFields: [],  // Sin campos estándar (renderizado personalizado)
+        actions: [],
+        esMedidoresEspeciales: true,
+        rolesPermitidos: ['Administrador', 'Despacho']
+    }
+
 };
 
 
@@ -22054,7 +22076,8 @@ const PERMISOS_MODULOS = {
     'OSCerradas':          ['Administrador', 'Despacho', 'Supervisor', 'Contratista', 'Consulta'],
     'consultas_servicios': ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Lectura', 'Poda'],
     'tx_y_cortes':         ['Administrador', 'Supervisor', 'Bodega', 'ATTF', 'Contratista', 'Consulta', 'Poda', 'Despacho'],
-    'suministros_multiples': ['Administrador', 'Despacho']  // ✅ CORREGIDO: nombre simple + coma anterior
+    'suministros_multiples': ['Administrador', 'Despacho'],  // ✅ CORREGIDO: nombre simple + coma anterior
+    'medidores_especiales': ['Administrador', 'Despacho']  // ✅ CORREGIDO: nombre simple + coma anterior
 };
 
 
@@ -22157,6 +22180,21 @@ function seleccionarTabla(tableName, retryCount = 0) {
         return;
 }
 
+case 'medidores_especiales':
+    console.log("⚡ Inicializando Medidores Especiales...");
+    const tableSel3 = document.getElementById('tableSelectionSection');
+    const searchSec3 = document.getElementById('searchSection');
+    if (tableSel3) tableSel3.style.display = 'none';
+    if (searchSec3) {
+        searchSec3.style.display = 'block';
+        searchSec3.classList.remove('hidden');
+    }
+    if (searchGrid) searchGrid.innerHTML = '';
+    cargarInterfazMedidoresEspeciales();
+    return;
+}
+
+
     // 3. ACTUALIZAR INTERFAZ VISUAL
     const config = tableConfigs[tableName];
     if (!config) {
@@ -22187,6 +22225,7 @@ function seleccionarTabla(tableName, retryCount = 0) {
         console.log('✅ searchSection visible y activo');
     }
 }
+
 
 // ========================================
 // 🧹 LIMPIAR FILTROS OBSOLETOS (Automático silencioso)
@@ -26363,6 +26402,406 @@ function deseleccionarTodasUnidades() {
   
   console.log(`✅ ${count} unidades deseleccionadas`);
   alert(`✅ ${count} unidades deseleccionadas`);
+}
+
+
+// ===================================================================
+// 👁️ MOSTRAR/OCULTAR OPCIÓN DE MEDIDORES ESPECIALES SEGÚN ROL
+// ===================================================================
+function mostrarOpcionMedidoresEspeciales() {
+  const opcionMedidores = document.getElementById('opcionMedidoresEspeciales');
+  if (!opcionMedidores || !currentUser?.rol) {
+    console.warn('⚠️ No se pudo acceder a la opción de Medidores Especiales');
+    return;
+  }
+  
+  // ✅ Mostrar solo para roles Administrador y Despacho
+  if (['Administrador', 'Despacho'].includes(currentUser.rol)) {
+    opcionMedidores.style.display = 'block';
+    console.log('✅ Opción "Medidores Especiales" visible para rol:', currentUser.rol);
+  } else {
+    opcionMedidores.style.display = 'none';
+    console.log('🔒 Opción "Medidores Especiales" oculta para rol:', currentUser.rol);
+  }
+}
+
+// ===================================================================
+// 📋 CARGAR INTERFAZ: MEDIDORES ESPECIALES
+// ===================================================================
+async function cargarInterfazMedidoresEspeciales() {
+  console.log('⚡ Cargando interfaz de Medidores Especiales...');
+  
+  const searchGrid = document.getElementById('searchGrid');
+  const resultsContainer = document.getElementById('searchResults');
+  
+  // ✅ Validación de rol (seguridad adicional)
+  if (!['Administrador', 'Despacho'].includes(currentUser?.rol)) {
+    resultsContainer.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Acceso Denegado</div>
+        <p style="text-align: center; color: #666;">
+          Esta funcionalidad solo está disponible para roles Administrador y Despacho.
+        </p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Pantalla de carga
+  searchGrid.innerHTML = `
+    <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
+      <h3 style="margin: 0 0 10px 0; color: #1565c0;">⚡ Analizando Medidores Especiales</h3>
+      <p style="margin: 0; color: #666;">Escaneando base de datos para detectar medidores especiales...</p>
+      <div class="loading" style="display: block; margin: 20px auto;"></div>
+      <p style="color: #666; font-size: 13px; margin-top: 10px;">
+        ⚠️ Este análisis puede tardar 10-20 segundos con 10k+ registros
+      </p>
+    </div>
+  `;
+  resultsContainer.innerHTML = '';
+  
+  try {
+    // ✅ Cargar TODAS las OS Pendientes (solo campos necesarios)
+    const {  osPendientes, error, count } = await supabaseClient
+      .from('OS Pendientes')
+      .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen.", Tipo_Medidor, Marca_Modelo', { count: 'exact' })
+      .not('CuentaContrato', 'is', null)
+      .not('CuentaContrato', 'eq', '')
+      .not('CuentaContrato', 'eq', '0')
+      .not('CuentaContrato', 'eq', '200000000000')
+      .in('Tipo_Medidor', ['Especial', 'Bidireccional', 'Telemedido']);
+    
+    if (error) throw error;
+    
+    console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
+    
+    if (!osPendientes || osPendientes.length === 0) {
+      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con Tipo Medidor Especial</div>';
+      return;
+    }
+    
+    // ✅ Analizar medidores especiales
+    const analisis = analizarMedidoresEspeciales(osPendientes);
+    
+    // ✅ Mostrar resumen + interfaz de filtros
+    searchGrid.innerHTML = generarHTMLResumenMedidores(analisis);
+    resultsContainer.innerHTML = generarHTMLTablaMedidores(analisis);
+    
+    // ✅ Guardar datos para exportación y filtros
+    window.datosMedidoresEspeciales = analisis;
+    
+  } catch (err) {
+    console.error('❌ Error cargando Medidores Especiales:', err);
+    searchGrid.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Error de Análisis</div>
+        <p style="color: #666;">${err.message || 'Error desconocido al analizar medidores'}</p>
+        <p style="color: #999; font-size: 13px; margin-top: 10px;">
+          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
+        </p>
+      </div>
+    `;
+  }
+}
+
+// ===================================================================
+// 🔍 ANALIZAR MEDIDORES ESPECIALES
+// ===================================================================
+function analizarMedidoresEspeciales(osPendientes) {
+  console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
+  
+  // ✅ Filtrar por unidades válidas (diferentes de "--------------------------------------------------", null, 0)
+  const medidoresEspeciales = osPendientes.filter(os => {
+    const unidadValida = os.Unidad && 
+                         os.Unidad.trim() !== '' &&
+                         os.Unidad.trim() !== '0' &&
+                         os.Unidad.trim() !== '--------------------------------------------------';
+    
+    return unidadValida;
+  });
+  
+  // ✅ Agrupar por CuentaContrato
+  const agrupado = {};
+  medidoresEspeciales.forEach(os => {
+    const cc = String(os.CuentaContrato || '').trim();
+    if (!cc || cc === '0' || cc === '200000000000') return;
+    
+    if (!agrupado[cc]) agrupado[cc] = [];
+    agrupado[cc].push({
+      OSSAP: os.OSSAP || 'N/A',
+      OSATMO: os.OSATMO || 'N/A',
+      Tipologia: os.Tipologia || 'N/A',
+      Estado_ATOMO: os.Estado_ATOMO || 'N/A',
+      Unidad: os.Unidad || 'SIN UNIDAD',
+      'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
+      Tipo_Medidor: os.Tipo_Medidor || 'N/A',
+      Marca_Modelo: os.Marca_Modelo || 'N/A',
+      CuentaContrato: cc
+    });
+  });
+  
+  // ✅ Estadísticas
+  const totalMedidores = Object.keys(agrupado).length;
+  const totalOS = medidoresEspeciales.length;
+  
+  console.log(`✅ Medidores especiales detectados: ${totalMedidores}`);
+  console.log(`✅ OS involucradas: ${totalOS}`);
+  
+  console.groupEnd();
+  
+  return {
+    medidores: Object.values(agrupado),
+    estadisticas: {
+      totalMedidores,
+      totalOS
+    }
+  };
+}
+
+// ===================================================================
+// 📊 GENERAR HTML: RESUMEN + FILTROS
+// ===================================================================
+function generarHTMLResumenMedidores(analisis) {
+  const { estadisticas } = analisis;
+  
+  return `
+    <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
+      <button class="btn btn-back" onclick="volverATablas()">← Volver a Módulos</button>
+      
+      <div class="result-header">⚡ Medidores Especiales</div>
+      
+      <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+        <strong>📊 Resumen del Análisis:</strong><br>
+        • Medidores detectados: <strong>${estadisticas.totalMedidores.toLocaleString()}</strong><br>
+        • OS involucradas: <strong>${estadisticas.totalOS.toLocaleString()}</strong>
+      </div>
+      
+      <!-- ✅ FILTROS RÁPIDOS -->
+      <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #ffc107;">
+        <strong style="font-size: 16px; color: #2d3748;">🔍 Filtros Rápidos:</strong>
+        
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+          <button class="btn btn-secondary" onclick="filtrarMedidoresPorTipo('todos')" 
+                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 16px; font-size: 14px;">
+            🎨 Mostrar Todos (${analisis.medidores.length})
+          </button>
+        </div>
+        
+        <div style="margin-top: 15px; padding: 12px; background: #dbeafe; border-radius: 8px; font-size: 13px;">
+          <strong>💡 Leyenda:</strong><br>
+          • Cada medidor especial se muestra con sus OS asociadas<br>
+          • Solo se muestran medidores asignados a unidades válidas
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+          <button class="btn" onclick="exportarMedidoresEspecialesExcel()" 
+                  style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 12px 25px; font-size: 16px;">
+            📥 Exportar a Excel (${analisis.medidores.length} medidores)
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ===================================================================
+// 📋 GENERAR HTML: TABLA DE MEDIDORES
+// ===================================================================
+function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
+  const medidoresFiltrados = analisis.medidores;
+  
+  if (medidoresFiltrados.length === 0) {
+    return `
+      <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107; text-align: center; padding: 30px;">
+        <div class="result-header">ℹ️ Sin</div>
+        <p style="color: #666; margin-top: 15px;">
+          No se encontraron medidores especiales que coincidan con el filtro seleccionado.
+        </p>
+        <button class="btn" onclick="filtrarMedidoresPorTipo('todos')" 
+                style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); margin-top: 20px; padding: 10px 20px;">
+          🔄 Mostrar Todos los Medidores
+        </button>
+      </div>
+    `;
+  }
+  
+  // ✅ Generar tabla
+  let html = `
+    <div class="result-card" style="background: white; padding: 25px;">
+      <h2 style="color: #64748b; margin: 0 0 20px 0; font-size: 24px; border-bottom: 3px solid #94a3b8; padding-bottom: 10px;">
+        ⚡ Medidores Especiales (${medidoresFiltrados.length} encontrados)
+      </h2>
+      
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Cuenta Contrato</th>
+              <th style="padding: 14px 16px; text-align: center; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); min-width: 100px;">Total OS</th>
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Unidades</th>
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">OS Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+  
+  medidoresFiltrados.forEach((medidor, idx) => {
+    const esPar = idx % 2 === 0;
+    const bgColor = esPar ? '#f8fafc' : '#ffffff';
+    
+    html += `
+      <tr style="background: ${bgColor}; border-bottom: 2px solid #e2e8f0;">
+        <td style="padding: 12px 16px; font-weight: 700; color: #1565c0; font-family: monospace; border-right: 1px solid #e2e8f0;">
+          ${medidor[0].CuentaContrato}
+        </td>
+        <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: #1565c0; border-right: 1px solid #e2e8f0; font-size: 16px;">
+          ${medidor.length}
+        </td>
+        <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            ${medidor.map(os => `
+              <span style="background: #f1f5f9; color: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">
+                ${os.Unidad}
+              </span>
+            `).join('')}
+          </div>
+        </td>
+        <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+            ${medidor.map(os => `
+              <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; border-left: 4px solid #1565c0;">
+                <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+                  <span>OSATMO: ${os.OSATMO}</span>
+                  <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                    ${os.Estado_ATOMO}
+                  </span>
+                </div>
+                <div style="font-size: 13px; color: #4b5563; line-height: 1.5;">
+                  <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
+                  <div><strong>Tipología:</strong> ${os.Tipologia}</div>
+                  <div><strong>Unidad:</strong> ${os.Unidad}</div>
+                  <div><strong>Tipo Medidor:</strong> ${os.Tipo_Medidor}</div>
+                  <div><strong>Marca/Modelo:</strong> ${os.Marca_Modelo}</div>
+                  <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+  
+  html += `
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-top: 30px; border: 1px solid #cbde1;">
+        <strong style="color: #1e293b; font-size: 18px; display: block; margin-bottom: 15px;">
+          📊 Resumen del Filtro Actual
+        </strong>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
+          <div>• <strong>Total medidores:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.length.toLocaleString()}</span></div>
+          <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.length, 0).toLocaleString()}</span></div>
+          <div>• <strong>Filtro aplicado:</strong> <span style="color: #64748b; font-weight: 700;">🎨 Todos</span></div>
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+          <button class="btn" onclick="exportarMedidoresEspecialesExcel()" 
+                  style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 10px 25px; font-size: 15px;">
+            📥 Exportar a Excel (${medidoresFiltrados.length} medidores)
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return html;
+}
+
+// ===================================================================
+// 🔘 FILTRAR POR TIPO (interactivo)
+// ===================================================================
+function filtrarMedidoresPorTipo(tipo) {
+  if (!window.datosMedidoresEspeciales) {
+    alert('⚠️ No hay datos cargados para filtrar');
+    return;
+  }
+  
+  const resultsContainer = document.getElementById('searchResults');
+  if (!resultsContainer) return;
+  
+  resultsContainer.innerHTML = generarHTMLTablaMedidores(window.datosMedidoresEspeciales, tipo);
+  
+  // ✅ Scroll suave al inicio de los resultados
+  resultsContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ===================================================================
+// 📥 EXPORTAR A EXCEL
+// ===================================================================
+function exportarMedidoresEspecialesExcel() {
+  if (!window.datosMedidoresEspeciales) {
+    alert('⚠️ No hay datos para exportar');
+    return;
+  }
+  
+  try {
+    // ✅ Preparar datos para Excel
+    const datos = [];
+    
+    window.datosMedidoresEspeciales.medidores.forEach(medidor => {
+      medidor.forEach((os, idx) => {
+        datos.push({
+          'Cuenta Contrato': medidor[0].CuentaContrato,
+          'Total OS en Medidor': medidor.length,
+          'OS #': idx + 1,
+          'OSATMO': os.OSATMO,
+          'OSSAP': os.OSSAP,
+          'Tipología': os.Tipologia,
+          'Estado ATOMO': os.Estado_ATOMO,
+          'Unidad': os.Unidad,
+          'Tipo Medidor': os.Tipo_Medidor,
+          'Marca/Modelo': os.Marca_Modelo,
+          'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
+        });
+      });
+    });
+    
+    // ✅ Crear hoja de Excel
+    const ws = XLSX.utils.json_to_sheet(datos);
+    
+    // ✅ Ajustar ancho de columnas
+    const wscols = [
+      { wch: 18 }, // Cuenta Contrato
+      { wch: 10 }, // Total OS
+      { wch: 8 },  // OS #
+      { wch: 15 }, // OSATMO
+      { wch: 15 }, // OSSAP
+      { wch: 35 }, // Tipología
+      { wch: 18 }, // Estado ATOMO
+      { wch: 15 }, // Unidad
+      { wch: 20 }, // Tipo Medidor
+      { wch: 20 }, // Marca/Modelo
+      { wch: 15 }  // Fecha
+    ];
+    ws['!cols'] = wscols;
+    
+    // ✅ Crear libro y descargar
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Medidores_Especiales');
+    
+    // ✅ Nombre de archivo con fecha
+    const fecha = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Medidores_Especiales_${fecha}.xlsx`);
+    
+    console.log(`✅ Exportado: ${datos.length} registros a Excel`);
+    alert(`✅ Exportación completada exitosamente\n\n${datos.length} registros guardados en archivo Excel.`);
+    
+  } catch (err) {
+    console.error('❌ Error exportando a Excel:', err);
+    alert(`❌ Error al exportar: ${err.message || 'Error desconocido'}`);
+  }
 }
 
 </script>
