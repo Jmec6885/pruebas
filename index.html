@@ -2407,139 +2407,6 @@ function mostrarProgramarTurnoManana(userData, mostrarOpcionDescanso = null) {
     console.log('✅ Interfaz renderizada exitosamente');
 }
 
-// ✅ Toggle de unidad individual
-function toggleUnidadMultiple(unidad) {
-  // ✅ OBTENER CHECKBOX POR VALOR (NO POR event.target)
-  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
-  if (!checkbox) {
-    console.warn(`⚠️ Checkbox para unidad "${unidad}" no encontrado`);
-    return;
-  }
-  
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
-  
-  if (checkbox.checked) {
-    unidadesSeleccionadas.add(unidad);
-  } else {
-    unidadesSeleccionadas.delete(unidad);
-  }
-  
-  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
-  actualizarContadorUnidadesMultiple();
-  actualizarResumenUnidadesMultiple();
-}
-
-// ===================================================================
-// ✅ FUNCIÓN FALTANTE: ACTUALIZAR CONTADOR DE UNIDADES SELECCIONADAS
-// ===================================================================
-function actualizarContadorUnidadesMultiple() {
-    try {
-        // Busca todos los checkboxes de unidades que estén marcados
-        const seleccionados = document.querySelectorAll('.checkbox-unidad-multiple:checked').length;
-        const total = document.querySelectorAll('.checkbox-unidad-multiple').length;
-        
-        // Busca el elemento de texto donde se muestra el conteo (ajusta el ID si es diferente)
-        const contadorElemento = document.getElementById('contadorUnidadesSeleccionadas');
-        
-        if (contadorElemento) {
-            contadorElemento.innerText = `${seleccionados} de ${total} unidades seleccionadas`;
-            
-            // Opcional: Cambiar color si no hay nada seleccionado
-            contadorElemento.style.color = seleccionados > 0 ? '#2e7d32' : '#666';
-        }
-        
-        console.log(`✅ Contador actualizado: ${seleccionados} seleccionadas`);
-    } catch (e) {
-        console.warn('⚠️ No se pudo actualizar el contador de unidades:', e.message);
-    }
-}
-
-// También es recomendable asegurar que la función sea visible globalmente
-window.actualizarContadorUnidadesMultiple = actualizarContadorUnidadesMultiple;
-
-
-// ===================================================================
-// 📋 FUNCIONES DE SELECCIÓN MÚLTIPLE DE UNIDADES
-// ===================================================================
-
-
-
-// ✅ Actualizar resumen visual de unidades seleccionadas
-function actualizarResumenUnidadesMultiple() {
-  const resumenDiv = document.getElementById('resumenUnidadesSeleccionadas');
-  const listaDiv = document.getElementById('listaUnidadesSeleccionadas');
-  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
-  
-  if (resumenDiv && listaDiv) {
-    if (unidadesSeleccionadas.size > 0) {
-      resumenDiv.style.display = 'block';
-      
-      // Generar badges para cada unidad
-      let badgesHTML = '';
-      Array.from(unidadesSeleccionadas).sort().forEach(unidad => {
-        badgesHTML += `
-          <span style="
-            background: #3b82f6; 
-            color: white; 
-            padding: 4px 12px; 
-            border-radius: 20px; 
-            font-size: 12px; 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 6px;
-          ">
-            ${unidad}
-            <span onclick="event.stopPropagation(); deseleccionarUnidadMultiple('${unidad}')" 
-                  style="cursor: pointer; margin-left: 4px; font-weight: bold;">×</span>
-          </span>
-        `;
-      });
-      
-      listaDiv.innerHTML = badgesHTML;
-    } else {
-      resumenDiv.style.display = 'none';
-    }
-  }
-}
-
-// ✅ Deseleccionar unidad específica desde el badge
-function deseleccionarUnidadMultiple(unidad) {
-  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
-  if (checkbox) {
-    checkbox.checked = false;
-    toggleUnidadMultiple(unidad);
-  }
-}
-
-// ✅ Filtrar lista de unidades mientras se escribe
-// ✅ MEJORAR FILTRADO DE UNIDADES CON SELECCIÓN AUTOMÁTICA
-function filtrarListaUnidadesMultiple(busqueda) {
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
-  const busquedaLower = busqueda.toLowerCase().trim();
-  
-  // Contar coincidencias para el botón "Seleccionar Coincidencias"
-  let coincidencias = 0;
-  
-  checkboxes.forEach(checkbox => {
-    const label = checkbox.closest('label');
-    const unidad = checkbox.value.toLowerCase();
-    
-    const coincide = busquedaLower === '' || unidad.includes(busquedaLower);
-    label.style.display = coincide ? 'flex' : 'none';
-    
-    if (coincide) coincidencias++;
-  });
-  
-  // ✅ Actualizar botón "Seleccionar Coincidencias" si existe
-  const btnSeleccionarCoincidencias = document.getElementById('btnSeleccionarCoincidencias');
-  if (btnSeleccionarCoincidencias) {
-    btnSeleccionarCoincidencias.style.display = coincidencias > 0 ? 'inline-block' : 'none';
-    btnSeleccionarCoincidencias.dataset.coindencias = coincidencias;
-    btnSeleccionarCoincidencias.innerHTML = `✅ Seleccionar ${coincidencias} coincidencias`;
-  }
-}
-
-
 
 
 
@@ -9487,23 +9354,19 @@ misAsignadasReales.forEach(os => {
 
 
 function determinarRangoDias(fechaGen) {
-    if (!fechaGen) return "SIN FECHA";
-    try {
-        const ahora = new Date();
-        const hoyUTC = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
-
-        const inicio = new Date(fechaGen);
-        const inicioUTC = Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), inicio.getUTCDate());
-
-        const diferenciaMs = hoyUTC - inicioUTC;
-        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
-
-        // Llama a la maestra
-        return obtenerRangoPorNumero(dias); 
-    } catch (e) {
-        return "ERROR FECHA";
-    }
+  if (!fechaGen) return "SIN FECHA";
+  
+  try {
+    // ✅ USAR LA FUNCIÓN MAESTRA CORREGIDA (Hoy = Día 0)
+    const dias = calcularDias(fechaGen);
+    return obtenerRangoPorNumero(dias);
+  } catch (e) {
+    console.error('❌ Error en determinarRangoDias:', e);
+    return "ERROR FECHA";
+  }
 }
+
+
 
  	// ========================================
 // 📊 ACTUALIZAR RESUMEN UNIDAD KML (VALIDADA CON LIMPIEZA)
@@ -11632,16 +11495,7 @@ async function cargarInterfazDetalleOS() {
         `;
 
         window.unidadesSeleccionadasMultiples = new Set();
-        // ✅ INICIALIZAR contadores (con verificación de existencia)
-window.unidadesSeleccionadasMultiples = new Set();
-if (typeof actualizarContadorUnidadesMultiple === 'function') {
-  actualizarContadorUnidadesMultiple();
-} else {
-  console.warn('⚠️ Función actualizarContadorUnidadesMultiple no definida. Selección múltiple desactivada.');
-  // Fallback: Inicializar contador manualmente si no existe la función
-  const contador = document.getElementById('contadorUnidadesSeleccionadas');
-  if (contador) contador.textContent = '0 seleccionadas';
-}
+        actualizarContadorUnidadesMultiple();
 
        
 
@@ -20008,61 +19862,109 @@ async function cargarFestivos() {
 // ========================================
 // 📅 CALCULAR DÍAS HÁBILES (EXCLUYE SÁB/DOM/FESTIVOS)
 // ========================================
+
 function calcularDiasHabiles(fechaGen) {
-    if (!fechaGen) return null;
- 
-    const hoy = getFechaElSalvador();
-    hoy.setHours(0, 0, 0, 0);
- 
-    const fechaInicio = new Date(fechaGen);
-    fechaInicio.setHours(0, 0, 0, 0);
- 
-    let diasHabiles = 0;
-    let fechaActual = new Date(fechaInicio);
- 
-    while (fechaActual <= hoy) {
-        const diaSemana = fechaActual.getDay(); // 0=Domingo, 6=Sábado
-        const fechaStr = fechaActual.toISOString().split('T')[0];
- 
-        // Contar si NO es sábado, NO es domingo, NO es festivo
-        if (diaSemana !== 0 && diaSemana !== 6 && !festivosCache.includes(fechaStr)) {
-            diasHabiles++;
-        }
- 
-        fechaActual.setDate(fechaActual.getDate() + 1);
-    }
- 
-    return diasHabiles;
-}
- 
+  if (!fechaGen) return null;
+  
+  try {
+    // ✅ 1. Obtener HOY a medianoche en ZONA HORARIA DE EL SALVADOR
+    const hoySV = getFechaElSalvador();
+    hoySV.setHours(0, 0, 0, 0);
+    
+    // ✅ 2. Normalizar fecha de generación a MEDIANOCHE SV (UTC-6)
+    const fechaGeneracion = new Date(fechaGen);
+    if (isNaN(fechaGeneracion.getTime())) return null;
+    
+    const fechaGenSV = new Date(
+      fechaGeneracion.getUTCFullYear(),
+      fechaGeneracion.getUTCMonth(),
+      fechaGeneracion.getUTCDate(),
+      6, 0, 0, 0
+    );
+    fechaGenSV.setHours(0, 0, 0, 0);
+    
+    // ✅ 3. Calcular diferencia en días calendario (CORREGIDO)
+    const diffMs = hoySV - fechaGenSV;
+    const diffTotalDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffTotalDias < 0) return 0;
+    
+    // ✅ 4. Contar SOLO días hábiles (lunes a viernes, excluyendo festivos)
+    let diasHabiles = 0;
+    let fechaActual = new Date(fechaGenSV);
+    
+    while (fechaActual <= hoySV) {
+      const diaSemana = fechaActual.getDay(); // 0=Domingo, 6=Sábado
+      const fechaStr = fechaActual.toISOString().split('T')[0];
+      
+      // Contar si NO es sábado, NO es domingo, y NO es festivo
+      if (diaSemana !== 0 && diaSemana !== 6 && !festivosCache.includes(fechaStr)) {
+        diasHabiles++;
+      }
+      
+      fechaActual.setDate(fechaActual.getDate() + 1);
+    }
+    
+    // ✅ 5. CORRECCIÓN: Si es el mismo día, debe ser 0 días hábiles transcurridos
+    // (No contamos el día de generación como día hábil transcurrido)
+    if (diffTotalDias === 0) return 0;
+    
+    // 📌 LOG DE VERIFICACIÓN (comentar en producción)
+    // console.log(`📅 CalcularDiasHabiles: Gen=${fechaGenSV.toISOString().split('T')[0]}, Hoy=${hoySV.toISOString().split('T')[0]}, Hábiles=${diasHabiles - 1}`);
+    
+    // ✅ RESTAR 1 para que HOY sea DÍA 0 (no día 1)
+    return Math.max(0, diasHabiles - 1);
+    
+  } catch (err) {
+    console.error('Error calculando días hábiles:', err);
+    return null;
+  }
+} 
 
- 	// ========================================
-// 📅 CALCULAR DÍAS DESDE GENERACIÓN
-// ========================================
+ 	// ===================================================================
+// 📅 CALCULAR DÍAS DESDE GENERACIÓN (Hoy = DÍA 0)
+// ===================================================================
 function calcularDias(fechaGen) {
-    if (!fechaGen) return 999;
- 
-    const fechaGeneracion = new Date(fechaGen);
-    const hoy = getFechaElSalvador();
- 
-    const diffMs = hoy - fechaGeneracion;
-    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
- 
-    return diffDias;
+    if (!fechaGen) return 999;
+    
+    try {
+        // 1. Obtener HOY y normalizar a medianoche (00:00:00)
+        const hoy = getFechaElSalvador();
+        const hoyMedianoche = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+
+        // 2. Convertir la fecha de generación y normalizar también a medianoche
+        const fechaGeneracion = new Date(fechaGen);
+        const genMedianoche = new Date(fechaGeneracion.getFullYear(), fechaGeneracion.getMonth(), fechaGeneracion.getDate());
+
+        // 3. Calcular la diferencia en milisegundos
+        const diffMs = hoyMedianoche - genMedianoche;
+
+        // 4. Convertir a días (usando Math.round para evitar errores por cambios de horario)
+        let diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        // 5. Si la fecha es de hoy, diffDias será 0. 
+        // Si es menor a 0 (fecha futura), lo dejamos en 0.
+        return diffDias < 0 ? 0 : diffDias;
+
+    } catch (e) {
+        console.error('❌ Error en calcularDias:', e);
+        return 999;
+    }
 }
 
- function determinarRango(dias) {
+// ========================================
+// 📊 CLASIFICACIÓN DE RANGOS (MANTENIDO)
+// ========================================
+function determinarRango(dias) {
     return obtenerRangoPorNumero(dias);
 }
-
-
 
 // ÚNICA FUENTE DE VERDAD PARA LOS RANGOS
 function obtenerRangoPorNumero(dias) {
     const d = parseInt(dias);
     if (isNaN(d) || d < 0) return "FUERA DE RANGO";
 
-    if (d <= 5) return '0-5';
+    // Aquí se aplican tus rangos tal cual los tenías
+    if (d <= 5) return '0-5';   // Si d=0, caerá aquí correctamente
     if (d <= 10) return '6-10';
     if (d <= 15) return '11-15';
     if (d <= 20) return '16-20';
@@ -24173,8 +24075,108 @@ function debugCuentaContrato() {
     console.log('Todos los campos:', Object.keys(primer.options.osData));
 }
 
+// ===================================================================
+// 📋 FUNCIONES DE SELECCIÓN MÚLTIPLE DE UNIDADES
+// ===================================================================
+
+// ✅ Toggle de unidad individual
+function toggleUnidadMultiple(unidad) {
+  // ✅ OBTENER CHECKBOX POR VALOR (NO POR event.target)
+  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
+  if (!checkbox) {
+    console.warn(`⚠️ Checkbox para unidad "${unidad}" no encontrado`);
+    return;
+  }
+  
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  if (checkbox.checked) {
+    unidadesSeleccionadas.add(unidad);
+  } else {
+    unidadesSeleccionadas.delete(unidad);
+  }
+  
+  window.unidadesSeleccionadasMultiples = unidadesSeleccionadas;
+  actualizarContadorUnidadesMultiple();
+  actualizarResumenUnidadesMultiple();
+}
 
 
+
+// ✅ Actualizar resumen visual de unidades seleccionadas
+function actualizarResumenUnidadesMultiple() {
+  const resumenDiv = document.getElementById('resumenUnidadesSeleccionadas');
+  const listaDiv = document.getElementById('listaUnidadesSeleccionadas');
+  const unidadesSeleccionadas = window.unidadesSeleccionadasMultiples || new Set();
+  
+  if (resumenDiv && listaDiv) {
+    if (unidadesSeleccionadas.size > 0) {
+      resumenDiv.style.display = 'block';
+      
+      // Generar badges para cada unidad
+      let badgesHTML = '';
+      Array.from(unidadesSeleccionadas).sort().forEach(unidad => {
+        badgesHTML += `
+          <span style="
+            background: #3b82f6; 
+            color: white; 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 6px;
+          ">
+            ${unidad}
+            <span onclick="event.stopPropagation(); deseleccionarUnidadMultiple('${unidad}')" 
+                  style="cursor: pointer; margin-left: 4px; font-weight: bold;">×</span>
+          </span>
+        `;
+      });
+      
+      listaDiv.innerHTML = badgesHTML;
+    } else {
+      resumenDiv.style.display = 'none';
+    }
+  }
+}
+
+// ✅ Deseleccionar unidad específica desde el badge
+function deseleccionarUnidadMultiple(unidad) {
+  const checkbox = document.querySelector(`input.checkbox-unidad-multiple[value="${unidad}"]`);
+  if (checkbox) {
+    checkbox.checked = false;
+    toggleUnidadMultiple(unidad);
+  }
+}
+
+// ✅ Filtrar lista de unidades mientras se escribe
+// ✅ MEJORAR FILTRADO DE UNIDADES CON SELECCIÓN AUTOMÁTICA
+function filtrarListaUnidadesMultiple(busqueda) {
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-multiple');
+  const busquedaLower = busqueda.toLowerCase().trim();
+  
+  // Contar coincidencias para el botón "Seleccionar Coincidencias"
+  let coincidencias = 0;
+  
+  checkboxes.forEach(checkbox => {
+    const label = checkbox.closest('label');
+    const unidad = checkbox.value.toLowerCase();
+    
+    const coincide = busquedaLower === '' || unidad.includes(busquedaLower);
+    label.style.display = coincide ? 'flex' : 'none';
+    
+    if (coincide) coincidencias++;
+  });
+  
+  // ✅ Actualizar botón "Seleccionar Coincidencias" si existe
+  const btnSeleccionarCoincidencias = document.getElementById('btnSeleccionarCoincidencias');
+  if (btnSeleccionarCoincidencias) {
+    btnSeleccionarCoincidencias.style.display = coincidencias > 0 ? 'inline-block' : 'none';
+    btnSeleccionarCoincidencias.dataset.coindencias = coincidencias;
+    btnSeleccionarCoincidencias.innerHTML = `✅ Seleccionar ${coincidencias} coincidencias`;
+  }
+}
 
 // ✅ NUEVA FUNCIÓN: Seleccionar todas las unidades que coincidan con la búsqueda actual
 function seleccionarCoincidenciasBusqueda() {
@@ -26314,7 +26316,6 @@ function deseleccionarTodasUnidades() {
   console.log(`✅ ${count} unidades deseleccionadas`);
   alert(`✅ ${count} unidades deseleccionadas`);
 }
-
 
 </script>
 </body>
