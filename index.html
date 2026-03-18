@@ -25472,9 +25472,7 @@ async function cargarInterfazSuministrosMultiples() {
 }
 
 
-// ===================================================================
-// 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
-// ===================================================================
+
 // ===================================================================
 // 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS (CORREGIDO: CuentaContrato + Medidor)
 // ===================================================================
@@ -25867,72 +25865,6 @@ ws['!cols'] = wscols;
 }
 
 
-// ===================================================================
-// 🔍 ANALIZAR SUMINISTROS CON MÚLTIPLES OS
-// ===================================================================
-function analizarSuministrosMultiples(osPendientes) {
-  console.group('🔍 ANALIZANDO SUMINISTROS CON MÚLTIPLES OS');
-  
-  // ✅ Agrupar por CuentaContrato
-  const agrupado = {};
-  osPendientes.forEach(os => {
-    const cc = String(os.CuentaContrato || '').trim();
-    if (!cc || cc === '0' || cc === '200000000000') return;
-    
-    if (!agrupado[cc]) agrupado[cc] = [];
-    agrupado[cc].push({
-      OSSAP: os.OSSAP || 'N/A',
-      OSATMO: os.OSATMO || 'N/A',
-      Tipologia: os.Tipologia || 'N/A',
-      Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: os.Unidad || 'SIN UNIDAD',
-      'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      CuentaContrato: cc
-    });
-  });
-  
-  // ✅ Filtrar solo los que tienen 2+ OS
-  const multiples = Object.entries(agrupado)
-    .filter(([cc, osList]) => osList.length >= 2)
-    .map(([cc, osList]) => {
-      // Determinar color según unidades
-      const unidadesUnicas = [...new Set(osList.map(os => os.Unidad.trim()))];
-      const mismoUnidad = unidadesUnicas.length === 1;
-      
-      return {
-        CuentaContrato: cc,
-        OS_Lista: osList.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
-        totalOS: osList.length,
-        unidadesUnicas: unidadesUnicas,
-        mismoUnidad: mismoUnidad,
-        color: mismoUnidad ? 'verde' : 'rojo',
-        prioridad: mismoUnidad ? 2 : 1 // Rojo primero en orden
-      };
-    })
-    .sort((a, b) => b.prioridad - a.prioridad || a.CuentaContrato.localeCompare(b.CuentaContrato));
-  
-  // ✅ Estadísticas
-  const totalSuministros = multiples.length;
-  const totalOSInvolucradas = multiples.reduce((sum, item) => sum + item.totalOS, 0);
-  const suministrosRojos = multiples.filter(item => item.color === 'rojo').length;
-  const suministrosVerdes = multiples.filter(item => item.color === 'verde').length;
-  
-  console.log(`✅ Suministros con múltiples OS: ${totalSuministros}`);
-  console.log(`✅ OS involucradas: ${totalOSInvolucradas}`);
-  console.log(`✅ Rojos (unidades diferentes): ${suministrosRojos}`);
-  console.log(`✅ Verdes (misma unidad): ${suministrosVerdes}`);
-  console.groupEnd();
-  
-  return {
-    suministros: multiples,
-    estadisticas: {
-      totalSuministros,
-      totalOSInvolucradas,
-      suministrosRojos,
-      suministrosVerdes
-    }
-  };
-}
 
 // ===================================================================
 // 📊 GENERAR HTML: RESUMEN + FILTROS
