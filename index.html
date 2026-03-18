@@ -25361,7 +25361,7 @@ async function cargarInterfazSuministrosMultiples() {
     console.log('\n🔍 [PASO 1] Obteniendo conteo total de registros...');
     const { count: totalDB, error: countError } = await supabaseClient
       .from('OS Pendientes')
-      .select('CuentaContrato', { count: 'exact', head: true })
+      .select('CuentaContrato, Medidor', { count: 'exact', head: true })
       .not('CuentaContrato', 'is', null)
       .not('CuentaContrato', 'eq', '')
       .not('CuentaContrato', 'eq', '0')
@@ -25390,7 +25390,7 @@ async function cargarInterfazSuministrosMultiples() {
       
       const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."')
+        .select('CuentaContrato, Medidor, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."')
         .not('CuentaContrato', 'is', null)
         .not('CuentaContrato', 'eq', '')
         .not('CuentaContrato', 'eq', '0')
