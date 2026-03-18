@@ -26426,7 +26426,7 @@ function mostrarOpcionMedidoresEspeciales() {
 }
 
 // ===================================================================
-// 📋 CARGAR INTERFAZ: MEDIDORES ESPECIALES
+// 📋 CARGAR INTERFAZ: MEDIDORES ESPECIALES (CORREGIDO: Columnas con espacios + Paginación)
 // ===================================================================
 async function cargarInterfazMedidoresEspeciales() {
   console.log('⚡ Cargando interfaz de Medidores Especiales...');
@@ -26447,86 +26447,173 @@ async function cargarInterfazMedidoresEspeciales() {
     return;
   }
   
-  // Pantalla de carga
+  // Pantalla de carga con progreso
   searchGrid.innerHTML = `
     <div style="background: #e3f2fd; padding: 20px; border-radius: 12px; text-align: center; border-left: 4px solid #2196f3;">
       <h3 style="margin: 0 0 10px 0; color: #1565c0;">⚡ Analizando Medidores Especiales</h3>
-      <p style="margin: 0; color: #666;">Escaneando base de datos para detectar medidores especiales...</p>
+      <p style="margin: 0; color: #666;">Cargando datos desde la base de datos...</p>
       <div class="loading" style="display: block; margin: 20px auto;"></div>
+      <p style="color: #1565c0; font-weight: 600; font-size: 16px; margin-top: 10px;">
+        <span id="progresoCarga">0%</span> • <span id="contadorRegistros">0</span> de <span id="totalRegistros">?</span> registros
+      </p>
       <p style="color: #666; font-size: 13px; margin-top: 10px;">
-        ⚠️ Este análisis puede tardar 10-20 segundos con 10k+ registros
+        ⚠️ Este análisis puede tardar 15-30 segundos con 10k+ registros
       </p>
     </div>
   `;
   resultsContainer.innerHTML = '';
   
   try {
-    // ✅ Cargar TODAS las OS Pendientes (solo campos necesarios)
-    const {  osPendientes, error, count } = await supabaseClient
+    // ===================================================================
+    // 🔍 PASO 1: OBTENER CONTEO TOTAL (PARA SABER CUÁNTOS REGISTROS HAY)
+    // ===================================================================
+    console.log('\n🔍 [PASO 1] Obteniendo conteo total de registros con medidores especiales...');
+    
+    // ✅ CORRECCIÓN CLAVE 1: Usar nombre de columna correcto con espacio: "Tipo Medidor"
+    // ✅ CORRECCIÓN CLAVE 2: Escapar correctamente el nombre de columna con comillas dobles en Supabase
+    const { count: totalDB, error: countError } = await supabaseClient
       .from('OS Pendientes')
-      .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen.", Tipo_Medidor, Marca_Modelo', { count: 'exact' })
+      .select('CuentaContrato', { count: 'exact', head: true })
       .not('CuentaContrato', 'is', null)
       .not('CuentaContrato', 'eq', '')
       .not('CuentaContrato', 'eq', '0')
       .not('CuentaContrato', 'eq', '200000000000')
-      .in('Tipo_Medidor', ['Especial', 'Bidireccional', 'Telemedido']);
+      .in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido']); // ✅ Columna con espacio + comillas dobles
     
-    if (error) throw error;
+    if (countError) {
+      console.error('❌ ERROR al obtener conteo total:', countError);
+      throw new Error(`Error al obtener conteo: ${countError.message}`);
+    }
     
-    console.log(`✅ Total cargado: ${osPendientes.length} de ${count} registros`);
+    console.log(`✅ CONTEO TOTAL EN BD: ${totalDB.toLocaleString()} registros con medidores especiales`);
+    document.getElementById('totalRegistros').textContent = totalDB.toLocaleString();
     
-    if (!osPendientes || osPendientes.length === 0) {
-      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay OS Pendientes con Tipo Medidor Especial</div>';
+    // ===================================================================
+    // 📥 PASO 2: CARGAR REGISTROS POR LOTES (PAGINACIÓN REAL)
+    // ===================================================================
+    console.log('\n📥 [PASO 2] Iniciando carga paginada por lotes de 1000...');
+    const BATCH_SIZE = 1000;
+    let allRecords = [];
+    let start = 0;
+    let loteActual = 1;
+    let registrosCargados = 0;
+    
+    while (start < totalDB) {
+      console.log(`\n📤 CARGANDO LOTE #${loteActual} (registros ${start} a ${start + BATCH_SIZE - 1})...`);
+      
+      // ✅ CORRECCIÓN CLAVE 3: Usar nombre de columna correcto con espacio en select()
+      const { data, error } = await supabaseClient
+        .from('OS Pendientes')
+        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen.", "Tipo Medidor", "Marca_ Modelo"') // ✅ Columnas con espacio/underscore correctamente escapadas
+        .not('CuentaContrato', 'is', null)
+        .not('CuentaContrato', 'eq', '')
+        .not('CuentaContrato', 'eq', '0')
+        .not('CuentaContrato', 'eq', '200000000000')
+        .in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido']) // ✅ Filtro por columna con espacio
+        .range(start, start + BATCH_SIZE - 1);
+      
+      if (error) {
+        console.error(`❌ ERROR en lote #${loteActual}:`, error);
+        throw new Error(`Error en lote ${loteActual}: ${error.message}`);
+      }
+      
+      // ✅ Verificar datos recibidos
+      const registrosEnLote = data?.length || 0;
+      console.log(`✅ Lote #${loteActual} recibido: ${registrosEnLote} registros`);
+      
+      if (registrosEnLote === 0) {
+        console.warn(`⚠️ Lote #${loteActual} vacío. Terminando carga.`);
+        break;
+      }
+      
+      // ✅ FILTRAR SOLO UNIDADES VÁLIDAS (diferentes de null, "0", "--------------------------------------------------")
+      const validos = data.filter(os => {
+        const unidad = String(os.Unidad || '').trim();
+        return unidad && 
+               unidad !== '0' && 
+               unidad !== '--------------------------------------------------' &&
+               unidad !== '';
+      });
+      
+      console.log(`✅ Lote #${loteActual} filtrado: ${validos.length} medidores válidos de ${registrosEnLote} totales`);
+      
+      // ✅ Acumular registros válidos
+      allRecords = allRecords.concat(validos);
+      registrosCargados += validos.length;
+      
+      // ✅ Actualizar progreso visual
+      const progreso = Math.min(100, Math.round((registrosCargados / totalDB) * 100));
+      document.getElementById('progresoCarga').textContent = `${progreso}%`;
+      document.getElementById('contadorRegistros').textContent = registrosCargados.toLocaleString();
+      
+      console.log(`📊 Progreso: ${registrosCargados.toLocaleString()}/${totalDB.toLocaleString()} (${progreso}%)`);
+      
+      // ✅ Preparar siguiente lote
+      start += BATCH_SIZE;
+      loteActual++;
+      
+      // ✅ Pequeña pausa para no saturar (opcional pero recomendado)
+      if (start < totalDB) {
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+    }
+    
+    console.log('\n' + '='.repeat(60));
+    console.log(`✅ CARGA COMPLETADA: ${registrosCargados.toLocaleString()} de ${totalDB.toLocaleString()} registros válidos`);
+    console.log('='.repeat(60));
+    
+    // ===================================================================
+    // 📊 PASO 3: ANALIZAR DATOS Y MOSTRAR RESULTADOS
+    // ===================================================================
+    if (!allRecords || allRecords.length === 0) {
+      searchGrid.innerHTML = '<div class="result-card">⚠️ No hay medidores especiales asignados a unidades válidas</div>';
       return;
     }
     
-    // ✅ Analizar medidores especiales
-    const analisis = analizarMedidoresEspeciales(osPendientes);
+    console.log('\n🔍 [PASO 3] Analizando medidores especiales...');
+    const analisis = analizarMedidoresEspeciales(allRecords);
     
-    // ✅ Mostrar resumen + interfaz de filtros
+    console.log('✅ Análisis completado. Generando interfaz...');
     searchGrid.innerHTML = generarHTMLResumenMedidores(analisis);
     resultsContainer.innerHTML = generarHTMLTablaMedidores(analisis);
-    
-    // ✅ Guardar datos para exportación y filtros
     window.datosMedidoresEspeciales = analisis;
     
+    console.log('\n✅ INTERFAZ CARGADA EXITOSAMENTE');
+    console.log('='.repeat(60));
+    
   } catch (err) {
-    console.error('❌ Error cargando Medidores Especiales:', err);
+    console.error('\n❌ ERROR CRÍTICO EN CARGA:', err);
+    console.error('Stack:', err.stack);
+    
     searchGrid.innerHTML = `
       <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
         <div class="result-header">❌ Error de Análisis</div>
         <p style="color: #666;">${err.message || 'Error desconocido al analizar medidores'}</p>
         <p style="color: #999; font-size: 13px; margin-top: 10px;">
-          💡 Consejo: Intenta nuevamente en unos segundos o contacta al administrador del sistema.
+          💡 Consejo: Verifica la consola para logs detallados de depuración
         </p>
       </div>
     `;
   }
 }
 
+
 // ===================================================================
-// 🔍 ANALIZAR MEDIDORES ESPECIALES
+// 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Agrupación por CuentaContrato)
 // ===================================================================
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
   
-  // ✅ Filtrar por unidades válidas (diferentes de "--------------------------------------------------", null, 0)
-  const medidoresEspeciales = osPendientes.filter(os => {
-    const unidadValida = os.Unidad && 
-                         os.Unidad.trim() !== '' &&
-                         os.Unidad.trim() !== '0' &&
-                         os.Unidad.trim() !== '--------------------------------------------------';
-    
-    return unidadValida;
-  });
-  
-  // ✅ Agrupar por CuentaContrato
+  // ✅ AGRUPAR POR CUENTA CONTRATO (cada cuenta puede tener múltiples OS con medidor especial)
   const agrupado = {};
-  medidoresEspeciales.forEach(os => {
+  
+  osPendientes.forEach(os => {
     const cc = String(os.CuentaContrato || '').trim();
-    if (!cc || cc === '0' || cc === '200000000000') return;
+    if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
     
     if (!agrupado[cc]) agrupado[cc] = [];
+    
+    // ✅ Almacenar datos completos del OS con medidor especial
     agrupado[cc].push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
@@ -26534,29 +26621,35 @@ function analizarMedidoresEspeciales(osPendientes) {
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
       Unidad: os.Unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      Tipo_Medidor: os.Tipo_Medidor || 'N/A',
-      Marca_Modelo: os.Marca_Modelo || 'N/A',
+      'Tipo Medidor': os['Tipo Medidor'] || 'N/A', // ✅ Columna con espacio
+      'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A', // ✅ Columna con underscore+espacio
       CuentaContrato: cc
     });
   });
   
-  // ✅ Estadísticas
-  const totalMedidores = Object.keys(agrupado).length;
-  const totalOS = medidoresEspeciales.length;
+  console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
   
-  console.log(`✅ Medidores especiales detectados: ${totalMedidores}`);
+  // ✅ Convertir a array para fácil procesamiento
+  const medidores = Object.values(agrupado);
+  
+  // ✅ ESTADÍSTICAS
+  const totalMedidores = medidores.length;
+  const totalOS = osPendientes.length;
+  
+  console.log(`✅ Cuentas con medidores especiales: ${totalMedidores}`);
   console.log(`✅ OS involucradas: ${totalOS}`);
-  
   console.groupEnd();
   
   return {
-    medidores: Object.values(agrupado),
+    medidores: medidores,
     estadisticas: {
       totalMedidores,
       totalOS
     }
   };
 }
+
+
 
 // ===================================================================
 // 📊 GENERAR HTML: RESUMEN + FILTROS
@@ -26605,7 +26698,7 @@ function generarHTMLResumenMedidores(analisis) {
 }
 
 // ===================================================================
-// 📋 GENERAR HTML: TABLA DE MEDIDORES
+// 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Mostrar Tipo Medidor y Marca/Modelo)
 // ===================================================================
 function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   const medidoresFiltrados = analisis.medidores;
@@ -26613,13 +26706,13 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   if (medidoresFiltrados.length === 0) {
     return `
       <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107; text-align: center; padding: 30px;">
-        <div class="result-header">ℹ️ Sin</div>
+        <div class="result-header">ℹ️ Sin Resultados</div>
         <p style="color: #666; margin-top: 15px;">
-          No se encontraron medidores especiales que coincidan con el filtro seleccionado.
+          No se encontraron medidores especiales asignados a unidades válidas.
         </p>
-        <button class="btn" onclick="filtrarMedidoresPorTipo('todos')" 
+        <button class="btn" onclick="location.reload()" 
                 style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); margin-top: 20px; padding: 10px 20px;">
-          🔄 Mostrar Todos los Medidores
+          🔄 Recargar Análisis
         </button>
       </div>
     `;
@@ -26629,7 +26722,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   let html = `
     <div class="result-card" style="background: white; padding: 25px;">
       <h2 style="color: #64748b; margin: 0 0 20px 0; font-size: 24px; border-bottom: 3px solid #94a3b8; padding-bottom: 10px;">
-        ⚡ Medidores Especiales (${medidoresFiltrados.length} encontrados)
+        ⚡ Medidores Especiales (${medidoresFiltrados.length} cuentas encontradas)
       </h2>
       
       <div style="overflow-x: auto;">
@@ -26667,21 +26760,25 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
           </div>
         </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
             ${medidor.map(os => `
-              <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; border-left: 4px solid #1565c0;">
-                <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #1565c0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e40af;">
                   <span>OSATMO: ${os.OSATMO}</span>
-                  <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                  <span style="background: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ffedd5' : '#dbeafe'}; 
+                               color: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ea580c' : '#1e40af'}; 
+                               padding: 2px 8px; 
+                               border-radius: 4px; 
+                               font-size: 12px;">
                     ${os.Estado_ATOMO}
                   </span>
                 </div>
-                <div style="font-size: 13px; color: #4b5563; line-height: 1.5;">
+                <div style="font-size: 13px; color: #4b5563; line-height: 1.6;">
                   <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
                   <div><strong>Tipología:</strong> ${os.Tipologia}</div>
-                  <div><strong>Unidad:</strong> ${os.Unidad}</div>
-                  <div><strong>Tipo Medidor:</strong> ${os.Tipo_Medidor}</div>
-                  <div><strong>Marca/Modelo:</strong> ${os.Marca_Modelo}</div>
+                  <div><strong>Unidad:</strong> <span style="color: #1565c0; font-weight: 600;">${os.Unidad}</span></div>
+                  <div><strong>Tipo Medidor:</strong> <span style="background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #1e40af;">${os['Tipo Medidor']}</span></div>
+                  <div><strong>Marca/Modelo:</strong> ${os['Marca_ Modelo'] || 'N/A'}</div>
                   <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
                 </div>
               </div>
@@ -26697,19 +26794,19 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
         </table>
       </div>
       
-      <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-top: 30px; border: 1px solid #cbde1;">
+      <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin-top: 30px; border: 1px solid #cbd5e1;">
         <strong style="color: #1e293b; font-size: 18px; display: block; margin-bottom: 15px;">
-          📊 Resumen del Filtro Actual
+          📊 Resumen del Análisis
         </strong>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
-          <div>• <strong>Total medidores:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.length.toLocaleString()}</span></div>
+          <div>• <strong>Total cuentas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.length.toLocaleString()}</span></div>
           <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.length, 0).toLocaleString()}</span></div>
-          <div>• <strong>Filtro aplicado:</strong> <span style="color: #64748b; font-weight: 700;">🎨 Todos</span></div>
+          <div>• <strong>Filtro aplicado:</strong> <span style="color: #64748b; font-weight: 700;">⚡ Medidores Especiales</span></div>
         </div>
         <div style="text-align: center; margin-top: 20px;">
           <button class="btn" onclick="exportarMedidoresEspecialesExcel()" 
-                  style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 10px 25px; font-size: 15px;">
-            📥 Exportar a Excel (${medidoresFiltrados.length} medidores)
+                  style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 12px 25px; font-size: 16px;">
+            📥 Exportar a Excel (${medidoresFiltrados.length} cuentas)
           </button>
         </div>
       </div>
@@ -26718,6 +26815,9 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   
   return html;
 }
+
+
+
 
 // ===================================================================
 // 🔘 FILTRAR POR TIPO (interactivo)
@@ -26738,7 +26838,7 @@ function filtrarMedidoresPorTipo(tipo) {
 }
 
 // ===================================================================
-// 📥 EXPORTAR A EXCEL
+// 📥 EXPORTAR A EXCEL (CORREGIDO: Columnas con espacios correctamente nombradas)
 // ===================================================================
 function exportarMedidoresEspecialesExcel() {
   if (!window.datosMedidoresEspeciales) {
@@ -26754,15 +26854,15 @@ function exportarMedidoresEspecialesExcel() {
       medidor.forEach((os, idx) => {
         datos.push({
           'Cuenta Contrato': medidor[0].CuentaContrato,
-          'Total OS en Medidor': medidor.length,
+          'Total OS en Cuenta': medidor.length,
           'OS #': idx + 1,
           'OSATMO': os.OSATMO,
           'OSSAP': os.OSSAP,
           'Tipología': os.Tipologia,
           'Estado ATOMO': os.Estado_ATOMO,
           'Unidad': os.Unidad,
-          'Tipo Medidor': os.Tipo_Medidor,
-          'Marca/Modelo': os.Marca_Modelo,
+          'Tipo Medidor': os['Tipo Medidor'], // ✅ Columna con espacio
+          'Marca/Modelo': os['Marca_ Modelo'] || 'N/A', // ✅ Columna con underscore+espacio
           'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
         });
       });
@@ -26774,15 +26874,15 @@ function exportarMedidoresEspecialesExcel() {
     // ✅ Ajustar ancho de columnas
     const wscols = [
       { wch: 18 }, // Cuenta Contrato
-      { wch: 10 }, // Total OS
+      { wch: 12 }, // Total OS
       { wch: 8 },  // OS #
       { wch: 15 }, // OSATMO
       { wch: 15 }, // OSSAP
-      { wch: 35 }, // Tipología
-      { wch: 18 }, // Estado ATOMO
+      { wch: 30 }, // Tipología
+      { wch: 15 }, // Estado ATOMO
       { wch: 15 }, // Unidad
       { wch: 20 }, // Tipo Medidor
-      { wch: 20 }, // Marca/Modelo
+      { wch: 25 }, // Marca/Modelo
       { wch: 15 }  // Fecha
     ];
     ws['!cols'] = wscols;
@@ -26803,6 +26903,7 @@ function exportarMedidoresEspecialesExcel() {
     alert(`❌ Error al exportar: ${err.message || 'Error desconocido'}`);
   }
 }
+
 
 </script>
 </body>
