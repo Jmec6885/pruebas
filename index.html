@@ -25953,6 +25953,7 @@ window.datosSuministrosMultiples.suministros.forEach(suministro => {
       'Tipología': os.Tipologia,
       'Estado ATOMO': os.Estado_ATOMO,
       'Unidad': os.Unidad,
+      'Medidor': os.Medidor,
       'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
     });
   });
@@ -26250,6 +26251,7 @@ function exportarSuministrosMultiplesExcel() {
           'Tipología': os.Tipologia,
           'Estado ATOMO': os.Estado_ATOMO,
           'Unidad': os.Unidad,
+           'Medidor': os.Medidor,
           'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
         });
       });
@@ -26446,6 +26448,14 @@ async function cargarInterfazMedidoresEspeciales() {
     `;
     return;
   }
+
+// ✅ 🔑 CORRECCIÓN CRÍTICA: Establecer TÍTULO PRINCIPAL de la página
+  const searchTitle = document.getElementById('searchTitle');
+  if (searchTitle) {
+    searchTitle.innerHTML = '⚡ Medidores Especiales'; // ← ¡ESTO RESUELVE EL PROBLEMA!
+    console.log('✅ Título principal actualizado a: Medidores Especiales');
+  }
+
   
   // Pantalla de carga con progreso
   searchGrid.innerHTML = `
@@ -26601,11 +26611,15 @@ async function cargarInterfazMedidoresEspeciales() {
 // ===================================================================
 // 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Agrupación por CuentaContrato)
 // ===================================================================
+// ===================================================================
+// 🔍 ANALIZAR MEDIDORES ESPECIALES (CON UNIDADES ÚNICAS PARA FILTRO)
+// ===================================================================
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
   
-  // ✅ AGRUPAR POR CUENTA CONTRATO (cada cuenta puede tener múltiples OS con medidor especial)
+  // ✅ AGRUPAR POR CUENTA CONTRATO
   const agrupado = {};
+  const unidadesSet = new Set();
   
   osPendientes.forEach(os => {
     const cc = String(os.CuentaContrato || '').trim();
@@ -26613,7 +26627,7 @@ function analizarMedidoresEspeciales(osPendientes) {
     
     if (!agrupado[cc]) agrupado[cc] = [];
     
-    // ✅ Almacenar datos completos del OS con medidor especial
+    // ✅ Almacenar datos completos + recolectar unidades únicas
     agrupado[cc].push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
@@ -26621,20 +26635,26 @@ function analizarMedidoresEspeciales(osPendientes) {
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
       Unidad: os.Unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      'Tipo Medidor': os['Tipo Medidor'] || 'N/A', // ✅ Columna con espacio
-      'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A', // ✅ Columna con underscore+espacio
+      'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
+      'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
       CuentaContrato: cc
     });
+    
+    // ✅ Recolectar unidades únicas para el filtro
+    const unidad = String(os.Unidad || '').trim();
+    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
+      unidadesSet.add(unidad);
+    }
   });
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
-  
-  // ✅ Convertir a array para fácil procesamiento
-  const medidores = Object.values(agrupado);
+  console.log(`✅ Unidades únicas detectadas: ${unidadesSet.size}`);
   
   // ✅ ESTADÍSTICAS
+  const medidores = Object.values(agrupado);
   const totalMedidores = medidores.length;
   const totalOS = osPendientes.length;
+  const unidadesUnicas = Array.from(unidadesSet).sort();
   
   console.log(`✅ Cuentas con medidores especiales: ${totalMedidores}`);
   console.log(`✅ OS involucradas: ${totalOS}`);
@@ -26645,7 +26665,8 @@ function analizarMedidoresEspeciales(osPendientes) {
     estadisticas: {
       totalMedidores,
       totalOS
-    }
+    },
+    unidadesUnicas: unidadesUnicas // ✅ NUEVO: Para el filtro por unidad
   };
 }
 
@@ -26654,8 +26675,11 @@ function analizarMedidoresEspeciales(osPendientes) {
 // ===================================================================
 // 📊 GENERAR HTML: RESUMEN + FILTROS
 // ===================================================================
+// ===================================================================
+// 📊 GENERAR HTML: RESUMEN + FILTROS + FILTRO POR UNIDAD
+// ===================================================================
 function generarHTMLResumenMedidores(analisis) {
-  const { estadisticas } = analisis;
+  const { estadisticas, unidadesUnicas } = analisis;
   
   return `
     <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6;">
@@ -26669,33 +26693,63 @@ function generarHTMLResumenMedidores(analisis) {
         • OS involucradas: <strong>${estadisticas.totalOS.toLocaleString()}</strong>
       </div>
       
-      <!-- ✅ FILTROS RÁPIDOS -->
-      <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #ffc107;">
-        <strong style="font-size: 16px; color: #2d3748;">🔍 Filtros Rápidos:</strong>
+      <!-- ✅ NUEVO: FILTRO POR UNIDAD -->
+      <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
+        <strong style="font-size: 16px; color: #2d3748;">🔍 Filtrar por Unidad</strong>
         
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-          <button class="btn btn-secondary" onclick="filtrarMedidoresPorTipo('todos')" 
-                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 16px; font-size: 14px;">
-            🎨 Mostrar Todos (${analisis.medidores.length})
-          </button>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: flex-end;">
+          <div style="flex: 1; min-width: 250px;">
+            <select id="filtroUnidadMedidores" multiple size="6" 
+                    style="width: 100%; padding: 8px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; height: 150px;">
+              ${unidadesUnicas.map(unidad => `
+                <option value="${unidad}">${unidad}</option>
+              `).join('')}
+            </select>
+            <small style="color: #64748b; display: block; margin-top: 5px; font-size: 13px;">
+              ✅ Mantén Ctrl (Windows) o Cmd (Mac) para seleccionar múltiples unidades
+            </small>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
+            <button class="btn btn-secondary" onclick="aplicarFiltroUnidadMedidores()" 
+                    style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+              📊 Mostrar Seleccionadas (${unidadesUnicas.length})
+            </button>
+            <button class="btn btn-secondary" onclick="seleccionarTodasUnidadesMedidores()" 
+                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 8px 15px; font-size: 13px;">
+              ✅ Seleccionar Todas (${unidadesUnicas.length})
+            </button>
+            <button class="btn btn-secondary" onclick="deseleccionarTodasUnidadesMedidores()" 
+                    style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 15px; font-size: 13px;">
+              ❌ Deseleccionar Todas
+            </button>
+            <button class="btn" onclick="limpiarFiltroUnidadMedidores()" 
+                    style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 8px 15px; font-size: 13px; margin-top: 5px;">
+              🗑️ Limpiar Filtro
+            </button>
+          </div>
         </div>
         
         <div style="margin-top: 15px; padding: 12px; background: #dbeafe; border-radius: 8px; font-size: 13px;">
           <strong>💡 Leyenda:</strong><br>
           • Cada medidor especial se muestra con sus OS asociadas<br>
-          • Solo se muestran medidores asignados a unidades válidas
+          • Solo se muestran medidores asignados a unidades válidas<br>
+          • <span style="color: #ef4444; font-weight: bold;">🔴 Rojo</span>: Medidor asignado a múltiples unidades (requiere revisión)<br>
+          • <span style="color: #10b981; font-weight: bold;">🟢 Verde</span>: Medidor asignado a una sola unidad (correcto)
         </div>
-        
-        <div style="text-align: center; margin-top: 20px;">
-          <button class="btn" onclick="exportarMedidoresEspecialesExcel()" 
-                  style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 12px 25px; font-size: 16px;">
-            📥 Exportar a Excel (${analisis.medidores.length} medidores)
-          </button>
-        </div>
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px;">
+        <button class="btn" onclick="exportarMedidoresEspecialesExcel()" 
+                style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 12px 25px; font-size: 16px;">
+          📥 Exportar a Excel (${estadisticas.totalMedidores} medidores)
+        </button>
       </div>
     </div>
   `;
 }
+
+
 
 // ===================================================================
 // 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Mostrar Tipo Medidor y Marca/Modelo)
@@ -26861,6 +26915,7 @@ function exportarMedidoresEspecialesExcel() {
           'Tipología': os.Tipologia,
           'Estado ATOMO': os.Estado_ATOMO,
           'Unidad': os.Unidad,
+	  'Medidor': os.Medidor,
           'Tipo Medidor': os['Tipo Medidor'], // ✅ Columna con espacio
           'Marca/Modelo': os['Marca_ Modelo'] || 'N/A', // ✅ Columna con underscore+espacio
           'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
@@ -26901,6 +26956,98 @@ function exportarMedidoresEspecialesExcel() {
   } catch (err) {
     console.error('❌ Error exportando a Excel:', err);
     alert(`❌ Error al exportar: ${err.message || 'Error desconocido'}`);
+  }
+}
+
+
+// ===================================================================
+// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES EN FILTRO
+// ===================================================================
+function seleccionarTodasUnidadesMedidores() {
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (!select) return;
+  
+  Array.from(select.options).forEach(option => option.selected = true);
+  console.log(`✅ ${select.selectedOptions.length} unidades seleccionadas`);
+}
+
+function deseleccionarTodasUnidadesMedidores() {
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (!select) return;
+  
+  Array.from(select.options).forEach(option => option.selected = false);
+  console.log('✅ Todas las unidades deseleccionadas');
+}
+
+// ===================================================================
+// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA
+// ===================================================================
+function aplicarFiltroUnidadMedidores() {
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (!select || !window.datosMedidoresEspeciales) {
+    alert('⚠️ No hay datos disponibles para filtrar');
+    return;
+  }
+  
+  // ✅ Obtener unidades seleccionadas
+  const unidadesSeleccionadas = Array.from(select.selectedOptions).map(opt => opt.value);
+  
+  if (unidadesSeleccionadas.length === 0) {
+    alert('⚠️ Por favor selecciona al menos una unidad para filtrar');
+    return;
+  }
+  
+  console.log(`🔍 Filtrando por ${unidadesSeleccionadas.length} unidades:`, unidadesSeleccionadas);
+  
+  // ✅ Filtrar medidores: mantener solo los que tienen AL MENOS UNA OS en las unidades seleccionadas
+  const medidoresFiltrados = window.datosMedidoresEspeciales.medidores.filter(medidor => {
+    return medidor.some(os => unidadesSeleccionadas.includes(os.Unidad));
+  });
+  
+  // ✅ Actualizar estadísticas filtradas
+  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.length, 0);
+  
+  // ✅ Regenerar tabla con resultados filtrados
+  const resultsContainer = document.getElementById('searchResults');
+  if (resultsContainer) {
+    resultsContainer.innerHTML = generarHTMLTablaMedidores({
+      medidores: medidoresFiltrados,
+      estadisticas: {
+        totalMedidores: medidoresFiltrados.length,
+        totalOS: totalOSFiltradas
+      }
+    });
+    
+    // ✅ Actualizar botón "Mostrar Seleccionadas" con conteo real
+    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
+    if (btnMostrar) {
+      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${medidoresFiltrados.length})`;
+    }
+    
+    console.log(`✅ Filtro aplicado: ${medidoresFiltrados.length} medidores de ${unidadesSeleccionadas.length} unidades`);
+  }
+}
+
+// ===================================================================
+// 🗑️ LIMPIAR FILTRO Y RESTAURAR VISTA COMPLETA
+// ===================================================================
+function limpiarFiltroUnidadMedidores() {
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (select) {
+    Array.from(select.options).forEach(option => option.selected = false);
+  }
+  
+  // ✅ Restaurar vista completa con todos los medidores
+  if (window.datosMedidoresEspeciales && document.getElementById('searchResults')) {
+    document.getElementById('searchResults').innerHTML = generarHTMLTablaMedidores(window.datosMedidoresEspeciales);
+    
+    // ✅ Restaurar botón "Mostrar Seleccionadas" al conteo total
+    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
+    if (btnMostrar) {
+      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${window.datosMedidoresEspeciales.medidores.length})`;
+    }
+    
+    console.log('✅ Filtro limpiado - Vista completa restaurada');
   }
 }
 
