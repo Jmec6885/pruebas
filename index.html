@@ -26251,7 +26251,7 @@ function exportarSuministrosMultiplesExcel() {
           'Tipología': os.Tipologia,
           'Estado ATOMO': os.Estado_ATOMO,
           'Unidad': os.Unidad,
-           'Medidor': os.Medidor,
+          'Medidor': os.Medidor,
           'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
         });
       });
@@ -26514,7 +26514,7 @@ async function cargarInterfazMedidoresEspeciales() {
       // ✅ CORRECCIÓN CLAVE 3: Usar nombre de columna correcto con espacio en select()
       const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen.", "Tipo Medidor", "Marca_ Modelo"') // ✅ Columnas con espacio/underscore correctamente escapadas
+        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Medidor, "Fecha Gen.", "Tipo Medidor", "Marca_ Modelo"') // ✅ Columnas con espacio/underscore correctamente escapadas
         .not('CuentaContrato', 'is', null)
         .not('CuentaContrato', 'eq', '')
         .not('CuentaContrato', 'eq', '0')
@@ -26608,9 +26608,6 @@ async function cargarInterfazMedidoresEspeciales() {
 }
 
 
-// ===================================================================
-// 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Agrupación por CuentaContrato)
-// ===================================================================
 // ===================================================================
 // 🔍 ANALIZAR MEDIDORES ESPECIALES (CON UNIDADES ÚNICAS PARA FILTRO)
 // ===================================================================
@@ -26797,13 +26794,13 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     const bgColor = esPar ? '#f8fafc' : '#ffffff';
     
     html += `
-      <tr style="background: ${bgColor}; border-bottom: 2px solid #e2e8f0;">
-        <td style="padding: 12px 16px; font-weight: 700; color: #1565c0; font-family: monospace; border-right: 1px solid #e2e8f0;">
-          ${medidor[0].CuentaContrato}
-        </td>
-        <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: #1565c0; border-right: 1px solid #e2e8f0; font-size: 16px;">
-          ${medidor.length}
-        </td>
+  <tr style="background: ${bgColor}; border-bottom: 2px solid ${medidor.length > 1 ? '#fecaca' : '#bbf7d0'};">
+    <td style="padding: 12px 16px; font-weight: 700; color: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+      ${medidor[0].CuentaContrato}
+      <span style="display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; color: white; font-weight: bold; line-height: 20px; text-align: center; margin-left: 8px; font-size: 12px;">
+        ${medidor.length > 1 ? '!' : '✓'}
+      </span>
+    </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
             ${medidor.map(os => `
