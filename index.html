@@ -26609,12 +26609,12 @@ async function cargarInterfazMedidoresEspeciales() {
 
 
 // ===================================================================
-// 🔍 ANALIZAR MEDIDORES ESPECIALES (CON UNIDADES ÚNICAS PARA FILTRO)
+// 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Unidades Únicas + Estado Rojo/Verde)
 // ===================================================================
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
   
-  // ✅ AGRUPAR POR CUENTA CONTRATO
+  // ✅ AGRUPAR POR CUENTA CONTRATO + EXTRAER UNIDADES ÚNICAS
   const agrupado = {};
   const unidadesSet = new Set();
   
@@ -26622,51 +26622,81 @@ function analizarMedidoresEspeciales(osPendientes) {
     const cc = String(os.CuentaContrato || '').trim();
     if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
     
+    // ✅ Recolectar unidades únicas para el filtro global
+    const unidad = String(os.Unidad || '').trim();
+    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
+      unidadesSet.add(unidad);
+    }
+    
+    // ✅ Agrupar OS por CuentaContrato
     if (!agrupado[cc]) agrupado[cc] = [];
     
-    // ✅ Almacenar datos completos + recolectar unidades únicas
     agrupado[cc].push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
       Tipologia: os.Tipologia || 'N/A',
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: os.Unidad || 'SIN UNIDAD',
+      Unidad: unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
       'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
       'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
-      CuentaContrato: cc
+      CuentaContrato: cc,
+      Medidor: os.Medidor || 'N/A'  // ✅ ¡IMPORTANTE! Incluir Medidor aquí
     });
-    
-    // ✅ Recolectar unidades únicas para el filtro
-    const unidad = String(os.Unidad || '').trim();
-    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
-      unidadesSet.add(unidad);
-    }
   });
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
   console.log(`✅ Unidades únicas detectadas: ${unidadesSet.size}`);
   
+  // ✅ ✅ ✅ CORRECCIÓN CLAVE: Calcular estado ROJO/VERDE por cuenta ✅ ✅ ✅
+  const medidores = Object.values(agrupado).map(cuentaOS => {
+    // Extraer unidades únicas de TODAS las OS de esta cuenta
+    const unidadesUnicas = [...new Set(cuentaOS.map(os => os.Unidad.trim()))];
+    
+    // Determinar si todas las OS pertenecen a la MISMA unidad
+    const mismoUnidad = unidadesUnicas.length === 1;
+    
+    return {
+      CuentaContrato: cuentaOS[0].CuentaContrato,
+      Medidor: cuentaOS[0].Medidor,  // ✅ Incluir Medidor en el resultado final
+      OS_Lista: cuentaOS.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
+      totalOS: cuentaOS.length,
+      unidadesUnicas: unidadesUnicas,
+      mismoUnidad: mismoUnidad,
+      color: mismoUnidad ? 'verde' : 'rojo',  // ✅ Verde = misma unidad | Rojo = unidades diferentes
+      prioridad: mismoUnidad ? 2 : 1  // Rojo primero en orden (mayor prioridad)
+    };
+  }).sort((a, b) => 
+    b.prioridad - a.prioridad || 
+    a.CuentaContrato.localeCompare(b.CuentaContrato)
+  );
+  
   // ✅ ESTADÍSTICAS
-  const medidores = Object.values(agrupado);
   const totalMedidores = medidores.length;
   const totalOS = osPendientes.length;
   const unidadesUnicas = Array.from(unidadesSet).sort();
   
-  console.log(`✅ Cuentas con medidores especiales: ${totalMedidores}`);
+  // ✅ Contar rojos y verdes para estadísticas
+  const suministrosRojos = medidores.filter(m => m.color === 'rojo').length;
+  const suministrosVerdes = medidores.filter(m => m.color === 'verde').length;
+  
+  console.log(`✅ Medidores especiales detectados: ${totalMedidores}`);
   console.log(`✅ OS involucradas: ${totalOS}`);
+  console.log(`✅ Rojos (unidades diferentes): ${suministrosRojos}`);
+  console.log(`✅ Verdes (misma unidad): ${suministrosVerdes}`);
   console.groupEnd();
   
   return {
     medidores: medidores,
     estadisticas: {
       totalMedidores,
-      totalOS
+      totalOS,
+      suministrosRojos,   // ✅ Nuevas estadísticas para el resumen
+      suministrosVerdes   // ✅ Nuevas estadísticas para el resumen
     },
-    unidadesUnicas: unidadesUnicas // ✅ NUEVO: Para el filtro por unidad
+    unidadesUnicas: unidadesUnicas  // ✅ Para el filtro por unidad
   };
 }
-
 
 
 // ===================================================================
@@ -26793,51 +26823,53 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     const esPar = idx % 2 === 0;
     const bgColor = esPar ? '#f8fafc' : '#ffffff';
     
-    html += `
-  <tr style="background: ${bgColor}; border-bottom: 2px solid ${medidor.length > 1 ? '#fecaca' : '#bbf7d0'};">
-    <td style="padding: 12px 16px; font-weight: 700; color: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-      ${medidor[0].CuentaContrato}
-      <span style="display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; color: white; font-weight: bold; line-height: 20px; text-align: center; margin-left: 8px; font-size: 12px;">
-        ${medidor.length > 1 ? '!' : '✓'}
-      </span>
+    // ✅ CORRECCIÓN CLAVE: Mostrar Medidor correctamente en la tabla
+html += `
+  <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
+    <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor[0].CuentaContrato}</span>
+        <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
+          Medidor: ${medidor[0].Medidor}
+        </span>
+      </div>
     </td>
-        <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${medidor.map(os => `
-              <span style="background: #f1f5f9; color: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">
-                ${os.Unidad}
+    <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
+      ${medidor.length}
+    </td>
+    <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        ${medidor.map(os => `
+          <span style="background: ${medidor.mismoUnidad ? '#bbf7d0' : '#fecaca'}; color: ${medidor.mismoUnidad ? '#1e40af' : '#b91c1c'}; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">
+            ${os.Unidad}
+          </span>
+        `).join('')}
+      </div>
+    </td>
+    <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+        ${medidor.map(os => `
+          <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; border-left: 4px solid ${medidor.mismoUnidad ? '#10b981' : '#ef4444'};">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+              <span>OSATMO: ${os.OSATMO}</span>
+              <span style="background: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ffedd5' : '#dbeafe'}; color: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ea580c' : '#1e40af'}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
+                ${os.Estado_ATOMO}
               </span>
-            `).join('')}
+            </div>
+            <div style="font-size: 13px; color: #4b5563; line-height: 1.5;">
+              <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
+              <div><strong>Tipología:</strong> ${os.Tipologia}</div>
+              <div><strong>Unidad:</strong> <span style="color: ${medidor.mismoUnidad ? '#10b981' : '#ef4444'}; font-weight: 600;">${os.Unidad}</span></div>
+              <div><strong>Tipo Medidor:</strong> ${os['Tipo Medidor']}</div>
+              <div><strong>Marca/Modelo:</strong> ${os['Marca_ Modelo'] || 'N/A'}</div>
+              <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
+            </div>
           </div>
-        </td>
-        <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
-            ${medidor.map(os => `
-              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #1565c0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e40af;">
-                  <span>OSATMO: ${os.OSATMO}</span>
-                  <span style="background: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ffedd5' : '#dbeafe'}; 
-                               color: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ea580c' : '#1e40af'}; 
-                               padding: 2px 8px; 
-                               border-radius: 4px; 
-                               font-size: 12px;">
-                    ${os.Estado_ATOMO}
-                  </span>
-                </div>
-                <div style="font-size: 13px; color: #4b5563; line-height: 1.6;">
-                  <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
-                  <div><strong>Tipología:</strong> ${os.Tipologia}</div>
-                  <div><strong>Unidad:</strong> <span style="color: #1565c0; font-weight: 600;">${os.Unidad}</span></div>
-                  <div><strong>Tipo Medidor:</strong> <span style="background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #1e40af;">${os['Tipo Medidor']}</span></div>
-                  <div><strong>Marca/Modelo:</strong> ${os['Marca_ Modelo'] || 'N/A'}</div>
-                  <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </td>
-      </tr>
-    `;
+        `).join('')}
+      </div>
+    </td>
+  </tr>
+`;
   });
   
   html += `
@@ -26958,26 +26990,34 @@ function exportarMedidoresEspecialesExcel() {
 
 
 // ===================================================================
-// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES EN FILTRO
+// ✅ SELECCIÓN MÚLTIPLE DE UNIDADES (CORREGIDA)
 // ===================================================================
 function seleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => option.selected = true);
-  console.log(`✅ ${select.selectedOptions.length} unidades seleccionadas`);
+  Array.from(select.options).forEach(option => {
+    option.selected = true;
+  });
+  
+  // ✅ Forzar actualización del filtro
+  aplicarFiltroUnidadMedidores();
 }
 
 function deseleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => option.selected = false);
-  console.log('✅ Todas las unidades deseleccionadas');
+  Array.from(select.options).forEach(option => {
+    option.selected = false;
+  });
+  
+  // ✅ Forzar actualización del filtro
+  aplicarFiltroUnidadMedidores();
 }
 
 // ===================================================================
-// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA
+// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA (CORREGIDO)
 // ===================================================================
 function aplicarFiltroUnidadMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
@@ -26993,8 +27033,6 @@ function aplicarFiltroUnidadMedidores() {
     alert('⚠️ Por favor selecciona al menos una unidad para filtrar');
     return;
   }
-  
-  console.log(`🔍 Filtrando por ${unidadesSeleccionadas.length} unidades:`, unidadesSeleccionadas);
   
   // ✅ Filtrar medidores: mantener solo los que tienen AL MENOS UNA OS en las unidades seleccionadas
   const medidoresFiltrados = window.datosMedidoresEspeciales.medidores.filter(medidor => {
@@ -27014,14 +27052,6 @@ function aplicarFiltroUnidadMedidores() {
         totalOS: totalOSFiltradas
       }
     });
-    
-    // ✅ Actualizar botón "Mostrar Seleccionadas" con conteo real
-    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
-    if (btnMostrar) {
-      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${medidoresFiltrados.length})`;
-    }
-    
-    console.log(`✅ Filtro aplicado: ${medidoresFiltrados.length} medidores de ${unidadesSeleccionadas.length} unidades`);
   }
 }
 
@@ -27031,23 +27061,18 @@ function aplicarFiltroUnidadMedidores() {
 function limpiarFiltroUnidadMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (select) {
-    Array.from(select.options).forEach(option => option.selected = false);
+    Array.from(select.options).forEach(option => {
+      option.selected = false;
+    });
   }
   
   // ✅ Restaurar vista completa con todos los medidores
   if (window.datosMedidoresEspeciales && document.getElementById('searchResults')) {
     document.getElementById('searchResults').innerHTML = generarHTMLTablaMedidores(window.datosMedidoresEspeciales);
     
-    // ✅ Restaurar botón "Mostrar Seleccionadas" al conteo total
-    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
-    if (btnMostrar) {
-      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${window.datosMedidoresEspeciales.medidores.length})`;
-    }
-    
     console.log('✅ Filtro limpiado - Vista completa restaurada');
   }
 }
-
 
 </script>
 </body>
