@@ -23452,6 +23452,16 @@ async function cargarCircuitoEnMapa() {
 
 
 function limpiarMapaCircuito() {
+    // ✅ Eliminar capas procesadas individualmente
+    if (window.capasProcesadasActual && Array.isArray(window.capasProcesadasActual)) {
+        window.capasProcesadasActual.forEach(capa => {
+            if (window.mapaLeafletInstance?.hasLayer(capa)) {
+                window.mapaLeafletInstance.removeLayer(capa);
+            }
+        });
+        window.capasProcesadasActual = [];
+    }
+
     if (window.capaCircuitoActual && window.mapaLeafletInstance) {
         window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
     }
@@ -23464,15 +23474,16 @@ function limpiarMapaCircuito() {
         window.markersTX = [];
     }
     window.capaCircuitoActual = null;
-    
-    // ✅ Limpiar panel de detalle
+
     const panel = document.getElementById('detalleTXPanel');
     if (panel) {
         panel.innerHTML = '<div style="text-align:center; padding:15px; color:#999;">🔍 Haz clic en un marcador y presiona "Ver Detalle"</div>';
     }
-    
+
     console.log('🧹 Mapa de circuito limpiado');
 }
+
+
 
 // Cerrar mapa de circuito
 function cerrarMapaCircuito() {
@@ -23810,6 +23821,7 @@ const capaKMZ = await new Promise((resolve, reject) => {
 });
         
         const capasProcesadas = procesarCapasKMZ(capaKMZ, window.mapaLeafletInstance, nombreCircuito);
+        window.capasProcesadasActual = capasProcesadas;
         const totalElementos = capasProcesadas.length;
         const geometriasEncontradas = totalElementos > 0;
         console.log('📊 Capas procesadas:', totalElementos);
