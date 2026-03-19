@@ -25989,8 +25989,7 @@ function exportarSuministrosMultiplesExcel() {
 window.datosSuministrosMultiples.suministros.forEach(suministro => {
   suministro.OS_Lista.forEach((os, idx) => {
     datos.push({
-  datos.push({
-  'Cuenta Contrato': suministro.CuentaContrato || 'N/A',
+   'Cuenta Contrato': suministro.CuentaContrato || 'N/A',
   'Tarifa': suministro.OS_Lista[0]?.Tarifa || 'N/A', // ✅ NUEVO: Tarifa
   'Medidor': suministro.Medidor || 'N/A',
   'Total OS en Suministro': suministro.totalOS || 0,
