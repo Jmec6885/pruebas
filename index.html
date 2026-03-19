@@ -21545,6 +21545,8 @@ function formatearComentario(valor, esDireccion = false) {
     .replace(/Sin Coordenadas/g, '<br><em>Sin Coordenadas</em>')
     .replace(/Sin Foto/g, '<br><em>Sin Foto</em>')
     .replace(/Nombre del Cliente/g, '<br><strong>Nombre del Cliente:</strong>')
+    .replace(/Facturas Pent./g, '<br><strong>Facturas Pent:</strong>')
+    .replace(/Dias Vencidos/g, '<br><strong>Dias Vencidos:</strong>')
           .replace(/Tel, Previa/g, '<br><strong>Tel, Previa:</strong>')
           .replace(/Deuda/g, '<br><strong>Deuda:</strong>')
            .replace(/Cuenta contrato/g, '<br><strong>Cuenta contrato:</strong>')
@@ -25681,15 +25683,16 @@ function analizarSuministrosMultiples(osPendientes) {
     
     // ✅ Almacenar datos completos del OS
     agrupado[claveUnica].lista.push({
-      OSSAP: os.OSSAP || 'N/A',
-      OSATMO: os.OSATMO || 'N/A',
-      Tipologia: os.Tipologia || 'N/A',
-      Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: os.Unidad || 'SIN UNIDAD',
-      'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      CuentaContrato: cc,
-      Medidor: medidor
-    });
+  OSSAP: os.OSSAP || 'N/A',
+  OSATMO: os.OSATMO || 'N/A',
+  Tipologia: os.Tipologia || 'N/A',
+  Estado_ATOMO: os.Estado_ATOMO || 'N/A',
+  Unidad: os.Unidad || 'SIN UNIDAD',
+  'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
+  Tarifa: os.Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
+  CuentaContrato: cc,
+  Medidor: medidor
+});
   });
   
   console.log(`✅ Total de suministros únicos analizados (Cuenta+Medidor): ${Object.keys(agrupado).length}`);
@@ -25856,8 +25859,8 @@ function generarHTMLTablaSuministros(analisis, filtroColor = 'todos') {
         <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
   <div style="display: flex; flex-direction: column; gap: 2px;">
     <span style="font-size: 13px; color: #4b5563;">NIC: ${suministro.CuentaContrato}</span>
-    <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px;">
-      Medidor: ${suministro.Medidor}
+    <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+      💰 Tarifa: ${suministro.OS_Lista[0].Tarifa || 'N/A'}
     </span>
   </div>
 </td>
@@ -25986,20 +25989,20 @@ function exportarSuministrosMultiplesExcel() {
 window.datosSuministrosMultiples.suministros.forEach(suministro => {
   suministro.OS_Lista.forEach((os, idx) => {
     datos.push({
-      'Cuenta Contrato': suministro.CuentaContrato,
-      'Medidor': suministro.Medidor, // ✅ NUEVA COLUMNA CLAVE
-      'Total OS en Suministro': suministro.totalOS,
-      'Unidades Únicas': suministro.unidadesUnicas.join(' | '),
-      'Misma Unidad': suministro.mismoUnidad ? 'SÍ' : 'NO',
-      'OS #': idx + 1,
-      'OSATMO': os.OSATMO,
-      'OSSAP': os.OSSAP,
-      'Tipología': os.Tipologia,
-      'Estado ATOMO': os.Estado_ATOMO,
-      'Unidad': os.Unidad,
-      'Medidor': os.Medidor,
-      'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
-    });
+  'Cuenta Contrato': suministro.CuentaContrato,
+  'Tarifa': suministro.OS_Lista[0].Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
+  'Medidor': suministro.Medidor,
+  'Total OS en Suministro': suministro.totalOS,
+  'Unidades Únicas': suministro.unidadesUnicas.join(' | '),
+  'Misma Unidad': suministro.mismoUnidad ? 'SÍ' : 'NO',
+  'OS #': idx + 1,
+  'OSATMO': os.OSATMO,
+  'OSSAP': os.OSSAP,
+  'Tipología': os.Tipologia,
+  'Estado ATOMO': os.Estado_ATOMO,
+  'Unidad': os.Unidad,
+  'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
+});
   });
 });
     
@@ -26009,7 +26012,8 @@ window.datosSuministrosMultiples.suministros.forEach(suministro => {
     // ✅ Ajustar ancho de columnas
     const wscols = [
   { wch: 18 }, // Cuenta Contrato
-  { wch: 15 }, // Medidor ← NUEVA COLUMNA
+  { wch: 12 }, // Tarifa ← NUEVA COLUMNA
+  { wch: 15 }, // Medidor
   { wch: 10 }, // Total OS
   { wch: 30 }, // Unidades Únicas
   { wch: 12 }, // Misma Unidad
@@ -26558,7 +26562,7 @@ async function cargarInterfazMedidoresEspeciales() {
       // ✅ CORRECCIÓN CLAVE 3: Usar nombre de columna correcto con espacio en select()
       const { data, error } = await supabaseClient
         .from('OS Pendientes')
-        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Medidor, "Fecha Gen.", "Tipo Medidor", "Marca_ Modelo"') // ✅ Columnas con espacio/underscore correctamente escapadas
+        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Tarifa, "Fecha Gen."', { count: 'exact' }) // ✅ Columnas con espacio/underscore correctamente escapadas
         .not('CuentaContrato', 'is', null)
         .not('CuentaContrato', 'eq', '')
         .not('CuentaContrato', 'eq', '0')
@@ -26676,17 +26680,18 @@ function analizarMedidoresEspeciales(osPendientes) {
     if (!agrupado[cc]) agrupado[cc] = [];
     
     agrupado[cc].push({
-      OSSAP: os.OSSAP || 'N/A',
-      OSATMO: os.OSATMO || 'N/A',
-      Tipologia: os.Tipologia || 'N/A',
-      Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: unidad || 'SIN UNIDAD',
-      'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-      'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
-      'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
-      CuentaContrato: cc,
-      Medidor: os.Medidor || 'N/A'  // ✅ ¡IMPORTANTE! Incluir Medidor aquí
-    });
+  OSSAP: os.OSSAP || 'N/A',
+  OSATMO: os.OSATMO || 'N/A',
+  Tipologia: os.Tipologia || 'N/A',
+  Estado_ATOMO: os.Estado_ATOMO || 'N/A',
+  Unidad: os.Unidad || 'SIN UNIDAD',
+  'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
+  'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
+  'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
+  Tarifa: os.Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
+  CuentaContrato: cc,
+  Medidor: os.Medidor || 'N/A'
+});
   });
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
@@ -26880,13 +26885,16 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     html += `
       <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
         <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-          <div style="display: flex; flex-direction: column; gap: 2px;">
-            <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor.CuentaContrato}</span>
-            <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
-              Medidor: ${medidor.Medidor || 'N/A'}
-            </span>
-          </div>
-        </td>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor[0].CuentaContrato}</span>
+    <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
+      Medidor: ${medidor[0].Medidor || 'N/A'}
+    </span>
+    <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+      💰 Tarifa: ${medidor[0].Tarifa || 'N/A'}
+    </span>
+  </div>
+</td>
         <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
           ${medidor.totalOS}
         </td>
@@ -26999,19 +27007,19 @@ function exportarMedidoresEspecialesExcel() {
     window.datosMedidoresEspeciales.medidores.forEach(medidor => {
       medidor.forEach((os, idx) => {
         datos.push({
-          'Cuenta Contrato': medidor[0].CuentaContrato,
-          'Total OS en Cuenta': medidor.length,
-          'OS #': idx + 1,
-          'OSATMO': os.OSATMO,
-          'OSSAP': os.OSSAP,
-          'Tipología': os.Tipologia,
-          'Estado ATOMO': os.Estado_ATOMO,
-          'Unidad': os.Unidad,
-	  'Medidor': os.Medidor,
-          'Tipo Medidor': os['Tipo Medidor'], // ✅ Columna con espacio
-          'Marca/Modelo': os['Marca_ Modelo'] || 'N/A', // ✅ Columna con underscore+espacio
-          'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
-        });
+  'Cuenta Contrato': medidor[0].CuentaContrato,
+  'Tarifa': medidor[0].Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
+  'Total OS en Cuenta': medidor.length,
+  'OS #': idx + 1,
+  'OSATMO': os.OSATMO,
+  'OSSAP': os.OSSAP,
+  'Tipología': os.Tipologia,
+  'Estado ATOMO': os.Estado_ATOMO,
+  'Unidad': os.Unidad,
+  'Tipo Medidor': os['Tipo Medidor'],
+  'Marca/Modelo': os['Marca_ Modelo'] || 'N/A',
+  'Fecha Generación': os['Fecha Gen.'].split('T')[0] || 'N/A'
+});
       });
     });
     
@@ -27020,18 +27028,19 @@ function exportarMedidoresEspecialesExcel() {
     
     // ✅ Ajustar ancho de columnas
     const wscols = [
-      { wch: 18 }, // Cuenta Contrato
-      { wch: 12 }, // Total OS
-      { wch: 8 },  // OS #
-      { wch: 15 }, // OSATMO
-      { wch: 15 }, // OSSAP
-      { wch: 30 }, // Tipología
-      { wch: 15 }, // Estado ATOMO
-      { wch: 15 }, // Unidad
-      { wch: 20 }, // Tipo Medidor
-      { wch: 25 }, // Marca/Modelo
-      { wch: 15 }  // Fecha
-    ];
+  { wch: 18 }, // Cuenta Contrato
+  { wch: 12 }, // Tarifa ← NUEVA COLUMNA
+  { wch: 12 }, // Total OS
+  { wch: 8 },  // OS #
+  { wch: 15 }, // OSATMO
+  { wch: 15 }, // OSSAP
+  { wch: 30 }, // Tipología
+  { wch: 15 }, // Estado ATOMO
+  { wch: 15 }, // Unidad
+  { wch: 20 }, // Tipo Medidor
+  { wch: 25 }, // Marca/Modelo
+  { wch: 15 }  // Fecha
+];
     ws['!cols'] = wscols;
     
     // ✅ Crear libro y descargar
