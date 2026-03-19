@@ -592,58 +592,6 @@ function limpiarCacheSesion() {
     console.log('✅ Cache de sesión limpiado');
 }
 
-// ===================================================================
-// 📍 GUARDAR COORDENADAS DEL USUARIO AUTOMÁTICAMENTE AL INICIAR SESIÓN
-// ===================================================================
-async function guardarCoordenadasUsuarioAlIniciar() {
-  try {
-    // Intentar obtener coordenadas del navegador
-    const position = await new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocalización no soportada'));
-        return;
-      }
-      
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve(pos),
-        (err) => reject(err),
-        { timeout: 5000, maximumAge: 300000 } // 5 segundos timeout, caché de 5 minutos
-      );
-    });
-    
-    const coords = {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Guardar en sessionStorage (persiste mientras la pestaña esté abierta)
-    sessionStorage.setItem('ultimasCoordenadasGPS', JSON.stringify(coords));
-    console.log('✅ Coordenadas del usuario guardadas automáticamente:', coords);
-    
-    // También actualizar el campo de coordenadas si existe
-    const inputCoordenadas = document.getElementById('coordenadasTX');
-    if (inputCoordenadas) {
-      inputCoordenadas.value = `${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}`;
-    }
-    
-  } catch (error) {
-    console.warn('⚠️ No se pudieron obtener coordenadas automáticas:', error.message);
-    // No es crítico - el usuario puede usar el botón GPS manualmente
-  }
-}
-
-// ✅ EJECUTAR AUTOMÁTICAMENTE AL INICIAR SESIÓN
-document.addEventListener('DOMContentLoaded', () => {
-  // Ejecutar después de que el usuario inicie sesión
-  setTimeout(() => {
-    if (currentUser?.rol) {
-      guardarCoordenadasUsuarioAlIniciar();
-    }
-  }, 2000); // Esperar a que se complete el login
-});
-
 
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
@@ -23136,153 +23084,94 @@ txData.forEach(tx => {
 
 
 
+// ===================================================================
+// 📍 CAPTURAR COORDENADAS GPS PARA BÚSQUEDA TX Y CORTES
+// ===================================================================
 async function capturarCoordenadasGPS_TX() {
-  const inputCoordenadas = document.getElementById('coordenadasTX');
-  const gpsStatus = document.getElementById('gpsStatus_TX');
-  
-  if (!navigator.geolocation) {
-    alert('❌ Tu dispositivo no soporta geolocalización GPS');
-    return;
-  }
-  
-  // Mostrar indicador de carga
-  if (gpsStatus) {
-    gpsStatus.style.display = 'block';
-    gpsStatus.innerHTML = '📡 Obteniendo ubicación GPS...';
-    gpsStatus.style.background = '#e3f2fd';
-    gpsStatus.style.color = '#1976d2';
-  }
-  
-  try {
-    const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      });
-    });
+    const inputCoordenadas = document.getElementById('coordenadasTX');
+    const gpsStatus = document.getElementById('gpsStatus_TX');
     
-    const lat = position.coords.latitude.toFixed(6);
-    const lng = position.coords.longitude.toFixed(6);
-    const accuracy = position.coords.accuracy;
-    const coordenadas = `${lat},${lng}`;
-    
-    // Actualizar campo de coordenadas
-    if (inputCoordenadas) {
-      inputCoordenadas.value = coordenadas;
+    if (!navigator.geolocation) {
+        alert('❌ Tu dispositivo no soporta geolocalización GPS');
+        return;
     }
     
-    // Guardar en sessionStorage
-    sessionStorage.setItem('ultimasCoordenadasGPS', JSON.stringify({
-      lat: parseFloat(lat),
-      lng: parseFloat(lng),
-      accuracy,
-      timestamp: new Date().toISOString()
-    }));
-    
-    // Actualizar estado GPS
+    // Mostrar indicador de carga
     if (gpsStatus) {
-      gpsStatus.innerHTML = `
-        ✅ Ubicación capturada<br>
-        <strong>Precisión: ${Math.round(accuracy)} metros</strong><br>
-        <small>${coordenadas}</small>
-      `;
-      gpsStatus.style.background = '#e8f5e9';
-      gpsStatus.style.color = '#2e7d32';
-      
-      // Ocultar después de 3 segundos
-      setTimeout(() => { gpsStatus.style.display = 'none'; }, 3000);
+        gpsStatus.style.display = 'block';
+        gpsStatus.innerHTML = '📡 Obteniendo ubicación GPS...';
+        gpsStatus.style.background = '#e3f2fd';
+        gpsStatus.style.color = '#1976d2';
     }
     
-    console.log(`✅ Coordenadas GPS actualizadas: ${coordenadas} (precisión: ${Math.round(accuracy)}m)`);
-    
-    // ✅ RE-CENTRAR MAPA SI ESTÁ ABIERTO
-    if (window.mapaLeafletInstance && window.capaCircuitoActual) {
-      const newCoords = { lat: parseFloat(lat), lng: parseFloat(lng) };
-      
-      // Mover vista al nuevo punto
-      window.mapaLeafletInstance.setView([newCoords.lat, newCoords.lng], 16);
-      
-      // Actualizar o crear marcador de usuario
-      if (window.userLocationMarker) {
-        window.userLocationMarker.setLatLng([newCoords.lat, newCoords.lng]);
-      } else {
-        window.userLocationMarker = L.marker([newCoords.lat, newCoords.lng], {
-          icon: L.divIcon({
-            className: 'gps-user-marker',
-            html: `
-              <div style="
-                background: radial-gradient(circle, #4285F4 0%, #1a56db 70%);
-                width: 24px;
-                height: 24px;
-                border-radius: 50%;
-                border: 3px solid white;
-                box-shadow: 0 0 0 2px #4285F4, 0 2px 10px rgba(66, 133, 244, 0.5);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                position: relative;
-              ">
-                <div style="
-                  position: absolute;
-                  width: 10px;
-                  height: 10px;
-                  background: white;
-                  border-radius: 50%;
-                  animation: pulse 2s infinite;
-                "></div>
-                <style>
-                  @keyframes pulse {
-                    0% { transform: scale(0.8); opacity: 0.7; }
-                    70% { transform: scale(1.2); opacity: 0.3; }
-                    100% { transform: scale(0.8); opacity: 0.7; }
-                  }
-                </style>
-              </div>
-            `,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-          })
-        }).addTo(window.mapaLeafletInstance);
-      }
-      
-      // Abrir popup con nueva ubicación
-      window.userLocationMarker.bindPopup(`
-        <div style="font-weight: bold; color: #1e40af; text-align: center;">
-          📍 TU NUEVA UBICACIÓN<br>
-          <span style="font-size: 12px; color: #64748b;">
-            Lat: ${newCoords.lat.toFixed(6)}<br>
-            Lng: ${newCoords.lng.toFixed(6)}<br>
-            Precisión: ${Math.round(accuracy)}m
-          </span>
-        </div>
-      `).openPopup();
-      
-      console.log('✅ Mapa re-centrado en nueva ubicación del usuario');
+    try {
+        // Obtener posición actual
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                {
+                    enableHighAccuracy: true,  // Usar GPS de alta precisión
+                    timeout: 15000,             // 15 segundos máximo
+                    maximumAge: 0               // No usar cache
+                }
+            );
+        });
+        
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        const accuracy = position.coords.accuracy;
+        const coordenadas = `${lat},${lng}`;
+        
+        // Llenar el campo de coordenadas
+        if (inputCoordenadas) {
+            inputCoordenadas.value = coordenadas;
+        }
+        
+        // Mostrar éxito
+        if (gpsStatus) {
+            gpsStatus.innerHTML = `✅ Ubicación capturada<br>
+                                   <strong>Precisión: ${Math.round(accuracy)} metros</strong><br>
+                                   <small>${coordenadas}</small>`;
+            gpsStatus.style.background = '#e8f5e9';
+            gpsStatus.style.color = '#2e7d32';
+            
+            // Ocultar después de 3 segundos
+            setTimeout(() => {
+                gpsStatus.style.display = 'none';
+            }, 3000);
+        }
+        
+        console.log(`✅ Coordenadas GPS capturadas: ${coordenadas} (precisión: ${Math.round(accuracy)}m)`);
+        
+        // Opcional: Buscar automáticamente después de capturar
+        // Descomenta la siguiente línea si quieres búsqueda automática:
+        // setTimeout(() => buscarTXPorCoordenadas(), 500);
+        
+    } catch (error) {
+        console.error('❌ Error GPS:', error);
+        
+        let mensajeError = 'No se pudo obtener la ubicación.';
+        
+        if (error.code === 1) {
+            mensajeError = 'Permiso denegado. Habilita el permiso de ubicación en tu navegador.';
+        } else if (error.code === 2) {
+            mensajeError = 'Ubicación no disponible. Activa el GPS de tu dispositivo.';
+        } else if (error.code === 3) {
+            mensajeError = 'Tiempo agotado. Intenta de nuevo en un área con mejor señal.';
+        }
+        
+        if (gpsStatus) {
+            gpsStatus.innerHTML = `❌ ${mensajeError}`;
+            gpsStatus.style.background = '#fee2e2';
+            gpsStatus.style.color = '#b91c1c';
+        } else {
+            alert(`❌ Error GPS: ${mensajeError}`);
+        }
     }
-    
-  } catch (error) {
-    console.error('❌ Error GPS:', error);
-    let mensajeError = 'No se pudo obtener la ubicación.';
-    
-    if (error.code === 1) {
-      mensajeError = 'Permiso denegado. Habilita el permiso de ubicación en tu navegador.';
-    } else if (error.code === 2) {
-      mensajeError = 'Ubicación no disponible. Activa el GPS de tu dispositivo.';
-    } else if (error.code === 3) {
-      mensajeError = 'Tiempo de espera agotado. Intenta nuevamente.';
-    }
-    
-    if (gpsStatus) {
-      gpsStatus.innerHTML = `❌ ${mensajeError}`;
-      gpsStatus.style.background = '#fee2e2';
-      gpsStatus.style.color = '#dc2626';
-      setTimeout(() => { gpsStatus.style.display = 'none'; }, 5000);
-    }
-    
-    alert(`📍 Error GPS: ${mensajeError}`);
-  }
 }
+
+
 
 
 // ===================================================================
@@ -23804,136 +23693,119 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
 
 
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
-  console.log(`🗺️ Cargando circuito: ${nombreCircuito}`);
-  
-  const resultsContainer = document.getElementById('searchResults');
-  if (!resultsContainer) return;
-  
-  // ✅ OBTENER COORDENADAS DEL USUARIO (capturadas automáticamente por el sistema)
-  let userCoords = null;
-  const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
-  
-  if (coordenadasInput && coordenadasInput.includes(',')) {
-    const [lat, lng] = coordenadasInput.split(',').map(c => parseFloat(c.trim()));
-    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
-      userCoords = { lat, lng };
-      console.log(`📍 Coordenadas del usuario capturadas automáticamente: ${lat}, ${lng}`);
-    } else {
-      console.warn('⚠️ Coordenadas inválidas en campo GPS');
+    console.log('📡 Cargando circuito KMZ:', nombreCircuito);
+    
+    if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado');
+        return;
     }
-  } else {
-    console.warn('⚠️ No se encontraron coordenadas en campo GPS. Buscando en sessionStorage...');
-    // ✅ Fallback: Buscar coordenadas guardadas en sessionStorage (capturadas al inicio)
-    const savedCoords = sessionStorage.getItem('ultimasCoordenadasGPS');
-    if (savedCoords) {
-      try {
-        const coords = JSON.parse(savedCoords);
-        if (coords.lat && coords.lng) {
-          userCoords = { lat: coords.lat, lng: coords.lng };
-          console.log(`📍 Coordenadas recuperadas de sessionStorage: ${coords.lat}, ${coords.lng}`);
+    
+    await ensureOmnivoreLoaded();
+    console.log('✅ Dependencias verificadas: Leaflet y omnivore disponibles');
+    
+    // Limpiar capa anterior
+    limpiarMapaCircuito();
+    
+    // ✅ Crear contenedor del mapa si no existe
+    let contenedorMapa = document.getElementById('mapaCircuito');
+    if (!contenedorMapa) {
+        const searchResults = document.getElementById('searchResults');
+        if (!searchResults) {
+            console.error('❌ No existe #searchResults para insertar el mapa');
+            return;
         }
-      } catch (e) {
-        console.error('❌ Error parseando coordenadas de sessionStorage:', e);
-      }
-    }
-  }
-  
-  // ✅ INICIALIZAR MAPA CON CENTRADO INTELIGENTE
-  if (!window.mapaLeafletInstance) {
-    const mapaDiv = document.getElementById('mapaCircuito');
-    if (!mapaDiv) {
-      // Crear contenedor si no existe
-      resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
-          <div class="result-header">🗺️ Mapa del Circuito: ${nombreCircuito}</div>
-          <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc; margin: 15px 0;"></div>
-          <div id="panelDetalleTX" style="margin-top:10px;">
-            <div style="text-align:center; padding:15px; color:#999;">
-              📍 Cargando mapa con tu ubicación actual...
+        searchResults.innerHTML = `
+            <div id="mapaCircuitoContainer">
+                <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc;"></div>
             </div>
-          </div>
-        </div>
-      `;
+        `;
+        console.log('✅ Contenedor #mapaCircuito creado dinámicamente');
     }
     
-    // ✅ CENTRAR EN UBICACIÓN DEL USUARIO SI ESTÁ DISPONIBLE
-    const defaultCenter = userCoords || { lat: 13.7981427, lng: -89.4436187 }; // San Salvador por defecto
-    const defaultZoom = userCoords ? 16 : 10; // Zoom cercano si hay coordenadas de usuario
+    // Crear mapa si no existe
+    if (!window.mapaLeafletInstance) {
+        window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', 13.7981427, -89.4436187);
+        if (!window.mapaLeafletInstance) return;
+        console.log('🗺️ Instancia de mapa creada');
+    } else {
+        console.log('🗺️ Usando instancia de mapa existente');
+    }
     
-    window.mapaLeafletInstance = L.map('mapaCircuito').setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
+    const { data } = supabaseClient.storage
+        .from('circuitos-kmz')
+        .getPublicUrl(`${nombreCircuito}.kmz`);
     
-    // Capa base OpenStreetMap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(window.mapaLeafletInstance);
+    const kmzUrl = data?.publicUrl;
+    if (!kmzUrl) {
+        throw new Error('No se pudo generar URL pública para el KMZ');
+    }
+    console.log('🔗 KMZ URL generada:', kmzUrl);
     
-    console.log(`✅ Mapa inicializado en: ${defaultCenter.lat}, ${defaultCenter.lng} (zoom ${defaultZoom})`);
+    try {
+        const check = await fetch(kmzUrl, { method: 'HEAD' });
+        if (!check.ok) {
+            throw new Error(`Archivo no accesible (Status: ${check.status})`);
+        }
+    } catch (err) {
+        console.error('❌ Error verificando KMZ:', err);
+        alert(`⚠️ El circuito "${nombreCircuito}" no está disponible`);
+        return;
+    }
     
-    // ✅ AÑADIR MARCADOR DE UBICACIÓN DEL USUARIO (si está disponible)
-    if (userCoords) {
-      const userMarker = L.marker([userCoords.lat, userCoords.lng], {
-        icon: L.divIcon({
-          className: 'gps-user-marker',
-          html: `
-            <div style="
-              background: radial-gradient(circle, #4285F4 0%, #1a56db 70%);
-              width: 24px;
-              height: 24px;
-              border-radius: 50%;
-              border: 3px solid white;
-              box-shadow: 0 0 0 2px #4285F4, 0 2px 10px rgba(66, 133, 244, 0.5);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              position: relative;
-            ">
-              <div style="
-                position: absolute;
-                width: 10px;
-                height: 10px;
-                background: white;
-                border-radius: 50%;
-                animation: pulse 2s infinite;
-              "></div>
-              <style>
-                @keyframes pulse {
-                  0% { transform: scale(0.8); opacity: 0.7; }
-                  70% { transform: scale(1.2); opacity: 0.3; }
-                  100% { transform: scale(0.8); opacity: 0.7; }
-                }
-              </style>
-            </div>
-          `,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
+    console.log('📥 Iniciando carga con leaflet-omnivore...');
+    
+    try {
+        const respuesta = await fetch(kmzUrl);
+const arrayBuffer = await respuesta.arrayBuffer();
+const zip = await JSZip.loadAsync(arrayBuffer);
+
+// Buscar el archivo .kml dentro del ZIP
+const archivoKML = Object.values(zip.files).find(f => f.name.endsWith('.kml'));
+if (!archivoKML) throw new Error('No se encontró .kml dentro del KMZ');
+
+const kmlTexto = await archivoKML.async('string');
+const kmlBlob = new Blob([kmlTexto], { type: 'application/xml' });
+const kmlUrl = URL.createObjectURL(kmlBlob);
+
+const capaKMZ = await new Promise((resolve, reject) => {
+    omnivore.kml(kmlUrl)
+        .on('ready', function() {
+            URL.revokeObjectURL(kmlUrl); // liberar memoria
+            resolve(this);
         })
-      }).addTo(window.mapaLeafletInstance);
-      
-      userMarker.bindPopup(`
-        <div style="font-weight: bold; color: #1e40af; text-align: center;">
-          📍 TU UBICACIÓN ACTUAL<br>
-          <span style="font-size: 12px; color: #64748b;">
-            Lat: ${userCoords.lat.toFixed(6)}<br>
-            Lng: ${userCoords.lng.toFixed(6)}
-          </span>
-        </div>
-      `).openPopup();
-      
-      console.log('✅ Marcador de ubicación del usuario agregado al mapa');
+        .on('error', function(error) {
+            URL.revokeObjectURL(kmlUrl);
+            reject(error);
+        });
+});
+        
+        const capasProcesadas = procesarCapasKMZ(capaKMZ, window.mapaLeafletInstance, nombreCircuito);
+        const totalElementos = capasProcesadas.length;
+        const geometriasEncontradas = totalElementos > 0;
+        console.log('📊 Capas procesadas:', totalElementos);
+        
+        if (!geometriasEncontradas) {
+            console.warn('⚠️ El KMZ no tiene geometrías válidas');
+            alert('El archivo KMZ no contiene elementos visibles.');
+        } else {
+            if (capaKMZ.getBounds) {
+                const bounds = capaKMZ.getBounds();
+                if (bounds.isValid()) {
+                    window.mapaLeafletInstance.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+        }
+        
+        window.capaCircuitoActual = capaKMZ;
+        if (typeof mostrarInfoCircuito === 'function') {
+            mostrarInfoCircuito(nombreCircuito, totalElementos);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error fatal en cargarCircuitoKMZEnMapa:', error);
     }
-  }
-  
-  // ... resto de tu código para cargar el KMZ del circuito y los marcadores de TX/Cortes ...
-  
-  // ✅ AJUSTE FINAL: Si hay coordenadas de usuario, asegurar que estén visibles
-  if (userCoords && window.mapaLeafletInstance) {
-    setTimeout(() => {
-      window.mapaLeafletInstance.setView([userCoords.lat, userCoords.lng], 16);
-      console.log('✅ Mapa reajustado a ubicación del usuario después de cargar capas');
-    }, 500);
-  }
 }
+
 
 
 
@@ -26737,7 +26609,7 @@ async function cargarInterfazMedidoresEspeciales() {
 
 
 // ===================================================================
-// 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Incluye Medidor + Cálculo correcto de mismoUnidad)
+// 🔍 ANALIZAR MEDIDORES ESPECIALES (CON UNIDADES ÚNICAS PARA FILTRO)
 // ===================================================================
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
@@ -26750,83 +26622,59 @@ function analizarMedidoresEspeciales(osPendientes) {
     const cc = String(os.CuentaContrato || '').trim();
     if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
     
-    // ✅ Recolectar unidades únicas para el filtro global
-    const unidad = String(os.Unidad || '').trim();
-    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
-      unidadesSet.add(unidad);
-    }
-    
-    // ✅ Agrupar OS por CuentaContrato
     if (!agrupado[cc]) agrupado[cc] = [];
     
+    // ✅ Almacenar datos completos + recolectar unidades únicas
     agrupado[cc].push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
       Tipologia: os.Tipologia || 'N/A',
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: unidad || 'SIN UNIDAD',
+      Unidad: os.Unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
       'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
       'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
-      CuentaContrato: cc,
-      Medidor: os.Medidor || 'N/A'  // ✅ ¡IMPORTANTE! Incluir Medidor aquí
+      CuentaContrato: cc
     });
+    
+    // ✅ Recolectar unidades únicas para el filtro
+    const unidad = String(os.Unidad || '').trim();
+    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
+      unidadesSet.add(unidad);
+    }
   });
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
   console.log(`✅ Unidades únicas detectadas: ${unidadesSet.size}`);
   
-  // ✅ ✅ ✅ CORRECCIÓN CLAVE: Calcular estado ROJO/VERDE por cuenta ✅ ✅ ✅
-  const medidores = Object.values(agrupado).map(cuentaOS => {
-    // Extraer unidades únicas de TODAS las OS de esta cuenta
-    const unidadesUnicas = [...new Set(cuentaOS.map(os => os.Unidad.trim()))];
-    
-    // Determinar si todas las OS pertenecen a la MISMA unidad
-    const mismoUnidad = unidadesUnicas.length === 1;
-    
-    return {
-      CuentaContrato: cuentaOS[0].CuentaContrato,
-      Medidor: cuentaOS[0].Medidor,  // ✅ Incluir Medidor en el resultado final
-      OS_Lista: cuentaOS.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
-      totalOS: cuentaOS.length,
-      unidadesUnicas: unidadesUnicas,
-      mismoUnidad: mismoUnidad,
-      color: mismoUnidad ? 'verde' : 'rojo',  // ✅ Verde = misma unidad | Rojo = unidades diferentes
-      prioridad: mismoUnidad ? 2 : 1  // Rojo primero en orden (mayor prioridad)
-    };
-  }).sort((a, b) => 
-    b.prioridad - a.prioridad || 
-    a.CuentaContrato.localeCompare(b.CuentaContrato)
-  );
-  
   // ✅ ESTADÍSTICAS
+  const medidores = Object.values(agrupado);
   const totalMedidores = medidores.length;
   const totalOS = osPendientes.length;
   const unidadesUnicas = Array.from(unidadesSet).sort();
   
-  // ✅ Contar rojos y verdes para estadísticas
-  const suministrosRojos = medidores.filter(m => m.color === 'rojo').length;
-  const suministrosVerdes = medidores.filter(m => m.color === 'verde').length;
-  
-  console.log(`✅ Medidores especiales detectados: ${totalMedidores}`);
+  console.log(`✅ Cuentas con medidores especiales: ${totalMedidores}`);
   console.log(`✅ OS involucradas: ${totalOS}`);
-  console.log(`✅ Rojos (unidades diferentes): ${suministrosRojos}`);
-  console.log(`✅ Verdes (misma unidad): ${suministrosVerdes}`);
   console.groupEnd();
   
   return {
     medidores: medidores,
     estadisticas: {
       totalMedidores,
-      totalOS,
-      suministrosRojos,   // ✅ Nuevas estadísticas para el resumen
-      suministrosVerdes   // ✅ Nuevas estadísticas para el resumen
+      totalOS
     },
-    unidadesUnicas: unidadesUnicas  // ✅ Para el filtro por unidad
+    unidadesUnicas: unidadesUnicas // ✅ NUEVO: Para el filtro por unidad
   };
 }
 
 
+
+// ===================================================================
+// 📊 GENERAR HTML: RESUMEN + FILTROS
+// ===================================================================
+// ===================================================================
+// 📊 GENERAR HTML: RESUMEN + FILTROS + FILTRO POR UNIDAD
+// ===================================================================
 function generarHTMLResumenMedidores(analisis) {
   const { estadisticas, unidadesUnicas } = analisis;
   
@@ -26842,38 +26690,41 @@ function generarHTMLResumenMedidores(analisis) {
         • OS involucradas: <strong>${estadisticas.totalOS.toLocaleString()}</strong>
       </div>
       
+      <!-- ✅ NUEVO: FILTRO POR UNIDAD -->
       <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
         <strong style="font-size: 16px; color: #2d3748;">🔍 Filtrar por Unidad</strong>
         
-        <div style="margin-top: 15px; max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: white;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
-            ${unidadesUnicas.map(unidad => `
-              <label style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 6px; transition: background 0.2s;">
-                <input type="checkbox" class="checkbox-unidad-medidor" value="${unidad}" 
-                       style="width: 16px; height: 16px; margin-right: 8px; cursor: pointer;">
-                <span style="font-size: 13px; color: #334155;">${unidad}</span>
-              </label>
-            `).join('')}
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: flex-end;">
+          <div style="flex: 1; min-width: 250px;">
+            <select id="filtroUnidadMedidores" multiple size="6" 
+                    style="width: 100%; padding: 8px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; height: 150px;">
+              ${unidadesUnicas.map(unidad => `
+                <option value="${unidad}">${unidad}</option>
+              `).join('')}
+            </select>
+            <small style="color: #64748b; display: block; margin-top: 5px; font-size: 13px;">
+              ✅ Mantén Ctrl (Windows) o Cmd (Mac) para seleccionar múltiples unidades
+            </small>
           </div>
-        </div>
-        
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: center;">
-          <button class="btn btn-secondary" onclick="aplicarFiltroUnidadMedidores()" 
-                  style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
-            📊 Mostrar Seleccionadas (${unidadesUnicas.length})
-          </button>
-          <button class="btn btn-secondary" onclick="seleccionarTodasUnidadesMedidores()" 
-                  style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 8px 15px; font-size: 13px;">
-            ✅ Seleccionar Todas (${unidadesUnicas.length})
-          </button>
-          <button class="btn btn-secondary" onclick="deseleccionarTodasUnidadesMedidores()" 
-                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 15px; font-size: 13px;">
-            ❌ Deseleccionar Todas
-          </button>
-          <button class="btn" onclick="limpiarFiltroUnidadMedidores()" 
-                  style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 8px 15px; font-size: 13px;">
-            🗑️ Limpiar Filtro
-          </button>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
+            <button class="btn btn-secondary" onclick="aplicarFiltroUnidadMedidores()" 
+                    style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+              📊 Mostrar Seleccionadas (${unidadesUnicas.length})
+            </button>
+            <button class="btn btn-secondary" onclick="seleccionarTodasUnidadesMedidores()" 
+                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 8px 15px; font-size: 13px;">
+              ✅ Seleccionar Todas (${unidadesUnicas.length})
+            </button>
+            <button class="btn btn-secondary" onclick="deseleccionarTodasUnidadesMedidores()" 
+                    style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 15px; font-size: 13px;">
+              ❌ Deseleccionar Todas
+            </button>
+            <button class="btn" onclick="limpiarFiltroUnidadMedidores()" 
+                    style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 8px 15px; font-size: 13px; margin-top: 5px;">
+              🗑️ Limpiar Filtro
+            </button>
+          </div>
         </div>
         
         <div style="margin-top: 15px; padding: 12px; background: #dbeafe; border-radius: 8px; font-size: 13px;">
@@ -26882,21 +26733,6 @@ function generarHTMLResumenMedidores(analisis) {
           • Solo se muestran medidores asignados a unidades válidas<br>
           • <span style="color: #ef4444; font-weight: bold;">🔴 Rojo</span>: Medidor asignado a múltiples unidades (requiere revisión)<br>
           • <span style="color: #10b981; font-weight: bold;">🟢 Verde</span>: Medidor asignado a una sola unidad (correcto)
-        </div>
-        
-        <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px;">
-          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('todos')" 
-                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 16px; font-size: 14px;">
-            🎨 Mostrar Todos (${estadisticas.totalMedidores})
-          </button>
-          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('rojo')" 
-                  style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); padding: 8px 16px; font-size: 14px;">
-            🔴 Solo Diferentes Unidades (${estadisticas.suministrosRojos || 0})
-          </button>
-          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('verde')" 
-                  style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); padding: 8px 16px; font-size: 14px;">
-            🟢 Solo Misma Unidad (${estadisticas.suministrosVerdes || 0})
-          </button>
         </div>
       </div>
       
@@ -26911,8 +26747,9 @@ function generarHTMLResumenMedidores(analisis) {
 }
 
 
+
 // ===================================================================
-// 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Sin errores + Medidor visible)
+// 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Mostrar Tipo Medidor y Marca/Modelo)
 // ===================================================================
 function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   const medidoresFiltrados = analisis.medidores;
@@ -26922,7 +26759,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
       <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107; text-align: center; padding: 30px;">
         <div class="result-header">ℹ️ Sin Resultados</div>
         <p style="color: #666; margin-top: 15px;">
-          No se encontraron medidores especiales que coincidan con el filtro seleccionado.
+          No se encontraron medidores especiales asignados a unidades válidas.
         </p>
         <button class="btn" onclick="location.reload()" 
                 style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); margin-top: 20px; padding: 10px 20px;">
@@ -26943,7 +26780,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <thead>
             <tr style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
-              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Suministro (Cuenta-Medidor)</th>
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Cuenta Contrato</th>
               <th style="padding: 14px 16px; text-align: center; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); min-width: 100px;">Total OS</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Unidades</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">OS Detalle</th>
@@ -26956,42 +26793,27 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     const esPar = idx % 2 === 0;
     const bgColor = esPar ? '#f8fafc' : '#ffffff';
     
-    // ✅ CORRECCIÓN CLAVE 1: Definir borderColor según mismoUnidad (NO usar variable no definida)
-    const borderColor = medidor.mismoUnidad ? '#bbf7d0' : '#fecaca';
-    const headerColor = medidor.mismoUnidad ? '#10b981' : '#ef4444';
-    const iconoEstado = medidor.mismoUnidad ? '✓' : '!';
-    
     html += `
-      <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
-        <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-          <div style="display: flex; flex-direction: column; gap: 2px;">
-            <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor.CuentaContrato}</span>
-            <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
-              Medidor: ${medidor.Medidor || 'N/A'}
-            </span>
-          </div>
-        </td>
-        <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
-          ${medidor.totalOS}
-        </td>
+  <tr style="background: ${bgColor}; border-bottom: 2px solid ${medidor.length > 1 ? '#fecaca' : '#bbf7d0'};">
+    <td style="padding: 12px 16px; font-weight: 700; color: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+      ${medidor[0].CuentaContrato}
+      <span style="display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; color: white; font-weight: bold; line-height: 20px; text-align: center; margin-left: 8px; font-size: 12px;">
+        ${medidor.length > 1 ? '!' : '✓'}
+      </span>
+    </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${medidor.unidadesUnicas.map(unidad => `
-              <span style="background: ${medidor.mismoUnidad ? '#bbf7d0' : '#fecaca'}; 
-                           color: ${medidor.mismoUnidad ? '#1e40af' : '#b91c1c'}; 
-                           padding: 4px 10px; 
-                           border-radius: 20px; 
-                           font-size: 13px; 
-                           font-weight: 600;">
-                ${unidad}
+            ${medidor.map(os => `
+              <span style="background: #f1f5f9; color: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">
+                ${os.Unidad}
               </span>
             `).join('')}
           </div>
         </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
-            ${medidor.OS_Lista.map(os => `
-              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid ${headerColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            ${medidor.map(os => `
+              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #1565c0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e40af;">
                   <span>OSATMO: ${os.OSATMO}</span>
                   <span style="background: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ffedd5' : '#dbeafe'}; 
@@ -27005,7 +26827,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
                 <div style="font-size: 13px; color: #4b5563; line-height: 1.6;">
                   <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
                   <div><strong>Tipología:</strong> ${os.Tipologia}</div>
-                  <div><strong>Unidad:</strong> <span style="color: ${headerColor}; font-weight: 600;">${os.Unidad}</span></div>
+                  <div><strong>Unidad:</strong> <span style="color: #1565c0; font-weight: 600;">${os.Unidad}</span></div>
                   <div><strong>Tipo Medidor:</strong> <span style="background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #1e40af;">${os['Tipo Medidor']}</span></div>
                   <div><strong>Marca/Modelo:</strong> ${os['Marca_ Modelo'] || 'N/A'}</div>
                   <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
@@ -27029,7 +26851,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
         </strong>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
           <div>• <strong>Total cuentas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.length.toLocaleString()}</span></div>
-          <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0).toLocaleString()}</span></div>
+          <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.length, 0).toLocaleString()}</span></div>
           <div>• <strong>Filtro aplicado:</strong> <span style="color: #64748b; font-weight: 700;">⚡ Medidores Especiales</span></div>
         </div>
         <div style="text-align: center; margin-top: 20px;">
@@ -27044,7 +26866,6 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   
   return html;
 }
-
 
 
 
@@ -27137,55 +26958,51 @@ function exportarMedidoresEspecialesExcel() {
 
 
 // ===================================================================
-// ✅ SELECCIÓN MÚLTIPLE DE UNIDADES (CORREGIDA)
+// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES EN FILTRO
 // ===================================================================
 function seleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => {
-    option.selected = true;
-  });
-  
-  // ✅ Forzar actualización del filtro
-  aplicarFiltroUnidadMedidores();
+  Array.from(select.options).forEach(option => option.selected = true);
+  console.log(`✅ ${select.selectedOptions.length} unidades seleccionadas`);
 }
 
 function deseleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => {
-    option.selected = false;
-  });
-  
-  // ✅ Forzar actualización del filtro
-  aplicarFiltroUnidadMedidores();
+  Array.from(select.options).forEach(option => option.selected = false);
+  console.log('✅ Todas las unidades deseleccionadas');
 }
 
 // ===================================================================
-// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA (CORREGIDO: Usa OS_Lista en lugar de medidor)
+// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA
 // ===================================================================
 function aplicarFiltroUnidadMedidores() {
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor:checked');
-  if (!checkboxes || checkboxes.length === 0 || !window.datosMedidoresEspeciales) {
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (!select || !window.datosMedidoresEspeciales) {
+    alert('⚠️ No hay datos disponibles para filtrar');
+    return;
+  }
+  
+  // ✅ Obtener unidades seleccionadas
+  const unidadesSeleccionadas = Array.from(select.selectedOptions).map(opt => opt.value);
+  
+  if (unidadesSeleccionadas.length === 0) {
     alert('⚠️ Por favor selecciona al menos una unidad para filtrar');
     return;
   }
   
-  // ✅ Obtener unidades seleccionadas de los checkboxes
-  const unidadesSeleccionadas = Array.from(checkboxes).map(cb => cb.value);
-  
   console.log(`🔍 Filtrando por ${unidadesSeleccionadas.length} unidades:`, unidadesSeleccionadas);
   
-  // ✅ CORRECCIÓN CLAVE: Usar OS_Lista.some() en lugar de medidor.some()
+  // ✅ Filtrar medidores: mantener solo los que tienen AL MENOS UNA OS en las unidades seleccionadas
   const medidoresFiltrados = window.datosMedidoresEspeciales.medidores.filter(medidor => {
-    // Verificar si AL MENOS UNA OS del medidor pertenece a las unidades seleccionadas
-    return medidor.OS_Lista.some(os => unidadesSeleccionadas.includes(os.Unidad));
+    return medidor.some(os => unidadesSeleccionadas.includes(os.Unidad));
   });
   
   // ✅ Actualizar estadísticas filtradas
-  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0);
+  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.length, 0);
   
   // ✅ Regenerar tabla con resultados filtrados
   const resultsContainer = document.getElementById('searchResults');
@@ -27194,26 +27011,28 @@ function aplicarFiltroUnidadMedidores() {
       medidores: medidoresFiltrados,
       estadisticas: {
         totalMedidores: medidoresFiltrados.length,
-        totalOS: totalOSFiltradas,
-        suministrosRojos: medidoresFiltrados.filter(m => !m.mismoUnidad).length,
-        suministrosVerdes: medidoresFiltrados.filter(m => m.mismoUnidad).length
-      },
-      unidadesUnicas: window.datosMedidoresEspeciales.unidadesUnicas
+        totalOS: totalOSFiltradas
+      }
     });
+    
+    // ✅ Actualizar botón "Mostrar Seleccionadas" con conteo real
+    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
+    if (btnMostrar) {
+      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${medidoresFiltrados.length})`;
+    }
     
     console.log(`✅ Filtro aplicado: ${medidoresFiltrados.length} medidores de ${unidadesSeleccionadas.length} unidades`);
   }
 }
 
-
-
 // ===================================================================
 // 🗑️ LIMPIAR FILTRO Y RESTAURAR VISTA COMPLETA
 // ===================================================================
 function limpiarFiltroUnidadMedidores() {
-  // ✅ Deseleccionar todos los checkboxes
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
-  checkboxes.forEach(cb => cb.checked = false);
+  const select = document.getElementById('filtroUnidadMedidores');
+  if (select) {
+    Array.from(select.options).forEach(option => option.selected = false);
+  }
   
   // ✅ Restaurar vista completa con todos los medidores
   if (window.datosMedidoresEspeciales && document.getElementById('searchResults')) {
@@ -27225,82 +27044,10 @@ function limpiarFiltroUnidadMedidores() {
       btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${window.datosMedidoresEspeciales.medidores.length})`;
     }
     
-    // ✅ Restaurar botones de color
-    document.querySelectorAll('.btn.btn-secondary').forEach(btn => {
-      btn.style.opacity = '1';
-      btn.style.transform = 'scale(1)';
-    });
-    
     console.log('✅ Filtro limpiado - Vista completa restaurada');
   }
 }
 
-
-// ===================================================================
-// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES (CHECKBOXES)
-// ===================================================================
-function seleccionarTodasUnidadesMedidores() {
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
-  checkboxes.forEach(cb => cb.checked = true);
-  console.log(`✅ ${checkboxes.length} unidades seleccionadas`);
-}
-
-function deseleccionarTodasUnidadesMedidores() {
-  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
-  checkboxes.forEach(cb => cb.checked = false);
-  console.log('✅ Todas las unidades deseleccionadas');
-}
-
-// ===================================================================
-// 🔘 FILTRAR POR COLOR (rojo/verde/todos)
-// ===================================================================
-function filtrarMedidoresPorColor(color) {
-  if (!window.datosMedidoresEspeciales) {
-    alert('⚠️ No hay datos cargados para filtrar');
-    return;
-  }
-  
-  let medidoresFiltrados = window.datosMedidoresEspeciales.medidores;
-  
-  if (color === 'rojo') {
-    medidoresFiltrados = medidoresFiltrados.filter(m => !m.mismoUnidad);
-  } else if (color === 'verde') {
-    medidoresFiltrados = medidoresFiltrados.filter(m => m.mismoUnidad);
-  }
-  
-  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0);
-  
-  const resultsContainer = document.getElementById('searchResults');
-  if (resultsContainer) {
-    resultsContainer.innerHTML = generarHTMLTablaMedidores({
-      medidores: medidoresFiltrados,
-      estadisticas: {
-        totalMedidores: medidoresFiltrados.length,
-        totalOS: totalOSFiltradas,
-        suministrosRojos: medidoresFiltrados.filter(m => !m.mismoUnidad).length,
-        suministrosVerdes: medidoresFiltrados.filter(m => m.mismoUnidad).length
-      },
-      unidadesUnicas: window.datosMedidoresEspeciales.unidadesUnicas
-    });
-    
-    // ✅ Actualizar botones de color visualmente
-    document.querySelectorAll('.btn.btn-secondary').forEach(btn => {
-      btn.style.opacity = '0.7';
-      btn.style.transform = 'scale(0.98)';
-    });
-    
-    // Resaltar botón activo
-    const botonActivo = Array.from(document.querySelectorAll('.btn.btn-secondary')).find(btn => 
-      btn.onclick.toString().includes(`filtrarMedidoresPorColor('${color}')`)
-    );
-    if (botonActivo) {
-      botonActivo.style.opacity = '1';
-      botonActivo.style.transform = 'scale(1.05)';
-    }
-    
-    console.log(`✅ Filtro por color "${color}": ${medidoresFiltrados.length} medidores`);
-  }
-}
 
 </script>
 </body>
