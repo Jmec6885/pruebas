@@ -12,7 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2 "></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<!-- Leaflet para mapas -->
+    <!-- Leaflet para mapas -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
@@ -23173,7 +23173,6 @@ async function capturarCoordenadasGPS_TX() {
 
 
 
-
 // ===================================================================
 // 🧪 DIAGNÓSTICO RÁPIDO: Verificar tabla tx_y_cortes
 // ===================================================================
@@ -23692,6 +23691,10 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
 
 
 
+
+// ===================================================================
+// 🗺️ CARGAR CIRCUITO KMZ EN MAPA (CORREGIDO: Sin return anticipado + Verificación omnivore)
+// ===================================================================
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     console.log('📡 Cargando circuito KMZ:', nombreCircuito);
     
@@ -23723,10 +23726,37 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     }
     
     // Crear mapa si no existe
-    if (!window.mapaLeafletInstance) {
-        window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', 13.7981427, -89.4436187);
+    // ✅ Obtener coordenadas del usuario desde BD
+let userCoords = null;
+const coordsUsuario = currentUser?.coordenadas;
+if (coordsUsuario && coordsUsuario.includes(',')) {
+    const [lat, lng] = coordsUsuario.split(',').map(c => parseFloat(c.trim()));
+    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        userCoords = { lat, lng };
+        console.log(`📍 Coordenadas del usuario desde BD: ${lat}, ${lng}`);
+    }
+}
+
+const centroInicial = userCoords || { lat: 13.7981427, lng: -89.4436187 };
+
+// Crear mapa si no existe
+if (!window.mapaLeafletInstance) {
+    window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', centroInicial.lat, centroInicial.lng);
         if (!window.mapaLeafletInstance) return;
         console.log('🗺️ Instancia de mapa creada');
+// ✅ Marcador de ubicación del usuario
+if (userCoords) {
+    window.userLocationMarker = L.marker([userCoords.lat, userCoords.lng], {
+        icon: L.divIcon({
+            className: 'gps-user-marker',
+            html: `<div style="background:radial-gradient(circle,#4285F4 0%,#1a56db 70%);width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 0 2px #4285F4;"></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        })
+    }).addTo(window.mapaLeafletInstance)
+    .bindPopup(`<div style="font-weight:bold;color:#1e40af;text-align:center;">📍 TU UBICACIÓN<br><small>${userCoords.lat.toFixed(6)}, ${userCoords.lng.toFixed(6)}</small></div>`);
+    console.log('✅ Marcador de usuario agregado');
+}
     } else {
         console.log('🗺️ Usando instancia de mapa existente');
     }
@@ -23805,8 +23835,6 @@ const capaKMZ = await new Promise((resolve, reject) => {
         console.error('❌ Error fatal en cargarCircuitoKMZEnMapa:', error);
     }
 }
-
-
 
 
 
@@ -26609,7 +26637,7 @@ async function cargarInterfazMedidoresEspeciales() {
 
 
 // ===================================================================
-// 🔍 ANALIZAR MEDIDORES ESPECIALES (CON UNIDADES ÚNICAS PARA FILTRO)
+// 🔍 ANALIZAR MEDIDORES ESPECIALES (CORREGIDO: Incluye Medidor + Cálculo correcto de mismoUnidad)
 // ===================================================================
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
@@ -26622,59 +26650,83 @@ function analizarMedidoresEspeciales(osPendientes) {
     const cc = String(os.CuentaContrato || '').trim();
     if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
     
+    // ✅ Recolectar unidades únicas para el filtro global
+    const unidad = String(os.Unidad || '').trim();
+    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
+      unidadesSet.add(unidad);
+    }
+    
+    // ✅ Agrupar OS por CuentaContrato
     if (!agrupado[cc]) agrupado[cc] = [];
     
-    // ✅ Almacenar datos completos + recolectar unidades únicas
     agrupado[cc].push({
       OSSAP: os.OSSAP || 'N/A',
       OSATMO: os.OSATMO || 'N/A',
       Tipologia: os.Tipologia || 'N/A',
       Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-      Unidad: os.Unidad || 'SIN UNIDAD',
+      Unidad: unidad || 'SIN UNIDAD',
       'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
       'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
       'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
-      CuentaContrato: cc
+      CuentaContrato: cc,
+      Medidor: os.Medidor || 'N/A'  // ✅ ¡IMPORTANTE! Incluir Medidor aquí
     });
-    
-    // ✅ Recolectar unidades únicas para el filtro
-    const unidad = String(os.Unidad || '').trim();
-    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
-      unidadesSet.add(unidad);
-    }
   });
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
   console.log(`✅ Unidades únicas detectadas: ${unidadesSet.size}`);
   
+  // ✅ ✅ ✅ CORRECCIÓN CLAVE: Calcular estado ROJO/VERDE por cuenta ✅ ✅ ✅
+  const medidores = Object.values(agrupado).map(cuentaOS => {
+    // Extraer unidades únicas de TODAS las OS de esta cuenta
+    const unidadesUnicas = [...new Set(cuentaOS.map(os => os.Unidad.trim()))];
+    
+    // Determinar si todas las OS pertenecen a la MISMA unidad
+    const mismoUnidad = unidadesUnicas.length === 1;
+    
+    return {
+      CuentaContrato: cuentaOS[0].CuentaContrato,
+      Medidor: cuentaOS[0].Medidor,  // ✅ Incluir Medidor en el resultado final
+      OS_Lista: cuentaOS.sort((a, b) => a.OSATMO.localeCompare(b.OSATMO)),
+      totalOS: cuentaOS.length,
+      unidadesUnicas: unidadesUnicas,
+      mismoUnidad: mismoUnidad,
+      color: mismoUnidad ? 'verde' : 'rojo',  // ✅ Verde = misma unidad | Rojo = unidades diferentes
+      prioridad: mismoUnidad ? 2 : 1  // Rojo primero en orden (mayor prioridad)
+    };
+  }).sort((a, b) => 
+    b.prioridad - a.prioridad || 
+    a.CuentaContrato.localeCompare(b.CuentaContrato)
+  );
+  
   // ✅ ESTADÍSTICAS
-  const medidores = Object.values(agrupado);
   const totalMedidores = medidores.length;
   const totalOS = osPendientes.length;
   const unidadesUnicas = Array.from(unidadesSet).sort();
   
-  console.log(`✅ Cuentas con medidores especiales: ${totalMedidores}`);
+  // ✅ Contar rojos y verdes para estadísticas
+  const suministrosRojos = medidores.filter(m => m.color === 'rojo').length;
+  const suministrosVerdes = medidores.filter(m => m.color === 'verde').length;
+  
+  console.log(`✅ Medidores especiales detectados: ${totalMedidores}`);
   console.log(`✅ OS involucradas: ${totalOS}`);
+  console.log(`✅ Rojos (unidades diferentes): ${suministrosRojos}`);
+  console.log(`✅ Verdes (misma unidad): ${suministrosVerdes}`);
   console.groupEnd();
   
   return {
     medidores: medidores,
     estadisticas: {
       totalMedidores,
-      totalOS
+      totalOS,
+      suministrosRojos,   // ✅ Nuevas estadísticas para el resumen
+      suministrosVerdes   // ✅ Nuevas estadísticas para el resumen
     },
-    unidadesUnicas: unidadesUnicas // ✅ NUEVO: Para el filtro por unidad
+    unidadesUnicas: unidadesUnicas  // ✅ Para el filtro por unidad
   };
 }
 
 
-
-// ===================================================================
-// 📊 GENERAR HTML: RESUMEN + FILTROS
-// ===================================================================
-// ===================================================================
-// 📊 GENERAR HTML: RESUMEN + FILTROS + FILTRO POR UNIDAD
-// ===================================================================
 function generarHTMLResumenMedidores(analisis) {
   const { estadisticas, unidadesUnicas } = analisis;
   
@@ -26690,41 +26742,38 @@ function generarHTMLResumenMedidores(analisis) {
         • OS involucradas: <strong>${estadisticas.totalOS.toLocaleString()}</strong>
       </div>
       
-      <!-- ✅ NUEVO: FILTRO POR UNIDAD -->
       <div style="background: #fff3cd; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #ffc107;">
         <strong style="font-size: 16px; color: #2d3748;">🔍 Filtrar por Unidad</strong>
         
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: flex-end;">
-          <div style="flex: 1; min-width: 250px;">
-            <select id="filtroUnidadMedidores" multiple size="6" 
-                    style="width: 100%; padding: 8px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; height: 150px;">
-              ${unidadesUnicas.map(unidad => `
-                <option value="${unidad}">${unidad}</option>
-              `).join('')}
-            </select>
-            <small style="color: #64748b; display: block; margin-top: 5px; font-size: 13px;">
-              ✅ Mantén Ctrl (Windows) o Cmd (Mac) para seleccionar múltiples unidades
-            </small>
+        <div style="margin-top: 15px; max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: white;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+            ${unidadesUnicas.map(unidad => `
+              <label style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 6px; transition: background 0.2s;">
+                <input type="checkbox" class="checkbox-unidad-medidor" value="${unidad}" 
+                       style="width: 16px; height: 16px; margin-right: 8px; cursor: pointer;">
+                <span style="font-size: 13px; color: #334155;">${unidad}</span>
+              </label>
+            `).join('')}
           </div>
-          
-          <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
-            <button class="btn btn-secondary" onclick="aplicarFiltroUnidadMedidores()" 
-                    style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
-              📊 Mostrar Seleccionadas (${unidadesUnicas.length})
-            </button>
-            <button class="btn btn-secondary" onclick="seleccionarTodasUnidadesMedidores()" 
-                    style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 8px 15px; font-size: 13px;">
-              ✅ Seleccionar Todas (${unidadesUnicas.length})
-            </button>
-            <button class="btn btn-secondary" onclick="deseleccionarTodasUnidadesMedidores()" 
-                    style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 15px; font-size: 13px;">
-              ❌ Deseleccionar Todas
-            </button>
-            <button class="btn" onclick="limpiarFiltroUnidadMedidores()" 
-                    style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 8px 15px; font-size: 13px; margin-top: 5px;">
-              🗑️ Limpiar Filtro
-            </button>
-          </div>
+        </div>
+        
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: center;">
+          <button class="btn btn-secondary" onclick="aplicarFiltroUnidadMedidores()" 
+                  style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); padding: 10px 15px; font-size: 14px; font-weight: 600;">
+            📊 Mostrar Seleccionadas (${unidadesUnicas.length})
+          </button>
+          <button class="btn btn-secondary" onclick="seleccionarTodasUnidadesMedidores()" 
+                  style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 8px 15px; font-size: 13px;">
+            ✅ Seleccionar Todas (${unidadesUnicas.length})
+          </button>
+          <button class="btn btn-secondary" onclick="deseleccionarTodasUnidadesMedidores()" 
+                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 15px; font-size: 13px;">
+            ❌ Deseleccionar Todas
+          </button>
+          <button class="btn" onclick="limpiarFiltroUnidadMedidores()" 
+                  style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 8px 15px; font-size: 13px;">
+            🗑️ Limpiar Filtro
+          </button>
         </div>
         
         <div style="margin-top: 15px; padding: 12px; background: #dbeafe; border-radius: 8px; font-size: 13px;">
@@ -26733,6 +26782,21 @@ function generarHTMLResumenMedidores(analisis) {
           • Solo se muestran medidores asignados a unidades válidas<br>
           • <span style="color: #ef4444; font-weight: bold;">🔴 Rojo</span>: Medidor asignado a múltiples unidades (requiere revisión)<br>
           • <span style="color: #10b981; font-weight: bold;">🟢 Verde</span>: Medidor asignado a una sola unidad (correcto)
+        </div>
+        
+        <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px;">
+          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('todos')" 
+                  style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); padding: 8px 16px; font-size: 14px;">
+            🎨 Mostrar Todos (${estadisticas.totalMedidores})
+          </button>
+          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('rojo')" 
+                  style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); padding: 8px 16px; font-size: 14px;">
+            🔴 Solo Diferentes Unidades (${estadisticas.suministrosRojos || 0})
+          </button>
+          <button class="btn btn-secondary" onclick="filtrarMedidoresPorColor('verde')" 
+                  style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); padding: 8px 16px; font-size: 14px;">
+            🟢 Solo Misma Unidad (${estadisticas.suministrosVerdes || 0})
+          </button>
         </div>
       </div>
       
@@ -26747,9 +26811,8 @@ function generarHTMLResumenMedidores(analisis) {
 }
 
 
-
 // ===================================================================
-// 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Mostrar Tipo Medidor y Marca/Modelo)
+// 📋 GENERAR HTML: TABLA DE MEDIDORES (CORREGIDO: Sin errores + Medidor visible)
 // ===================================================================
 function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   const medidoresFiltrados = analisis.medidores;
@@ -26759,7 +26822,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
       <div class="result-card" style="background: #fff3cd; border-left: 4px solid #ffc107; text-align: center; padding: 30px;">
         <div class="result-header">ℹ️ Sin Resultados</div>
         <p style="color: #666; margin-top: 15px;">
-          No se encontraron medidores especiales asignados a unidades válidas.
+          No se encontraron medidores especiales que coincidan con el filtro seleccionado.
         </p>
         <button class="btn" onclick="location.reload()" 
                 style="background: linear-gradient(135deg, #3b82f6 0%, #2196f3 100%); margin-top: 20px; padding: 10px 20px;">
@@ -26780,7 +26843,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <thead>
             <tr style="background: linear-gradient(135deg, #64748b 0%, #475569 100%); color: white;">
-              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Cuenta Contrato</th>
+              <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Suministro (Cuenta-Medidor)</th>
               <th style="padding: 14px 16px; text-align: center; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2); min-width: 100px;">Total OS</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">Unidades</th>
               <th style="padding: 14px 16px; text-align: left; font-weight: 700; border-right: 1px solid rgba(255,255,255,0.2);">OS Detalle</th>
@@ -26793,27 +26856,42 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     const esPar = idx % 2 === 0;
     const bgColor = esPar ? '#f8fafc' : '#ffffff';
     
+    // ✅ CORRECCIÓN CLAVE 1: Definir borderColor según mismoUnidad (NO usar variable no definida)
+    const borderColor = medidor.mismoUnidad ? '#bbf7d0' : '#fecaca';
+    const headerColor = medidor.mismoUnidad ? '#10b981' : '#ef4444';
+    const iconoEstado = medidor.mismoUnidad ? '✓' : '!';
+    
     html += `
-  <tr style="background: ${bgColor}; border-bottom: 2px solid ${medidor.length > 1 ? '#fecaca' : '#bbf7d0'};">
-    <td style="padding: 12px 16px; font-weight: 700; color: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-      ${medidor[0].CuentaContrato}
-      <span style="display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: ${medidor.length > 1 ? '#ef4444' : '#10b981'}; color: white; font-weight: bold; line-height: 20px; text-align: center; margin-left: 8px; font-size: 12px;">
-        ${medidor.length > 1 ? '!' : '✓'}
-      </span>
-    </td>
+      <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
+        <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor.CuentaContrato}</span>
+            <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
+              Medidor: ${medidor.Medidor || 'N/A'}
+            </span>
+          </div>
+        </td>
+        <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
+          ${medidor.totalOS}
+        </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
           <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${medidor.map(os => `
-              <span style="background: #f1f5f9; color: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">
-                ${os.Unidad}
+            ${medidor.unidadesUnicas.map(unidad => `
+              <span style="background: ${medidor.mismoUnidad ? '#bbf7d0' : '#fecaca'}; 
+                           color: ${medidor.mismoUnidad ? '#1e40af' : '#b91c1c'}; 
+                           padding: 4px 10px; 
+                           border-radius: 20px; 
+                           font-size: 13px; 
+                           font-weight: 600;">
+                ${unidad}
               </span>
             `).join('')}
           </div>
         </td>
         <td style="padding: 12px 16px; border-right: 1px solid #e2e8f0;">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
-            ${medidor.map(os => `
-              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid #1565c0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            ${medidor.OS_Lista.map(os => `
+              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; border-left: 4px solid ${headerColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e40af;">
                   <span>OSATMO: ${os.OSATMO}</span>
                   <span style="background: ${os.Estado_ATOMO === 'ASIGNADA' ? '#ffedd5' : '#dbeafe'}; 
@@ -26827,7 +26905,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
                 <div style="font-size: 13px; color: #4b5563; line-height: 1.6;">
                   <div><strong>OSSAP:</strong> ${os.OSSAP}</div>
                   <div><strong>Tipología:</strong> ${os.Tipologia}</div>
-                  <div><strong>Unidad:</strong> <span style="color: #1565c0; font-weight: 600;">${os.Unidad}</span></div>
+                  <div><strong>Unidad:</strong> <span style="color: ${headerColor}; font-weight: 600;">${os.Unidad}</span></div>
                   <div><strong>Tipo Medidor:</strong> <span style="background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-weight: 600; color: #1e40af;">${os['Tipo Medidor']}</span></div>
                   <div><strong>Marca/Modelo:</strong> ${os['Marca_ Modelo'] || 'N/A'}</div>
                   <div><strong>Fecha:</strong> ${os['Fecha Gen.'].split('T')[0] || 'N/A'}</div>
@@ -26851,7 +26929,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
         </strong>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 14px;">
           <div>• <strong>Total cuentas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.length.toLocaleString()}</span></div>
-          <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.length, 0).toLocaleString()}</span></div>
+          <div>• <strong>OS involucradas:</strong> <span style="color: #1e293b; font-weight: 700;">${medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0).toLocaleString()}</span></div>
           <div>• <strong>Filtro aplicado:</strong> <span style="color: #64748b; font-weight: 700;">⚡ Medidores Especiales</span></div>
         </div>
         <div style="text-align: center; margin-top: 20px;">
@@ -26866,6 +26944,7 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
   
   return html;
 }
+
 
 
 
@@ -26958,51 +27037,55 @@ function exportarMedidoresEspecialesExcel() {
 
 
 // ===================================================================
-// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES EN FILTRO
+// ✅ SELECCIÓN MÚLTIPLE DE UNIDADES (CORREGIDA)
 // ===================================================================
 function seleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => option.selected = true);
-  console.log(`✅ ${select.selectedOptions.length} unidades seleccionadas`);
+  Array.from(select.options).forEach(option => {
+    option.selected = true;
+  });
+  
+  // ✅ Forzar actualización del filtro
+  aplicarFiltroUnidadMedidores();
 }
 
 function deseleccionarTodasUnidadesMedidores() {
   const select = document.getElementById('filtroUnidadMedidores');
   if (!select) return;
   
-  Array.from(select.options).forEach(option => option.selected = false);
-  console.log('✅ Todas las unidades deseleccionadas');
+  Array.from(select.options).forEach(option => {
+    option.selected = false;
+  });
+  
+  // ✅ Forzar actualización del filtro
+  aplicarFiltroUnidadMedidores();
 }
 
 // ===================================================================
-// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA
+// 🔍 APLICAR FILTRO POR UNIDAD SELECCIONADA (CORREGIDO: Usa OS_Lista en lugar de medidor)
 // ===================================================================
 function aplicarFiltroUnidadMedidores() {
-  const select = document.getElementById('filtroUnidadMedidores');
-  if (!select || !window.datosMedidoresEspeciales) {
-    alert('⚠️ No hay datos disponibles para filtrar');
-    return;
-  }
-  
-  // ✅ Obtener unidades seleccionadas
-  const unidadesSeleccionadas = Array.from(select.selectedOptions).map(opt => opt.value);
-  
-  if (unidadesSeleccionadas.length === 0) {
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor:checked');
+  if (!checkboxes || checkboxes.length === 0 || !window.datosMedidoresEspeciales) {
     alert('⚠️ Por favor selecciona al menos una unidad para filtrar');
     return;
   }
   
+  // ✅ Obtener unidades seleccionadas de los checkboxes
+  const unidadesSeleccionadas = Array.from(checkboxes).map(cb => cb.value);
+  
   console.log(`🔍 Filtrando por ${unidadesSeleccionadas.length} unidades:`, unidadesSeleccionadas);
   
-  // ✅ Filtrar medidores: mantener solo los que tienen AL MENOS UNA OS en las unidades seleccionadas
+  // ✅ CORRECCIÓN CLAVE: Usar OS_Lista.some() en lugar de medidor.some()
   const medidoresFiltrados = window.datosMedidoresEspeciales.medidores.filter(medidor => {
-    return medidor.some(os => unidadesSeleccionadas.includes(os.Unidad));
+    // Verificar si AL MENOS UNA OS del medidor pertenece a las unidades seleccionadas
+    return medidor.OS_Lista.some(os => unidadesSeleccionadas.includes(os.Unidad));
   });
   
   // ✅ Actualizar estadísticas filtradas
-  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.length, 0);
+  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0);
   
   // ✅ Regenerar tabla con resultados filtrados
   const resultsContainer = document.getElementById('searchResults');
@@ -27011,28 +27094,26 @@ function aplicarFiltroUnidadMedidores() {
       medidores: medidoresFiltrados,
       estadisticas: {
         totalMedidores: medidoresFiltrados.length,
-        totalOS: totalOSFiltradas
-      }
+        totalOS: totalOSFiltradas,
+        suministrosRojos: medidoresFiltrados.filter(m => !m.mismoUnidad).length,
+        suministrosVerdes: medidoresFiltrados.filter(m => m.mismoUnidad).length
+      },
+      unidadesUnicas: window.datosMedidoresEspeciales.unidadesUnicas
     });
-    
-    // ✅ Actualizar botón "Mostrar Seleccionadas" con conteo real
-    const btnMostrar = document.querySelector('button[onclick="aplicarFiltroUnidadMedidores()"]');
-    if (btnMostrar) {
-      btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${medidoresFiltrados.length})`;
-    }
     
     console.log(`✅ Filtro aplicado: ${medidoresFiltrados.length} medidores de ${unidadesSeleccionadas.length} unidades`);
   }
 }
 
+
+
 // ===================================================================
 // 🗑️ LIMPIAR FILTRO Y RESTAURAR VISTA COMPLETA
 // ===================================================================
 function limpiarFiltroUnidadMedidores() {
-  const select = document.getElementById('filtroUnidadMedidores');
-  if (select) {
-    Array.from(select.options).forEach(option => option.selected = false);
-  }
+  // ✅ Deseleccionar todos los checkboxes
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
+  checkboxes.forEach(cb => cb.checked = false);
   
   // ✅ Restaurar vista completa con todos los medidores
   if (window.datosMedidoresEspeciales && document.getElementById('searchResults')) {
@@ -27044,10 +27125,82 @@ function limpiarFiltroUnidadMedidores() {
       btnMostrar.innerHTML = `📊 Mostrar Seleccionadas (${window.datosMedidoresEspeciales.medidores.length})`;
     }
     
+    // ✅ Restaurar botones de color
+    document.querySelectorAll('.btn.btn-secondary').forEach(btn => {
+      btn.style.opacity = '1';
+      btn.style.transform = 'scale(1)';
+    });
+    
     console.log('✅ Filtro limpiado - Vista completa restaurada');
   }
 }
 
+
+// ===================================================================
+// ✅ SELECCIONAR/DESELECCIONAR TODAS LAS UNIDADES (CHECKBOXES)
+// ===================================================================
+function seleccionarTodasUnidadesMedidores() {
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
+  checkboxes.forEach(cb => cb.checked = true);
+  console.log(`✅ ${checkboxes.length} unidades seleccionadas`);
+}
+
+function deseleccionarTodasUnidadesMedidores() {
+  const checkboxes = document.querySelectorAll('.checkbox-unidad-medidor');
+  checkboxes.forEach(cb => cb.checked = false);
+  console.log('✅ Todas las unidades deseleccionadas');
+}
+
+// ===================================================================
+// 🔘 FILTRAR POR COLOR (rojo/verde/todos)
+// ===================================================================
+function filtrarMedidoresPorColor(color) {
+  if (!window.datosMedidoresEspeciales) {
+    alert('⚠️ No hay datos cargados para filtrar');
+    return;
+  }
+  
+  let medidoresFiltrados = window.datosMedidoresEspeciales.medidores;
+  
+  if (color === 'rojo') {
+    medidoresFiltrados = medidoresFiltrados.filter(m => !m.mismoUnidad);
+  } else if (color === 'verde') {
+    medidoresFiltrados = medidoresFiltrados.filter(m => m.mismoUnidad);
+  }
+  
+  const totalOSFiltradas = medidoresFiltrados.reduce((sum, m) => sum + m.totalOS, 0);
+  
+  const resultsContainer = document.getElementById('searchResults');
+  if (resultsContainer) {
+    resultsContainer.innerHTML = generarHTMLTablaMedidores({
+      medidores: medidoresFiltrados,
+      estadisticas: {
+        totalMedidores: medidoresFiltrados.length,
+        totalOS: totalOSFiltradas,
+        suministrosRojos: medidoresFiltrados.filter(m => !m.mismoUnidad).length,
+        suministrosVerdes: medidoresFiltrados.filter(m => m.mismoUnidad).length
+      },
+      unidadesUnicas: window.datosMedidoresEspeciales.unidadesUnicas
+    });
+    
+    // ✅ Actualizar botones de color visualmente
+    document.querySelectorAll('.btn.btn-secondary').forEach(btn => {
+      btn.style.opacity = '0.7';
+      btn.style.transform = 'scale(0.98)';
+    });
+    
+    // Resaltar botón activo
+    const botonActivo = Array.from(document.querySelectorAll('.btn.btn-secondary')).find(btn => 
+      btn.onclick.toString().includes(`filtrarMedidoresPorColor('${color}')`)
+    );
+    if (botonActivo) {
+      botonActivo.style.opacity = '1';
+      botonActivo.style.transform = 'scale(1.05)';
+    }
+    
+    console.log(`✅ Filtro por color "${color}": ${medidoresFiltrados.length} medidores`);
+  }
+}
 
 </script>
 </body>
