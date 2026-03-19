@@ -25565,14 +25565,14 @@ async function cargarInterfazSuministrosMultiples() {
     while (start < totalDB) {
       console.log(`\n📤 CARGANDO LOTE #${loteActual} (registros ${start} a ${start + BATCH_SIZE - 1})...`);
       
-      const { data, error } = await supabaseClient
-  .from('OS Pendientes')
-  .select('"CuentaContrato","Medidor","OSSAP","OSATMO","Tipologia","Estado_ATOMO","Unidad","Tarifa","Fecha Gen."')
-  .not('"CuentaContrato"', 'is', null)
-  .not('"CuentaContrato"', 'eq', '')
-  .not('"CuentaContrato"', 'eq', '0')
-  .not('"CuentaContrato"', 'eq', '200000000000')
-  .range(start, start + BATCH_SIZE - 1);
+     const { data, error } = await supabaseClient
+    .from('OS Pendientes')
+    .select('CuentaContrato, Medidor, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Tarifa, "Fecha Gen."')
+    .not('CuentaContrato', 'is', null)
+    .not('CuentaContrato', 'eq', '')
+    .not('CuentaContrato', 'eq', '0')
+    .not('CuentaContrato', 'eq', '200000000000')
+    .range(start, start + BATCH_SIZE - 1);
       
       if (error) {
         console.error(`❌ ERROR en lote #${loteActual}:`, error);
@@ -25690,12 +25690,12 @@ osPendientes.forEach(os => {
     OSATMO: os.OSATMO || 'N/A',
     Tipologia: os.Tipologia || 'N/A',
     Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-    Unidad: os.Unidad || 'SIN UNIDAD',
+    Unidad: os.Unidad || 'N/A',
     'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
     CuentaContrato: cc,
     Medidor: medidor,
-    Tarifa: tarifa  // ✅ INCLUIR Tarifa en cada OS
-  });
+    Tarifa: os.Tarifa || 'N/A'  // ✅ agregar esto
+});
 });
   
   console.log(`✅ Total de suministros únicos analizados (Cuenta+Medidor): ${Object.keys(agrupado).length}`);
@@ -26565,13 +26565,12 @@ async function cargarInterfazMedidoresEspeciales() {
       // ✅ CORRECCIÓN CLAVE 3: Usar nombre de columna correcto con espacio en select()
       const { data, error } = await supabaseClient
   .from('OS Pendientes')
-  .select('"CuentaContrato","OSSAP","OSATMO","Tipologia","Estado_ATOMO","Unidad","Medidor","Tarifa","Fecha Gen.","Tipo Medidor","Marca_ Modelo"')
-  .not('"CuentaContrato"', 'is', null)
-  .not('"CuentaContrato"', 'eq', '')
-  .not('"CuentaContrato"', 'eq', '0')
-  .not('"CuentaContrato"', 'eq', '200000000000')
-  .in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido'])
-  .range(start, start + BATCH_SIZE - 1);
+  .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Medidor, Tarifa, "Fecha Gen.", "Tipo Medidor", "Marca_ Modelo"')
+  .not('CuentaContrato', 'is', null)
+.not('CuentaContrato', 'eq', '')
+.not('CuentaContrato', 'eq', '0')
+.not('CuentaContrato', 'eq', '200000000000')
+.in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido'])
       
       if (error) {
         console.error(`❌ ERROR en lote #${loteActual}:`, error);
