@@ -12,7 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2 "></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<!-- Leaflet para mapas -->
+    <!-- Leaflet para mapas -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
@@ -591,58 +591,6 @@ function limpiarCacheSesion() {
     
     console.log('✅ Cache de sesión limpiado');
 }
-
-// ===================================================================
-// 📍 GUARDAR COORDENADAS DEL USUARIO AUTOMÁTICAMENTE AL INICIAR SESIÓN
-// ===================================================================
-async function guardarCoordenadasUsuarioAlIniciar() {
-  try {
-    // Intentar obtener coordenadas del navegador
-    const position = await new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocalización no soportada'));
-        return;
-      }
-      
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve(pos),
-        (err) => reject(err),
-        { timeout: 5000, maximumAge: 300000 } // 5 segundos timeout, caché de 5 minutos
-      );
-    });
-    
-    const coords = {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Guardar en sessionStorage (persiste mientras la pestaña esté abierta)
-    sessionStorage.setItem('ultimasCoordenadasGPS', JSON.stringify(coords));
-    console.log('✅ Coordenadas del usuario guardadas automáticamente:', coords);
-    
-    // También actualizar el campo de coordenadas si existe
-    const inputCoordenadas = document.getElementById('coordenadasTX');
-    if (inputCoordenadas) {
-      inputCoordenadas.value = `${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}`;
-    }
-    
-  } catch (error) {
-    console.warn('⚠️ No se pudieron obtener coordenadas automáticas:', error.message);
-    // No es crítico - el usuario puede usar el botón GPS manualmente
-  }
-}
-
-// ✅ EJECUTAR AUTOMÁTICAMENTE AL INICIAR SESIÓN
-document.addEventListener('DOMContentLoaded', () => {
-  // Ejecutar después de que el usuario inicie sesión
-  setTimeout(() => {
-    if (currentUser?.rol) {
-      guardarCoordenadasUsuarioAlIniciar();
-    }
-  }, 2000); // Esperar a que se complete el login
-});
 
 
 // ========================================
@@ -23285,6 +23233,7 @@ async function capturarCoordenadasGPS_TX() {
 }
 
 
+
 // ===================================================================
 // 🧪 DIAGNÓSTICO RÁPIDO: Verificar tabla tx_y_cortes
 // ===================================================================
@@ -23803,64 +23752,72 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
 
 
 
+
+// ===================================================================
+// 🗺️ CARGAR CIRCUITO KMZ EN MAPA (CORREGIDO: Sin return anticipado + Verificación omnivore)
+// ===================================================================
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
   console.log(`🗺️ Cargando circuito: ${nombreCircuito}`);
   
   const resultsContainer = document.getElementById('searchResults');
-  if (!resultsContainer) return;
-  
-  // ✅ OBTENER COORDENADAS DEL USUARIO (capturadas automáticamente por el sistema)
-  let userCoords = null;
-  const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
-  
-  if (coordenadasInput && coordenadasInput.includes(',')) {
-    const [lat, lng] = coordenadasInput.split(',').map(c => parseFloat(c.trim()));
-    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
-      userCoords = { lat, lng };
-      console.log(`📍 Coordenadas del usuario capturadas automáticamente: ${lat}, ${lng}`);
-    } else {
-      console.warn('⚠️ Coordenadas inválidas en campo GPS');
-    }
-  } else {
-    console.warn('⚠️ No se encontraron coordenadas en campo GPS. Buscando en sessionStorage...');
-    // ✅ Fallback: Buscar coordenadas guardadas en sessionStorage (capturadas al inicio)
-    const savedCoords = sessionStorage.getItem('ultimasCoordenadasGPS');
-    if (savedCoords) {
-      try {
-        const coords = JSON.parse(savedCoords);
-        if (coords.lat && coords.lng) {
-          userCoords = { lat: coords.lat, lng: coords.lng };
-          console.log(`📍 Coordenadas recuperadas de sessionStorage: ${coords.lat}, ${coords.lng}`);
-        }
-      } catch (e) {
-        console.error('❌ Error parseando coordenadas de sessionStorage:', e);
-      }
-    }
+  if (!resultsContainer) {
+    console.error('❌ Contenedor searchResults no encontrado');
+    return;
   }
   
-  // ✅ INICIALIZAR MAPA CON CENTRADO INTELIGENTE
-  if (!window.mapaLeafletInstance) {
-    const mapaDiv = document.getElementById('mapaCircuito');
-    if (!mapaDiv) {
-      // Crear contenedor si no existe
-      resultsContainer.innerHTML = `
-        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
-          <div class="result-header">🗺️ Mapa del Circuito: ${nombreCircuito}</div>
-          <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc; margin: 15px 0;"></div>
-          <div id="panelDetalleTX" style="margin-top:10px;">
-            <div style="text-align:center; padding:15px; color:#999;">
-              📍 Cargando mapa con tu ubicación actual...
-            </div>
+  // ✅ VERIFICACIÓN CRÍTICA 1: Librería omnivore debe estar disponible
+  if (typeof omnivore === 'undefined') {
+    console.error('❌ Librería leaflet-omnivore no cargada. Verifica que el script esté incluido.');
+    resultsContainer.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Error de Mapa</div>
+        <p style="color: #666;">La librería de mapas no está cargada correctamente.</p>
+        <p style="color: #999; font-size: 13px; margin-top: 10px;">
+          💡 Recarga la página o contacta al administrador del sistema.
+        </p>
+      </div>
+    `;
+    return;
+  }
+  
+  // ✅ VERIFICACIÓN CRÍTICA 2: Contenedor del mapa debe existir
+  let mapaDiv = document.getElementById('mapaCircuito');
+  if (!mapaDiv) {
+    // Crear contenedor si no existe
+    resultsContainer.innerHTML = `
+      <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
+        <div class="result-header">🗺️ Mapa del Circuito: ${nombreCircuito}</div>
+        <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc; margin: 15px 0;"></div>
+        <div id="panelDetalleTX" style="margin-top:10px;">
+          <div style="text-align:center; padding:15px; color:#999;">
+            📍 Cargando mapa y circuito KMZ...
           </div>
         </div>
-      `;
+      </div>
+    `;
+    mapaDiv = document.getElementById('mapaCircuito');
+  }
+  
+  // ✅ OBTENER COORDENADAS DEL USUARIO (si existen, sino usar default)
+ let userCoords = null;
+const coordsUsuario = currentUser?.coordenadas;
+if (coordsUsuario && coordsUsuario.includes(',')) {
+    const [lat, lng] = coordsUsuario.split(',').map(c => parseFloat(c.trim()));
+    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        userCoords = { lat, lng };
+        console.log(`📍 Coordenadas del usuario desde BD: ${lat}, ${lng}`);
     }
+}
+  
+  // ✅ INICIALIZAR MAPA (SI NO EXISTE)
+  if (!window.mapaLeafletInstance) {
+    const defaultCenter = userCoords || { lat: 13.7981427, lng: -89.4436187 };
+    const defaultZoom = userCoords ? 16 : 10;
     
-    // ✅ CENTRAR EN UBICACIÓN DEL USUARIO SI ESTÁ DISPONIBLE
-    const defaultCenter = userCoords || { lat: 13.7981427, lng: -89.4436187 }; // San Salvador por defecto
-    const defaultZoom = userCoords ? 16 : 10; // Zoom cercano si hay coordenadas de usuario
-    
-    window.mapaLeafletInstance = L.map('mapaCircuito').setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
+    window.mapaLeafletInstance = L.map('mapaCircuito').setView(
+      [defaultCenter.lat, defaultCenter.lng], 
+      defaultZoom
+    );
     
     // Capa base OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -23870,7 +23827,7 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
     
     console.log(`✅ Mapa inicializado en: ${defaultCenter.lat}, ${defaultCenter.lng} (zoom ${defaultZoom})`);
     
-    // ✅ AÑADIR MARCADOR DE UBICACIÓN DEL USUARIO (si está disponible)
+    // ✅ AÑADIR MARCADOR DE USUARIO SI EXISTEN COORDENADAS
     if (userCoords) {
       const userMarker = L.marker([userCoords.lat, userCoords.lng], {
         icon: L.divIcon({
@@ -23920,22 +23877,61 @@ async function cargarCircuitoKMZEnMapa(nombreCircuito) {
         </div>
       `).openPopup();
       
-      console.log('✅ Marcador de ubicación del usuario agregado al mapa');
+      console.log('✅ Marcador de ubicación del usuario agregado');
+    }
+  } else {
+    // ✅ LIMPIAR CAPA ANTERIOR SI EXISTE
+    if (window.capaCircuitoActual) {
+      window.mapaLeafletInstance.removeLayer(window.capaCircuitoActual);
     }
   }
   
-  // ... resto de tu código para cargar el KMZ del circuito y los marcadores de TX/Cortes ...
-  
-  // ✅ AJUSTE FINAL: Si hay coordenadas de usuario, asegurar que estén visibles
-  if (userCoords && window.mapaLeafletInstance) {
-    setTimeout(() => {
-      window.mapaLeafletInstance.setView([userCoords.lat, userCoords.lng], 16);
-      console.log('✅ Mapa reajustado a ubicación del usuario después de cargar capas');
-    }, 500);
+  // ✅ CARGAR KMZ DEL CIRCUITO (¡ESTA ES LA PARTE CRÍTICA QUE FALTABA!)
+  try {
+    // URL del KMZ en Supabase Storage
+    const kmzUrl = `https://bsxllefnehbwkuqbelec.supabase.co/storage/v1/object/public/circuitos-kmz/${nombreCircuito}.kmz`;
+    console.log(`📡 Cargando KMZ desde: ${kmzUrl}`);
+    
+    // ✅ CARGAR Y AGREGAR KMZ AL MAPA (sin return anticipado)
+    window.capaCircuitoActual = omnivore.kml(kmzUrl)
+      .on('ready', function() {
+        console.log('✅ KMZ cargado correctamente');
+        
+        // Ajustar vista a los límites del KMZ
+        const bounds = window.capaCircuitoActual.getBounds();
+        if (bounds.isValid()) {
+          window.mapaLeafletInstance.fitBounds(bounds, { padding: [50, 50] });
+          
+          // ✅ Si hay coordenadas de usuario, re-centrar después de cargar KMZ
+          if (userCoords) {
+            setTimeout(() => {
+              window.mapaLeafletInstance.setView([userCoords.lat, userCoords.lng], 16);
+              console.log('✅ Mapa re-centrado en ubicación del usuario');
+            }, 300);
+          }
+        }
+      })
+      .on('error', function(error) {
+        console.error('❌ Error cargando KMZ:', error);
+        alert(`❌ Error al cargar el circuito "${nombreCircuito}":\n${error.message || 'Archivo no encontrado en el servidor'}`);
+      })
+      .addTo(window.mapaLeafletInstance);
+    
+    console.log('✅ KMZ agregado al mapa (esperando evento ready)');
+    
+  } catch (err) {
+    console.error('❌ Error fatal al cargar KMZ:', err);
+    resultsContainer.innerHTML = `
+      <div class="result-card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+        <div class="result-header">❌ Error de Carga</div>
+        <p style="color: #666;">No se pudo cargar el circuito "${nombreCircuito}".</p>
+        <p style="color: #999; font-size: 13px; margin-top: 10px;">
+          💡 Verifica que el circuito exista en el sistema o contacta al administrador.
+        </p>
+      </div>
+    `;
   }
 }
-
-
 
 
 function mostrarInfoCircuito(nombreCircuito, totalElementos) {
