@@ -592,6 +592,58 @@ function limpiarCacheSesion() {
     console.log('✅ Cache de sesión limpiado');
 }
 
+// ===================================================================
+// 📍 GUARDAR COORDENADAS DEL USUARIO AUTOMÁTICAMENTE AL INICIAR SESIÓN
+// ===================================================================
+async function guardarCoordenadasUsuarioAlIniciar() {
+  try {
+    // Intentar obtener coordenadas del navegador
+    const position = await new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocalización no soportada'));
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(pos),
+        (err) => reject(err),
+        { timeout: 5000, maximumAge: 300000 } // 5 segundos timeout, caché de 5 minutos
+      );
+    });
+    
+    const coords = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Guardar en sessionStorage (persiste mientras la pestaña esté abierta)
+    sessionStorage.setItem('ultimasCoordenadasGPS', JSON.stringify(coords));
+    console.log('✅ Coordenadas del usuario guardadas automáticamente:', coords);
+    
+    // También actualizar el campo de coordenadas si existe
+    const inputCoordenadas = document.getElementById('coordenadasTX');
+    if (inputCoordenadas) {
+      inputCoordenadas.value = `${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}`;
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ No se pudieron obtener coordenadas automáticas:', error.message);
+    // No es crítico - el usuario puede usar el botón GPS manualmente
+  }
+}
+
+// ✅ EJECUTAR AUTOMÁTICAMENTE AL INICIAR SESIÓN
+document.addEventListener('DOMContentLoaded', () => {
+  // Ejecutar después de que el usuario inicie sesión
+  setTimeout(() => {
+    if (currentUser?.rol) {
+      guardarCoordenadasUsuarioAlIniciar();
+    }
+  }, 2000); // Esperar a que se complete el login
+});
+
 
 // ========================================
 // 🆕 CACHE GLOBAL DE TIPOLOGÍAS
@@ -23084,94 +23136,153 @@ txData.forEach(tx => {
 
 
 
-// ===================================================================
-// 📍 CAPTURAR COORDENADAS GPS PARA BÚSQUEDA TX Y CORTES
-// ===================================================================
 async function capturarCoordenadasGPS_TX() {
-    const inputCoordenadas = document.getElementById('coordenadasTX');
-    const gpsStatus = document.getElementById('gpsStatus_TX');
+  const inputCoordenadas = document.getElementById('coordenadasTX');
+  const gpsStatus = document.getElementById('gpsStatus_TX');
+  
+  if (!navigator.geolocation) {
+    alert('❌ Tu dispositivo no soporta geolocalización GPS');
+    return;
+  }
+  
+  // Mostrar indicador de carga
+  if (gpsStatus) {
+    gpsStatus.style.display = 'block';
+    gpsStatus.innerHTML = '📡 Obteniendo ubicación GPS...';
+    gpsStatus.style.background = '#e3f2fd';
+    gpsStatus.style.color = '#1976d2';
+  }
+  
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      });
+    });
     
-    if (!navigator.geolocation) {
-        alert('❌ Tu dispositivo no soporta geolocalización GPS');
-        return;
+    const lat = position.coords.latitude.toFixed(6);
+    const lng = position.coords.longitude.toFixed(6);
+    const accuracy = position.coords.accuracy;
+    const coordenadas = `${lat},${lng}`;
+    
+    // Actualizar campo de coordenadas
+    if (inputCoordenadas) {
+      inputCoordenadas.value = coordenadas;
     }
     
-    // Mostrar indicador de carga
+    // Guardar en sessionStorage
+    sessionStorage.setItem('ultimasCoordenadasGPS', JSON.stringify({
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      accuracy,
+      timestamp: new Date().toISOString()
+    }));
+    
+    // Actualizar estado GPS
     if (gpsStatus) {
-        gpsStatus.style.display = 'block';
-        gpsStatus.innerHTML = '📡 Obteniendo ubicación GPS...';
-        gpsStatus.style.background = '#e3f2fd';
-        gpsStatus.style.color = '#1976d2';
+      gpsStatus.innerHTML = `
+        ✅ Ubicación capturada<br>
+        <strong>Precisión: ${Math.round(accuracy)} metros</strong><br>
+        <small>${coordenadas}</small>
+      `;
+      gpsStatus.style.background = '#e8f5e9';
+      gpsStatus.style.color = '#2e7d32';
+      
+      // Ocultar después de 3 segundos
+      setTimeout(() => { gpsStatus.style.display = 'none'; }, 3000);
     }
     
-    try {
-        // Obtener posición actual
-        const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
-                resolve,
-                reject,
-                {
-                    enableHighAccuracy: true,  // Usar GPS de alta precisión
-                    timeout: 15000,             // 15 segundos máximo
-                    maximumAge: 0               // No usar cache
-                }
-            );
-        });
-        
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        const accuracy = position.coords.accuracy;
-        const coordenadas = `${lat},${lng}`;
-        
-        // Llenar el campo de coordenadas
-        if (inputCoordenadas) {
-            inputCoordenadas.value = coordenadas;
-        }
-        
-        // Mostrar éxito
-        if (gpsStatus) {
-            gpsStatus.innerHTML = `✅ Ubicación capturada<br>
-                                   <strong>Precisión: ${Math.round(accuracy)} metros</strong><br>
-                                   <small>${coordenadas}</small>`;
-            gpsStatus.style.background = '#e8f5e9';
-            gpsStatus.style.color = '#2e7d32';
-            
-            // Ocultar después de 3 segundos
-            setTimeout(() => {
-                gpsStatus.style.display = 'none';
-            }, 3000);
-        }
-        
-        console.log(`✅ Coordenadas GPS capturadas: ${coordenadas} (precisión: ${Math.round(accuracy)}m)`);
-        
-        // Opcional: Buscar automáticamente después de capturar
-        // Descomenta la siguiente línea si quieres búsqueda automática:
-        // setTimeout(() => buscarTXPorCoordenadas(), 500);
-        
-    } catch (error) {
-        console.error('❌ Error GPS:', error);
-        
-        let mensajeError = 'No se pudo obtener la ubicación.';
-        
-        if (error.code === 1) {
-            mensajeError = 'Permiso denegado. Habilita el permiso de ubicación en tu navegador.';
-        } else if (error.code === 2) {
-            mensajeError = 'Ubicación no disponible. Activa el GPS de tu dispositivo.';
-        } else if (error.code === 3) {
-            mensajeError = 'Tiempo agotado. Intenta de nuevo en un área con mejor señal.';
-        }
-        
-        if (gpsStatus) {
-            gpsStatus.innerHTML = `❌ ${mensajeError}`;
-            gpsStatus.style.background = '#fee2e2';
-            gpsStatus.style.color = '#b91c1c';
-        } else {
-            alert(`❌ Error GPS: ${mensajeError}`);
-        }
+    console.log(`✅ Coordenadas GPS actualizadas: ${coordenadas} (precisión: ${Math.round(accuracy)}m)`);
+    
+    // ✅ RE-CENTRAR MAPA SI ESTÁ ABIERTO
+    if (window.mapaLeafletInstance && window.capaCircuitoActual) {
+      const newCoords = { lat: parseFloat(lat), lng: parseFloat(lng) };
+      
+      // Mover vista al nuevo punto
+      window.mapaLeafletInstance.setView([newCoords.lat, newCoords.lng], 16);
+      
+      // Actualizar o crear marcador de usuario
+      if (window.userLocationMarker) {
+        window.userLocationMarker.setLatLng([newCoords.lat, newCoords.lng]);
+      } else {
+        window.userLocationMarker = L.marker([newCoords.lat, newCoords.lng], {
+          icon: L.divIcon({
+            className: 'gps-user-marker',
+            html: `
+              <div style="
+                background: radial-gradient(circle, #4285F4 0%, #1a56db 70%);
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                border: 3px solid white;
+                box-shadow: 0 0 0 2px #4285F4, 0 2px 10px rgba(66, 133, 244, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+              ">
+                <div style="
+                  position: absolute;
+                  width: 10px;
+                  height: 10px;
+                  background: white;
+                  border-radius: 50%;
+                  animation: pulse 2s infinite;
+                "></div>
+                <style>
+                  @keyframes pulse {
+                    0% { transform: scale(0.8); opacity: 0.7; }
+                    70% { transform: scale(1.2); opacity: 0.3; }
+                    100% { transform: scale(0.8); opacity: 0.7; }
+                  }
+                </style>
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).addTo(window.mapaLeafletInstance);
+      }
+      
+      // Abrir popup con nueva ubicación
+      window.userLocationMarker.bindPopup(`
+        <div style="font-weight: bold; color: #1e40af; text-align: center;">
+          📍 TU NUEVA UBICACIÓN<br>
+          <span style="font-size: 12px; color: #64748b;">
+            Lat: ${newCoords.lat.toFixed(6)}<br>
+            Lng: ${newCoords.lng.toFixed(6)}<br>
+            Precisión: ${Math.round(accuracy)}m
+          </span>
+        </div>
+      `).openPopup();
+      
+      console.log('✅ Mapa re-centrado en nueva ubicación del usuario');
     }
+    
+  } catch (error) {
+    console.error('❌ Error GPS:', error);
+    let mensajeError = 'No se pudo obtener la ubicación.';
+    
+    if (error.code === 1) {
+      mensajeError = 'Permiso denegado. Habilita el permiso de ubicación en tu navegador.';
+    } else if (error.code === 2) {
+      mensajeError = 'Ubicación no disponible. Activa el GPS de tu dispositivo.';
+    } else if (error.code === 3) {
+      mensajeError = 'Tiempo de espera agotado. Intenta nuevamente.';
+    }
+    
+    if (gpsStatus) {
+      gpsStatus.innerHTML = `❌ ${mensajeError}`;
+      gpsStatus.style.background = '#fee2e2';
+      gpsStatus.style.color = '#dc2626';
+      setTimeout(() => { gpsStatus.style.display = 'none'; }, 5000);
+    }
+    
+    alert(`📍 Error GPS: ${mensajeError}`);
+  }
 }
-
-
 
 
 // ===================================================================
@@ -23693,119 +23804,136 @@ function procesarCapasKMZ(capaKMZ, mapa, nombreCircuito = '') {
 
 
 async function cargarCircuitoKMZEnMapa(nombreCircuito) {
-    console.log('📡 Cargando circuito KMZ:', nombreCircuito);
-    
-    if (typeof L === 'undefined') {
-        console.error('❌ Leaflet no está cargado');
-        return;
-    }
-    
-    await ensureOmnivoreLoaded();
-    console.log('✅ Dependencias verificadas: Leaflet y omnivore disponibles');
-    
-    // Limpiar capa anterior
-    limpiarMapaCircuito();
-    
-    // ✅ Crear contenedor del mapa si no existe
-    let contenedorMapa = document.getElementById('mapaCircuito');
-    if (!contenedorMapa) {
-        const searchResults = document.getElementById('searchResults');
-        if (!searchResults) {
-            console.error('❌ No existe #searchResults para insertar el mapa');
-            return;
-        }
-        searchResults.innerHTML = `
-            <div id="mapaCircuitoContainer">
-                <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc;"></div>
-            </div>
-        `;
-        console.log('✅ Contenedor #mapaCircuito creado dinámicamente');
-    }
-    
-    // Crear mapa si no existe
-    if (!window.mapaLeafletInstance) {
-        window.mapaLeafletInstance = await inicializarMapaTX('mapaCircuito', 13.7981427, -89.4436187);
-        if (!window.mapaLeafletInstance) return;
-        console.log('🗺️ Instancia de mapa creada');
+  console.log(`🗺️ Cargando circuito: ${nombreCircuito}`);
+  
+  const resultsContainer = document.getElementById('searchResults');
+  if (!resultsContainer) return;
+  
+  // ✅ OBTENER COORDENADAS DEL USUARIO (capturadas automáticamente por el sistema)
+  let userCoords = null;
+  const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
+  
+  if (coordenadasInput && coordenadasInput.includes(',')) {
+    const [lat, lng] = coordenadasInput.split(',').map(c => parseFloat(c.trim()));
+    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      userCoords = { lat, lng };
+      console.log(`📍 Coordenadas del usuario capturadas automáticamente: ${lat}, ${lng}`);
     } else {
-        console.log('🗺️ Usando instancia de mapa existente');
+      console.warn('⚠️ Coordenadas inválidas en campo GPS');
     }
-    
-    const { data } = supabaseClient.storage
-        .from('circuitos-kmz')
-        .getPublicUrl(`${nombreCircuito}.kmz`);
-    
-    const kmzUrl = data?.publicUrl;
-    if (!kmzUrl) {
-        throw new Error('No se pudo generar URL pública para el KMZ');
-    }
-    console.log('🔗 KMZ URL generada:', kmzUrl);
-    
-    try {
-        const check = await fetch(kmzUrl, { method: 'HEAD' });
-        if (!check.ok) {
-            throw new Error(`Archivo no accesible (Status: ${check.status})`);
+  } else {
+    console.warn('⚠️ No se encontraron coordenadas en campo GPS. Buscando en sessionStorage...');
+    // ✅ Fallback: Buscar coordenadas guardadas en sessionStorage (capturadas al inicio)
+    const savedCoords = sessionStorage.getItem('ultimasCoordenadasGPS');
+    if (savedCoords) {
+      try {
+        const coords = JSON.parse(savedCoords);
+        if (coords.lat && coords.lng) {
+          userCoords = { lat: coords.lat, lng: coords.lng };
+          console.log(`📍 Coordenadas recuperadas de sessionStorage: ${coords.lat}, ${coords.lng}`);
         }
-    } catch (err) {
-        console.error('❌ Error verificando KMZ:', err);
-        alert(`⚠️ El circuito "${nombreCircuito}" no está disponible`);
-        return;
+      } catch (e) {
+        console.error('❌ Error parseando coordenadas de sessionStorage:', e);
+      }
+    }
+  }
+  
+  // ✅ INICIALIZAR MAPA CON CENTRADO INTELIGENTE
+  if (!window.mapaLeafletInstance) {
+    const mapaDiv = document.getElementById('mapaCircuito');
+    if (!mapaDiv) {
+      // Crear contenedor si no existe
+      resultsContainer.innerHTML = `
+        <div class="result-card" style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 15px;">
+          <div class="result-header">🗺️ Mapa del Circuito: ${nombreCircuito}</div>
+          <div id="mapaCircuito" style="height: 500px; border-radius: 8px; border: 1px solid #ccc; margin: 15px 0;"></div>
+          <div id="panelDetalleTX" style="margin-top:10px;">
+            <div style="text-align:center; padding:15px; color:#999;">
+              📍 Cargando mapa con tu ubicación actual...
+            </div>
+          </div>
+        </div>
+      `;
     }
     
-    console.log('📥 Iniciando carga con leaflet-omnivore...');
+    // ✅ CENTRAR EN UBICACIÓN DEL USUARIO SI ESTÁ DISPONIBLE
+    const defaultCenter = userCoords || { lat: 13.7981427, lng: -89.4436187 }; // San Salvador por defecto
+    const defaultZoom = userCoords ? 16 : 10; // Zoom cercano si hay coordenadas de usuario
     
-    try {
-        const respuesta = await fetch(kmzUrl);
-const arrayBuffer = await respuesta.arrayBuffer();
-const zip = await JSZip.loadAsync(arrayBuffer);
-
-// Buscar el archivo .kml dentro del ZIP
-const archivoKML = Object.values(zip.files).find(f => f.name.endsWith('.kml'));
-if (!archivoKML) throw new Error('No se encontró .kml dentro del KMZ');
-
-const kmlTexto = await archivoKML.async('string');
-const kmlBlob = new Blob([kmlTexto], { type: 'application/xml' });
-const kmlUrl = URL.createObjectURL(kmlBlob);
-
-const capaKMZ = await new Promise((resolve, reject) => {
-    omnivore.kml(kmlUrl)
-        .on('ready', function() {
-            URL.revokeObjectURL(kmlUrl); // liberar memoria
-            resolve(this);
-        })
-        .on('error', function(error) {
-            URL.revokeObjectURL(kmlUrl);
-            reject(error);
-        });
-});
-        
-        const capasProcesadas = procesarCapasKMZ(capaKMZ, window.mapaLeafletInstance, nombreCircuito);
-        const totalElementos = capasProcesadas.length;
-        const geometriasEncontradas = totalElementos > 0;
-        console.log('📊 Capas procesadas:', totalElementos);
-        
-        if (!geometriasEncontradas) {
-            console.warn('⚠️ El KMZ no tiene geometrías válidas');
-            alert('El archivo KMZ no contiene elementos visibles.');
-        } else {
-            if (capaKMZ.getBounds) {
-                const bounds = capaKMZ.getBounds();
-                if (bounds.isValid()) {
-                    window.mapaLeafletInstance.fitBounds(bounds, { padding: [50, 50] });
+    window.mapaLeafletInstance = L.map('mapaCircuito').setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
+    
+    // Capa base OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(window.mapaLeafletInstance);
+    
+    console.log(`✅ Mapa inicializado en: ${defaultCenter.lat}, ${defaultCenter.lng} (zoom ${defaultZoom})`);
+    
+    // ✅ AÑADIR MARCADOR DE UBICACIÓN DEL USUARIO (si está disponible)
+    if (userCoords) {
+      const userMarker = L.marker([userCoords.lat, userCoords.lng], {
+        icon: L.divIcon({
+          className: 'gps-user-marker',
+          html: `
+            <div style="
+              background: radial-gradient(circle, #4285F4 0%, #1a56db 70%);
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 0 0 2px #4285F4, 0 2px 10px rgba(66, 133, 244, 0.5);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              position: relative;
+            ">
+              <div style="
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background: white;
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+              "></div>
+              <style>
+                @keyframes pulse {
+                  0% { transform: scale(0.8); opacity: 0.7; }
+                  70% { transform: scale(1.2); opacity: 0.3; }
+                  100% { transform: scale(0.8); opacity: 0.7; }
                 }
-            }
-        }
-        
-        window.capaCircuitoActual = capaKMZ;
-        if (typeof mostrarInfoCircuito === 'function') {
-            mostrarInfoCircuito(nombreCircuito, totalElementos);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error fatal en cargarCircuitoKMZEnMapa:', error);
+              </style>
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        })
+      }).addTo(window.mapaLeafletInstance);
+      
+      userMarker.bindPopup(`
+        <div style="font-weight: bold; color: #1e40af; text-align: center;">
+          📍 TU UBICACIÓN ACTUAL<br>
+          <span style="font-size: 12px; color: #64748b;">
+            Lat: ${userCoords.lat.toFixed(6)}<br>
+            Lng: ${userCoords.lng.toFixed(6)}
+          </span>
+        </div>
+      `).openPopup();
+      
+      console.log('✅ Marcador de ubicación del usuario agregado al mapa');
     }
+  }
+  
+  // ... resto de tu código para cargar el KMZ del circuito y los marcadores de TX/Cortes ...
+  
+  // ✅ AJUSTE FINAL: Si hay coordenadas de usuario, asegurar que estén visibles
+  if (userCoords && window.mapaLeafletInstance) {
+    setTimeout(() => {
+      window.mapaLeafletInstance.setView([userCoords.lat, userCoords.lng], 16);
+      console.log('✅ Mapa reajustado a ubicación del usuario después de cargar capas');
+    }, 500);
+  }
 }
-
 
 
 
