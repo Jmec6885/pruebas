@@ -25566,13 +25566,13 @@ async function cargarInterfazSuministrosMultiples() {
       console.log(`\n📤 CARGANDO LOTE #${loteActual} (registros ${start} a ${start + BATCH_SIZE - 1})...`);
       
       const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('CuentaContrato, Medidor, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, "Fecha Gen."')
-        .not('CuentaContrato', 'is', null)
-        .not('CuentaContrato', 'eq', '')
-        .not('CuentaContrato', 'eq', '0')
-        .not('CuentaContrato', 'eq', '200000000000')
-        .range(start, start + BATCH_SIZE - 1);
+  .from('OS Pendientes')
+  .select('"CuentaContrato","Medidor","OSSAP","OSATMO","Tipologia","Estado_ATOMO","Unidad","Tarifa","Fecha Gen."')
+  .not('"CuentaContrato"', 'is', null)
+  .not('"CuentaContrato"', 'eq', '')
+  .not('"CuentaContrato"', 'eq', '0')
+  .not('"CuentaContrato"', 'eq', '200000000000')
+  .range(start, start + BATCH_SIZE - 1);
       
       if (error) {
         console.error(`❌ ERROR en lote #${loteActual}:`, error);
@@ -25657,43 +25657,46 @@ function analizarSuministrosMultiples(osPendientes) {
   console.group('🔍 ANALIZANDO SUMINISTROS CON MÚLTIPLES OS (Clave Única: CuentaContrato + Medidor)');
   
   // ✅ AGRUPAR POR CLAVE COMPUESTA ÚNICA: CuentaContrato + Medidor
-  const agrupado = {};
+const agrupado = {};
+
+osPendientes.forEach(os => {
+  // ✅ Normalizar y validar CuentaContrato
+  const ccRaw = os.CuentaContrato || os.cuentacontrato || '';
+  const cc = String(ccRaw).trim().toUpperCase();
+  if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
   
-  osPendientes.forEach(os => {
-    // ✅ Normalizar y validar CuentaContrato
-    const ccRaw = os.CuentaContrato;
-    const cc = String(ccRaw || '').trim().toUpperCase();
-    if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
-    
-    // ✅ Normalizar y validar Medidor (CLAVE PARA EVITAR FALSOS POSITIVOS)
-    const medidorRaw = os.Medidor;
-    const medidor = String(medidorRaw || '').trim().toUpperCase();
-    if (!medidor || medidor === '0' || medidor === 'N/A' || medidor === '') return;
-    
-    // ✅ CREAR CLAVE ÚNICA COMPUESTA (evita agrupar suministros diferentes con mismo NIC)
-    const claveUnica = `${cc}-${medidor}`;
-    
-    if (!agrupado[claveUnica]) {
-      agrupado[claveUnica] = {
-        CuentaContrato: cc,
-        Medidor: medidor,
-        lista: []
-      };
-    }
-    
-    // ✅ Almacenar datos completos del OS
-    agrupado[claveUnica].lista.push({
-  OSSAP: os.OSSAP || 'N/A',
-  OSATMO: os.OSATMO || 'N/A',
-  Tipologia: os.Tipologia || 'N/A',
-  Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-  Unidad: os.Unidad || 'SIN UNIDAD',
-  'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-  Tarifa: os.Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
-  CuentaContrato: cc,
-  Medidor: medidor
-});
+  // ✅ Normalizar y validar Medidor (CLAVE PARA EVITAR FALSOS POSITIVOS)
+  const medidorRaw = os.Medidor || os.medidor || '';
+  const medidor = String(medidorRaw).trim().toUpperCase();
+  if (!medidor || medidor === '0' || medidor === 'N/A' || medidor === '') return;
+  
+  // ✅ Normalizar Tarifa
+  const tarifaRaw = os.Tarifa || os.tarifa || '';
+  const tarifa = String(tarifaRaw).trim() || 'N/A';
+  
+  // ✅ CREAR CLAVE ÚNICA COMPUESTA
+  const claveUnica = `${cc}-${medidor}`;
+  if (!agrupado[claveUnica]) {
+    agrupado[claveUnica] = {
+      CuentaContrato: cc,
+      Medidor: medidor,
+      lista: []
+    };
+  }
+  
+  // ✅ Almacenar datos completos del OS + Tarifa
+  agrupado[claveUnica].lista.push({
+    OSSAP: os.OSSAP || 'N/A',
+    OSATMO: os.OSATMO || 'N/A',
+    Tipologia: os.Tipologia || 'N/A',
+    Estado_ATOMO: os.Estado_ATOMO || 'N/A',
+    Unidad: os.Unidad || 'SIN UNIDAD',
+    'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
+    CuentaContrato: cc,
+    Medidor: medidor,
+    Tarifa: tarifa  // ✅ INCLUIR Tarifa en cada OS
   });
+});
   
   console.log(`✅ Total de suministros únicos analizados (Cuenta+Medidor): ${Object.keys(agrupado).length}`);
   
@@ -26561,14 +26564,14 @@ async function cargarInterfazMedidoresEspeciales() {
       
       // ✅ CORRECCIÓN CLAVE 3: Usar nombre de columna correcto con espacio en select()
       const { data, error } = await supabaseClient
-        .from('OS Pendientes')
-        .select('CuentaContrato, OSSAP, OSATMO, Tipologia, Estado_ATOMO, Unidad, Tarifa, "Fecha Gen."', { count: 'exact' }) // ✅ Columnas con espacio/underscore correctamente escapadas
-        .not('CuentaContrato', 'is', null)
-        .not('CuentaContrato', 'eq', '')
-        .not('CuentaContrato', 'eq', '0')
-        .not('CuentaContrato', 'eq', '200000000000')
-        .in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido']) // ✅ Filtro por columna con espacio
-        .range(start, start + BATCH_SIZE - 1);
+  .from('OS Pendientes')
+  .select('"CuentaContrato","OSSAP","OSATMO","Tipologia","Estado_ATOMO","Unidad","Medidor","Tarifa","Fecha Gen.","Tipo Medidor","Marca_ Modelo"')
+  .not('"CuentaContrato"', 'is', null)
+  .not('"CuentaContrato"', 'eq', '')
+  .not('"CuentaContrato"', 'eq', '0')
+  .not('"CuentaContrato"', 'eq', '200000000000')
+  .in('"Tipo Medidor"', ['Especial', 'Bidireccional', 'Telemedido'])
+  .range(start, start + BATCH_SIZE - 1);
       
       if (error) {
         console.error(`❌ ERROR en lote #${loteActual}:`, error);
@@ -26662,37 +26665,44 @@ async function cargarInterfazMedidoresEspeciales() {
 function analizarMedidoresEspeciales(osPendientes) {
   console.group('🔍 ANALIZANDO MEDIDORES ESPECIALES');
   
-  // ✅ AGRUPAR POR CUENTA CONTRATO
-  const agrupado = {};
-  const unidadesSet = new Set();
+  // ✅ AGRUPAR POR CUENTA CONTRATO + EXTRAER UNIDADES ÚNICAS
+const agrupado = {};
+const unidadesSet = new Set();
+
+osPendientes.forEach(os => {
+  const cc = String(os.CuentaContrato || '').trim();
+  if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
   
-  osPendientes.forEach(os => {
-    const cc = String(os.CuentaContrato || '').trim();
-    if (!cc || cc === '0' || cc === '200000000000' || cc === 'N/A' || cc === '') return;
-    
-    // ✅ Recolectar unidades únicas para el filtro global
-    const unidad = String(os.Unidad || '').trim();
-    if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
-      unidadesSet.add(unidad);
-    }
-    
-    // ✅ Agrupar OS por CuentaContrato
-    if (!agrupado[cc]) agrupado[cc] = [];
-    
-    agrupado[cc].push({
-  OSSAP: os.OSSAP || 'N/A',
-  OSATMO: os.OSATMO || 'N/A',
-  Tipologia: os.Tipologia || 'N/A',
-  Estado_ATOMO: os.Estado_ATOMO || 'N/A',
-  Unidad: os.Unidad || 'SIN UNIDAD',
-  'Fecha Gen.': os['Fecha Gen.'] || 'N/A',
-  'Tipo Medidor': os['Tipo Medidor'] || 'N/A',
-  'Marca_ Modelo': os['Marca_ Modelo'] || 'N/A',
-  Tarifa: os.Tarifa || 'N/A', // ✅ NUEVO: Agregar Tarifa
-  CuentaContrato: cc,
-  Medidor: os.Medidor || 'N/A'
-});
+  // ✅ CORRECCIÓN CLAVE: Normalizar Medidor y Tarifa con fallback inteligente
+  const medidorRaw = os.Medidor || os.medidor || '';
+  const medidor = String(medidorRaw).trim() || 'N/A';
+  
+  const tarifaRaw = os.Tarifa || os.tarifa || '';
+  const tarifa = String(tarifaRaw).trim() || 'N/A';
+  
+  // ✅ Recolectar unidades únicas para el filtro global
+  const unidad = String(os.Unidad || '').trim();
+  if (unidad && unidad !== '0' && unidad !== '--------------------------------------------------' && unidad !== '') {
+    unidadesSet.add(unidad);
+  }
+  
+  // ✅ Agrupar OS por CuentaContrato
+  if (!agrupado[cc]) agrupado[cc] = [];
+  
+  agrupado[cc].push({
+    OSSAP: os.OSSAP || 'N/A',
+    OSATMO: os.OSATMO || 'N/A',
+    Tipologia: os.Tipologia || 'N/A',
+    Estado_ATOMO: os.Estado_ATOMO || 'N/A',
+    Unidad: unidad || 'SIN UNIDAD',
+    'Fecha Gen.': os['Fecha Gen.'] || os['fecha gen.'] || 'N/A',
+    'Tipo Medidor': os['Tipo Medidor'] || os['tipo medidor'] || 'N/A',
+    'Marca_ Modelo': os['Marca_ Modelo'] || os['marca_ modelo'] || 'N/A',
+    CuentaContrato: cc,
+    Medidor: medidor,  // ✅ Ya normalizado
+    Tarifa: tarifa     // ✅ Ya normalizado
   });
+});
   
   console.log(`✅ Total de cuentas con medidores especiales: ${Object.keys(agrupado).length}`);
   console.log(`✅ Unidades únicas detectadas: ${unidadesSet.size}`);
@@ -26886,18 +26896,17 @@ function generarHTMLTablaMedidores(analisis, filtroTipo = 'todos') {
     const iconoEstado = medidor.mismoUnidad ? '✓' : '!';
     
     html += `
-      <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
-        <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor.CuentaContrato || 'N/A'}</span>
-            <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
-              Medidor: ${medidor.Medidor || 'N/A'}
-            </span>
-            <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
-              💰 Tarifa: ${medidor.OS_Lista[0]?.Tarifa || 'N/A'}
-            </span>
-          </div>
-        </td>
+  <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 13px; color: #4b5563;">NIC: ${medidor.CuentaContrato || 'N/A'}</span>
+      <span style="font-size: 14px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; font-weight: 600;">
+        Medidor: ${medidor.Medidor || 'N/A'}
+      </span>
+      <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+        💰 Tarifa: ${medidor.OS_Lista[0]?.Tarifa || medidor.OS_Lista[0]?.tarifa || 'N/A'}
+      </span>
+    </div>
+  </td>
         <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
           ${medidor.totalOS || 0}
         </td>
