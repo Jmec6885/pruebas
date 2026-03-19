@@ -23841,8 +23841,13 @@ const capaKMZ = await new Promise((resolve, reject) => {
 function mostrarInfoCircuito(nombreCircuito, totalElementos) {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
-    
+
+    // ✅ Eliminar panel de info anterior si existe
+    const panelAnterior = document.getElementById('infoCircuitoPanel');
+    if (panelAnterior) panelAnterior.remove();
+
     const infoPanel = document.createElement('div');
+    infoPanel.id = 'infoCircuitoPanel';
     infoPanel.innerHTML = `
         <div class="result-card" style="background: #e3f2fd; border: 2px solid #2196f3; margin-top: 10px;">
             <div class="result-header">🗺️ Circuito: ${escapeHtml(nombreCircuito)}</div>
@@ -23859,14 +23864,13 @@ function mostrarInfoCircuito(nombreCircuito, totalElementos) {
         </div>
     `;
     resultsContainer.appendChild(infoPanel);
-    
+
     setTimeout(() => {
         if (window.mapaLeafletInstance) {
             window.mapaLeafletInstance.invalidateSize();
         }
     }, 200);
 }
-
 
 
 // ===================================================================
