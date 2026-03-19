@@ -25853,19 +25853,17 @@ function generarHTMLTablaSuministros(analisis, filtroColor = 'todos') {
     const bgColor = esPar ? '#f8fafc' : '#ffffff';
     const borderColor = suministro.color === 'rojo' ? '#fecaca' : '#bbf7d0';
     const headerColor = suministro.color === 'rojo' ? '#ef4444' : '#10b981';
-    
+
     html += `
       <tr style="background: ${bgColor}; border-bottom: 2px solid ${borderColor};">
-     html += `
-  <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
-    <div style="display: flex; flex-direction: column; gap: 4px;">
-      <span style="font-size: 13px; color: #4b5563;">NIC: ${suministro.CuentaContrato || 'N/A'}</span>
-      <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
-        💰 Tarifa: ${suministro.OS_Lista[0]?.Tarifa || 'N/A'}
-      </span>
-    </div>
-  </td>
-`;
+        <td style="padding: 12px 16px; font-weight: 700; color: ${headerColor}; font-family: monospace; border-right: 1px solid #e2e8f0;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 13px; color: #4b5563;">NIC: ${suministro.CuentaContrato || 'N/A'}</span>
+            <span style="font-size: 13px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+              💰 Tarifa: ${suministro.OS_Lista[0]?.Tarifa || 'N/A'}
+            </span>
+          </div>
+        </td>
         <td style="padding: 12px 16px; text-align: center; font-weight: 700; color: ${headerColor}; border-right: 1px solid #e2e8f0; font-size: 16px;">
           ${suministro.totalOS}
         </td>
