@@ -22896,14 +22896,14 @@ function parsearCoordenadasSeguras(coordsStr) {
 // ===================================================================
 async function buscarTXPorCoordenadas() {
     const coordenadasInput = document.getElementById('coordenadasTX')?.value?.trim();
-    const radioMetros = parseInt(document.getElementById('radioMetrosTX')?.value) || 50;
+    const radioMetros = parseInt(document.getElementById('radioMetrosTX')?.value) || 1000;
     
     // Validaciones básicas
     if (!coordenadasInput?.includes(',')) {
         alert('⚠️ Formato inválido. Usa: latitud,longitud (Ej: 13.7981427,-89.4436187)');
         return;
     }
-    if (radioMetros < 10 || radioMetros > 1000) {
+    if (radioMetros < 10 || radioMetros > 5000) {
         alert('⚠️ Radio debe estar entre 10 y 1000 metros');
         return;
     }
@@ -22957,8 +22957,8 @@ if (errorCount) {
         let totalCargados = 0;
         let intentos = 0;
         
-        // ✅ CAMBIO CLAVE: 40 intentos para cargar hasta ~40,000 registros
-        const MAX_INTENTOS = 40;
+        // ✅ CAMBIO CLAVE: 40 intentos para cargar hasta ~200,000 registros
+        const MAX_INTENTOS = 110;
         
         while (hayMas && intentos < MAX_INTENTOS) {
             intentos++;
