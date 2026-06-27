@@ -522,7 +522,9 @@
                         <canvas id="consumosChart"></canvas>
                     </div>
                 </div>
-		<!-- Modal Anomalía -->
+		
+                <div class="chart-card">
+<!-- Modal Anomalía -->
 <div id="anomaliaModal" class="modal">
     <div class="modal-content">
         <span class="close" onclick="cerrarAnomalia()">×</span>
@@ -530,7 +532,6 @@
         <div id="anomaliaContenido" style="margin-top: 20px;"></div>
     </div>
 </div>
-                <div class="chart-card">
                     <div class="chart-title">📈 Historial de Lecturas</div>
                     <div class="chart-container">
                         <canvas id="lecturasChart"></canvas>
@@ -21751,43 +21752,44 @@ function formatearComentario(valor, esDireccion = false) {
 // ===================================================================
 
 function generarBotonesAccion(item, index, config) {
-    let html = '<div class="action-buttons">';
- 
-    config.actions.forEach(action => {
-        const val = item[action];
-        if (!val) return;
+    let html = '<div class="action-buttons">';
 
-        const isCoordenadasLector = (action === 'Coordenadas' || action === 'CoordenadasLector');
-        const isCoordenadasGis = (action === 'Coordenadasgis' || action === 'CoordenadasGis');
-        const isFotoLink = (action === 'FotoLink' || action === 'fotolink');
-        const isGrafica = (action === 'Grafica');
- 
-        // Roles sin acceso a gráficas
-        const sinGraficas = ['Lectura', 'Contratista', 'ATTF', 'Poda'];
-        const puedeVerGraficas = currentUser && currentUser.rol && !sinGraficas.includes(currentUser.rol);
- 
-        if (isCoordenadasLector) {
-            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
-        } else if (isCoordenadasGis) {
-            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
-        } else if (isFotoLink) {
-            html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
-        } else if (isGrafica && puedeVerGraficas) {
-    html += `<button class="btn btn-secondary" onclick="verGraficasPorIndice(${index})">📊 Ver Consumos</button>`;
+    const sinGraficas = ['Lectura', 'Contratista', 'ATTF', 'Poda'];
+    const puedeVerGraficas = currentUser && currentUser.rol && !sinGraficas.includes(currentUser.rol);
+
+    config.actions.forEach(action => {
+        const val = item[action];
+        if (!val) return;
+
+        const isCoordenadasLector = (action === 'Coordenadas' || action === 'CoordenadasLector');
+        const isCoordenadasGis = (action === 'Coordendasgis' || action === 'CoordenadasGis');
+        const isFotoLink = (action === 'FotoLink' || action === 'fotolink');
+        const isGrafica = (action === 'Grafica');
+
+        if (isCoordenadasLector) {
+            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">📍 Coordenadas Lector</button>`;
+        } else if (isCoordenadasGis) {
+            html += `<button class="btn btn-secondary" onclick="abrirCoordenadas('${val}')">🗺️ Coordenadas GIS</button>`;
+        } else if (isFotoLink) {
+            html += `<button class="btn btn-secondary" onclick="verFoto('${val}')">📸 Ver Foto</button>`;
+        } else if (isGrafica && puedeVerGraficas) {
+            html += `<button class="btn btn-secondary" onclick="verGraficasPorIndice(${index})">📊 Ver Consumos</button>`;
+        }
+    });
+
+    // ✅ Botón Anomalía UNA SOLA VEZ, fuera del forEach
+    const tieneAnomalia = item.Anomalia || item.anomalia;
+    if (tieneAnomalia) {
+        html += `<button class="btn btn-secondary" onclick="verAnomalia(${index})"
+                    style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                    ⚠️ Ver Anomalías
+                 </button>`;
+    }
+
+    html += '</div></div>';
+    return html;
 }
 
-// Botón Anomalía - visible para todos los roles
-if (item.Anomalia || item.anomalia) {
-    html += `<button class="btn btn-secondary" onclick="verAnomalia(${index})"
-                style="background: linear-gradient(135deg, #f093fb, #f5576c);">
-                ⚠️ Ver Anomalías
-             </button>`;
-}
-    });
- 
-    html += '</div></div>'; // Cierre action-buttons y result-card
-    return html;
-}
 
 // ===================================================================
 // 🔍 BÚSQUEDA EN TABLAS RELACIONADAS (UNIFICADA)
