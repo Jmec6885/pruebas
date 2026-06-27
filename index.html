@@ -5129,6 +5129,78 @@ function verAnomalia(dataIndex) {
     document.getElementById('anomaliaModal').style.display = 'block';
 }
 
+function verAnomalia(dataIndex) {
+    console.log('🔍 verAnomalia llamada con index:', dataIndex);
+    console.log('🔍 consultasData length:', consultasData ? consultasData.length : 'NO DEFINIDO');
+    
+    if (dataIndex === undefined || dataIndex < 0 || dataIndex >= consultasData.length) {
+        console.error('❌ Index inválido');
+        alert('No hay datos de anomalía disponibles');
+        return;
+    }
+
+    const item = consultasData[dataIndex];
+    console.log('🔍 item completo:', item);
+    console.log('🔍 item.Anomalia:', item.Anomalia);
+    console.log('🔍 item.anomalia:', item.anomalia);
+    console.log('🔍 Campos disponibles en item:', Object.keys(item));
+
+    const anomaliaTexto = item.Anomalia || item.anomalia || '';
+    console.log('🔍 anomaliaTexto:', anomaliaTexto);
+
+    if (!anomaliaTexto || anomaliaTexto.trim() === '') {
+        console.warn('⚠️ Sin datos de anomalía');
+        alert('Este registro no tiene historial de anomalías registrado.');
+        return;
+    }
+
+    const modal = document.getElementById('anomaliaModal');
+    console.log('🔍 modal encontrado:', modal);
+
+    const entradas = parsearAnomalia(anomaliaTexto);
+    console.log('🔍 entradas parseadas:', entradas);
+
+    document.getElementById('anomaliaModalTitle').textContent = 
+        `Anomalías - ${item.NombreCliente || 'Cliente'} (Cuenta: ${item.CuentaContrato || 'N/A'})`;
+
+    let html = `<div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+                <tr style="background: linear-gradient(135deg, #3b54d3, #3ac99c); color: white;">
+                    <th style="padding: 12px 15px; text-align: left;">Mes</th>
+                    <th style="padding: 12px 15px; text-align: left;">Comentario</th>
+                    <th style="padding: 12px 15px; text-align: center;">Foto</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+    entradas.forEach((entrada, idx) => {
+        const bgColor = idx % 2 === 0 ? '#f7fafc' : '#ffffff';
+        const comentario = entrada.comentario || '<em style="color:#aaa;">Sin comentario</em>';
+        const foto = entrada.foto
+            ? `<a href="${entrada.foto}" target="_blank"
+                  style="display: inline-block; background: linear-gradient(135deg, #3b54d3, #3ac99c);
+                         color: white; padding: 6px 14px; border-radius: 8px; text-decoration: none;
+                         font-weight: 600; font-size: 13px;">📸 Ver foto</a>`
+            : '<span style="color:#ccc;">Sin foto</span>';
+
+        html += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 12px 15px; font-weight: 700; color: #3b54d3; white-space: nowrap;">${entrada.mes}</td>
+            <td style="padding: 12px 15px; color: #4a5568;">${comentario}</td>
+            <td style="padding: 12px 15px; text-align: center;">${foto}</td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div>
+        <p style="margin-top: 15px; color: #999; font-size: 12px; text-align: right;">
+            ${entradas.length} registro(s) encontrado(s)
+        </p>`;
+
+    document.getElementById('anomaliaContenido').innerHTML = html;
+    modal.style.display = 'block';
+    console.log('✅ Modal abierto');
+}
+
 
 function cerrarAnomalia() {
     document.getElementById('anomaliaModal').style.display = 'none';
