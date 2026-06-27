@@ -522,16 +522,7 @@
                         <canvas id="consumosChart"></canvas>
                     </div>
                 </div>
-		
                 <div class="chart-card">
-<!-- Modal Anomalía -->
-<div id="anomaliaModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="cerrarAnomalia()">×</span>
-        <h2 id="anomaliaModalTitle">Historial de Anomalías</h2>
-        <div id="anomaliaContenido" style="margin-top: 20px;"></div>
-    </div>
-</div>
                     <div class="chart-title">📈 Historial de Lecturas</div>
                     <div class="chart-container">
                         <canvas id="lecturasChart"></canvas>
@@ -540,6 +531,16 @@
             </div>
         </div>
     </div>
+
+    <!-- ✅ Modal Anomalía - FUERA de chartsModal, antes de </body> -->
+    <div id="anomaliaModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarAnomalia()">×</span>
+            <h2 id="anomaliaModalTitle">Historial de Anomalías</h2>
+            <div id="anomaliaContenido" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
 </body>
 
 <script>
