@@ -4593,7 +4593,7 @@ const tableConfigs = {
 	   
         ],
         resultFields: ['OSATMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Deuda', 'Comentario'],
-        actions: ['Coordenadas', 'FotoLink', 'CoordenadasGis']
+        actions: ['Coordenadas', 'FotoLink', 'Coordenadasgis']
     },
     'OSCerradas': {
         title: 'OS Cerradas',
@@ -4606,7 +4606,7 @@ const tableConfigs = {
             { key: 'NombreCliente', label: 'Nombre Cliente', type: 'like' }
         ],
         resultFields: ['OSATOMO', 'OSSAP', 'CuentaContrato', 'Medidor', 'NombreCliente', 'Comentario'],
-        actions: ['Coordenadas', 'FotoLink']
+        actions: ['Coordenadas', 'Fotolink']
     },
     'tx_y_cortes': {
     title: 'tx_y_cortes',
@@ -21835,8 +21835,8 @@ function generarBotonesAccion(item, index, config) {
         if (!val) return;
 
         const isCoordenadasLector = (action === 'Coordenadas' || action === 'CoordenadasLector');
-        const isCoordenadasGis = (action === 'Coordendasgis' || action === 'CoordenadasGis');
-        const isFotoLink = (action === 'FotoLink' || action === 'fotolink');
+        const isCoordenadasGis = (action === 'Coordendasgis' || action === 'CoordenadasGis' || action === 'Coordenadasgis');
+        const isFotoLink = (action === 'FotoLink' || action === 'fotolink' || action === 'Fotolink');
         const isGrafica = (action === 'Grafica');
 
         if (isCoordenadasLector) {
